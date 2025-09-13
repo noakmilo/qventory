@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+*.log
+
+# Virtualenv
+.env
+.venv
+venv/
+ENV/
+
+# SQLite (dev only — la de producción vive en Render Persistent Disk)
+app.db
+*.sqlite3
+
+# IDEs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Reports / local files
+*.pdf
+*.csv
+*.xlsx
+
+# Cache
+.cache/
