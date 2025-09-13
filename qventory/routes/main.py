@@ -327,3 +327,19 @@ def sitemap_xml():
   <url><loc>{request.url_root.rstrip('/')}/register</loc></url>
 </urlset>"""
     return Response(xml, mimetype="application/xml")
+
+# en qventory/routes/main.py (o donde registres rutas “públicas”)
+from flask import send_from_directory, make_response
+
+@main_bp.route("/sw.js")
+def service_worker():
+    resp = make_response(send_from_directory("static", "sw.js"))
+    # Evita caché agresiva: así se actualiza bien en clientes
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Content-Type"] = "application/javascript"
+    return resp
+
+@main_bp.route("/offline")
+def offline():
+    # No requiere login; es fallback de PWA
+    return render_template("offline.html")
