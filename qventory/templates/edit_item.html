@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Edit Item – Qventory{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Edit Item</h2>
+  <form method="post" class="grid cols-3">
+    <div style="grid-column:1/-1">
+      <label>Title</label>
+      <input class="input" type="text" name="title" value="{{ item.title }}" required>
+    </div>
+    <div style="grid-column:1/-1">
+      <label>Listing Link (optional)</label>
+      <input class="input" type="url" name="listing_link" value="{{ item.listing_link or '' }}">
+    </div>
+    <div style="grid-column:1/-1"><hr style="border-color:var(--border);opacity:.3;margin:8px 0"></div>
+    <div style="grid-column:1/-1">
+      <h3 style="margin:0 0 8px 0;font-size:16px">Marketplace Links (optional)</h3>
+    </div>
+    <div><label>Website</label><input class="input" type="url" name="web_url" value="{{ item.web_url or '' }}"></div>
+    <div><label>eBay</label><input class="input" type="url" name="ebay_url" value="{{ item.ebay_url or '' }}"></div>
+    <div><label>Amazon</label><input class="input" type="url" name="amazon_url" value="{{ item.amazon_url or '' }}"></div>
+    <div><label>Mercari</label><input class="input" type="url" name="mercari_url" value="{{ item.mercari_url or '' }}"></div>
+    <div><label>Vinted</label><input class="input" type="url" name="vinted_url" value="{{ item.vinted_url or '' }}"></div>
+    <div><label>Poshmark</label><input class="input" type="url" name="poshmark_url" value="{{ item.poshmark_url or '' }}"></div>
+    <div><label>Depop</label><input class="input" type="url" name="depop_url" value="{{ item.depop_url or '' }}"></div>
+    
+    {% if settings.enable_A %}
+    <div>
+      <label>{{ settings.label_A }} (A)</label>
+      <input class="input" type="text" name="A" value="{{ item.A or '' }}">
+    </div>
+    {% endif %}
+    {% if settings.enable_B %}
+    <div>
+      <label>{{ settings.label_B }} (B)</label>
+      <input class="input" type="text" name="B" value="{{ item.B or '' }}">
+    </div>
+    {% endif %}
+    {% if settings.enable_S %}
+    <div>
+      <label>{{ settings.label_S }} (S)</label>
+      <input class="input" type="text" name="S" value="{{ item.S or '' }}">
+    </div>
+    {% endif %}
+    {% if settings.enable_C %}
+    <div>
+      <label>{{ settings.label_C }} (C)</label>
+      <input class="input" type="text" name="C" value="{{ item.C or '' }}">
+    </div>
+    {% endif %}
+    <div style="grid-column:1/-1">
+      <button class="btn" type="submit">Save</button>
+      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

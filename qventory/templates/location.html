@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Qventory{% endblock %}
+{% block content %}
+
+<div class="row">
+  <!-- Filtros -->
+  <div class="card" style="flex:1 1 280px;min-width:280px">
+    <h2>Filters</h2>
+    <form method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
+      <div style="grid-column:1/-1">
+        <input class="input" type="text" name="q" value="{{ q }}" placeholder="Search title or SKU…">
+      </div>
+
+      {% if settings.enable_A %}
+      <div>
+        <label>{{ settings.label_A }}</label>
+        <select name="A">
+          <option value="">All</option>
+          {% for opt in options.A %}
+          <option value="{{ opt }}" {% if fA==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      {% if settings.enable_B %}
+      <div>
+        <label>{{ settings.label_B }}</label>
+        <select name="B">
+          <option value="">All</option>
+          {% for opt in options.B %}
+          <option value="{{ opt }}" {% if fB==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      {% if settings.enable_S %}
+      <div>
+        <label>{{ settings.label_S }}</label>
+        <select name="S">
+          <option value="">All</option>
+          {% for opt in options.S %}
+          <option value="{{ opt }}" {% if fS==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      {% if settings.enable_C %}
+      <div>
+        <label>{{ settings.label_C }}</label>
+        <select name="C">
+          <option value="">All</option>
+          {% for opt in options.C %}
+          <option value="{{ opt }}" {% if fC==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      {% if PLATFORMS %}
+      <div>
+        <label>Platform</label>
+        <select name="platform">
+          <option value="">All</option>
+          {% for key,label in PLATFORMS %}
+            <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" type="submit">Apply</button>
+        <a class="btn" href="{{ url_for('main.dashboard') }}">Clear</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabla / Cards -->
+  <div class="card" style="flex:3 1 600px;min-width:320px">
+    <h2>Items</h2>
+    {% set un = current_user.username %}
+    <div class="table-wrap">
+      <!-- Añade 'table-cards' para que en móvil se transforme a fichas -->
+      <table class="table-cards">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>SKU</th>
+            <th>Location</th>
+            <th>Listings</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for it in items %}
+          <tr>
+            <td data-th="Title">{{ it.title }}</td>
+            <td data-th="SKU"><span class="tag">{{ it.sku }}</span></td>
+            <td data-th="Location">
+              {% if it.location_code %}
+                <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
+                &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" target="_blank">QR</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td data-th="Listings">
+              <div class="platform-badges">
+                {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
+                {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank">eBay</a>{% endif %}
+                {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
+                {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
+                {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
+                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
+                {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
+                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
+              </div>
+            </td>
+            <td data-th="Actions">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}">Edit</a>
+                <form method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
+                  <button class="btn" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- FAB móvil para crear ítems rápido -->
+<a class="btn fab" href="{{ url_for('main.new_item') }}">＋ Add Item</a>
+
+{% endblock %}

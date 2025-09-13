@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Qventory — QR-powered Inventory for Resellers & Small Warehouses{% endblock %}
+{% block content %}
+
+<!-- Meta SEO específicos de la landing -->
+{% set canonical = request.url_root.rstrip('/') %}
+<link rel="canonical" href="{{ canonical }}/">
+
+<meta name="description" content="Qventory helps resellers and small warehouses track inventory with QR codes, flexible A/B/S/C locations, and marketplace links (eBay, Amazon, Mercari, Vinted, Poshmark, Depop). Scan, find, ship—fast.">
+<meta name="keywords" content="inventory, qr labels, warehouse locations, aisle bay shelf bin, ebay inventory, mercari, depop, poshmark, vinted, small warehouse, stock control">
+
+<!-- Open Graph -->
+<meta property="og:title" content="Qventory — QR-powered Inventory for Resellers & Small Warehouses">
+<meta property="og:description" content="Scan a code. See what's inside. Qventory organizes your inventory with flexible locations and marketplace links.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ canonical }}/">
+<meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Qventory — QR-powered Inventory">
+<meta name="twitter:description" content="Flexible Aisle/Bay/Shelf/Container. One scan to find items fast.">
+<meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
+
+<!-- JSON-LD: SoftwareApplication -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Qventory",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "description": "QR-powered inventory management with flexible A/B/S/C locations and multi-marketplace links for resellers and small warehouses.",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+
+<!-- HERO -->
+<section class="card" style="padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent);">
+  <h1 style="font-size:34px; margin:0 0 10px;">Scan. Find. Ship. <span style="color:var(--accent)">Qventory</span> keeps you fast.</h1>
+  <p style="font-size:16px; color:var(--sub); max-width:820px; margin:10px auto 18px;">
+    Organize your inventory with flexible <strong>Aisle/Bay/Shelf/Container</strong> locations and <strong>QR labels</strong>. 
+    Link each item to <em>any</em> marketplace (eBay, Amazon, Mercari, Vinted, Poshmark, Depop) and pull it in seconds.
+  </p>
+
+  <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+    <a class="btn" href="{{ url_for('auth.register') }}">Get Started — Free</a>
+    <a class="btn" href="{{ url_for('auth.login') }}">Sign in</a>
+  </div>
+
+  <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; color:var(--sub); font-size:13px;">
+    <span class="tag">QR labels</span>
+    <span class="tag">Batch PDF</span>
+    <span class="tag">Multi-Marketplace Links</span>
+    <span class="tag">Mobile-friendly</span>
+    <span class="tag">Privacy-first</span>
+  </div>
+</section>
+
+<!-- SOCIAL PROOF / VALUE -->
+<section class="row">
+  <div class="card" style="flex:1 1 320px;">
+    <h2>Why Qventory</h2>
+    <ul style="margin:0; padding-left:18px; line-height:1.6;">
+      <li><strong>Speed & accuracy:</strong> scan a location and see everything inside.</li>
+      <li><strong>Flexible hierarchy:</strong> enable only the levels you use (A/B/S/C).</li>
+      <li><strong>Sell everywhere:</strong> store links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop.</li>
+      <li><strong>Zero learning curve:</strong> clean UI, dark mode by default.</li>
+      <li><strong>Built for resellers:</strong> optimized for picking, packing & shipping.</li>
+    </ul>
+  </div>
+  <div class="card" style="flex:1 1 320px;">
+    <h2>How it Works</h2>
+    <ol style="margin:0; padding-left:18px; line-height:1.6;">
+      <li><strong>Create locations:</strong> Aisle/Bay/Shelf/Container, your way.</li>
+      <li><strong>Print QR labels:</strong> batch generate and stick on every spot.</li>
+      <li><strong>Add items:</strong> title, auto-SKU, links to your marketplaces.</li>
+      <li><strong>Scan & go:</strong> open a location page and pull items in seconds.</li>
+    </ol>
+  </div>
+  <div class="card" style="flex:1 1 320px;">
+    <h2>Made for Growth</h2>
+    <p style="margin:0 0 8px;">Start simple, scale later:</p>
+    <ul style="margin:0; padding-left:18px; line-height:1.6;">
+      <li>From a single shelf to a full garage or warehouse.</li>
+      <li>Fast filters by location and sales channel.</li>
+      <li>Clean exports coming soon.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- FEATURE GRID -->
+<section class="card">
+  <h2 style="margin-top:0;">Features that matter</h2>
+  <div class="grid cols-3">
+    <div>
+      <h3 style="margin:0 0 6px;">QR Location Pages</h3>
+      <p class="tag">Scan to see contents</p>
+      <p>Each location has its own URL and QR code. Print labels in bulk and stick them everywhere.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">Flexible A/B/S/C</h3>
+      <p class="tag">Enable only what you use</p>
+      <p>Disable Aisle or Container if you don’t need them. Your codes stay clean: <code>A1B3S2C1</code>.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">Marketplace Links</h3>
+      <p class="tag">eBay, Amazon, Mercari & more</p>
+      <p>Jump straight from Qventory to the live listing. Pick, pack, done.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="card" style="text-align:center;">
+  <h2>Ready to organize your inventory?</h2>
+  <p style="color:var(--sub); max-width:720px; margin:8px auto 16px;">Create a free account and generate your first QR labels in minutes.</p>
+  <a class="btn" href="{{ url_for('auth.register') }}">Create Free Account</a>
+</section>
+
+<!-- FAQ (SEO + JSON-LD) -->
+<section class="card">
+  <h2>FAQ</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>Do I need special printers?</h3>
+      <p>No. Any home or office printer works for the PDF label sheets.</p>
+    </div>
+    <div>
+      <h3>Can I change the hierarchy?</h3>
+      <p>Yes. Enable/disable Aisle, Bay, Shelf, Container in Settings any time.</p>
+    </div>
+    <div>
+      <h3>Is Qventory mobile-friendly?</h3>
+      <p>Absolutely. Scan and view locations from your phone in the warehouse.</p>
+    </div>
+    <div>
+      <h3>Does it support multiple marketplaces?</h3>
+      <p>Yes. Save links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop.</p>
+    </div>
+  </div>
+</section>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Do I need special printers?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Any home or office printer works for the PDF label sheets." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I change the hierarchy?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Enable or disable Aisle, Bay, Shelf, Container in Settings any time." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is Qventory mobile-friendly?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Absolutely. Scan and view locations from your phone in the warehouse." }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it support multiple marketplaces?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Save links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop." }
+    }
+  ]
+}
+</script>
+
+{% endblock %}

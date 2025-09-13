@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Settings – Qventory{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Hierarchy & Labels</h2>
+  <form method="post" class="grid cols-2">
+    <div>
+      <label><input type="checkbox" name="enable_A" {% if settings.enable_A %}checked{% endif %}> Enable {{ settings.label_A }} (A)</label>
+      <input class="input" type="text" name="label_A" value="{{ settings.label_A }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_B" {% if settings.enable_B %}checked{% endif %}> Enable {{ settings.label_B }} (B)</label>
+      <input class="input" type="text" name="label_B" value="{{ settings.label_B }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_S" {% if settings.enable_S %}checked{% endif %}> Enable {{ settings.label_S }} (S)</label>
+      <input class="input" type="text" name="label_S" value="{{ settings.label_S }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_C" {% if settings.enable_C %}checked{% endif %}> Enable {{ settings.label_C }} (C)</label>
+      <input class="input" type="text" name="label_C" value="{{ settings.label_C }}">
+    </div>
+    <div style="grid-column:1/-1">
+      <button class="btn" type="submit">Save Settings</button>
+      <a class="btn" href="{{ url_for('main.dashboard') }}">Back</a>
+    </div>
+  </form>
+  <p class="tag">Order is fixed A → B → S → C. Disable levels you don't use.</p>
+</div>
+{% endblock %}

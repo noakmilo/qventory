@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Sign in – Qventory{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:0 auto">
+  <h2>Sign in</h2>
+  <form method="post" class="grid cols-1">
+    <div>
+      <label>Email</label>
+      <input class="input" type="email" name="email" placeholder="you@example.com" required>
+    </div>
+    <div>
+      <label>Password</label>
+      <input class="input" type="password" name="password" placeholder="••••••••" required>
+    </div>
+    <div>
+      <button class="btn" type="submit">Sign in</button>
+      <a class="btn" href="{{ url_for('auth.register') }}">Create account</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

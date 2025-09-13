@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Qventory – Inventory QR{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="dot"></div>
+      <strong>Qventory</strong>
+      <span class="tag">Flask + SQLite</span>
+    </div>
+    <nav class="row">
+      <a class="btn" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+      {% if current_user.is_authenticated %}
+        <a class="btn" href="{{ url_for('main.new_item') }}">Add Item</a>
+        <a class="btn" href="{{ url_for('main.settings') }}">Settings</a>
+        <a class="btn" href="{{ url_for('main.qr_batch') }}">QR Batch</a>
+        <a class="btn" href="{{ url_for('auth.logout') }}">Logout</a>
+      {% else %}
+        <a class="btn" href="{{ url_for('auth.login') }}">Login</a>
+        <a class="btn" href="{{ url_for('auth.register') }}">Register</a>
+      {% endif %}
+    </nav>
+  </header>
+  <div class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ 'ok' if category=='ok' else 'error' if category=='error' else '' }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+  <footer>
+    Built for Kmilo — no tracking, no fuss.
+  </footer>
+</body>
+</html>

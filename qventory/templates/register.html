@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Create account – Qventory{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin:0 auto">
+  <h2>Create your account</h2>
+  <form method="post" class="grid cols-1">
+    <div>
+      <label>Email</label>
+      <input class="input" type="email" name="email" value="{{ email or '' }}" required>
+    </div>
+    <div>
+      <label>Username</label>
+      <input class="input" type="text" name="username" value="{{ username or '' }}" placeholder="yourbrand" required>
+      <p class="tag">Lowercase, 3–32 chars. a–z, 0–9, _ or -</p>
+    </div>
+    <div>
+      <label>Password</label>
+      <input class="input" type="password" name="password" minlength="6" required>
+    </div>
+    <div>
+      <label>Confirm Password</label>
+      <input class="input" type="password" name="password2" minlength="6" required>
+    </div>
+    <div>
+      <button class="btn" type="submit">Create account</button>
+      <a class="btn" href="{{ url_for('auth.login') }}">Sign in</a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}
