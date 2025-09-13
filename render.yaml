@@ -2,7 +2,7 @@ services:
   - type: web
     name: qventory
     env: python
-    plan: free        # o starter/standard según el plan
+    plan: free
     buildCommand: |
       pip install --upgrade pip wheel setuptools
       pip install -r requirements.txt
@@ -12,8 +12,4 @@ services:
       - key: SECRET_KEY
         value: c3f9a4b8e7d12f4a9b6d8c3e5a2f7b1c
       - key: QVENTORY_DB_PATH
-        value: /var/data/app.db
-    disk:
-      name: qventory-data
-      mountPath: /var/data
-      sizeGB: 10
+        value: app.db   # temporal (no persistente en Free)
