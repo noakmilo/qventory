@@ -3,27 +3,6 @@ from .config import Config
 from .extensions import db, login_manager
 from .routes import main_bp, auth_bp
 
-def create_app():
-    app = Flask(__name__)
-    app.config.from_object(Config)
-
-    # init extensions
-    db.init_app(app)
-    login_manager.init_app(app)
-
-    # blueprints
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(main_bp)
-
-    # crea tablas
-    with app.app_context():
-        db.create_all()
-        # Seed opcional controlado por env var (solo DEV)
-        _maybe_seed_demo()
-
-    return app
-
-
 def _maybe_seed_demo():
     """
     Para desarrollo: export QVENTORY_SEED_DEMO=1 para crear un usuario demo
@@ -39,20 +18,16 @@ def _maybe_seed_demo():
     )
     from .extensions import db
 
-    # si ya hay usuarios, no hacer nada
     if User.query.count() > 0:
         return
 
-    # crea usuario demo
     demo = User(email="demo@example.com", username="demo")
     demo.set_password("demo123")  # solo dev
     db.session.add(demo)
     db.session.commit()
 
-    # settings del demo
     s = get_or_create_settings(demo)
 
-    # ítems de ejemplo
     examples = [
         ("Dell Latitude 7490", {"A": "1", "B": "2", "S": "1", "C": "1"}, "https://example.com/listing/7490"),
         ("Star Wars VHS Lot", {"A": "1", "B": "3", "S": "2", "C": "1"}, "https://example.com/listing/vhs"),
@@ -72,3 +47,21 @@ def _maybe_seed_demo():
         )
         db.session.add(it)
     db.session.commit()
+
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+
+    db.init_app(app)
+    login_manager.init_app(app)
+
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(main_bp)
+
+    with app.app_context():
+        print("DB URI ->", app.config.get("SQLALCHEMY_DATABASE_URI"), flush=True)
+        db.create_all()
+        _maybe_seed_demo()  # ahora sí existe
+
+    return app
