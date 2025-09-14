@@ -6,21 +6,19 @@ from flask_login import login_required, current_user
 from sqlalchemy import or_
 import io
 import re
+import os
+import base64
+import time
+import requests
 from urllib.parse import urlparse
 
-import requests
-from bs4 import BeautifulSoup
-from urllib3.util.retry import Retry
-from requests.adapters import HTTPAdapter
-
-# >>> NUEVO: imports para impresión de etiquetas
-import os
+# >>> IMPRESIÓN (ya lo tenías)
 import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.graphics.barcode import code128
 from reportlab.lib.units import mm
-# <<< NUEVO
+# <<<
 
 from ..extensions import db
 from ..models.item import Item
@@ -123,142 +121,109 @@ def dashboard():
     )
 
 
-# ---------------------- Helpers de scraping / anti-bot ----------------------
+# ---------------------- eBay Browse API (PROD, sin env) ----------------------
 
-DESKTOP_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
-MOBILE_UA = (
-    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
-)
+# TUS CREDENCIALES DE PRODUCCIÓN (hardcodeadas a tu pedido)
+EBAY_CLIENT_ID = "CamiloNo-listgena-PRD-412c11d4d-2f6cb02f"
+EBAY_CLIENT_SECRET = "PRD-12c11d4dc6bd-cfc6-4186-a5df-f779"
 
-def _make_session():
-    s = requests.Session()
-    retry = Retry(
-        total=3,
-        backoff_factor=0.6,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"]
-    )
-    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
-    s.mount("http://", adapter)
-    s.mount("https://", adapter)
-    return s
+# Endpoints de producción
+EBAY_OAUTH_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+EBAY_BROWSE_BASE = "https://api.ebay.com/buy/browse/v1"
 
-def _fetch_html_with_cookies(url, ua, timeout=20):
-    headers = {
-        "User-Agent": ua,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.7",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Dest": "document",
+# Cache simple de token en memoria
+_EBAY_TOKEN = {"value": None, "exp": 0}
+
+def _get_ebay_app_token() -> str:
+    now = time.time()
+    if _EBAY_TOKEN["value"] and _EBAY_TOKEN["exp"] - 60 > now:
+        return _EBAY_TOKEN["value"]
+
+    # Authorization Basic base64(client_id:client_secret)
+    basic = base64.b64encode(f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}".encode()).decode()
+    data = {
+        "grant_type": "client_credentials",
+        "scope": "https://api.ebay.com/oauth/api_scope"
     }
-    sess = _make_session()
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": f"Basic {basic}",
+    }
+    r = requests.post(EBAY_OAUTH_URL, headers=headers, data=data, timeout=15)
+    r.raise_for_status()
+    j = r.json()
+    _EBAY_TOKEN["value"] = j["access_token"]
+    _EBAY_TOKEN["exp"] = now + int(j.get("expires_in", 7200))
+    return _EBAY_TOKEN["value"]
 
-    # 1) Primer GET: eBay puede plantar cookies y devolver content-length: 1
-    r1 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-    r1.raise_for_status()
-    text = r1.text or ""
-
-    # 2) Si el body es muy corto, hacer segundo GET con cookies ya plantadas
-    if len(text) < 1000:
-        r2 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
-        r2.raise_for_status()
-        text = r2.text or ""
-
-    return text
-
-def _extract_title_from_html(html):
-    soup = BeautifulSoup(html, "html.parser")
-    h1 = soup.select_one("h1.x-item-title__mainTitle")
-    if h1:
-        return h1.get_text(strip=True)
-    og = soup.find("meta", property="og:title")
-    if og and og.get("content"):
-        return og["content"].strip()
-    ttag = soup.find("title")
-    if ttag and ttag.get_text(strip=True):
-        return ttag.get_text(strip=True)
-    return None
+def _extract_legacy_id(url: str) -> str | None:
+    # patrón principal /itm/<digits>
+    m = re.search(r"/itm/(\d+)", url)
+    if m:
+        return m.group(1)
+    # fallback: primer número largo
+    m = re.search(r"(\d{9,})", url)
+    return m.group(1) if m else None
 
 
-# ---------------------- API helper: importar título desde URL ----------------------
+# ---------------------- API helper: importar título desde URL (eBay API) ----------------------
 
 @main_bp.route("/api/fetch-market-title")
 @login_required
 def api_fetch_market_title():
     """
-    Recibe ?url=... , detecta marketplace y devuelve {ok, marketplace, title, fill: {...}}
-    Soporta eBay: busca h1.x-item-title__mainTitle y tiene fallbacks og:title y <title>.
-    Implementa sesión/cookies, retries y fallback a UA móvil para saltar anti-bot.
+    Recibe ?url=... y devuelve {ok, marketplace, title, fill:{title, ebay_url}}
+    Implementación: eBay Browse API (PROD).
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
         return jsonify({"ok": False, "error": "Missing url"}), 400
-
-    # Validación simple de esquema
     if not re.match(r"^https?://", raw_url, re.I):
         return jsonify({"ok": False, "error": "Invalid URL"}), 400
 
-    # Detección de dominio
+    legacy_id = _extract_legacy_id(raw_url)
+    if not legacy_id:
+        return jsonify({"ok": False, "error": "No se pudo extraer el legacy_item_id de la URL"}), 400
+
     try:
-        netloc = urlparse(raw_url).netloc.lower()
-    except Exception:
-        netloc = ""
+        token = _get_ebay_app_token()
+        r = requests.get(
+            f"{EBAY_BROWSE_BASE}/item/get_item_by_legacy_id",
+            params={"legacy_item_id": legacy_id},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=15
+        )
 
-    # Detectar eBay por TLDs comunes
-    is_ebay = any(
-        netloc.endswith(d)
-        for d in [
-            "ebay.com", "ebay.co.uk", "ebay.de", "ebay.fr", "ebay.it",
-            "ebay.es", "ebay.ca", "ebay.com.au", "ebay.com.mx",
-            "ebay.com.sg", "ebay.com.hk", "ebay.nl"
-        ]
-    )
-    marketplace = "ebay" if is_ebay else "unknown"
+        if r.status_code == 403:
+            return jsonify({
+                "ok": False,
+                "error": "403 Forbidden: tu app aún no tiene acceso a Browse API en producción (o keyset deshabilitado)."
+            }), 403
+        if r.status_code == 404:
+            return jsonify({
+                "ok": False,
+                "error": "404: legacy_item_id no encontrado. ¿El listing existe y es público?"
+            }), 404
 
-    title_text = None
+        r.raise_for_status()
+        data = r.json()
+        title = (data.get("title") or "").strip()
+        item_web_url = data.get("itemWebUrl") or raw_url
 
-    if marketplace == "ebay":
-        try:
-            # 1) Intento con User-Agent desktop
-            html = _fetch_html_with_cookies(raw_url, DESKTOP_UA, timeout=20)
-            title_text = _extract_title_from_html(html)
+        if not title:
+            return jsonify({"ok": False, "error": "La API no devolvió título"}), 502
 
-            # 2) Fallback: si el HTML sigue “vacío” o no hay título, prueba UA móvil
-            if not title_text or len(html) < 1000:
-                html_m = _fetch_html_with_cookies(raw_url, MOBILE_UA, timeout=20)
-                maybe = _extract_title_from_html(html_m)
-                if maybe:
-                    title_text = maybe
-
-            if not title_text:
-                return jsonify({"ok": False, "error": "No se pudo extraer el título de eBay."}), 502
-
-        except requests.exceptions.Timeout:
-            return jsonify({"ok": False, "error": "Timeout: eBay no respondió a tiempo"}), 504
-        except requests.exceptions.RequestException as e:
-            return jsonify({"ok": False, "error": f"Request/parse failed: {e}"}), 502
-
-    # Construcción de payload de autocompletado
-    fill = {}
-    if title_text:
-        fill["title"] = title_text
-    if marketplace == "ebay":
-        fill["ebay_url"] = raw_url
-
-    return jsonify({
-        "ok": True,
-        "marketplace": marketplace,
-        "title": title_text,
-        "fill": fill
-    })
+        return jsonify({
+            "ok": True,
+            "marketplace": "ebay",
+            "title": title,
+            "fill": {"title": title, "ebay_url": item_web_url}
+        })
+    except requests.HTTPError as e:
+        body = e.response.text[:300] if e.response is not None else ""
+        return jsonify({"ok": False, "error": f"HTTP {e.response.status_code}: {body}"}), 502
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
 
 
 # ---------------------- CRUD Items (protegido) ----------------------
@@ -531,7 +496,7 @@ def offline():
     return render_template("offline.html")
 
 
-# ====================== NUEVO: helpers + ruta de IMPRESIÓN ======================
+# ====================== helpers + ruta de IMPRESIÓN ======================
 
 def _ellipsize(s: str, n: int = 20) -> str:
     s = (s or "").strip()
