@@ -96,14 +96,13 @@ def human_from_code(code, settings):
     return " • ".join(segs) if segs else "Location"
 
 # =========================
-#   Render QR (PIL)
+#   Render QR (PIL) (compat)
 # =========================
 
 def qr_label_image(code, human_text, link, qr_px=300):
     """
-    (Mantener por compatibilidad) Devuelve una imagen de etiqueta apilada verticalmente.
-    NOTA: Para el layout 40x30 mm con QR a la izquierda y texto a la derecha,
-    ahora usamos la composición directa en PDF (ver build_qr_batch_pdf).
+    Compatibilidad con layouts antiguos (apilado vertical).
+    El layout actual 40x30 se arma directo en PDF (ver build_qr_batch_pdf).
     """
     qr_img = qrcode.make(link).convert("RGB").resize((qr_px, qr_px), Image.NEAREST)
     try:
@@ -147,12 +146,29 @@ def _make_qr_pil(link: str, target_pt: float, dpi: int = 300):
     img = qrcode.make(link).convert("RGB").resize((px, px), Image.NEAREST)
     return img
 
+def _resolve_item_by_code(code: str):
+    """
+    Intenta resolver un Item dado un 'code':
+      - Primero por SKU exacto.
+      - Si 'code' es un entero, intenta por ID.
+    Devuelve el objeto Item o None.
+    """
+    it = Item.query.filter_by(sku=str(code)).first()
+    if it:
+        return it
+    try:
+        code_int = int(str(code))
+    except Exception:
+        return None
+    return Item.query.get(code_int)
+
 def build_qr_batch_pdf(codes, settings, make_link):
     """
     Construye un PDF con etiquetas de 40x30 mm:
       - QR a la izquierda (alto completo menos padding).
       - Texto a la derecha (human_text + code) en 12 pt.
-    Se auto-calcula cuántas etiquetas caben por página carta con el margen dado.
+    Si 'codes' tiene un solo elemento y se puede resolver el Item por SKU o ID,
+    la línea principal (line1) será el TÍTULO del ítem.
     """
     # Página
     page_w, page_h = letter
@@ -197,6 +213,8 @@ def build_qr_batch_pdf(codes, settings, make_link):
             acc += ch
         return acc + ell
 
+    single_label_mode = len(codes) == 1
+
     for i, code in enumerate(codes):
         # Nueva página si se llenó la grilla completa
         if i > 0 and i % (cols * rows) == 0:
@@ -212,7 +230,20 @@ def build_qr_batch_pdf(codes, settings, make_link):
 
         # Datos de la etiqueta
         link = make_link(code)
-        human = human_from_code(code, settings)
+
+        # Texto principal:
+        # - Si es una sola etiqueta e identificamos el Item, usamos su título.
+        # - Si no, usamos el texto "humano" desde la ubicación.
+        item_title = None
+        if single_label_mode:
+            try:
+                it = _resolve_item_by_code(code)
+                if it and getattr(it, "title", None):
+                    item_title = it.title
+            except Exception:
+                item_title = None
+
+        human = item_title if item_title else human_from_code(code, settings)
 
         # QR: lado = altura de la etiqueta - 2*PAD
         qr_side_pt = max(1.0, LABEL_H_PT - 2 * PAD)
@@ -236,9 +267,9 @@ def build_qr_batch_pdf(codes, settings, make_link):
 
         c.setFont(TEXT_FONT, TEXT_SIZE)
 
-        # Dos líneas: human_text y code
+        # Dos líneas: human_text (o título) y code
         line1 = _truncate_to_width(human or "Location", text_w)
-        line2 = _truncate_to_width(code or "", text_w)
+        line2 = _truncate_to_width(str(code) if code is not None else "", text_w)
 
         # Posición de líneas (desde arriba hacia abajo)
         y_line1 = text_top - TEXT_SIZE
@@ -247,7 +278,7 @@ def build_qr_batch_pdf(codes, settings, make_link):
         c.drawString(text_x, y_line1, line1)
         c.drawString(text_x, y_line2, line2)
 
-        # (opcional) guía de corte / borde de la etiqueta:
+        # (opcional) guía de corte:
         # c.setLineWidth(0.25)
         # c.rect(x0, y0, LABEL_W_PT, LABEL_H_PT)
 
