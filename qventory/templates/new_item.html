@@ -1,61 +1,162 @@
+{# templates/new_item.html #}
 {% extends "base.html" %}
 {% block title %}Add Item – Qventory{% endblock %}
 {% block content %}
 <div class="card">
   <h2>Add Item</h2>
-  <form method="post" class="grid cols-3">
+
+  {# --------- Bloque de Import desde URL + GET --------- #}
+  <div class="grid" style="grid-template-columns: 1fr auto; gap: 8px; margin-bottom:12px">
+    <div>
+      <label>Import from URL (eBay supported)</label>
+      <input class="input" type="url" id="import_url" placeholder="Paste eBay item URL (https://www.ebay.com/itm/...)">
+    </div>
+    <div style="display:flex; align-items:flex-end">
+      <button class="btn" id="btnFetch" type="button" title="Fetch title & fill fields">GET</button>
+    </div>
+  </div>
+  <div id="import_status" style="font-size:12px; opacity:.8; min-height:1.2em"></div>
+
+  <form method="post" class="grid cols-3" id="newItemForm">
     <div style="grid-column:1/-1">
       <label>Title</label>
       <input class="input" type="text" name="title" placeholder="Item title" required>
     </div>
+
     <div style="grid-column:1/-1">
       <label>Listing Link (optional)</label>
       <input class="input" type="url" name="listing_link" placeholder="https://...">
     </div>
-    <div style="grid-column:1/-1"><hr style="border-color:var(--border);opacity:.3;margin:8px 0"></div>
+
+    <div style="grid-column:1/-1">
+      <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
+    </div>
+
     <div style="grid-column:1/-1">
       <h3 style="margin:0 0 8px 0;font-size:16px">Marketplace Links (optional)</h3>
     </div>
-    <div><label>Website</label><input class="input" type="url" name="web_url" placeholder="https://yourstore.com/..."></div>
-    <div><label>eBay</label><input class="input" type="url" name="ebay_url" placeholder="https://www.ebay.com/itm/..."></div>
-    <div><label>Amazon</label><input class="input" type="url" name="amazon_url" placeholder="https://www.amazon.com/dp/..."></div>
-    <div><label>Mercari</label><input class="input" type="url" name="mercari_url" placeholder="https://www.mercari.com/us/item/..."></div>
-    <div><label>Vinted</label><input class="input" type="url" name="vinted_url" placeholder="https://www.vinted.com/items/..."></div>
-    <div><label>Poshmark</label><input class="input" type="url" name="poshmark_url" placeholder="https://posh.mk/..."></div>
-    <div><label>Depop</label><input class="input" type="url" name="depop_url" placeholder="https://www.depop.com/products/..."></div>
-   </div>
-   <div class="card" style="margin-top:16px">
-    <div style="grid-column:1/-1"><hr style="border-color:var(--border);opacity:.3;margin:8px 0"></div>
-    <h3 style="margin:0 0 8px 0;font-size:16px">Location</h3>
 
-    {% if settings.enable_A %}
     <div>
-      <label>{{ settings.label_A }} (A)</label>
-      <input class="input" type="text" name="A" placeholder="e.g., 1">
+      <label>Website</label>
+      <input class="input" type="url" name="web_url" placeholder="https://yourstore.com/...">
     </div>
-    {% endif %}
-    {% if settings.enable_B %}
     <div>
-      <label>{{ settings.label_B }} (B)</label>
-      <input class="input" type="text" name="B" placeholder="e.g., 1">
+      <label>eBay</label>
+      <input class="input" type="url" name="ebay_url" placeholder="https://www.ebay.com/itm/...">
     </div>
-    {% endif %}
-    {% if settings.enable_S %}
     <div>
-      <label>{{ settings.label_S }} (S)</label>
-      <input class="input" type="text" name="S" placeholder="e.g., 1">
+      <label>Amazon</label>
+      <input class="input" type="url" name="amazon_url" placeholder="https://www.amazon.com/dp/...">
     </div>
-    {% endif %}
-    {% if settings.enable_C %}
     <div>
-      <label>{{ settings.label_C }} (C)</label>
-      <input class="input" type="text" name="C" placeholder="e.g., 1">
+      <label>Mercari</label>
+      <input class="input" type="url" name="mercari_url" placeholder="https://www.mercari.com/us/item/...">
     </div>
-    {% endif %}
-    <div style="grid-column:1/-1">
-      <button class="btn" type="submit">Create Item</button>
-      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+    <div>
+      <label>Vinted</label>
+      <input class="input" type="url" name="vinted_url" placeholder="https://www.vinted.com/items/...">
+    </div>
+    <div>
+      <label>Poshmark</label>
+      <input class="input" type="url" name="poshmark_url" placeholder="https://posh.mk/...">
+    </div>
+    <div>
+      <label>Depop</label>
+      <input class="input" type="url" name="depop_url" placeholder="https://www.depop.com/products/...">
+    </div>
+
+    <div class="card" style="grid-column:1/-1; margin-top:16px">
+      <div style="grid-column:1/-1">
+        <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
+      </div>
+      <h3 style="margin:0 0 8px 0;font-size:16px">Location</h3>
+
+      {% if settings.enable_A %}
+      <div>
+        <label>{{ settings.label_A }} (A)</label>
+        <input class="input" type="text" name="A" placeholder="e.g., 1">
+      </div>
+      {% endif %}
+
+      {% if settings.enable_B %}
+      <div>
+        <label>{{ settings.label_B }} (B)</label>
+        <input class="input" type="text" name="B" placeholder="e.g., 1">
+      </div>
+      {% endif %}
+
+      {% if settings.enable_S %}
+      <div>
+        <label>{{ settings.label_S }} (S)</label>
+        <input class="input" type="text" name="S" placeholder="e.g., 1">
+      </div>
+      {% endif %}
+
+      {% if settings.enable_C %}
+      <div>
+        <label>{{ settings.label_C }} (C)</label>
+        <input class="input" type="text" name="C" placeholder="e.g., 1">
+      </div>
+      {% endif %}
+
+      <div style="grid-column:1/-1; margin-top:8px">
+        <button class="btn" type="submit">Create Item</button>
+        <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+      </div>
     </div>
   </form>
 </div>
+
+<script>
+(function(){
+  const btn = document.getElementById('btnFetch');
+  const urlInput = document.getElementById('import_url');
+  const statusEl = document.getElementById('import_status');
+  const form = document.getElementById('newItemForm');
+
+  function setStatus(msg, ok=true){
+    statusEl.textContent = msg || '';
+    statusEl.style.color = ok ? 'var(--text-muted, #666)' : 'var(--error, #b00020)';
+  }
+
+  btn?.addEventListener('click', async () => {
+    const raw = (urlInput?.value || '').trim();
+    if (!raw) {
+      setStatus('Please paste a URL first.', false);
+      return;
+    }
+    setStatus('Fetching…');
+
+    try {
+      const qp = new URLSearchParams({ url: raw });
+      const res = await fetch(`{{ url_for('main.api_fetch_market_title') }}?` + qp.toString(), {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      });
+      const data = await res.json();
+
+      if (!data.ok) {
+        setStatus(data.error || 'Could not fetch data.', false);
+        return;
+      }
+
+      // Rellenar campos
+      const titleInput = form.querySelector('input[name="title"]');
+      const ebayInput  = form.querySelector('input[name="ebay_url"]');
+
+      if (data.fill?.title && titleInput) {
+        titleInput.value = data.fill.title;
+      }
+      if (data.marketplace === 'ebay' && ebayInput) {
+        ebayInput.value = raw;
+      }
+
+      setStatus(`Detected: ${data.marketplace || 'unknown'}${data.title ? ' · Title found' : ''}.`);
+    } catch (e) {
+      setStatus('Fetch failed. Try again or fill manually.', false);
+    }
+  });
+})();
+</script>
 {% endblock %}

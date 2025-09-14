@@ -1,6 +1,15 @@
-from flask import render_template, request, redirect, url_for, send_file, flash, Response
+from flask import (
+    render_template, request, redirect, url_for, send_file, flash, Response,
+    jsonify, send_from_directory, make_response
+)
 from flask_login import login_required, current_user
 from sqlalchemy import or_
+import io
+import re
+from urllib.parse import urlparse
+
+import requests
+from bs4 import BeautifulSoup
 
 from ..extensions import db
 from ..models.item import Item
@@ -94,6 +103,89 @@ def dashboard():
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
+
+
+# ---------------------- API helper: importar título desde URL ----------------------
+
+@main_bp.route("/api/fetch-market-title")
+@login_required
+def api_fetch_market_title():
+    """
+    Recibe ?url=... , detecta marketplace y devuelve {ok, marketplace, title, fill: {...}}
+    Soporta eBay: busca h1.x-item-title__mainTitle y tiene fallbacks og:title y <title>.
+    """
+    raw_url = (request.args.get("url") or "").strip()
+    if not raw_url:
+        return jsonify({"ok": False, "error": "Missing url"}), 400
+
+    # Validación simple de esquema
+    if not re.match(r"^https?://", raw_url, re.I):
+        return jsonify({"ok": False, "error": "Invalid URL"}), 400
+
+    # Detección de dominio
+    try:
+        netloc = urlparse(raw_url).netloc.lower()
+    except Exception:
+        netloc = ""
+
+    # Detectar eBay por TLDs comunes
+    is_ebay = any(
+        netloc.endswith(d)
+        for d in [
+            "ebay.com", "ebay.co.uk", "ebay.de", "ebay.fr", "ebay.it",
+            "ebay.es", "ebay.ca", "ebay.com.au", "ebay.com.mx",
+            "ebay.com.sg", "ebay.com.hk", "ebay.nl"
+        ]
+    )
+    marketplace = "ebay" if is_ebay else "unknown"
+
+    title_text = None
+
+    if marketplace == "ebay":
+        try:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            }
+            r = requests.get(raw_url, headers=headers, timeout=10)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "html.parser")
+
+            # Selector principal solicitado
+            h1 = soup.select_one("h1.x-item-title__mainTitle")
+            if h1:
+                title_text = h1.get_text(strip=True)
+
+            # Fallbacks
+            if not title_text:
+                og = soup.find("meta", property="og:title")
+                if og and og.get("content"):
+                    title_text = og["content"].strip()
+
+            if not title_text:
+                ttag = soup.find("title")
+                if ttag and ttag.get_text(strip=True):
+                    title_text = ttag.get_text(strip=True)
+
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Request/parse failed: {e}"}), 502
+
+    # Construcción de payload de autocompletado
+    fill = {}
+    if title_text:
+        fill["title"] = title_text
+    if marketplace == "ebay":
+        fill["ebay_url"] = raw_url
+
+    return jsonify({
+        "ok": True,
+        "marketplace": marketplace,
+        "title": title_text,
+        "fill": fill
+    })
 
 
 # ---------------------- CRUD Items (protegido) ----------------------
@@ -304,14 +396,13 @@ def qr_for_location(username, code):
 
     link = url_for("main.public_view_location", username=username, code=code, _external=True)
     img = qr_label_image(code, human, link, qr_px=300)
-    import io
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
     return send_file(buf, mimetype="image/png")
 
 
-# ---------------------- SEO extra (opcional) ----------------------
+# ---------------------- SEO / PWA extra ----------------------
 
 @main_bp.route("/robots.txt")
 def robots_txt():
@@ -328,8 +419,6 @@ def sitemap_xml():
 </urlset>"""
     return Response(xml, mimetype="application/xml")
 
-# en qventory/routes/main.py (o donde registres rutas “públicas”)
-from flask import send_from_directory, make_response
 
 @main_bp.route("/sw.js")
 def service_worker():
@@ -338,6 +427,7 @@ def service_worker():
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Content-Type"] = "application/javascript"
     return resp
+
 
 @main_bp.route("/offline")
 def offline():
