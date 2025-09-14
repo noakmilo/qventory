@@ -72,9 +72,9 @@ a{color:var(--accent);text-decoration:none}
 h1{font-size:var(--fs-xl);margin:0 0 var(--space-2)}
 
 .cardfilters {font-size: 10px;}
-.cardfilters select {font-size: 10px; padding: 5px;}
+.cardfilters select {font-size: 11px; max-height: 15px;}
 
-.cardfilters .btn {font-size: 10px; padding: 5px;}
+.cardfilters .btn {font-size: 11px; max-height: 15px;}
 
 /* Header mejor responsive */
 header{
