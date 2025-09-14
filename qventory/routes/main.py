@@ -6,12 +6,19 @@ from flask_login import login_required, current_user
 from sqlalchemy import or_
 import io
 import re
+import os
+import tempfile
+import subprocess
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
+
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.graphics.barcode import code128
+from reportlab.lib.units import mm
 
 from ..extensions import db
 from ..models.item import Item
@@ -107,7 +114,7 @@ def dashboard():
     )
 
 
-# ---------------------- Helpers de scraping / anti-bot ----------------------
+# ---------------------- Helpers scraping / anti-bot eBay ----------------------
 
 DESKTOP_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -179,24 +186,21 @@ def _extract_title_from_html(html):
 def api_fetch_market_title():
     """
     Recibe ?url=... , detecta marketplace y devuelve {ok, marketplace, title, fill: {...}}
-    Soporta eBay: busca h1.x-item-title__mainTitle y tiene fallbacks og:title y <title>.
+    Soporta eBay: busca h1.x-item-title__mainTitle y fallbacks og:title y <title>.
     Implementa sesión/cookies, retries y fallback a UA móvil para saltar anti-bot.
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
         return jsonify({"ok": False, "error": "Missing url"}), 400
 
-    # Validación simple de esquema
     if not re.match(r"^https?://", raw_url, re.I):
         return jsonify({"ok": False, "error": "Invalid URL"}), 400
 
-    # Detección de dominio
     try:
         netloc = urlparse(raw_url).netloc.lower()
     except Exception:
         netloc = ""
 
-    # Detectar eBay por TLDs comunes
     is_ebay = any(
         netloc.endswith(d)
         for d in [
@@ -211,11 +215,9 @@ def api_fetch_market_title():
 
     if marketplace == "ebay":
         try:
-            # 1) Intento con User-Agent desktop
             html = _fetch_html_with_cookies(raw_url, DESKTOP_UA, timeout=20)
             title_text = _extract_title_from_html(html)
 
-            # 2) Fallback: si el HTML sigue “vacío” o no hay título, prueba UA móvil
             if not title_text or len(html) < 1000:
                 html_m = _fetch_html_with_cookies(raw_url, MOBILE_UA, timeout=20)
                 maybe = _extract_title_from_html(html_m)
@@ -230,7 +232,6 @@ def api_fetch_market_title():
         except requests.exceptions.RequestException as e:
             return jsonify({"ok": False, "error": f"Request/parse failed: {e}"}), 502
 
-    # Construcción de payload de autocompletado
     fill = {}
     if title_text:
         fill["title"] = title_text
@@ -343,27 +344,113 @@ def delete_item(item_id):
     return redirect(url_for("main.dashboard"))
 
 
-# ---------------------- Settings (protegido) ----------------------
+# ---------------------- Print label (protegido) ----------------------
 
-@main_bp.route("/settings", methods=["GET", "POST"])
+def _ellipsize(s: str, n: int = 20) -> str:
+    s = (s or "").strip()
+    if len(s) <= n:
+        return s
+    return s[:n].rstrip() + "…"
+
+def _build_item_label_pdf(it, settings) -> bytes:
+    """
+    PDF 40x30mm:
+      - Code128 (SKU)
+      - Título (20 chars + …)
+      - Ubicación (location_code)
+    """
+    W = 40 * mm
+    H = 30 * mm
+
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=(W, H))
+
+    m = 3 * mm
+    inner_w = W - 2 * m
+    y = H - m
+
+    # Barcode SKU
+    sku = it.sku or ""
+    bc = code128.Code128(sku, barHeight=H * 0.38, humanReadable=False)
+    bw, bh = bc.width, bc.height
+    scale = min(1.0, inner_w / bw)
+    x_bc = m + (inner_w - bw * scale) / 2.0
+    y_bc = y - bh * scale
+    c.saveState()
+    c.translate(x_bc, y_bc)
+    c.scale(scale, scale)
+    bc.drawOn(c, 0, 0)
+    c.restoreState()
+    y = y_bc - 2
+
+    # Título
+    title = _ellipsize(it.title or "", 20)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(W / 2.0, y - 10, title)
+    y = y - 14
+
+    # Ubicación
+    loc = it.location_code or "-"
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(W / 2.0, y - 10, loc)
+
+    c.showPage()
+    c.save()
+    pdf_bytes = buf.getvalue()
+    buf.close()
+    return pdf_bytes
+
+@main_bp.route("/item/<int:item_id>/print", methods=["POST"])
 @login_required
-def settings():
+def print_item(item_id):
+    it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
     s = get_or_create_settings(current_user)
-    if request.method == "POST":
-        s.enable_A = request.form.get("enable_A") == "on"
-        s.enable_B = request.form.get("enable_B") == "on"
-        s.enable_S = request.form.get("enable_S") == "on"
-        s.enable_C = request.form.get("enable_C") == "on"
 
-        s.label_A = (request.form.get("label_A") or "").strip() or "Aisle"
-        s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
-        s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
-        s.label_C = (request.form.get("label_C") or "").strip() or "Container"
+    pdf_bytes = _build_item_label_pdf(it, s)
 
-        db.session.commit()
-        flash("Settings saved.", "ok")
-        return redirect(url_for("main.settings"))
-    return render_template("settings.html", settings=s)
+    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional
+    try:
+        with tempfile.NamedTemporaryFile(prefix="qventory_label_", suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = tmp.name
+
+        lp_cmd = ["lp"]
+        if printer_name:
+            lp_cmd += ["-d", printer_name]
+        lp_cmd.append(tmp_path)
+
+        res = subprocess.run(lp_cmd, capture_output=True, text=True, timeout=15)
+        if res.returncode == 0:
+            flash("Label sent to printer.", "ok")
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            return redirect(url_for("main.dashboard"))
+        else:
+            flash("Printing failed. Downloading the label instead.", "error")
+            return send_file(
+                io.BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=f"label_{it.sku}.pdf",
+            )
+    except FileNotFoundError:
+        flash("System print not available. Downloading the label.", "error")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"label_{it.sku}.pdf",
+        )
+    except Exception as e:
+        flash(f"Unexpected error: {e}. Downloading the label.", "error")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"label_{it.sku}.pdf",
+        )
 
 
 # ---------------------- Batch QR (protegido) ----------------------
@@ -401,7 +488,6 @@ def qr_batch():
         flash("No codes generated. Please provide at least one value.", "error")
         return redirect(url_for("main.qr_batch"))
 
-    # Construye links públicos usando el username del dueño
     from ..helpers.utils import build_qr_batch_pdf
     pdf_buf = build_qr_batch_pdf(
         combos, s,
@@ -430,7 +516,6 @@ def public_view_location(username, code):
         q = q.filter(Item.C == parts["C"])
 
     items = q.order_by(Item.created_at.desc()).all()
-    # Pasamos username para usarlo en los enlaces de QR dentro de la plantilla
     return render_template("location.html", code=code, items=items, settings=s, parts=parts, username=username)
 
 
@@ -480,7 +565,6 @@ def sitemap_xml():
 @main_bp.route("/sw.js")
 def service_worker():
     resp = make_response(send_from_directory("static", "sw.js"))
-    # Evita caché agresiva: así se actualiza bien en clientes
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Content-Type"] = "application/javascript"
     return resp
@@ -488,5 +572,4 @@ def service_worker():
 
 @main_bp.route("/offline")
 def offline():
-    # No requiere login; es fallback de PWA
     return render_template("offline.html")
