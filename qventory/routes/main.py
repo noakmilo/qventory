@@ -12,7 +12,11 @@ import time
 import requests
 from urllib.parse import urlparse
 
-# >>> IMPRESIÓN (ya lo tenías)
+# Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
+from dotenv import load_dotenv
+load_dotenv("/opt/qventory/qventory/.env")
+
+# >>> IMPRESIÓN (lo existente)
 import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
@@ -121,25 +125,34 @@ def dashboard():
     )
 
 
-# ---------------------- eBay Browse API (PROD, sin env) ----------------------
+# ---------------------- eBay Browse API (con .env) ----------------------
 
-# TUS CREDENCIALES DE PRODUCCIÓN (hardcodeadas a tu pedido)
-EBAY_CLIENT_ID = "CamiloNo-listgena-PRD-412c11d4d-2f6cb02f"
-EBAY_CLIENT_SECRET = "PRD-12c11d4dc6bd-cfc6-4186-a5df-f779"
+EBAY_ENV = (os.environ.get("EBAY_ENV") or "production").lower()
+EBAY_CLIENT_ID = os.environ.get("EBAY_CLIENT_ID")
+EBAY_CLIENT_SECRET = os.environ.get("EBAY_CLIENT_SECRET")
 
-# Endpoints de producción
-EBAY_OAUTH_URL = "https://api.ebay.com/identity/v1/oauth2/token"
-EBAY_BROWSE_BASE = "https://api.ebay.com/buy/browse/v1"
+def _ebay_base():
+    if EBAY_ENV == "sandbox":
+        return {
+            "oauth": "https://api.sandbox.ebay.com/identity/v1/oauth2/token",
+            "browse": "https://api.sandbox.ebay.com/buy/browse/v1",
+        }
+    return {
+        "oauth": "https://api.ebay.com/identity/v1/oauth2/token",
+        "browse": "https://api.ebay.com/buy/browse/v1",
+    }
 
 # Cache simple de token en memoria
 _EBAY_TOKEN = {"value": None, "exp": 0}
 
 def _get_ebay_app_token() -> str:
+    if not EBAY_CLIENT_ID or not EBAY_CLIENT_SECRET:
+        raise RuntimeError("Faltan EBAY_CLIENT_ID / EBAY_CLIENT_SECRET en .env")
+    base = _ebay_base()
     now = time.time()
     if _EBAY_TOKEN["value"] and _EBAY_TOKEN["exp"] - 60 > now:
         return _EBAY_TOKEN["value"]
 
-    # Authorization Basic base64(client_id:client_secret)
     basic = base64.b64encode(f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}".encode()).decode()
     data = {
         "grant_type": "client_credentials",
@@ -149,7 +162,7 @@ def _get_ebay_app_token() -> str:
         "Content-Type": "application/x-www-form-urlencoded",
         "Authorization": f"Basic {basic}",
     }
-    r = requests.post(EBAY_OAUTH_URL, headers=headers, data=data, timeout=15)
+    r = requests.post(base["oauth"], headers=headers, data=data, timeout=15)
     r.raise_for_status()
     j = r.json()
     _EBAY_TOKEN["value"] = j["access_token"]
@@ -173,7 +186,7 @@ def _extract_legacy_id(url: str) -> str | None:
 def api_fetch_market_title():
     """
     Recibe ?url=... y devuelve {ok, marketplace, title, fill:{title, ebay_url}}
-    Implementación: eBay Browse API (PROD).
+    Implementación: eBay Browse API (entorno tomado de EBAY_ENV).
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
@@ -185,10 +198,11 @@ def api_fetch_market_title():
     if not legacy_id:
         return jsonify({"ok": False, "error": "No se pudo extraer el legacy_item_id de la URL"}), 400
 
+    base = _ebay_base()
     try:
         token = _get_ebay_app_token()
         r = requests.get(
-            f"{EBAY_BROWSE_BASE}/item/get_item_by_legacy_id",
+            f"{base['browse']}/item/get_item_by_legacy_id",
             params={"legacy_item_id": legacy_id},
             headers={"Authorization": f"Bearer {token}"},
             timeout=15
@@ -197,12 +211,12 @@ def api_fetch_market_title():
         if r.status_code == 403:
             return jsonify({
                 "ok": False,
-                "error": "403 Forbidden: tu app aún no tiene acceso a Browse API en producción (o keyset deshabilitado)."
+                "error": f"403 Forbidden: tu app aún no tiene acceso a Browse API en {EBAY_ENV} (o keyset deshabilitado)."
             }), 403
         if r.status_code == 404:
             return jsonify({
                 "ok": False,
-                "error": "404: legacy_item_id no encontrado. ¿El listing existe y es público?"
+                "error": "404: legacy_item_id no encontrado en este entorno."
             }), 404
 
         r.raise_for_status()
@@ -560,7 +574,7 @@ def print_item(item_id):
 
     pdf_bytes = _build_item_label_pdf(it, s)
 
-    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional
+    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional, desde .env
     try:
         with tempfile.NamedTemporaryFile(prefix="qventory_label_", suffix=".pdf", delete=False) as tmp:
             tmp.write(pdf_bytes)
