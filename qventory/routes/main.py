@@ -48,6 +48,10 @@ def landing():
 def dashboard():
     s = get_or_create_settings(current_user)
 
+    # Conteo total de items del usuario (para el H2)
+    total_items = Item.query.filter_by(user_id=current_user.id).count()
+
+    # Filtros de búsqueda
     q = (request.args.get("q") or "").strip()
     fA = (request.args.get("A") or "").strip()
     fB = (request.args.get("B") or "").strip()
@@ -110,7 +114,10 @@ def dashboard():
 
     return render_template(
         "dashboard.html",
-        items=items, settings=s, options=options,
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,  # <-- para mostrar en el H2: Items ({{ total_items }})
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )

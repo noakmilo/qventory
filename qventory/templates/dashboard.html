@@ -58,7 +58,7 @@
         <select name="platform">
           <option value="">All</option>
           {% for key,label in PLATFORMS %}
-            <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -71,7 +71,7 @@
   </div>
 
   <div class="card" style="flex:3 1 600px;min-width:320px">
-    <h2>Items</h2>
+    <h2>Items ({{ total_items }})</h2>
     <div class="table-wrap">
       {% set un = current_user.username %}
       <table>
@@ -85,16 +85,18 @@
           </tr>
         </thead>
         <tbody>
-        {% for it in items %}
+          {% for it in items %}
           <tr>
             <td>{{ it.title }}</td>
             <td><span class="tag itsku">{{ it.sku }}</span></td>
             <td>
               {% if it.location_code %}
-                <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
-                &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" target="_blank">QR</a>
+              <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{
+                it.location_code }}</a>
+              &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
+                target="_blank">QR</a>
               {% else %}
-                —
+              —
               {% endif %}
             </td>
             <td>
@@ -104,28 +106,31 @@
                 {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
                 {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
                 {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
-                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
+                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif
+                %}
                 {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
-                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
+                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or
+                it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
             <td>
               {% if current_user.is_authenticated %}
-                <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">📝</a>
+              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">📝</a>
 
-                <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                  <button class="btn settingsbtn" type="submit" title="Print label">🖨️</button>
-                </form>
+              <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
+                <button class="btn settingsbtn" type="submit" title="Print label">🖨️</button>
+              </form>
 
-                <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                  <button class="btn settingsbtn" type="submit">❌</button>
-                </form>
+              <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}"
+                onsubmit="return confirm('Delete this item?')">
+                <button class="btn settingsbtn" type="submit">❌</button>
+              </form>
               {% else %}
-                <span class="tag ">Login to edit</span>
+              <span class="tag ">Login to edit</span>
               {% endif %}
             </td>
           </tr>
-        {% endfor %}
+          {% endfor %}
         </tbody>
       </table>
     </div>
