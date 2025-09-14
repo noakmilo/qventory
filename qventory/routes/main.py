@@ -260,42 +260,65 @@ def api_fetch_market_title():
 @login_required
 def new_item():
     s = get_or_create_settings(current_user)
+
     if request.method == "POST":
+        # Campos base
         title = (request.form.get("title") or "").strip()
         listing_link = (request.form.get("listing_link") or "").strip() or None
 
-        web_url = (request.form.get("web_url") or "").strip() or None
-        ebay_url = (request.form.get("ebay_url") or "").strip() or None
-        amazon_url = (request.form.get("amazon_url") or "").strip() or None
+        web_url     = (request.form.get("web_url") or "").strip() or None
+        ebay_url    = (request.form.get("ebay_url") or "").strip() or None
+        amazon_url  = (request.form.get("amazon_url") or "").strip() or None
         mercari_url = (request.form.get("mercari_url") or "").strip() or None
-        vinted_url = (request.form.get("vinted_url") or "").strip() or None
-        poshmark_url = (request.form.get("poshmark_url") or "").strip() or None
-        depop_url = (request.form.get("depop_url") or "").strip() or None
+        vinted_url  = (request.form.get("vinted_url") or "").strip() or None
+        poshmark_url= (request.form.get("poshmark_url") or "").strip() or None
+        depop_url   = (request.form.get("depop_url") or "").strip() or None
 
-        A = (request.form.get("A") or "").strip() or None
-        B = (request.form.get("B") or "").strip() or None
+        # Location levels
+        A  = (request.form.get("A") or "").strip() or None
+        B  = (request.form.get("B") or "").strip() or None
         S_ = (request.form.get("S") or "").strip() or None
-        C = (request.form.get("C") or "").strip() or None
+        C  = (request.form.get("C") or "").strip() or None
 
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("main.new_item"))
 
+        # Crear item
         sku = generate_sku()
         loc = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
         it = Item(
             user_id=current_user.id,
-            title=title, sku=sku, listing_link=listing_link,
-            web_url=web_url, ebay_url=ebay_url, amazon_url=amazon_url,
-            mercari_url=mercari_url, vinted_url=vinted_url,
-            poshmark_url=poshmark_url, depop_url=depop_url,
-            A=A, B=B, S=S_, C=C, location_code=loc
+            title=title,
+            sku=sku,
+            listing_link=listing_link,
+            web_url=web_url,
+            ebay_url=ebay_url,
+            amazon_url=amazon_url,
+            mercari_url=mercari_url,
+            vinted_url=vinted_url,
+            poshmark_url=poshmark_url,
+            depop_url=depop_url,
+            A=A, B=B, S=S_, C=C,
+            location_code=loc
         )
         db.session.add(it)
         db.session.commit()
+
+        action = (request.form.get("submit_action") or "create").strip()
+
+        if action == "create_another":
+            # Guardar y quedarse en la misma página con el formulario limpio
+            flash("Item created. You can add another.", "ok")
+            return render_template("new_item.html", settings=s, item=None)
+
+        # Flujo normal: redirigir (dashboard o detalle)
         flash("Item created.", "ok")
         return redirect(url_for("main.dashboard"))
+
+    # GET
     return render_template("new_item.html", settings=s, item=None)
+
 
 
 @main_bp.route("/item/<int:item_id>/edit", methods=["GET", "POST"])

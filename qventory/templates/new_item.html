@@ -100,7 +100,8 @@
       {% endif %}
 
       <div style="grid-column:1/-1; margin-top:8px">
-        <button class="btn" type="submit">Create Item</button>
+        <button class="btn" type="submit" name="submit_action" value="create">Create Item</button>
+        <button class="btn" type="submit" name="submit_action" value="create_another" title="Save and keep this page ready for a new item">Save & Add Another</button>
         <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
       </div>
     </div>
