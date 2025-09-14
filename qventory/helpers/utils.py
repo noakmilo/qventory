@@ -27,10 +27,10 @@ def get_or_create_settings(user):
 def generate_sku():
     today = datetime.datetime.utcnow().strftime("%Y%m%d")
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    sku = f"INV-{today}-{suffix}"
+    sku = f"{today}-{suffix}"
     while Item.query.filter_by(sku=sku).first() is not None:
         suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
-        sku = f"INV-{today}-{suffix}"
+        sku = f"{today}-{suffix}"
     return sku
 
 def compose_location_code(A=None, B=None, S=None, C=None, enabled=("A","B","S","C")):
