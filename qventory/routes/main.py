@@ -13,6 +13,15 @@ from bs4 import BeautifulSoup
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
+# >>> NUEVO: imports para impresión de etiquetas
+import os
+import tempfile
+import subprocess
+from reportlab.pdfgen import canvas as rl_canvas
+from reportlab.graphics.barcode import code128
+from reportlab.lib.units import mm
+# <<< NUEVO
+
 from ..extensions import db
 from ..models.item import Item
 from ..models.setting import Setting
@@ -490,3 +499,113 @@ def service_worker():
 def offline():
     # No requiere login; es fallback de PWA
     return render_template("offline.html")
+
+
+# ====================== NUEVO: helpers + ruta de IMPRESIÓN ======================
+
+def _ellipsize(s: str, n: int = 20) -> str:
+    s = (s or "").strip()
+    if len(s) <= n:
+        return s
+    return s[:n].rstrip() + "…"
+
+def _build_item_label_pdf(it, settings) -> bytes:
+    """
+    Genera un PDF 40x30 mm con:
+      - Barcode Code128 del SKU
+      - Título (20 chars + …)
+      - Ubicación (location_code)
+    """
+    W = 40 * mm
+    H = 30 * mm
+
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=(W, H))
+
+    m = 3 * mm
+    inner_w = W - 2 * m
+    y = H - m
+
+    # Barcode SKU
+    sku = it.sku or ""
+    bc = code128.Code128(sku, barHeight=H * 0.38, humanReadable=False)
+    bw, bh = bc.width, bc.height
+    scale = min(1.0, inner_w / bw)
+    x_bc = m + (inner_w - bw * scale) / 2.0
+    y_bc = y - bh * scale
+    c.saveState()
+    c.translate(x_bc, y_bc)
+    c.scale(scale, scale)
+    bc.drawOn(c, 0, 0)
+    c.restoreState()
+    y = y_bc - 2
+
+    # Título
+    title = _ellipsize(it.title or "", 20)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(W / 2.0, y - 10, title)
+    y = y - 14
+
+    # Ubicación
+    loc = it.location_code or "-"
+    c.setFont("Helvetica", 8)
+    c.drawCentredString(W / 2.0, y - 10, loc)
+
+    c.showPage()
+    c.save()
+    pdf_bytes = buf.getvalue()
+    buf.close()
+    return pdf_bytes
+
+@main_bp.route("/item/<int:item_id>/print", methods=["POST"])
+@login_required
+def print_item(item_id):
+    it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+    s = get_or_create_settings(current_user)
+
+    pdf_bytes = _build_item_label_pdf(it, s)
+
+    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional
+    try:
+        with tempfile.NamedTemporaryFile(prefix="qventory_label_", suffix=".pdf", delete=False) as tmp:
+            tmp.write(pdf_bytes)
+            tmp_path = tmp.name
+
+        lp_cmd = ["lp"]
+        if printer_name:
+            lp_cmd += ["-d", printer_name]
+        lp_cmd.append(tmp_path)
+
+        res = subprocess.run(lp_cmd, capture_output=True, text=True, timeout=15)
+        if res.returncode == 0:
+            flash("Label sent to printer.", "ok")
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+            return redirect(url_for("main.dashboard"))
+        else:
+            flash("Printing failed. Downloading the label instead.", "error")
+            return send_file(
+                io.BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name=f"label_{it.sku}.pdf",
+            )
+    except FileNotFoundError:
+        # No existe 'lp' (CUPS) en el sistema: ofrece descarga
+        flash("System print not available. Downloading the label.", "error")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"label_{it.sku}.pdf",
+        )
+    except Exception as e:
+        flash(f"Unexpected error: {e}. Downloading the label.", "error")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"label_{it.sku}.pdf",
+        )
