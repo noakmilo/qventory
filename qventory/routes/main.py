@@ -10,6 +10,8 @@ from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
+from urllib3.util.retry import Retry
+from requests.adapters import HTTPAdapter
 
 from ..extensions import db
 from ..models.item import Item
@@ -105,6 +107,71 @@ def dashboard():
     )
 
 
+# ---------------------- Helpers de scraping / anti-bot ----------------------
+
+DESKTOP_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+MOBILE_UA = (
+    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+)
+
+def _make_session():
+    s = requests.Session()
+    retry = Retry(
+        total=3,
+        backoff_factor=0.6,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=10)
+    s.mount("http://", adapter)
+    s.mount("https://", adapter)
+    return s
+
+def _fetch_html_with_cookies(url, ua, timeout=20):
+    headers = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Dest": "document",
+    }
+    sess = _make_session()
+
+    # 1) Primer GET: eBay puede plantar cookies y devolver content-length: 1
+    r1 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+    r1.raise_for_status()
+    text = r1.text or ""
+
+    # 2) Si el body es muy corto, hacer segundo GET con cookies ya plantadas
+    if len(text) < 1000:
+        r2 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        r2.raise_for_status()
+        text = r2.text or ""
+
+    return text
+
+def _extract_title_from_html(html):
+    soup = BeautifulSoup(html, "html.parser")
+    h1 = soup.select_one("h1.x-item-title__mainTitle")
+    if h1:
+        return h1.get_text(strip=True)
+    og = soup.find("meta", property="og:title")
+    if og and og.get("content"):
+        return og["content"].strip()
+    ttag = soup.find("title")
+    if ttag and ttag.get_text(strip=True):
+        return ttag.get_text(strip=True)
+    return None
+
+
 # ---------------------- API helper: importar título desde URL ----------------------
 
 @main_bp.route("/api/fetch-market-title")
@@ -113,6 +180,7 @@ def api_fetch_market_title():
     """
     Recibe ?url=... , detecta marketplace y devuelve {ok, marketplace, title, fill: {...}}
     Soporta eBay: busca h1.x-item-title__mainTitle y tiene fallbacks og:title y <title>.
+    Implementa sesión/cookies, retries y fallback a UA móvil para saltar anti-bot.
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
@@ -143,34 +211,23 @@ def api_fetch_market_title():
 
     if marketplace == "ebay":
         try:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                )
-            }
-            r = requests.get(raw_url, headers=headers, timeout=20)
-            r.raise_for_status()
-            soup = BeautifulSoup(r.text, "html.parser")
+            # 1) Intento con User-Agent desktop
+            html = _fetch_html_with_cookies(raw_url, DESKTOP_UA, timeout=20)
+            title_text = _extract_title_from_html(html)
 
-            # Selector principal solicitado
-            h1 = soup.select_one("h1.x-item-title__mainTitle")
-            if h1:
-                title_text = h1.get_text(strip=True)
-
-            # Fallbacks
-            if not title_text:
-                og = soup.find("meta", property="og:title")
-                if og and og.get("content"):
-                    title_text = og["content"].strip()
+            # 2) Fallback: si el HTML sigue “vacío” o no hay título, prueba UA móvil
+            if not title_text or len(html) < 1000:
+                html_m = _fetch_html_with_cookies(raw_url, MOBILE_UA, timeout=20)
+                maybe = _extract_title_from_html(html_m)
+                if maybe:
+                    title_text = maybe
 
             if not title_text:
-                ttag = soup.find("title")
-                if ttag and ttag.get_text(strip=True):
-                    title_text = ttag.get_text(strip=True)
+                return jsonify({"ok": False, "error": "No se pudo extraer el título de eBay."}), 502
 
-        except Exception as e:
+        except requests.exceptions.Timeout:
+            return jsonify({"ok": False, "error": "Timeout: eBay no respondió a tiempo"}), 504
+        except requests.exceptions.RequestException as e:
             return jsonify({"ok": False, "error": f"Request/parse failed: {e}"}), 502
 
     # Construcción de payload de autocompletado
