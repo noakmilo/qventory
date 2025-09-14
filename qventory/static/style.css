@@ -52,7 +52,8 @@ a{color:var(--accent);text-decoration:none}
 .btn.block{display:flex;justify-content:center;width:100%}
 
 .settingsbtn{
-  font-size: 8px;
+  font-size: 10px;
+  margin: 2px;
 }
 
 /* Layout */
