@@ -2,7 +2,7 @@
 {% block title %}Dashboard – Qventory{% endblock %}
 {% block content %}
 <div class="row">
-  <div class="card" style="flex:1 1 280px;min-width:280px">
+  <div class="card cardfilters" style="flex:1 1 280px;min-width:280px">
     <h2>Filters</h2>
     <form method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
       <div style="grid-column:1/-1">
