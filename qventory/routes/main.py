@@ -150,7 +150,7 @@ def api_fetch_market_title():
                     "Chrome/124.0.0.0 Safari/537.36"
                 )
             }
-            r = requests.get(raw_url, headers=headers, timeout=10)
+            r = requests.get(raw_url, headers=headers, timeout=20)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "html.parser")
 
