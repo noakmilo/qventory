@@ -6,6 +6,8 @@ from flask_login import login_required, current_user
 from sqlalchemy import or_
 import io
 import re
+import os
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -13,8 +15,23 @@ from bs4 import BeautifulSoup
 from urllib3.util.retry import Retry
 from requests.adapters import HTTPAdapter
 
+# >>> NUEVO: imports Playwright/Selenium (opcionales, manejamos import dinámico)
+try:
+    from playwright.sync_api import sync_playwright
+except Exception:
+    sync_playwright = None
+
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+except Exception:
+    webdriver = None
+# <<<
+
 # >>> NUEVO: imports para impresión de etiquetas
-import os
 import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
@@ -134,6 +151,12 @@ MOBILE_UA = (
     "(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 )
 
+ANTI_BOT_MARKERS = (
+    "Pardon Our Interruption",  # eBay/Akamai
+    "Access to this site is blocked",
+    "To continue, please verify"
+)
+
 def _make_session():
     s = requests.Session()
     retry = Retry(
@@ -155,18 +178,14 @@ def _fetch_html_with_cookies(url, ua, timeout=20):
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
         "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Dest": "document",
     }
     sess = _make_session()
 
-    # 1) Primer GET: eBay puede plantar cookies y devolver content-length: 1
     r1 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
     r1.raise_for_status()
     text = r1.text or ""
 
-    # 2) Si el body es muy corto, hacer segundo GET con cookies ya plantadas
+    # Segundo intento si el body luce sospechosamente corto
     if len(text) < 1000:
         r2 = sess.get(url, headers=headers, timeout=timeout, allow_redirects=True)
         r2.raise_for_status()
@@ -187,6 +206,146 @@ def _extract_title_from_html(html):
         return ttag.get_text(strip=True)
     return None
 
+def _looks_blocked(html: str) -> bool:
+    if not html:
+        return True
+    low = html[:5000]
+    return any(marker in low for marker in ANTI_BOT_MARKERS)
+
+
+# -------- Playwright headless (opcional) --------
+def _fetch_title_playwright(url: str, timeout_ms: int = 20000) -> str | None:
+    if sync_playwright is None:
+        return None
+    # Se controla con env USE_PLAYWRIGHT=1
+    if os.environ.get("USE_PLAYWRIGHT", "0") != "1":
+        return None
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            context = browser.new_context(user_agent=DESKTOP_UA, viewport={"width": 1366, "height": 768})
+            page = context.new_page()
+            page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+
+            # Espera rápida por el h1 (si aparece)
+            try:
+                page.wait_for_selector("h1.x-item-title__mainTitle", timeout=5000)
+            except Exception:
+                pass  # seguimos igual
+
+            # 1) Intenta selector principal
+            try:
+                el = page.query_selector("h1.x-item-title__mainTitle")
+                if el:
+                    txt = el.inner_text().strip()
+                    if txt:
+                        page.close(); context.close(); browser.close()
+                        return txt
+            except Exception:
+                pass
+
+            # 2) Fallback: og:title
+            try:
+                og = page.query_selector('meta[property="og:title"]')
+                if og:
+                    txt = (og.get_attribute("content") or "").strip()
+                    if txt:
+                        page.close(); context.close(); browser.close()
+                        return txt
+            except Exception:
+                pass
+
+            # 3) Fallback: page.title()
+            try:
+                t = (page.title() or "").strip()
+                if t:
+                    page.close(); context.close(); browser.close()
+                    return t
+            except Exception:
+                pass
+
+            page.close()
+            context.close()
+            browser.close()
+            return None
+    except Exception:
+        # Si Playwright falla (no browsers instalados, etc.)
+        return None
+
+
+# -------- Selenium headless (opcional) --------
+def _build_selenium_driver() -> "webdriver.Chrome|None":
+    if webdriver is None:
+        return None
+    if os.environ.get("USE_SELENIUM", "0") != "1":
+        return None
+
+    try:
+        options = ChromeOptions()
+        options.add_argument("--headless=new")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-gpu")
+        options.add_argument(f"--user-agent={DESKTOP_UA}")
+        options.add_argument("--window-size=1366,768")
+        # Si tienes CHROME_BIN/CHROMEDRIVER_PATH en env, puedes setearlos
+        chrome_bin = os.environ.get("CHROME_BIN")
+        if chrome_bin:
+            options.binary_location = chrome_bin
+        driver = webdriver.Chrome(options=options)  # requiere chromedriver instalado en PATH
+        driver.set_page_load_timeout(20)
+        return driver
+    except Exception:
+        return None
+
+def _fetch_title_selenium(url: str) -> str | None:
+    driver = _build_selenium_driver()
+    if not driver:
+        return None
+    try:
+        driver.get(url)
+
+        # 1) Espera/consulta el h1 principal
+        try:
+            el = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "h1.x-item-title__mainTitle"))
+            )
+            txt = el.text.strip()
+            if txt:
+                driver.quit()
+                return txt
+        except Exception:
+            pass
+
+        # 2) Fallback: og:title
+        try:
+            ogs = driver.find_elements(By.CSS_SELECTOR, 'meta[property="og:title"]')
+            if ogs:
+                val = (ogs[0].get_attribute("content") or "").strip()
+                if val:
+                    driver.quit()
+                    return val
+        except Exception:
+            pass
+
+        # 3) Fallback: title tag
+        try:
+            t = (driver.title or "").strip()
+            if t:
+                driver.quit()
+                return t
+        except Exception:
+            pass
+
+        driver.quit()
+        return None
+    except Exception:
+        try:
+            driver.quit()
+        except Exception:
+            pass
+        return None
+
 
 # ---------------------- API helper: importar título desde URL ----------------------
 
@@ -195,8 +354,10 @@ def _extract_title_from_html(html):
 def api_fetch_market_title():
     """
     Recibe ?url=... , detecta marketplace y devuelve {ok, marketplace, title, fill: {...}}
-    Soporta eBay: busca h1.x-item-title__mainTitle y tiene fallbacks og:title y <title>.
-    Implementa sesión/cookies, retries y fallback a UA móvil para saltar anti-bot.
+    Flujo:
+      1) requests + BS (rápido)
+      2) Playwright (si USE_PLAYWRIGHT=1)
+      3) Selenium   (si USE_SELENIUM=1)
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
@@ -226,25 +387,42 @@ def api_fetch_market_title():
     title_text = None
 
     if marketplace == "ebay":
+        # 1) intento rápido: requests + cookies + UA desktop/móvil
         try:
-            # 1) Intento con User-Agent desktop
             html = _fetch_html_with_cookies(raw_url, DESKTOP_UA, timeout=20)
-            title_text = _extract_title_from_html(html)
-
-            # 2) Fallback: si el HTML sigue “vacío” o no hay título, prueba UA móvil
-            if not title_text or len(html) < 1000:
-                html_m = _fetch_html_with_cookies(raw_url, MOBILE_UA, timeout=20)
-                maybe = _extract_title_from_html(html_m)
-                if maybe:
-                    title_text = maybe
+            blocked = _looks_blocked(html)
+            title_text = None if blocked else _extract_title_from_html(html)
 
             if not title_text:
-                return jsonify({"ok": False, "error": "No se pudo extraer el título de eBay."}), 502
-
+                html_m = _fetch_html_with_cookies(raw_url, MOBILE_UA, timeout=20)
+                blocked_m = _looks_blocked(html_m)
+                if not blocked_m:
+                    maybe = _extract_title_from_html(html_m)
+                    if maybe:
+                        title_text = maybe
         except requests.exceptions.Timeout:
             return jsonify({"ok": False, "error": "Timeout: eBay no respondió a tiempo"}), 504
         except requests.exceptions.RequestException as e:
-            return jsonify({"ok": False, "error": f"Request/parse failed: {e}"}), 502
+            # seguimos con headless
+            title_text = None
+
+        # 2) Playwright si sigue vacío y está habilitado
+        if not title_text:
+            pw_title = _fetch_title_playwright(raw_url)
+            if pw_title:
+                title_text = pw_title
+
+        # 3) Selenium si sigue vacío y está habilitado
+        if not title_text:
+            se_title = _fetch_title_selenium(raw_url)
+            if se_title:
+                title_text = se_title
+
+        if not title_text:
+            return jsonify({
+                "ok": False,
+                "error": "No se pudo extraer el título (bloqueo anti-bot). Pega el título manualmente o habilita Playwright/Selenium."
+            }), 502
 
     # Construcción de payload de autocompletado
     fill = {}
