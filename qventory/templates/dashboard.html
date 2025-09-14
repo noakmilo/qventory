@@ -111,17 +111,17 @@
             </td>
             <td>
               {% if current_user.is_authenticated %}
-                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}">📝</a>
+                <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">📝</a>
 
                 <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                  <button class="btn" type="submit" title="Print label">🖨️</button>
+                  <button class="btn settingsbtn" type="submit" title="Print label">🖨️</button>
                 </form>
 
                 <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                  <button class="btn" type="submit">❌</button>
+                  <button class="btn settingsbtn" type="submit">❌</button>
                 </form>
               {% else %}
-                <span class="tag">Login to edit</span>
+                <span class="tag ">Login to edit</span>
               {% endif %}
             </td>
           </tr>
