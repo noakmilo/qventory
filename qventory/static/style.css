@@ -106,7 +106,6 @@ th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-si
 .error{background:rgba(128,0,0,0.1);border:1px solid #4c2424;color:#f5a2a2}
 
 .itsku{
-  font-family: 'Courier New', Courier, monospace;
   letter-spacing: 1px;
   font-size: 10px;
 }
