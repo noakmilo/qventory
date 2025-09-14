@@ -7,4 +7,5 @@ class Config:
         p = pathlib.Path(_db_path)
         SQLALCHEMY_DATABASE_URI = f"sqlite:////{p.as_posix().lstrip('/')}"
     else:
-        SQLALCHEMY_DATABASE_URI = "sqlite:///app.db"
+        SQLALCHEMY_DATABASE_URI="sqlite:////opt/qventory/data/app.db"
+
