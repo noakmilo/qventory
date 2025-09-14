@@ -3,12 +3,13 @@
 {% block content %}
 
 <div class="row">
-  <!-- Filtros -->
+  {# ---- Filtros: solo si la vista pasó "options" ---- #}
+  {% if options is defined %}
   <div class="card" style="flex:1 1 280px;min-width:280px">
     <h2>Filters</h2>
     <form method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
       <div style="grid-column:1/-1">
-        <input class="input" type="text" name="q" value="{{ q }}" placeholder="Search title or SKU…">
+        <input class="input" type="text" name="q" value="{{ q|default('') }}" placeholder="Search title or SKU…">
       </div>
 
       {% if settings.enable_A %}
@@ -17,7 +18,7 @@
         <select name="A">
           <option value="">All</option>
           {% for opt in options.A %}
-          <option value="{{ opt }}" {% if fA==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if fA|default('')==opt %}selected{% endif %}>{{ opt }}</option>
           {% endfor %}
         </select>
       </div>
@@ -29,7 +30,7 @@
         <select name="B">
           <option value="">All</option>
           {% for opt in options.B %}
-          <option value="{{ opt }}" {% if fB==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if fB|default('')==opt %}selected{% endif %}>{{ opt }}</option>
           {% endfor %}
         </select>
       </div>
@@ -41,7 +42,7 @@
         <select name="S">
           <option value="">All</option>
           {% for opt in options.S %}
-          <option value="{{ opt }}" {% if fS==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if fS|default('')==opt %}selected{% endif %}>{{ opt }}</option>
           {% endfor %}
         </select>
       </div>
@@ -53,7 +54,7 @@
         <select name="C">
           <option value="">All</option>
           {% for opt in options.C %}
-          <option value="{{ opt }}" {% if fC==opt %}selected{% endif %}>{{ opt }}</option>
+          <option value="{{ opt }}" {% if fC|default('')==opt %}selected{% endif %}>{{ opt }}</option>
           {% endfor %}
         </select>
       </div>
@@ -65,7 +66,7 @@
         <select name="platform">
           <option value="">All</option>
           {% for key,label in PLATFORMS %}
-            <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
+            <option value="{{ key }}" {% if fPlatform|default('')==key %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -77,13 +78,16 @@
       </div>
     </form>
   </div>
+  {% endif %}
 
   <!-- Tabla / Cards -->
   <div class="card" style="flex:3 1 600px;min-width:320px">
     <h2>Items</h2>
-    {% set un = current_user.username %}
+
+    {# Username seguro: si hay sesión usa current_user, si no, usa la variable "username" de la ruta #}
+    {% set un = (current_user.is_authenticated and current_user.username) or username|default('') %}
+
     <div class="table-wrap">
-      <!-- Añade 'table-cards' para que en móvil se transforme a fichas -->
       <table class="table-cards">
         <thead>
           <tr>
@@ -135,7 +139,6 @@
   </div>
 </div>
 
-<!-- FAB móvil para crear ítems rápido -->
 <a class="btn fab" href="{{ url_for('main.new_item') }}">＋ Add Item</a>
 
 {% endblock %}
