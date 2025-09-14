@@ -105,6 +105,12 @@ th,td{padding:10px;border-bottom:1px solid var(--border);text-align:left;font-si
 .ok{background:rgba(0,128,0,0.1);border:1px solid #244c2f;color:#a2f5a2}
 .error{background:rgba(128,0,0,0.1);border:1px solid #4c2424;color:#f5a2a2}
 
+.itsku{
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 1px;
+  font-size: 10px;
+}
+
 /* Footer */
 footer{max-width:1250px;margin:32px auto;padding:16px;text-align:center;color:var(--sub)}
 footer a{color:var(--sub);text-decoration:none}

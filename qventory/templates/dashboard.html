@@ -88,7 +88,7 @@
         {% for it in items %}
           <tr>
             <td>{{ it.title }}</td>
-            <td><span class="tag">{{ it.sku }}</span></td>
+            <td><span class="tag itsku">{{ it.sku }}</span></td>
             <td>
               {% if it.location_code %}
                 <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
