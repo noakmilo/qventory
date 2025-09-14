@@ -11,6 +11,10 @@ from ..models.setting import Setting
 from ..models.item import Item
 from ..models.user import User
 
+# =========================
+#   Utilidades de sistema
+# =========================
+
 def get_or_create_settings(user):
     uid = user.id if hasattr(user, "id") else int(user)
     s = Setting.query.filter_by(user_id=uid).first()
@@ -57,7 +61,10 @@ def parse_location_code(code):
         result[current_key] = "".join(current_val).strip() or None
     return result
 
-# Batch helpers
+# =========================
+#   Batch helpers
+# =========================
+
 def parse_values(expr):
     if not expr:
         return []
@@ -78,17 +85,26 @@ def human_from_code(code, settings):
     parts = parse_location_code(code)
     labels = settings.labels_map()
     segs = []
-    if settings.enable_A and parts.get("A"):
+    if getattr(settings, "enable_A", False) and parts.get("A"):
         segs.append(f"{labels['A']} {parts['A']}")
-    if settings.enable_B and parts.get("B"):
+    if getattr(settings, "enable_B", False) and parts.get("B"):
         segs.append(f"{labels['B']} {parts['B']}")
-    if settings.enable_S and parts.get("S"):
+    if getattr(settings, "enable_S", False) and parts.get("S"):
         segs.append(f"{labels['S']} {parts['S']}")
-    if settings.enable_C and parts.get("C"):
+    if getattr(settings, "enable_C", False) and parts.get("C"):
         segs.append(f"{labels['C']} {parts['C']}")
     return " • ".join(segs) if segs else "Location"
 
+# =========================
+#   Render QR (PIL)
+# =========================
+
 def qr_label_image(code, human_text, link, qr_px=300):
+    """
+    (Mantener por compatibilidad) Devuelve una imagen de etiqueta apilada verticalmente.
+    NOTA: Para el layout 40x30 mm con QR a la izquierda y texto a la derecha,
+    ahora usamos la composición directa en PDF (ver build_qr_batch_pdf).
+    """
     qr_img = qrcode.make(link).convert("RGB").resize((qr_px, qr_px), Image.NEAREST)
     try:
         font = ImageFont.truetype("DejaVuSans.ttf", 40)
@@ -114,44 +130,126 @@ def qr_label_image(code, human_text, link, qr_px=300):
     d.text(((width-cw)//2, y_code), code, fill=(0,0,0), font=font)
     return out
 
-# PDF batch utility
+# =========================
+#   PDF: 40x30 mm, QR izq, texto der 12 pt
+# =========================
+
+def mm_to_pt(mm: float) -> float:
+    """Convierte milímetros a puntos (1 in = 25.4 mm; 1 in = 72 pt)."""
+    return mm * 72.0 / 25.4
+
+def _make_qr_pil(link: str, target_pt: float, dpi: int = 300):
+    """
+    Genera una imagen PIL cuadrada del QR a un tamaño físico 'target_pt' (en puntos PDF),
+    rasterizada a 'dpi' para que imprima nítido.
+    """
+    px = int(round(target_pt * dpi / 72.0))
+    img = qrcode.make(link).convert("RGB").resize((px, px), Image.NEAREST)
+    return img
+
 def build_qr_batch_pdf(codes, settings, make_link):
+    """
+    Construye un PDF con etiquetas de 40x30 mm:
+      - QR a la izquierda (alto completo menos padding).
+      - Texto a la derecha (human_text + code) en 12 pt.
+    Se auto-calcula cuántas etiquetas caben por página carta con el margen dado.
+    """
+    # Página
     page_w, page_h = letter
+    margin = 18  # ~6 mm de margen exterior; ajusta a gusto
+
+    # Etiqueta 40 x 30 mm
+    LABEL_W_PT = mm_to_pt(40.0)
+    LABEL_H_PT = mm_to_pt(30.0)
+
+    # Layout interno
+    PAD = 4                 # padding interno en pt
+    TEXT_FONT = "Helvetica" # tipografía estándar PDF
+    TEXT_SIZE = 12          # tamaño requerido
+    LINE_GAP = 2            # separación entre líneas
+    DPI = 300               # usa 203 si tu impresora es 203 dpi
+
+    # Grilla: cuántas etiquetas caben
+    cols = max(1, int((page_w - 2*margin) // LABEL_W_PT))
+    rows = max(1, int((page_h - 2*margin) // LABEL_H_PT))
+    grid_w = cols * LABEL_W_PT
+    grid_h = rows * LABEL_H_PT
+    left = (page_w - grid_w) / 2.0
+    bottom = (page_h - grid_h) / 2.0
+
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
+    c.setAuthor("Qventory")
+    c.setTitle("QR Labels 40x30mm")
 
-    cols, rows, qr_px = 2, 5, 300  # defaults; caller can change if desired
-    margin = 36
-    grid_w = page_w - margin*2
-    grid_h = page_h - margin*2
-    cell_w = grid_w / cols
-    cell_h = grid_h / rows
+    # Función local para truncar texto al ancho
+    def _truncate_to_width(text: str, max_width_pt: float) -> str:
+        if not text:
+            return ""
+        if c.stringWidth(text, TEXT_FONT, TEXT_SIZE) <= max_width_pt:
+            return text
+        ell = "…"
+        ell_w = c.stringWidth(ell, TEXT_FONT, TEXT_SIZE)
+        acc = ""
+        for ch in text:
+            if c.stringWidth(acc + ch, TEXT_FONT, TEXT_SIZE) + ell_w > max_width_pt:
+                break
+            acc += ch
+        return acc + ell
 
     for i, code in enumerate(codes):
+        # Nueva página si se llenó la grilla completa
+        if i > 0 and i % (cols * rows) == 0:
+            c.showPage()
+
+        idx = i % (cols * rows)
+        row = rows - 1 - (idx // cols)  # contamos de arriba hacia abajo
+        col = idx % cols
+
+        # Origen (esquina inferior izquierda) de la etiqueta actual
+        x0 = left + col * LABEL_W_PT
+        y0 = bottom + row * LABEL_H_PT
+
+        # Datos de la etiqueta
         link = make_link(code)
         human = human_from_code(code, settings)
-        img = qr_label_image(code, human, link, qr_px=qr_px)
 
-        row = (i // cols) % rows
-        col = i % cols
-        x = margin + col * cell_w
-        y = page_h - margin - (row+1) * cell_h
+        # QR: lado = altura de la etiqueta - 2*PAD
+        qr_side_pt = max(1.0, LABEL_H_PT - 2 * PAD)
+        qr_img = _make_qr_pil(link, qr_side_pt, dpi=DPI)
 
-        pad = 6
-        max_w = cell_w - pad*2
-        max_h = cell_h - pad*2
-        iw, ih = img.size
-        scale = min(max_w/iw, max_h/ih, 1.0)
-        draw_w = iw * scale
-        draw_h = ih * scale
+        # Dibuja QR
+        c.drawImage(
+            ImageReader(qr_img),
+            x0 + PAD,
+            y0 + PAD,
+            width=qr_side_pt,
+            height=qr_side_pt,
+            preserveAspectRatio=True,
+            mask='auto'
+        )
 
-        dx = x + (cell_w - draw_w)/2
-        dy = y + (cell_h - draw_h)/2
+        # Área de texto a la derecha del QR
+        text_x = x0 + PAD + qr_side_pt + PAD
+        text_w = max(1.0, LABEL_W_PT - (qr_side_pt + 3 * PAD))
+        text_top = y0 + LABEL_H_PT - PAD
 
-        c.drawImage(ImageReader(img), dx, dy, width=draw_w, height=draw_h)
+        c.setFont(TEXT_FONT, TEXT_SIZE)
 
-        if (i+1) % (cols*rows) == 0 and (i+1) < len(codes):
-            c.showPage()
+        # Dos líneas: human_text y code
+        line1 = _truncate_to_width(human or "Location", text_w)
+        line2 = _truncate_to_width(code or "", text_w)
+
+        # Posición de líneas (desde arriba hacia abajo)
+        y_line1 = text_top - TEXT_SIZE
+        y_line2 = y_line1 - (TEXT_SIZE + LINE_GAP)
+
+        c.drawString(text_x, y_line1, line1)
+        c.drawString(text_x, y_line2, line2)
+
+        # (opcional) guía de corte / borde de la etiqueta:
+        # c.setLineWidth(0.25)
+        # c.rect(x0, y0, LABEL_W_PT, LABEL_H_PT)
 
     c.save()
     buf.seek(0)
