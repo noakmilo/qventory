@@ -3,7 +3,6 @@ from flask import (
     jsonify, send_from_directory, make_response
 )
 from flask_login import login_required, current_user
-    # noqa: E402
 from sqlalchemy import or_
 import io
 import re
@@ -11,7 +10,7 @@ import os
 import base64
 import time
 import requests
-from urllib.parse import urlparse, parse_qs, unquote  # <-- para helpers eBay
+from urllib.parse import urlparse, parse_qs, unquote  # helpers URL eBay
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -631,55 +630,56 @@ FINDING_VERSION = "1.13.0"  # estable
 def _parse_seller_from_input(source: str) -> str | None:
     """
     Acepta:
-      - username directo (sin espacios, alfanumérico y _.-)
+      - username directo (A-Za-z0-9._-)
       - URL /usr/<seller>
-      - URL /str/<store>  -> intenta resolver seller con varias heurísticas:
-          * toma el slug como candidato si luce válido
-          * sigue redirecciones y busca _ssn= en URL final
-          * escanea HTML por _ssn= y claves: sellerUsername, sellerUserName, sellerName, userId
-          * si nada aparece, retorna el slug candidato
+      - URL /str/<store>  -> resuelve username real buscando:
+          * _ssn= en query o en la URL final (tras redirects)
+          * claves embebidas: sellerUsername, sellerUserName, sellerName, userId
+          * texto visible "Seller: <username>" en el HTML
+          * si nada aparece pero el slug es válido, usa el slug como fallback
     """
     if not source:
         return None
     s = source.strip()
 
-    # Si parece username directo
+    # username directo
     if not re.match(r"^https?://", s, re.I):
-        if re.match(r"^[A-Za-z0-9._-]{1,64}$", s):
-            return s
-        return None
+        return s if re.match(r"^[A-Za-z0-9._-]{1,64}$", s) else None
 
     try:
         p = urlparse(s)
         path = p.path or "/"
 
-        # --- /usr/<seller> ---
+        # /usr/<seller>
         m = re.search(r"/usr/([^/?#]+)", path, re.I)
         if m:
-            return unquote(m.group(1))
+            u = unquote(m.group(1))
+            return u if re.match(r"^[A-Za-z0-9._-]{1,64}$", u) else None
 
-        # --- _ssn=<seller> en query ---
+        # _ssn en query
         q = parse_qs(p.query or "")
         if "_ssn" in q and q["_ssn"]:
             return q["_ssn"][0]
 
-        # --- /str/<store> ---
-        if re.search(r"/str/([^/?#]+)", path, re.I):
-            slug = re.search(r"/str/([^/?#]+)", path, re.I).group(1)
-            candidate = unquote(slug) if re.match(r"^[A-Za-z0-9._-]{1,64}$", unquote(slug)) else None
+        # /str/<store>
+        mm = re.search(r"/str/([^/?#]+)", path, re.I)
+        if mm:
+            slug = unquote(mm.group(1))
+            candidate = slug if re.match(r"^[A-Za-z0-9._-]{1,64}$", slug) else None
 
-            # Intento de resolución activa con headers "reales"
+            # Intento activo con headers reales
             try:
                 headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                   "Chrome/124.0.0.0 Safari/537.36"),
                     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                     "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
                     "Cache-Control": "no-cache",
                 }
                 r = requests.get(s, headers=headers, timeout=15, allow_redirects=True)
 
-                # 1) Si la URL final trae _ssn=, úsalo
+                # _ssn en URL final
                 try:
                     pf = urlparse(r.url)
                     qf = parse_qs(pf.query or "")
@@ -690,31 +690,32 @@ def _parse_seller_from_input(source: str) -> str | None:
 
                 html = r.text or ""
 
-                # 2) Busca _ssn= en el HTML (enlaces, scripts, etc.)
+                # _ssn embebido
                 m = re.search(r"[_?&]ssn=([A-Za-z0-9._%-]+)", html, re.I)
                 if m:
                     return unquote(m.group(1))
 
-                # 3) Busca claves comunes embebidas en JSON
+                # claves frecuentes en JSON embebido
                 for key in [r'sellerUsername', r'sellerUserName', r'sellerName', r'userId']:
                     m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', html)
                     if m and re.match(r"^[A-Za-z0-9._-]{1,64}$", m.group(1)):
                         return m.group(1)
 
+                # texto visible en el HTML: "Seller: <username>"
+                m = re.search(r"Seller:\s*([A-Za-z0-9._-]{1,64})", html, re.I)
+                if m:
+                    return m.group(1)
+
             except Exception:
-                # Si el fetch falla, seguimos con candidate si existe
                 pass
 
-            # 4) Si nada funcionó pero el slug era válido, úsalo como fallback
+            # Fallback: slug si luce válido
             if candidate:
                 return candidate
 
-        # Si no coincide con ningún patrón soportado
         return None
-
     except Exception:
         return None
-
 
 
 def _normalize_site_id(domain: str) -> str:
@@ -816,17 +817,26 @@ def _browse_search_by_seller(
     """
     Browse API: /buy/browse/v1/item_summary/search
     Requiere OAuth app token (ya implementado).
-    Soporta filter=sellers:{username} y paginación por offset/limit (<=200).
+    Filtros:
+      - sellers:{username}
+      - buyingOptions:{FIXED_PRICE|AUCTION|BEST_OFFER}
+      - itemLocationRegion:WORLDWIDE
+    Paginación por offset/limit (<=200).
     Devuelve (next_offset, items[])
     """
     base = _ebay_base()
     token = _get_ebay_app_token()
 
     params = {
-        "q": "*",  # comodín para no exigir keyword
-        "filter": f"sellers:{{{seller}}}",
+        "q": "*",
         "limit": str(min(max(limit, 1), 200)),
         "offset": str(max(offset, 0)),
+        "fieldgroups": "EXTENDED",
+        "filter": (
+            f"sellers:{{{seller}}},"
+            "buyingOptions:{FIXED_PRICE|AUCTION|BEST_OFFER},"
+            "itemLocationRegion:WORLDWIDE"
+        ),
     }
     headers = {
         "Authorization": f"Bearer {token}",
