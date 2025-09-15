@@ -136,27 +136,32 @@
   </div>
 </div>
 
-<!-- Modal del escáner -->
+<!-- Modal del escáner (compacto) -->
 <div id="scanModal" class="scan-modal hidden" aria-hidden="true" aria-label="Barcode scanner">
   <div class="scan-sheet">
     <div class="scan-header">
       <strong>Scan a barcode</strong>
-      <div>
-        <button type="button" id="scanFlip" class="icon-btn" aria-label="Flip camera" title="Flip camera">🔁</button>
-        <button type="button" id="scanClose" class="icon-btn" aria-label="Close">✕</button>
+      <div class="scan-actions">
+        <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">🔁</button>
+        <button type="button" id="scanClose" class="icon-top" aria-label="Close">✕</button>
       </div>
     </div>
+
     <div class="scan-body">
-      <!-- Modo BarcodeDetector -->
-      <video id="scanVideo" playsinline autoplay muted></video>
-      <!-- Modo Quagga2: contenedor donde inyecta el stream -->
-      <div id="scanTarget" class="scan-target"></div>
+      <!-- Viewport fijo con bordes redondeados -->
+      <div class="viewport">
+        <video id="scanVideo" playsinline autoplay muted></video>
+        <div class="guide"></div>
+        <!-- Contenedor para Quagga (usa el mismo viewport) -->
+        <div id="scanTarget" class="scan-target"></div>
+      </div>
       <div class="scan-tip">Align the barcode inside the frame</div>
     </div>
   </div>
 </div>
 
 <style>
+  /* input con botón */
   .input-with-button{ position:relative; display:flex; align-items:center; }
   .input-with-button > .input{ padding-right:42px; }
   .icon-btn{
@@ -165,14 +170,55 @@
   }
   .icon-btn:hover{ opacity:1; }
 
+  /* Modal compacto y bloqueo de scroll */
+  body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
-  .scan-modal{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999; }
-  .scan-sheet{ width:min(640px,92vw); background:#111; color:#fff; border-radius:10px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.5); }
-  .scan-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#181818; border-bottom:1px solid #222; }
-  .scan-body{ position:relative; }
-  #scanVideo{ width:100%; height:auto; display:none; background:#000; }
-  .scan-target{ width:100%; display:none; background:#000; }
-  .scan-tip{ text-align:center; font-size:12px; opacity:.8; padding:8px 0 12px; }
+  .scan-modal{
+    position:fixed; inset:0; background:rgba(0,0,0,.6);
+    display:grid; place-items:center; z-index:9999; padding:16px;
+  }
+  .scan-sheet{
+    width:min(420px, 92vw); background:#0f1115; color:#fff;
+    border-radius:14px; overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,.5); border:1px solid #222;
+  }
+  .scan-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; background:#141821; border-bottom:1px solid #222;
+  }
+  .scan-actions .icon-top{
+    border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
+  }
+  .scan-actions .icon-top:hover{ opacity:1; }
+
+  .scan-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
+
+  /* Viewport fijo:  aspect-ratio evita fullscreen; redondeado + sombra */
+  .viewport{
+    position:relative;
+    width:100%;
+    aspect-ratio: 3 / 4;           /* alto mayor para móvil */
+    max-height: 60vh;              /* nunca ocupa toda la pantalla */
+    border-radius:12px;
+    overflow:hidden;
+    background:#000;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+  }
+  /* video y target ocupan exactamente el viewport */
+  #scanVideo, .scan-target{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit:cover;               /* llena sin deformar */
+    display:none;                   /* se alterna desde JS */
+  }
+  /* marco guía visual */
+  .guide{
+    position:absolute; inset:10%;
+    border:2px dashed rgba(255,255,255,.6);
+    border-radius:10px;
+    pointer-events:none;
+  }
+  .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
 </style>
 
 <script>
@@ -182,7 +228,7 @@
   const btnClose  = document.getElementById('scanClose');
   const btnFlip   = document.getElementById('scanFlip');
   const video     = document.getElementById('scanVideo');
-  const target    = document.getElementById('scanTarget'); // contenedor para Quagga
+  const target    = document.getElementById('scanTarget');
   const inputQ    = document.getElementById('q');
   const form      = document.getElementById('filterForm');
 
@@ -191,14 +237,10 @@
 
   const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
 
-  // evitar fullscreen iOS
-  video.setAttribute('playsinline','');
-  video.setAttribute('muted','');
-  video.setAttribute('autoplay','');
+  video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
 
-  // -------- utilidades UI / flujo --------
-  function openModal(){ modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
-  function closeModal(){ modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
+  function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
+  function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function cancelLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
   function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }
   function cleanupAll(){
@@ -210,24 +252,16 @@
     try { navigator.vibrate && navigator.vibrate(50); } catch(_){}
     cleanupAll(); closeModal();
     inputQ.value = value;
-    form?.submit(); // quita esta línea si prefieres revisar antes
+    form?.submit();
   }
 
-  // -------- diagnóstico amigable --------
   function showError(err, where=''){
     const name = err?.name || String(err) || 'Error';
     const msg  = err?.message || '';
-    const extra = [
-      `SecureContext: ${window.isSecureContext}`,
-      `Protocol: ${location.protocol.replace(':','')}`,
-      `Devices: ${videoDevices.length}`,
-      where ? `At: ${where}` : ''
-    ].filter(Boolean).join(' · ');
     console.error('[Scanner]', where, err);
-    alert(`${name}${msg ? ': ' + msg : ''}\n${extra}`);
+    alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
-  // -------- permisos y selección de cámara --------
   async function ensurePermissionOnce(){
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     tmp.getTracks().forEach(t=>t.stop());
@@ -235,7 +269,6 @@
   async function loadVideoDevices(){
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d => d.kind === 'videoinput');
-    // priorizar trasera por label
     const prefers = ['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
@@ -257,7 +290,6 @@
     await video.play();
   }
 
-  // -------- BarcodeDetector --------
   function startBDLoop(){
     const tick = async () => {
       try {
@@ -278,7 +310,6 @@
     startBDLoop();
   }
 
-  // -------- Quagga loader robusto (3 CDNs) --------
   function loadQuagga(){
     const CANDIDATES = [
       'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
@@ -290,33 +321,29 @@
     return new Promise(async (resolve, reject) => {
       for (const url of CANDIDATES) {
         try {
-          await injectScriptOnce(url);
-          const ok = await waitForGlobal('Quagga', 3000);
+          await inject(url);
+          const ok = await waitGlobal('Quagga', 3000);
           if (ok) { console.log('[Scanner] Quagga loaded from:', url); return resolve(url); }
-        } catch (e) {
-          console.warn('[Scanner] Failed to load', url, e);
-        }
+        } catch (e) { console.warn('[Scanner] Failed', url, e); }
       }
       reject(new Error('Quagga2 could not be loaded from any CDN'));
     });
 
-    function injectScriptOnce(src){
-      return new Promise((resolve, reject) => {
+    function inject(src){
+      return new Promise((resolve,reject)=>{
         if ([...document.scripts].some(s => s.src === src)) return resolve();
-        const s = document.createElement('script');
-        s.src = src; s.async = true;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error('script load error'));
+        const s=document.createElement('script'); s.src=src; s.async=true;
+        s.onload=()=>resolve(); s.onerror=()=>reject(new Error('script load error'));
         document.head.appendChild(s);
       });
     }
-    function waitForGlobal(name, timeoutMs){
-      return new Promise((resolve) => {
-        const start = performance.now();
-        (function check(){
+    function waitGlobal(name, ms){
+      return new Promise((resolve)=>{
+        const t0=performance.now();
+        (function loop(){
           if (window[name]) return resolve(true);
-          if (performance.now() - start > timeoutMs) return resolve(false);
-          requestAnimationFrame(check);
+          if (performance.now()-t0>ms) return resolve(false);
+          requestAnimationFrame(loop);
         })();
       });
     }
@@ -340,21 +367,12 @@
         inputStream: {
           type: 'LiveStream',
           constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 } },
-        target: target
+          target: target
         },
         locator: { patchSize: 'medium', halfSample: true },
         numOfWorkers: navigator.hardwareConcurrency || 2,
         frequency: 10,
-        decoder: {
-          readers: [
-            'code_128_reader',
-            'ean_reader',
-            'ean_8_reader',
-            'upc_reader',
-            'upc_e_reader',
-            'code_39_reader'
-          ]
-        }
+        decoder: { readers: ['code_128_reader','ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_39_reader'] }
       }, (err) => {
         if (err) return reject(err);
         window.Quagga.start();
@@ -367,29 +385,16 @@
     });
   }
 
-  // -------- flujo principal --------
   async function startScan(){
     openModal();
-
-    if (!window.isSecureContext) {
-      showError(new Error('Requiere HTTPS o localhost'), 'secure-check');
-      cleanupAll(); closeModal(); return;
-    }
-
     try{
-      await ensurePermissionOnce();      // dispara diálogo si hace falta
+      await ensurePermissionOnce();
       await loadVideoDevices();
       if (videoDevices.length) currentDeviceIdx = 0;
 
       if ('BarcodeDetector' in window) {
-        try {
-          await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-          await startBarcodeDetector();
-          return;
-        } catch (eBD) {
-          console.warn('BD falló → fallback Quagga2', eBD);
-          cleanupAll();
-        }
+        try { await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId); await startBarcodeDetector(); return; }
+        catch (eBD){ console.warn('BD → fallback', eBD); cleanupAll(); }
       }
 
       await loadQuagga();
@@ -407,25 +412,20 @@
 
     if (usingQuagga && window.Quagga){
       try { window.Quagga.stop(); } catch(_){}
-      usingQuagga = false;
+      usingQuagga=false;
       try { await startQuagga(); } catch (e) { showError(e, 'flip-quagga'); }
       return;
     }
 
     cancelLoop();
-    try{
-      await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-      // detector ya existe si veníamos de BD
-      if (detector) startBDLoop();
-    }catch(e){ showError(e, 'flip-bd'); }
+    try { await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId); if (detector) startBDLoop(); }
+    catch(e){ showError(e, 'flip-bd'); }
   }
 
-  // eventos
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
   btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
 })();
 </script>
-
 {% endblock %}
