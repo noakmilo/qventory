@@ -680,9 +680,14 @@
   }
 
   async function flipCamera(){
-    await loadVideoDevices();
+    if (!devicesLoaded) {
+      await loadVideoDevices();
+    }
+    
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
+
+    console.log(`[Scanner] Switching to camera ${currentDeviceIdx}: ${videoDevices[currentDeviceIdx].label}`);
 
     if (usingQuagga && window.Quagga){
       try { window.Quagga.stop(); } catch(_){}
@@ -696,6 +701,21 @@
     await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
     rememberActiveDevice();
     if (detector) startBDLoop();
+  }
+
+  // Pre-cargar devices cuando se carga la página para mayor velocidad
+  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
+    // Solo precargar si no es Safari iOS (para evitar prompts innecesarios)
+    const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                       (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
+    if (!isIOSSafari) {
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevicesCount = devices.filter(d => d.kind === 'videoinput').length;
+          console.log(`[Scanner] Found ${videoDevicesCount} video devices`);
+        })
+        .catch(() => {}); // Silently fail
+    }
   }
 
   btnScan?.addEventListener('click', startScan);
