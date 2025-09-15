@@ -3,6 +3,7 @@ from flask import (
     jsonify, send_from_directory, make_response
 )
 from flask_login import login_required, current_user
+    # noqa: E402
 from sqlalchemy import or_
 import io
 import re
@@ -10,7 +11,7 @@ import os
 import base64
 import time
 import requests
-from urllib.parse import urlparse, parse_qs, unquote  # <-- actualizado para helpers eBay
+from urllib.parse import urlparse, parse_qs, unquote  # <-- para helpers eBay
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -692,13 +693,22 @@ def _normalize_site_id(domain: str) -> str:
     return "EBAY-US"
 
 
-def _ebay_find_items_by_seller(seller: str, page: int = 1, entries_per_page: int = 100, site_id: str = "EBAY-US"):
+def _ebay_find_items_by_seller(
+    seller: str,
+    page: int = 1,
+    entries_per_page: int = 100,
+    site_id: str = "EBAY-US",
+    max_retries: int = 3,
+    backoff_sec: float = 1.5
+):
     """
-    Llama a Finding API (findItemsAdvanced) filtrando por Seller.
+    Finding API (findItemsAdvanced) filtrando por Seller.
+    Envía headers SOA + User-Agent y hace retry/backoff en 5xx.
     Devuelve (total_pages, items[]) con items: {"title","url"}.
     """
     if not EBAY_CLIENT_ID:
         raise RuntimeError("Falta EBAY_CLIENT_ID en .env para Finding API")
+
     params = {
         "OPERATION-NAME": "findItemsAdvanced",
         "SERVICE-VERSION": FINDING_VERSION,
@@ -711,85 +721,221 @@ def _ebay_find_items_by_seller(seller: str, page: int = 1, entries_per_page: int
         "itemFilter(0).name": "Seller",
         "itemFilter(0).value(0)": seller,
     }
-    r = requests.get(FINDING_ENDPOINT, params=params, timeout=20)
+    headers = {
+        "X-EBAY-SOA-OPERATION-NAME": "findItemsAdvanced",
+        "X-EBAY-SOA-SECURITY-APPNAME": EBAY_CLIENT_ID,
+        "X-EBAY-SOA-GLOBAL-ID": site_id,
+        "Accept": "application/json",
+        "User-Agent": "Qventory/1.0 (+https://qventory.com)",
+    }
+
+    last_exc = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            r = requests.get(FINDING_ENDPOINT, params=params, headers=headers, timeout=20)
+            if r.status_code >= 500:
+                time.sleep(backoff_sec * attempt)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            resp = (data.get("findItemsAdvancedResponse") or [{}])[0]
+            ack = (resp.get("ack", [""])[0]).lower()
+            if ack != "success":
+                err = (resp.get("errorMessage") or [{}])[0].get("error", [{}])[0]
+                msg = f"{err.get('severity', [''])[0]} {err.get('errorId', [''])[0]}: {err.get('message', [''])[0]}"
+                raise RuntimeError(f"Finding API error: {msg}")
+
+            pagination = (resp.get("paginationOutput") or [{}])[0]
+            total_pages = int((pagination.get("totalPages") or ["1"])[0])
+
+            items_raw = (resp.get("searchResult") or [{}])[0].get("item", []) or []
+            items = []
+            for it in items_raw:
+                title = (it.get("title", [""]) or [""])[0].strip()
+                urls = it.get("viewItemURL", [])
+                url = (urls[0] if urls else "").strip()
+                if title and url:
+                    items.append({"title": title, "url": url})
+            return total_pages, items
+
+        except requests.HTTPError as e:
+            last_exc = e
+            if e.response is not None and 400 <= e.response.status_code < 500:
+                raise
+            time.sleep(backoff_sec * attempt)
+        except Exception as e:
+            last_exc = e
+            time.sleep(backoff_sec * attempt)
+
+    if last_exc:
+        raise last_exc
+    return 1, []
+
+
+def _browse_search_by_seller(
+    seller: str,
+    limit: int = 200,
+    offset: int = 0
+):
+    """
+    Browse API: /buy/browse/v1/item_summary/search
+    Requiere OAuth app token (ya implementado).
+    Soporta filter=sellers:{username} y paginación por offset/limit (<=200).
+    Devuelve (next_offset, items[])
+    """
+    base = _ebay_base()
+    token = _get_ebay_app_token()
+
+    params = {
+        "q": "*",  # comodín para no exigir keyword
+        "filter": f"sellers:{{{seller}}}",
+        "limit": str(min(max(limit, 1), 200)),
+        "offset": str(max(offset, 0)),
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+        "User-Agent": "Qventory/1.0 (+https://qventory.com)",
+    }
+    r = requests.get(f"{base['browse']}/item_summary/search", params=params, headers=headers, timeout=20)
     r.raise_for_status()
     data = r.json()
-    resp = (data.get("findItemsAdvancedResponse") or [{}])[0]
-    ack = (resp.get("ack", [""])[0]).lower()
-    if ack != "success":
-        err = (resp.get("errorMessage") or [{}])[0].get("error", [{}])[0]
-        msg = f"{err.get('severity', [''])[0]} {err.get('errorId', [''])[0]}: {err.get('message', [''])[0]}"
-        raise RuntimeError(f"Finding API error: {msg}")
 
-    pagination = (resp.get("paginationOutput") or [{}])[0]
-    total_pages = int((pagination.get("totalPages") or ["1"])[0])
-
-    items_raw = (resp.get("searchResult") or [{}])[0].get("item", []) or []
     items = []
-    for it in items_raw:
-        title = (it.get("title", [""]) or [""])[0].strip()
-        urls = it.get("viewItemURL", [])
-        url = (urls[0] if urls else "").strip()
+    for it in data.get("itemSummaries", []) or []:
+        title = (it.get("title") or "").strip()
+        url = (it.get("itemWebUrl") or "").strip()
         if title and url:
             items.append({"title": title, "url": url})
-    return total_pages, items
+
+    total = int(data.get("total", 0))
+    new_offset = offset + int(params["limit"])
+    if new_offset >= total:
+        new_offset = None  # fin
+    return new_offset, items
 
 
 def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, global_id: str = "EBAY-US", dry: bool = False):
     """
     Itera y crea Items para 'user_id' desde el seller dado.
     Devuelve dict con métricas y (opcional) preview.
+    Usa Finding API con fallback a Browse API.
     """
     created = 0
     skipped = 0
     seen = 0
     preview = []
 
-    page = 1
-    per_page = 100
-    while seen < max_items:
-        total_pages, batch = _ebay_find_items_by_seller(seller, page=page, entries_per_page=per_page, site_id=global_id)
-        if not batch:
-            break
-
-        for it in batch:
-            if seen >= max_items:
-                break
-            seen += 1
-
-            title = it["title"]
-            url = it["url"]
-
-            exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
-            if exists:
-                skipped += 1
-                continue
-
-            if dry:
-                preview.append({"title": title, "url": url})
-                continue
-
-            sku = generate_sku()
-            new_it = Item(
-                user_id=user_id,
-                title=title,
-                sku=sku,
-                ebay_url=url,
-                listing_link=None,
-                web_url=None, amazon_url=None, mercari_url=None,
-                vinted_url=None, poshmark_url=None, depop_url=None,
-                A=None, B=None, S=None, C=None,
-                location_code=None
+    # --- PRIMER INTENTO: Finding API (paginada) ---
+    use_browse_fallback = False
+    try:
+        page = 1
+        per_page = 100
+        while seen < max_items:
+            total_pages, batch = _ebay_find_items_by_seller(
+                seller, page=page, entries_per_page=per_page, site_id=global_id
             )
-            db.session.add(new_it)
-            created += 1
+            if not batch:
+                if page == 1:
+                    use_browse_fallback = True
+                break
 
-        if not dry and created:
-            db.session.commit()
+            for it in batch:
+                if seen >= max_items:
+                    break
+                seen += 1
 
-        page += 1
-        if page > total_pages:
-            break
+                title = it["title"]
+                url = it["url"]
+
+                exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
+                if exists:
+                    skipped += 1
+                    continue
+
+                if dry:
+                    preview.append({"title": title, "url": url})
+                    continue
+
+                sku = generate_sku()
+                new_it = Item(
+                    user_id=user_id,
+                    title=title,
+                    sku=sku,
+                    ebay_url=url,
+                    listing_link=None,
+                    web_url=None, amazon_url=None, mercari_url=None,
+                    vinted_url=None, poshmark_url=None, depop_url=None,
+                    A=None, B=None, S=None, C=None,
+                    location_code=None
+                )
+                db.session.add(new_it)
+                created += 1
+
+            if not dry and created:
+                db.session.commit()
+
+            page += 1
+            if page > total_pages:
+                break
+
+    except Exception:
+        # cualquier error duro en Finding: caer a Browse
+        use_browse_fallback = True
+
+    # --- FALLBACK: Browse API ---
+    if use_browse_fallback and seen < max_items:
+        try:
+            offset = 0
+            per = min(200, max_items)  # Browse permite hasta 200 por página
+            while seen < max_items:
+                next_offset, batch = _browse_search_by_seller(
+                    seller, limit=min(per, max_items - seen), offset=offset
+                )
+                if not batch:
+                    break
+
+                for it in batch:
+                    if seen >= max_items:
+                        break
+                    seen += 1
+
+                    title = it["title"]
+                    url = it["url"]
+
+                    exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
+                    if exists:
+                        skipped += 1
+                        continue
+
+                    if dry:
+                        preview.append({"title": title, "url": url})
+                        continue
+
+                    sku = generate_sku()
+                    new_it = Item(
+                        user_id=user_id,
+                        title=title,
+                        sku=sku,
+                        ebay_url=url,
+                        listing_link=None,
+                        web_url=None, amazon_url=None, mercari_url=None,
+                        vinted_url=None, poshmark_url=None, depop_url=None,
+                        A=None, B=None, S=None, C=None,
+                        location_code=None
+                    )
+                    db.session.add(new_it)
+                    created += 1
+
+                if not dry and created:
+                    db.session.commit()
+
+                if next_offset is None:
+                    break
+                offset = next_offset
+        except Exception:
+            # si también falla Browse, devolvemos lo que tengamos
+            pass
 
     return {
         "seller": seller,
