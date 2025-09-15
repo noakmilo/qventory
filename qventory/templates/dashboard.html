@@ -185,7 +185,9 @@
 </style>
 
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[Scanner] DOM ready. SecureContext:', window.isSecureContext, 'Protocol:', location.protocol);
+
   const btnScan   = document.getElementById('btnScan');
   const modal     = document.getElementById('scanModal');
   const btnClose  = document.getElementById('scanClose');
@@ -197,17 +199,20 @@
   const form      = document.getElementById('filterForm');
   const beepEl    = document.getElementById('scanBeep');
 
+  if (!btnScan) {
+    console.warn('[Scanner] btnScan no existe en el DOM. Abort.');
+    return;
+  }
+
   const CAM_CACHE_KEY = 'qv_cam_device_id';
   let cachedDeviceId = null;
 
   let stream = null, rafId = null, detector = null, usingQuagga = false;
   let videoDevices = [], currentDeviceIdx = -1, currentTrack = null;
 
-  // === formatos permitidos ===
   const ALLOWED_FORMATS_BD = ['ean_13','ean_8','upc_a','upc_e','code_128'];
   const ALLOWED_READERS_QG = ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'];
 
-  // Consenso
   const CONSENSUS_NEEDED = 2, CONSENSUS_WINDOW = 5;
   let seenBuffer = [];
   let lastHitAt = 0; const HIT_COOLDOWN_MS = 900;
@@ -244,7 +249,6 @@
   function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; currentTrack=null; } }
   function cleanupAll(){ cancelLoop(); stopStream(); if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; } video.style.display='none'; target.style.display='none'; seenBuffer=[]; }
 
-  // sonido + vibración
   function beep(){
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -290,7 +294,6 @@
     rememberActiveDevice();
   }
 
-  // Torch (si disponible)
   async function setTorch(on){
     try{
       const track = currentTrack || stream?.getVideoTracks?.()[0];
@@ -301,7 +304,6 @@
     }catch(_){}
   }
 
-  // BarcodeDetector con consenso
   function startBDLoop(){
     seenBuffer = [];
     const tick = async () => {
@@ -329,7 +331,6 @@
     startBDLoop();
   }
 
-  // Cargar Quagga
   function loadQuagga(){
     const url = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@0.0.14/dist/quagga.min.js';
     if (window.Quagga) return Promise.resolve();
@@ -342,7 +343,6 @@
     });
   }
 
-  // Quagga con ROI + consenso + checksum
   async function startQuagga(){
     if (!window.Quagga) throw new Error('Quagga missing');
     usingQuagga = true;
@@ -353,7 +353,6 @@
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          // ROI: banda central amplia
           area: { top: "30%", right: "5%", left: "5%", bottom: "30%" },
           constraints: { width: { ideal: 1280 }, height: { ideal: 720 } },
           target: target
@@ -371,14 +370,11 @@
         window.Quagga.onDetected(res => {
           const code = res?.codeResult?.code;
           const fmt  = (res?.codeResult?.format || '').toLowerCase();
-
-          // confianza opcional en algunos builds
           const conf = res?.codeResult?.confidence;
           if (conf != null) {
             const confNorm = conf > 1 ? conf/100 : conf;
-            if (confNorm < 0.2) return; // umbral laxo
+            if (confNorm < 0.2) return;
           }
-
           if (!code || !fmt) return;
           if (!isValidByFormat(code, fmt)) return;
 
@@ -392,8 +388,8 @@
     });
   }
 
-  // Flow principal
   async function startScan(){
+    console.log('[Scanner] startScan click');
     openModal();
     try{
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
@@ -409,7 +405,6 @@
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
-      // intentar linterna si existe
       setTorch(true);
 
       if ('BarcodeDetector' in window) {
@@ -420,32 +415,42 @@
       }
 
     }catch(err){
+      console.error('[Scanner] startScan error:', err);
       alert((err?.name||'Error') + (err?.message?(': '+err.message):''));
       cleanupAll(); closeModal();
     }
   }
 
   async function flipCamera(){
-    await loadVideoDevices();
-    if (!videoDevices.length) return;
-    currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
+    try{
+      await loadVideoDevices();
+      if (!videoDevices.length) return;
+      currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
 
-    if (usingQuagga && window.Quagga){
-      try { window.Quagga.stop(); } catch(_){}
-      usingQuagga=false;
-      await startQuagga();
-      return;
-    }
+      if (usingQuagga && window.Quagga){
+        try { window.Quagga.stop(); } catch(_){}
+        usingQuagga=false;
+        await startQuagga();
+        return;
+      }
 
-    cancelLoop();
-    await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-    if (detector) startBDLoop();
+      cancelLoop();
+      await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
+      if (detector) startBDLoop();
+    }catch(e){ console.error('[Scanner] flipCamera error', e); }
   }
 
-  btnScan?.addEventListener('click', startScan);
-  btnFlip?.addEventListener('click', flipCamera);
-  btnClose?.addEventListener('click', () => { setTorch(false); cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ setTorch(false); cleanupAll(); closeModal(); } });
-})();
+  // --- REGISTRO DE EVENTOS con guardias ---
+  try {
+    btnScan.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); startScan(); }, { passive: true });
+    btnFlip?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); flipCamera(); }, { passive: true });
+    btnClose?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); setTorch(false); cleanupAll(); closeModal(); }, { passive: true });
+    modal?.addEventListener('click', (e) => { if (e.target === modal){ setTorch(false); cleanupAll(); closeModal(); } }, { passive: true });
+  } catch (e) {
+    console.error('[Scanner] Error registrando eventos:', e);
+  }
+
+  console.log('[Scanner] Listeners OK. Click el icono 📷 para iniciar.');
+});
 </script>
 {% endblock %}
