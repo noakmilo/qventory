@@ -163,75 +163,6 @@
   </div>
 </div>
 
-<style>
-  .input-with-button{ position:relative; display:flex; align-items:center; }
-  .input-with-button > .input{ padding-right:42px; }
-  .icon-btn{
-    position:absolute; right:8px; border:none; background:transparent;
-    cursor:pointer; line-height:1; font-size:18px; opacity:.8;
-  }
-  .icon-btn:hover{ opacity:1; }
-
-  body.modal-open{ overflow:hidden; touch-action:none; }
-  .scan-modal.hidden{ display:none; }
-  .scan-modal{
-    position:fixed; inset:0; background:rgba(0,0,0,.6);
-    display:grid; place-items:center; z-index:9999; padding:16px;
-  }
-  .scan-sheet{
-    width:min(420px, 92vw); background:#0f1115; color:#fff;
-    border-radius:14px; overflow:hidden;
-    box-shadow:0 20px 60px rgba(0,0,0,.5); border:1px solid #222;
-  }
-  .scan-header{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 12px; background:#141821; border-bottom:1px solid #222;
-  }
-  .scan-actions .icon-top{
-    border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
-  }
-  .scan-actions .icon-top:hover{ opacity:1; }
-
-  .scan-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
-
-  .viewport{
-    position:relative;
-    width:100%;
-    aspect-ratio: 3 / 4;
-    max-height: 60vh;
-    border-radius:12px;
-    overflow:hidden;
-    background:#000;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-  }
-  #scanVideo, .scan-target{
-    position:absolute; inset:0;
-    width:100%; height:100%;
-    object-fit:cover;
-    display:none;
-  }
-  .guide{
-    position:absolute; inset:12%;
-    border:2px dashed rgba(255,255,255,.5);
-    border-radius:10px;
-    pointer-events:none;
-  }
-  .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
-
-  .spinner{
-    position:absolute; inset:0; display:none;
-    align-items:center; justify-content:center;
-    background:rgba(0,0,0,.25);
-  }
-  .spinner::after{
-    content:"";
-    width:28px; height:28px; border-radius:50%;
-    border:3px solid rgba(255,255,255,.3);
-    border-top-color:#fff; animation:spin 0.9s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-
 <script>
 (function(){
   const btnScan   = document.getElementById('btnScan');
@@ -249,29 +180,65 @@
   let cachedDeviceId = null;
 
   let stream = null, rafId = null, detector = null, usingQuagga = false;
-  let videoDevices = [], currentDeviceIdx = -1;
+  let videoDevices = [], currentDeviceIdx = -1, currentTrack = null;
 
-  // === Ajustes de precisión ===
-  const ALLOWED_FORMATS_BD = ['ean_13','upc_a','code_128'];          // BarcodeDetector
-  const ALLOWED_READERS_QG = ['ean_reader','upc_reader','code_128_reader']; // Quagga
-  const CONSENSUS_NEEDED = 3;
-  const CONSENSUS_WINDOW = 6;
+  // === Precisión equilibrada ===
+  const ALLOWED_FORMATS_BD = ['ean_13','ean_8','upc_a','upc_e','code_128'];
+  const ALLOWED_READERS_QG = ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'];
+
+  // Consenso más laxo
+  const CONSENSUS_NEEDED = 2;
+  const CONSENSUS_WINDOW = 5;
   let seenBuffer = [];
   let lastHitAt = 0;
-  const HIT_COOLDOWN_MS = 1200;
+  const HIT_COOLDOWN_MS = 900;
 
   function isValidByFormat(code, format){
     const onlyDigits = /^\d+$/;
     const f = (format||'').toLowerCase();
     if (!code) return false;
-    if (f.includes('ean')) return onlyDigits.test(code) && code.length === 13;
-    if (f.includes('upc')) return onlyDigits.test(code) && (code.length === 12 || code.length === 8);
-    if (f.includes('128')) return /^[A-Za-z0-9\-\._]+$/.test(code) && code.length >= 6;
+
+    if (f.includes('ean')) {
+      if (!(onlyDigits.test(code) && (code.length===13 || code.length===8))) return false;
+      if (code.length===13) return ean13ChecksumValid(code);
+      if (code.length===8)  return ean8ChecksumValid(code);
+      return true;
+    }
+    if (f.includes('upc')) {
+      if (!(onlyDigits.test(code) && (code.length===12 || code.length===8))) return false;
+      if (code.length===12) return upcChecksumValid(code);
+      return true;
+    }
+    if (f.includes('128')) {
+      return /^[A-Za-z0-9\-\._]+$/.test(code) && code.length >= 6;
+    }
     return onlyDigits.test(code) && code.length >= 12;
   }
-  function pushAndCheckConsensus(code, format){
+  function ean13ChecksumValid(s){
+    if (s.length!==13) return false;
+    let sum=0;
+    for (let i=0;i<12;i++){ sum += (i%2?3:1)*parseInt(s[i],10); }
+    const check=(10-(sum%10))%10;
+    return check===parseInt(s[12],10);
+  }
+  function ean8ChecksumValid(s){
+    if (s.length!==8) return false;
+    let sum=0;
+    for (let i=0;i<7;i++){ sum += (i%2?3:1)*parseInt(s[i],10); }
+    const check=(10-(sum%10))%10;
+    return check===parseInt(s[7],10);
+  }
+  function upcChecksumValid(s){
+    if (s.length!==12) return false;
+    let odd=0, even=0;
+    for (let i=0;i<11;i++){ (i%2?even:odd) += parseInt(s[i],10); }
+    const check=(10-(((odd*3)+even)%10))%10;
+    return check===parseInt(s[11],10);
+  }
+
+  function pushAndCheckConsensus(code){
     const now = performance.now();
-    seenBuffer.push({code, format, t: now});
+    seenBuffer.push({code, t: now});
     if (seenBuffer.length > CONSENSUS_WINDOW) seenBuffer.shift();
     const count = seenBuffer.filter(x => x.code === code).length;
     return count >= CONSENSUS_NEEDED;
@@ -283,18 +250,19 @@
     return true;
   }
 
-  const BD_FORMATS = ALLOWED_FORMATS_BD; // restringe formatos BD
+  const BD_FORMATS = ALLOWED_FORMATS_BD;
 
   video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
 
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function cancelLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
-  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }
+  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; currentTrack=null; } }
   function cleanupAll(){
     cancelLoop(); stopStream();
     if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; }
     video.style.display='none'; target.style.display='none';
+    seenBuffer = [];
   }
 
   // sonido + vibración
@@ -305,7 +273,7 @@
       const g = ctx.createGain();
       o.type = 'sine'; o.frequency.value = 880;
       g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.32, ctx.currentTime + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
       o.connect(g); g.connect(ctx.destination);
       o.start(); o.stop(ctx.currentTime + 0.14);
@@ -334,6 +302,7 @@
       const track = stream?.getVideoTracks?.()[0];
       const id = track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
       if (id) { localStorage.setItem(CAM_CACHE_KEY, id); cachedDeviceId = id; }
+      currentTrack = track || null;
     } catch {}
   }
 
@@ -357,32 +326,32 @@
     stopStream(); cancelLoop(); showSpinner(true);
     const constraints = {
       video: deviceId
-        ? { deviceId: { exact: deviceId }, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} }
-        : { facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} },
+        ? { deviceId: { exact: deviceId }, width:{ideal:960}, height:{ideal:720}, frameRate:{ideal:30}, focusMode:'continuous' }
+        : { facingMode:{ideal:'environment'}, width:{ideal:960}, height:{ideal:720}, frameRate:{ideal:30}, focusMode:'continuous' },
       audio: false
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
     showSpinner(false);
+    rememberActiveDevice();
   }
 
-  // ---- BarcodeDetector con consenso ----
+  // BarcodeDetector con consenso
   function startBDLoop(){
     seenBuffer = [];
     const tick = async () => {
       try {
         const detections = await detector.detect(video);
         if (detections && detections.length){
+          // prioriza el más largo
           detections.sort((a,b)=> (b.rawValue?.length||0) - (a.rawValue?.length||0));
-          const best = detections[0];
-          const val = (best.rawValue || '').trim();
-          const fmt = (best.format || '').toLowerCase();
-
-          if (ALLOWED_FORMATS_BD.includes(fmt) && isValidByFormat(val, fmt)) {
-            if (pushAndCheckConsensus(val, fmt) && canHit()) {
-              onDetected(val); return;
-            }
+          for (const d of detections){
+            const val = (d.rawValue || '').trim();
+            const fmt = (d.format || '').toLowerCase();
+            if (!ALLOWED_FORMATS_BD.includes(fmt)) continue;
+            if (!isValidByFormat(val, fmt)) continue;
+            if (pushAndCheckConsensus(val) && canHit()) { onDetected(val); return; }
           }
         }
       } catch(_) {}
@@ -397,7 +366,7 @@
     startBDLoop();
   }
 
-  // ---- Quagga loader con múltiples CDNs ----
+  // Carga Quagga con varios CDNs
   function loadQuagga(){
     const CANDIDATES = [
       'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
@@ -437,7 +406,7 @@
     }
   }
 
-  // ---- Quagga con ROI + consenso + validación ----
+  // Quagga con ROI más amplio + consenso + checksum
   async function startQuagga(){
     if (!window.Quagga) throw new Error('Quagga global is missing after load');
     usingQuagga = true;
@@ -457,14 +426,14 @@
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          // ROI: franja central para reducir falsos positivos
-          area: { top: "40%", right: "10%", left: "10%", bottom: "40%" },
-          constraints: { ...constraints, width: { ideal: 960 }, height: { ideal: 720 } },
+          // ROI más permisivo: banda central ancha
+          area: { top: "30%", right: "5%", left: "5%", bottom: "30%" },
+          constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 } },
           target: target
         },
-        locator: { patchSize: 'medium', halfSample: true },
+        locator: { patchSize: 'large', halfSample: false },
         numOfWorkers: 1,
-        frequency: 15,
+        frequency: 25,
         decoder: { readers: ALLOWED_READERS_QG }
       }, (err) => {
         if (err) return reject(err);
@@ -476,19 +445,17 @@
           const code = res?.codeResult?.code;
           const fmt  = (res?.codeResult?.format || '').toLowerCase();
 
-          // Confianza si está disponible (algunos builds de Quagga2 lo exponen)
+          // confianza (si existe). Umbral más bajo
           const conf = res?.codeResult?.confidence;
           if (conf != null) {
             const confNorm = conf > 1 ? conf/100 : conf;
-            if (confNorm < 0.4) return; // descarta lecturas pobres
+            if (confNorm < 0.2) return;
           }
 
           if (!code || !fmt) return;
-          // filtro rápido por familia
-          if (!ALLOWED_READERS_QG.some(r => fmt.includes(r.split('_')[0]))) return;
           if (!isValidByFormat(code, fmt)) return;
 
-          if (pushAndCheckConsensus(code, fmt) && canHit()) {
+          if (pushAndCheckConsensus(code) && canHit()) {
             onDetected(code);
           }
         });
@@ -497,7 +464,18 @@
     });
   }
 
-  // ---- Flow principal ----
+  // Torch (opcional) si el dispositivo la soporta
+  async function setTorch(on){
+    try{
+      const track = currentTrack || stream?.getVideoTracks?.()[0];
+      if (!track) return;
+      const caps = track.getCapabilities?.();
+      if (caps && 'torch' in caps){
+        await track.applyConstraints({ advanced: [{ torch: !!on }] });
+      }
+    }catch(e){ /* no pasa nada si falla */ }
+  }
+
   async function startScan(){
     openModal();
     try{
@@ -514,14 +492,15 @@
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
+      // Prende torch si existe (mejora muchísimo lectura en interiores)
+      setTorch(true);
+
       if ('BarcodeDetector' in window) {
         await startBarcodeDetector();
       } else {
         await loadQuagga();
         await startQuagga();
       }
-
-      rememberActiveDevice();
     }catch(err){
       showError(err, 'startScan');
       cleanupAll(); closeModal();
@@ -549,8 +528,9 @@
 
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
-  btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
+  btnClose?.addEventListener('click', () => { setTorch(false); cleanupAll(); closeModal(); });
+  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ setTorch(false); cleanupAll(); closeModal(); } });
 })();
 </script>
+
 {% endblock %}
