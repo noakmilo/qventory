@@ -170,7 +170,7 @@ def _get_ebay_app_token() -> str:
     return _EBAY_TOKEN["value"]
 
 
-# ---------------------- Utilidades URL/HTML ----------------------
+# ---------------------- Utilidades URL eBay (solo ID) ----------------------
 
 _EBAY_HOSTS = (
     "ebay.com", "www.ebay.com", "m.ebay.com",
@@ -189,13 +189,14 @@ def _extract_legacy_id(url: str) -> str | None:
       - /itm/123456789012
       - /itm/Titulo/123456789012
       - /itm/123456789012?hash=...
-      - parámetros de query: ?item=..., ?iid=..., ?itemid=...
+      - parámetros de query: ?item=..., ?iid=..., ?itemid=..., ?itemId=...
       - subdominio móvil m.ebay.*
     """
     try:
         u = urlparse(url)
         path = u.path or ""
-        # si es tienda/búsqueda, evita confundir
+
+        # Si es tienda/búsqueda/categoría, no intentamos
         if _looks_like_ebay_store_or_search(path):
             return None
 
@@ -225,45 +226,16 @@ def _extract_legacy_id(url: str) -> str | None:
     except Exception:
         return None
 
-def _html_title_fallback(url: str) -> str | None:
-    """
-    Extrae el título desde el HTML (og:title o <title>) como último recurso.
-    Útil cuando no hay legacy_id o la Browse API no devuelve título.
-    """
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; QventoryBot/1.0; +https://qventory.local)"
-        }
-        r = requests.get(url, headers=headers, timeout=12)
-        if r.status_code >= 400:
-            return None
-        html = r.text or ""
 
-        # og:title
-        m = re.search(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']', html, re.I)
-        if m:
-            return m.group(1).strip()
-
-        # <title>…</title>
-        m = re.search(r"<title>(.*?)</title>", html, re.I | re.S)
-        if m:
-            # Limpia espacios y saltos
-            return re.sub(r"\s+", " ", m.group(1)).strip()
-
-        return None
-    except Exception:
-        return None
-
-
-# ---------------------- API helper: importar título desde URL (eBay API) ----------------------
+# ---------------------- API helper: importar título desde URL (SOLO eBay API) ----------------------
 
 @main_bp.route("/api/fetch-market-title")
 @login_required
 def api_fetch_market_title():
     """
     Recibe ?url=... y devuelve {ok, marketplace, title, fill:{title, ebay_url}}
-    Implementación: eBay Browse API (entorno tomado de EBAY_ENV).
-    Tiene fallback a scraping del título HTML si no hay legacy_id.
+    Implementación: SOLO eBay Browse API (sin scraping HTML).
+    Requiere URL de ítem con legacy_item_id extraíble.
     """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
@@ -275,37 +247,19 @@ def api_fetch_market_title():
     host = (u.netloc or "").lower()
     path = u.path or ""
 
-    # Si es eBay pero no parece URL de item (tienda/búsqueda), avisa pronto
+    # Verificación temprana: si es eBay pero NO es /itm/... (o similar), error claro
     if any(host.endswith(h) for h in _EBAY_HOSTS) and _looks_like_ebay_store_or_search(path):
-        # Intenta aún así título por HTML (para ayudar al usuario), pero marca que no es item
-        html_title = _html_title_fallback(raw_url)
-        if html_title:
-            return jsonify({
-                "ok": True,
-                "marketplace": "ebay",
-                "title": html_title,
-                "fill": {"title": html_title, "ebay_url": raw_url},
-                "note": "La URL parece de tienda/búsqueda, no un ítem específico. Título obtenido del HTML."
-            })
         return jsonify({
             "ok": False,
-            "error": "La URL de eBay no parece un ítem (/itm/…). Usa el enlace directo del producto."
+            "error": "La URL de eBay parece de tienda/búsqueda/categoría. Proporciona el enlace directo del producto (/itm/...)."
         }), 400
 
     legacy_id = _extract_legacy_id(raw_url)
-
-    # Si no hay legacy_id, intenta fallback HTML directo
     if not legacy_id:
-        html_title = _html_title_fallback(raw_url)
-        if html_title:
-            return jsonify({
-                "ok": True,
-                "marketplace": "ebay" if any(host.endswith(h) for h in _EBAY_HOSTS) else "web",
-                "title": html_title,
-                "fill": {"title": html_title, "ebay_url": raw_url},
-                "note": "No se pudo extraer legacy_item_id; título obtenido del HTML."
-            })
-        return jsonify({"ok": False, "error": "No se pudo extraer el legacy_item_id de la URL ni obtener título del HTML."}), 400
+        return jsonify({
+            "ok": False,
+            "error": "No se pudo extraer el legacy_item_id. Asegúrate de usar una URL de ítem de eBay (/itm/...)."
+        }), 400
 
     base = _ebay_base()
     try:
@@ -318,35 +272,14 @@ def api_fetch_market_title():
         )
 
         if r.status_code == 403:
-            # Intenta fallback HTML si es posible
-            html_title = _html_title_fallback(raw_url)
-            if html_title:
-                return jsonify({
-                    "ok": True,
-                    "marketplace": "ebay",
-                    "title": html_title,
-                    "fill": {"title": html_title, "ebay_url": raw_url},
-                    "note": "403 en Browse API; se usó título desde HTML."
-                })
             return jsonify({
                 "ok": False,
-                "error": f"403 Forbidden: tu app no tiene acceso a Browse API en {EBAY_ENV} (o keyset deshabilitado)."
+                "error": f"403 Forbidden: la app no tiene acceso a Browse API en {EBAY_ENV} (o keyset deshabilitado)."
             }), 403
-
         if r.status_code == 404:
-            # Ítem no encontrado en Browse API; prueba fallback HTML
-            html_title = _html_title_fallback(raw_url)
-            if html_title:
-                return jsonify({
-                    "ok": True,
-                    "marketplace": "ebay",
-                    "title": html_title,
-                    "fill": {"title": html_title, "ebay_url": raw_url},
-                    "note": "404 en Browse API; se usó título desde HTML."
-                })
             return jsonify({
                 "ok": False,
-                "error": "404: legacy_item_id no encontrado en este entorno."
+                "error": "404: legacy_item_id no encontrado por Browse API en este entorno."
             }), 404
 
         r.raise_for_status()
@@ -355,17 +288,7 @@ def api_fetch_market_title():
         item_web_url = (data.get("itemWebUrl") or raw_url).strip()
 
         if not title:
-            # Último intento: HTML
-            html_title = _html_title_fallback(raw_url)
-            if html_title:
-                return jsonify({
-                    "ok": True,
-                    "marketplace": "ebay",
-                    "title": html_title,
-                    "fill": {"title": html_title, "ebay_url": item_web_url or raw_url},
-                    "note": "La API no devolvió título; se usó HTML."
-                })
-            return jsonify({"ok": False, "error": "La API no devolvió título"}), 502
+            return jsonify({"ok": False, "error": "La Browse API no devolvió título para este ítem."}), 502
 
         return jsonify({
             "ok": True,
@@ -375,28 +298,9 @@ def api_fetch_market_title():
         })
     except requests.HTTPError as e:
         body = e.response.text[:300] if e.response is not None else ""
-        # Intenta fallback HTML antes de fallar
-        html_title = _html_title_fallback(raw_url)
-        if html_title:
-            return jsonify({
-                "ok": True,
-                "marketplace": "ebay" if any((urlparse(raw_url).netloc or "").lower().endswith(h) for h in _EBAY_HOSTS) else "web",
-                "title": html_title,
-                "fill": {"title": html_title, "ebay_url": raw_url},
-                "note": f"Fallback HTML por error HTTP ({e.response.status_code})."
-            })
-        return jsonify({"ok": False, "error": f"HTTP {e.response.status_code}: {body}"}), 502
+        code = e.response.status_code if e.response is not None else 502
+        return jsonify({"ok": False, "error": f"HTTP {code}: {body}"}), 502
     except Exception as e:
-        # Intenta fallback HTML como último recurso
-        html_title = _html_title_fallback(raw_url)
-        if html_title:
-            return jsonify({
-                "ok": True,
-                "marketplace": "ebay" if any((urlparse(raw_url).netloc or "").lower().endswith(h) for h in _EBAY_HOSTS) else "web",
-                "title": html_title,
-                "fill": {"title": html_title, "ebay_url": raw_url},
-                "note": f"Fallback HTML por excepción: {str(e)[:80]}"
-            })
         return jsonify({"ok": False, "error": str(e)}), 502
 
 
