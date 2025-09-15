@@ -20,7 +20,7 @@
   <form method="post" class="grid cols-3" id="newItemForm">
     <div style="grid-column:1/-1">
       <label>Title</label>
-      <input class="input" type="text" name="title" placeholder="Item title" required>
+      <input class="input" type="text" name="title" id="title" placeholder="Item title" required>
     </div>
 
     <div style="grid-column:1/-1">
@@ -42,7 +42,7 @@
     </div>
     <div>
       <label>eBay</label>
-      <input class="input" type="url" name="ebay_url" placeholder="https://www.ebay.com/itm/...">
+      <input class="input" type="url" name="ebay_url" id="ebay_url" placeholder="https://www.ebay.com/itm/...">
     </div>
     <div>
       <label>Amazon</label>
@@ -241,6 +241,63 @@
 </style>
 
 <script>
+/* ========== SCRIPT GET desde eBay ========== */
+document.addEventListener('DOMContentLoaded', () => {
+  const btn   = document.getElementById('btnFetch');
+  const urlI  = document.getElementById('import_url');
+  const titleI= document.getElementById('title');
+  const ebayI = document.getElementById('ebay_url');
+  const status= document.getElementById('import_status');
+
+  if (!btn) return;
+
+  btn.addEventListener('click', async () => {
+    const url = (urlI?.value || '').trim();
+    if (!url) {
+      status.textContent = 'Pega primero una URL de eBay (/itm/...)';
+      status.style.color = '#eab308';
+      urlI?.focus();
+      return;
+    }
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Getting…';
+    status.textContent = 'Consultando eBay…';
+    status.style.color = '#aaa';
+
+    try {
+      const resp = await fetch(`/api/fetch-market-title?url=${encodeURIComponent(url)}`, {
+        credentials: 'same-origin' // usa tu cookie de sesión
+      });
+
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.ok) {
+        const msg = (data && (data.error || data.message)) || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+
+      if (titleI && data.fill?.title)  titleI.value = data.fill.title;
+      if (ebayI  && data.fill?.ebay_url) ebayI.value = data.fill.ebay_url;
+
+      status.textContent = '✓ Título importado correctamente';
+      status.style.color = '#22c55e';
+      btn.textContent = '✓ Listo';
+      setTimeout(() => { btn.textContent = original; }, 1200);
+    } catch (err) {
+      console.error(err);
+      status.textContent = `No se pudo obtener el título: ${err.message}`;
+      status.style.color = '#ef4444';
+      btn.textContent = original;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+</script>
+
+<script>
+/* ========== SCRIPT SCANNER QR (completo) ========== */
 (function(){
   const btnScan = document.getElementById('btnScanLocation');
   const modal = document.getElementById('qrModal');
