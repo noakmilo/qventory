@@ -10,7 +10,7 @@ import os
 import base64
 import time
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, unquote  # <-- actualizado para helpers eBay
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -618,3 +618,298 @@ def print_item(item_id):
             as_attachment=True,
             download_name=f"label_{it.sku}.pdf",
         )
+
+
+# ============================================================
+# =============  NUEVO: IMPORT MASIVO DESDE eBay  ============
+# ============================================================
+
+FINDING_ENDPOINT = "https://svcs.ebay.com/services/search/FindingService/v1"
+FINDING_VERSION = "1.13.0"  # estable
+
+def _parse_seller_from_input(source: str) -> str | None:
+    """
+    Acepta:
+      - username directo (sin espacios, alfanumérico y _.-)
+      - URL /usr/<seller>
+      - URL /str/<store>  -> intenta resolver seller por _ssn=<seller> u otros hints en el HTML
+    """
+    if not source:
+        return None
+    s = source.strip()
+
+    # Username directo
+    if not re.match(r"^https?://", s, re.I):
+        if re.match(r"^[A-Za-z0-9._-]{1,64}$", s):
+            return s
+        return None
+
+    # Es URL
+    try:
+        p = urlparse(s)
+        path = p.path or "/"
+
+        # /usr/<seller>
+        m = re.search(r"/usr/([^/?#]+)", path, re.I)
+        if m:
+            return unquote(m.group(1))
+
+        # query param _ssn=<seller>
+        q = parse_qs(p.query or "")
+        if "_ssn" in q and q["_ssn"]:
+            return q["_ssn"][0]
+
+        # /str/<store> => intentar raspar _ssn o variantes
+        if "/str/" in path.lower():
+            try:
+                html = requests.get(s, timeout=15).text
+                m = re.search(r"[_?&]ssn=([A-Za-z0-9._%-]+)", html, re.I)
+                if m:
+                    return unquote(m.group(1))
+                m = re.search(r'"sellerUsername"\s*:\s*"([^"]+)"', html)
+                if m:
+                    return m.group(1)
+                m = re.search(r'"sellerName"\s*:\s*"([^"]+)"', html)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+
+        return None
+    except Exception:
+        return None
+
+
+def _normalize_site_id(domain: str) -> str:
+    """Mapea dominio eBay a GLOBAL-ID de Finding. Por defecto EBAY-US."""
+    d = (domain or "").lower()
+    if d.endswith(".co.uk"): return "EBAY-GB"
+    if d.endswith(".de"):    return "EBAY-DE"
+    if d.endswith(".fr"):    return "EBAY-FR"
+    if d.endswith(".it"):    return "EBAY-IT"
+    if d.endswith(".es"):    return "EBAY-ES"
+    if d.endswith(".com.au"):return "EBAY-AU"
+    return "EBAY-US"
+
+
+def _ebay_find_items_by_seller(seller: str, page: int = 1, entries_per_page: int = 100, site_id: str = "EBAY-US"):
+    """
+    Llama a Finding API (findItemsAdvanced) filtrando por Seller.
+    Devuelve (total_pages, items[]) con items: {"title","url"}.
+    """
+    if not EBAY_CLIENT_ID:
+        raise RuntimeError("Falta EBAY_CLIENT_ID en .env para Finding API")
+    params = {
+        "OPERATION-NAME": "findItemsAdvanced",
+        "SERVICE-VERSION": FINDING_VERSION,
+        "SECURITY-APPNAME": EBAY_CLIENT_ID,  # AppID
+        "RESPONSE-DATA-FORMAT": "JSON",
+        "REST-PAYLOAD": "true",
+        "paginationInput.entriesPerPage": str(entries_per_page),
+        "paginationInput.pageNumber": str(page),
+        "GLOBAL-ID": site_id,
+        "itemFilter(0).name": "Seller",
+        "itemFilter(0).value(0)": seller,
+    }
+    r = requests.get(FINDING_ENDPOINT, params=params, timeout=20)
+    r.raise_for_status()
+    data = r.json()
+    resp = (data.get("findItemsAdvancedResponse") or [{}])[0]
+    ack = (resp.get("ack", [""])[0]).lower()
+    if ack != "success":
+        err = (resp.get("errorMessage") or [{}])[0].get("error", [{}])[0]
+        msg = f"{err.get('severity', [''])[0]} {err.get('errorId', [''])[0]}: {err.get('message', [''])[0]}"
+        raise RuntimeError(f"Finding API error: {msg}")
+
+    pagination = (resp.get("paginationOutput") or [{}])[0]
+    total_pages = int((pagination.get("totalPages") or ["1"])[0])
+
+    items_raw = (resp.get("searchResult") or [{}])[0].get("item", []) or []
+    items = []
+    for it in items_raw:
+        title = (it.get("title", [""]) or [""])[0].strip()
+        urls = it.get("viewItemURL", [])
+        url = (urls[0] if urls else "").strip()
+        if title and url:
+            items.append({"title": title, "url": url})
+    return total_pages, items
+
+
+def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, global_id: str = "EBAY-US", dry: bool = False):
+    """
+    Itera y crea Items para 'user_id' desde el seller dado.
+    Devuelve dict con métricas y (opcional) preview.
+    """
+    created = 0
+    skipped = 0
+    seen = 0
+    preview = []
+
+    page = 1
+    per_page = 100
+    while seen < max_items:
+        total_pages, batch = _ebay_find_items_by_seller(seller, page=page, entries_per_page=per_page, site_id=global_id)
+        if not batch:
+            break
+
+        for it in batch:
+            if seen >= max_items:
+                break
+            seen += 1
+
+            title = it["title"]
+            url = it["url"]
+
+            exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
+            if exists:
+                skipped += 1
+                continue
+
+            if dry:
+                preview.append({"title": title, "url": url})
+                continue
+
+            sku = generate_sku()
+            new_it = Item(
+                user_id=user_id,
+                title=title,
+                sku=sku,
+                ebay_url=url,
+                listing_link=None,
+                web_url=None, amazon_url=None, mercari_url=None,
+                vinted_url=None, poshmark_url=None, depop_url=None,
+                A=None, B=None, S=None, C=None,
+                location_code=None
+            )
+            db.session.add(new_it)
+            created += 1
+
+        if not dry and created:
+            db.session.commit()
+
+        page += 1
+        if page > total_pages:
+            break
+
+    return {
+        "seller": seller,
+        "created": created,
+        "skipped": skipped,
+        "seen": seen,
+        "preview": preview if dry else None
+    }
+
+
+@main_bp.route("/api/ebay/import-seller", methods=["POST"])
+@login_required
+def api_ebay_import_seller():
+    """
+    Body JSON:
+      {
+        "source": "<username | /usr/... | /str/... URL>",
+        "max_items": 500,        # opcional (default 500; límite de seguridad 2000)
+        "site_hint": "EBAY-US",  # opcional; si no, inferimos por dominio
+        "dry": false             # opcional; si true, no crea y devuelve preview
+      }
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        source = (payload.get("source") or "").strip()
+        dry = bool(payload.get("dry", False))
+        max_items = min(int(payload.get("max_items", 500)), 2000)
+        site_hint = (payload.get("site_hint") or "").strip() or None
+
+        if not source:
+            return jsonify({"ok": False, "error": "Missing 'source' (username o URL)"}), 400
+
+        seller = _parse_seller_from_input(source)
+        if not seller:
+            return jsonify({"ok": False, "error": "No se pudo deducir el seller desde 'source'"}), 400
+
+        global_id = site_hint or "EBAY-US"
+        if not site_hint:
+            try:
+                if re.match(r"^https?://", source, re.I):
+                    global_id = _normalize_site_id(urlparse(source).netloc)
+            except Exception:
+                pass
+
+        result = _import_ebay_for_user(current_user.id, seller, max_items=max_items, global_id=global_id, dry=dry)
+        return jsonify({"ok": True, **result})
+    except requests.HTTPError as e:
+        body = e.response.text[:300] if e.response is not None else ""
+        return jsonify({"ok": False, "error": f"HTTP {e.response.status_code}: {body}"}), 502
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+# -------------- UI: Importar desde eBay (form + preview + import) --------------
+
+@main_bp.route("/import/ebay", methods=["GET", "POST"])
+@login_required
+def import_ebay():
+    """
+    Vista con formulario:
+      - source (username o URL eBay)
+      - site_hint (GLOBAL-ID)
+      - max_items
+      - acciones: preview / import
+    """
+    context = {
+        "source": "",
+        "site_hint": "",
+        "max_items": 500,
+        "preview": None,
+        "stats": None
+    }
+
+    if request.method == "POST":
+        action = (request.form.get("action") or "preview").strip()
+        source = (request.form.get("source") or "").strip()
+        site_hint = (request.form.get("site_hint") or "").strip()
+        try:
+            max_items = int(request.form.get("max_items") or 500)
+        except ValueError:
+            max_items = 500
+        max_items = max(1, min(max_items, 2000))
+
+        context.update({"source": source, "site_hint": site_hint, "max_items": max_items})
+
+        if not source:
+            flash("Please provide an eBay username or store/account URL.", "error")
+            return render_template("import_ebay.html", **context)
+
+        seller = _parse_seller_from_input(source)
+        if not seller:
+            flash("Could not resolve a valid eBay seller from the provided input.", "error")
+            return render_template("import_ebay.html", **context)
+
+        global_id = site_hint or "EBAY-US"
+        if not site_hint and re.match(r"^https?://", source, re.I):
+            try:
+                global_id = _normalize_site_id(urlparse(source).netloc)
+            except Exception:
+                pass
+
+        # preview o import
+        dry = (action == "preview")
+        try:
+            result = _import_ebay_for_user(current_user.id, seller, max_items=max_items, global_id=global_id, dry=dry)
+        except Exception as e:
+            flash(f"Error importing from eBay: {e}", "error")
+            return render_template("import_ebay.html", **context)
+
+        if dry:
+            context["preview"] = result.get("preview") or []
+            flash(f"Preview ready for seller '{seller}'. ({len(context['preview'])} items)", "ok")
+        else:
+            context["stats"] = {
+                "seller": seller,
+                "created": result.get("created"),
+                "skipped": result.get("skipped"),
+                "seen": result.get("seen"),
+                "global_id": global_id
+            }
+            flash(f"Imported {result.get('created')} item(s). Skipped {result.get('skipped')}.", "ok")
+
+    return render_template("import_ebay.html", **context)

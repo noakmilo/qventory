@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Import from eBay — Qventory{% endblock %}
+{% block content %}
+
+<div class="card" style="margin:20px;">
+  <h2 style="margin-top:0;">Import from eBay</h2>
+  <p style="color:var(--sub); margin-top:4px;">
+    Paste an eBay <strong>username</strong> or a <strong>store/account URL</strong> (e.g. <code>https://www.ebay.com/usr/your-seller</code> or <code>https://www.ebay.com/str/your-store</code>).
+    We will fetch public listings and create items in your inventory (SKU auto-generated). Locations can be assigned later.
+  </p>
+
+  <form method="post" class="grid cols-3" style="margin-top:12px;">
+    <div style="grid-column:1/-1">
+      <label>eBay username or URL</label>
+      <input class="input" type="text" name="source" value="{{ source or '' }}" placeholder="mivendedor123 or https://www.ebay.com/usr/mivendedor123" required>
+    </div>
+
+    <div>
+      <label>Site (GLOBAL-ID, optional)</label>
+      <input class="input" type="text" name="site_hint" value="{{ site_hint or '' }}" placeholder="EBAY-US, EBAY-GB, EBAY-DE, ...">
+      <div style="font-size:12px; opacity:.7; margin-top:4px;">If empty, we try to infer it from the URL (default EBAY-US).</div>
+    </div>
+
+    <div>
+      <label>Max items</label>
+      <input class="input" type="number" name="max_items" value="{{ max_items or 500 }}" min="1" max="2000">
+    </div>
+
+    <div style="grid-column:1/-1; margin-top:8px;">
+      <button class="btn submitbtn" type="submit" name="action" value="preview" title="Show items without creating">Preview</button>
+      <button class="btn submitbtn" type="submit" name="action" value="import" title="Create items now">Import</button>
+      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+
+{% if preview is not none %}
+<div class="card" style="margin:20px;">
+  <h3 style="margin-top:0;">Preview ({{ preview|length }} items)</h3>
+  {% if preview %}
+    <div style="overflow:auto;">
+      <table class="table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">#</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">Title</th>
+            <th style="text-align:left; padding:8px; border-bottom:1px solid var(--border);">URL</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in preview %}
+          <tr>
+            <td style="padding:8px; border-bottom:1px solid var(--border); opacity:.8;">{{ loop.index }}</td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);">{{ it.title }}</td>
+            <td style="padding:8px; border-bottom:1px solid var(--border);">
+              <a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.url }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <form method="post" style="margin-top:12px;">
+      <input type="hidden" name="source" value="{{ source }}">
+      <input type="hidden" name="site_hint" value="{{ site_hint }}">
+      <input type="hidden" name="max_items" value="{{ max_items }}">
+      <button class="btn submitbtn" type="submit" name="action" value="import">Import These</button>
+      <a class="btn" href="{{ url_for('main.import_ebay') }}">Back</a>
+    </form>
+  {% else %}
+    <p style="opacity:.8;">No items found for this seller/site.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if stats %}
+<div class="card" style="margin:20px;">
+  <h3 style="margin-top:0;">Import summary</h3>
+  <ul style="line-height:1.6; margin:0; padding-left:18px;">
+    <li><strong>Seller:</strong> {{ stats.seller }}</li>
+    <li><strong>Global ID:</strong> {{ stats.global_id }}</li>
+    <li><strong>Imported (created):</strong> {{ stats.created }}</li>
+    <li><strong>Skipped (duplicates):</strong> {{ stats.skipped }}</li>
+    <li><strong>Seen:</strong> {{ stats.seen }}</li>
+  </ul>
+  <div style="margin-top:10px;">
+    <a class="btn" href="{{ url_for('main.dashboard') }}">Go to Dashboard</a>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
