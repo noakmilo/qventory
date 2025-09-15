@@ -182,71 +182,74 @@
   const btnClose  = document.getElementById('scanClose');
   const btnFlip   = document.getElementById('scanFlip');
   const video     = document.getElementById('scanVideo');
-  const target    = document.getElementById('scanTarget');
+  const target    = document.getElementById('scanTarget'); // contenedor para Quagga
   const inputQ    = document.getElementById('q');
   const form      = document.getElementById('filterForm');
 
-  let stream=null, rafId=null, detector=null, usingQuagga=false;
-  let videoDevices=[], currentDeviceIdx=-1;
+  let stream = null, rafId = null, detector = null, usingQuagga = false;
+  let videoDevices = [], currentDeviceIdx = -1;
 
   const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
 
-  video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
+  // evitar fullscreen iOS
+  video.setAttribute('playsinline','');
+  video.setAttribute('muted','');
+  video.setAttribute('autoplay','');
 
+  // -------- utilidades UI / flujo --------
   function openModal(){ modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
-  function cancelLoop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=null; } }
-  function stopStream(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } }
+  function cancelLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
+  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }
   function cleanupAll(){
     cancelLoop(); stopStream();
-    if(usingQuagga && window.Quagga){ try{ window.Quagga.stop(); }catch(e){} usingQuagga=false; }
+    if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; }
     video.style.display='none'; target.style.display='none';
   }
   function onDetected(value){
-    try{ navigator.vibrate && navigator.vibrate(50); }catch(_){}
+    try { navigator.vibrate && navigator.vibrate(50); } catch(_){}
     cleanupAll(); closeModal();
     inputQ.value = value;
-    form?.submit();
+    form?.submit(); // quita esta línea si prefieres revisar antes
   }
 
-  // ---------- DIAGNÓSTICO VISUAL ----------
+  // -------- diagnóstico amigable --------
   function showError(err, where=''){
-    const name = err?.name || err?.toString() || 'UnknownError';
+    const name = err?.name || String(err) || 'Error';
     const msg  = err?.message || '';
     const extra = [
       `SecureContext: ${window.isSecureContext}`,
-      `Protocol: ${location.protocol}`,
+      `Protocol: ${location.protocol.replace(':','')}`,
       `Devices: ${videoDevices.length}`,
       where ? `At: ${where}` : ''
-    ].join(' · ');
-    console.error('[Scanner]', name, msg, err);
-    alert(`${name}: ${msg || 'No se pudo acceder a la cámara.'}\n${extra}`);
+    ].filter(Boolean).join(' · ');
+    console.error('[Scanner]', where, err);
+    alert(`${name}${msg ? ': ' + msg : ''}\n${extra}`);
   }
 
-  // ---------- PERMISOS / DISPOSITIVOS ----------
+  // -------- permisos y selección de cámara --------
   async function ensurePermissionOnce(){
-    // En muchos iOS, esto desbloquea labels y deviceIds
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio:false });
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     tmp.getTracks().forEach(t=>t.stop());
   }
-
   async function loadVideoDevices(){
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d => d.kind === 'videoinput');
+    // priorizar trasera por label
     const prefers = ['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
       const as = prefers.some(p=>la.includes(p)) ? 1 : 0;
       const bs = prefers.some(p=>lb.includes(p)) ? 1 : 0;
-      return bs - as; // trasera primero
+      return bs - as;
     });
   }
-
   async function startWithDevice(deviceId){
     stopStream(); cancelLoop();
     const constraints = {
-      video: deviceId ? { deviceId: { exact: deviceId }, width:{ideal:1280}, height:{ideal:720} }
-                      : { facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
+      video: deviceId
+        ? { deviceId: { exact: deviceId }, width:{ideal:1280}, height:{ideal:720} }
+        : { facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720} },
       audio: false
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -254,82 +257,136 @@
     await video.play();
   }
 
-  // ---------- BARCODE DETECTOR ----------
+  // -------- BarcodeDetector --------
   function startBDLoop(){
     const tick = async () => {
-      try{
+      try {
         const codes = await detector.detect(video);
         if (codes && codes.length){
-          const val = (codes[0].rawValue||'').trim();
+          const val = (codes[0].rawValue || '').trim();
           if (val){ onDetected(val); return; }
         }
-      }catch(_){}
+      } catch(_) {}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
   async function startBarcodeDetector(){
     detector = new window.BarcodeDetector({ formats: BD_FORMATS });
-    video.style.display='block'; target.style.display='none';
+    video.style.display = 'block';
+    target.style.display = 'none';
     startBDLoop();
   }
 
-  // ---------- QUAGGA (fallback) ----------
+  // -------- Quagga loader robusto (3 CDNs) --------
   function loadQuagga(){
-    return new Promise((resolve,reject)=>{
-      if(window.Quagga){ resolve(); return; }
-      const s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js';
-      s.async=true; s.onload=()=>resolve(); s.onerror=()=>reject(new Error('Failed to load Quagga2'));
-      document.head.appendChild(s);
-    });
-  }
-  async function startQuagga(){
-    usingQuagga=true; video.style.display='none'; target.style.display='block';
-    const constraints = (videoDevices.length && currentDeviceIdx>=0)
-      ? { deviceId:{ exact: videoDevices[currentDeviceIdx].deviceId }, width:{ideal:1280}, height:{ideal:720} }
-      : { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} };
+    const CANDIDATES = [
+      'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
+      'https://unpkg.com/@ericblade/quagga2@0.0.14/dist/quagga.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
+    ];
+    if (window.Quagga) return Promise.resolve('existing');
 
-    await new Promise((resolve,reject)=>{
+    return new Promise(async (resolve, reject) => {
+      for (const url of CANDIDATES) {
+        try {
+          await injectScriptOnce(url);
+          const ok = await waitForGlobal('Quagga', 3000);
+          if (ok) { console.log('[Scanner] Quagga loaded from:', url); return resolve(url); }
+        } catch (e) {
+          console.warn('[Scanner] Failed to load', url, e);
+        }
+      }
+      reject(new Error('Quagga2 could not be loaded from any CDN'));
+    });
+
+    function injectScriptOnce(src){
+      return new Promise((resolve, reject) => {
+        if ([...document.scripts].some(s => s.src === src)) return resolve();
+        const s = document.createElement('script');
+        s.src = src; s.async = true;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('script load error'));
+        document.head.appendChild(s);
+      });
+    }
+    function waitForGlobal(name, timeoutMs){
+      return new Promise((resolve) => {
+        const start = performance.now();
+        (function check(){
+          if (window[name]) return resolve(true);
+          if (performance.now() - start > timeoutMs) return resolve(false);
+          requestAnimationFrame(check);
+        })();
+      });
+    }
+  }
+
+  async function startQuagga(){
+    if (!window.Quagga) throw new Error('Quagga global is missing after load');
+    usingQuagga = true;
+    video.style.display = 'none';
+    target.style.display = 'block';
+
+    let constraints = {};
+    if (videoDevices.length && currentDeviceIdx >= 0) {
+      constraints.deviceId = { exact: videoDevices[currentDeviceIdx].deviceId };
+    } else {
+      constraints.facingMode = 'environment';
+    }
+
+    await new Promise((resolve, reject) => {
       window.Quagga.init({
-        inputStream:{ type:'LiveStream', constraints, target },
-        locator:{ patchSize:'medium', halfSample:true },
+        inputStream: {
+          type: 'LiveStream',
+          constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 } },
+        target: target
+        },
+        locator: { patchSize: 'medium', halfSample: true },
         numOfWorkers: navigator.hardwareConcurrency || 2,
-        frequency:10,
-        decoder:{ readers:['code_128_reader','ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_39_reader'] }
-      }, (err)=>{
-        if(err) return reject(err);
+        frequency: 10,
+        decoder: {
+          readers: [
+            'code_128_reader',
+            'ean_reader',
+            'ean_8_reader',
+            'upc_reader',
+            'upc_e_reader',
+            'code_39_reader'
+          ]
+        }
+      }, (err) => {
+        if (err) return reject(err);
         window.Quagga.start();
-        window.Quagga.onDetected(res=>{
+        window.Quagga.onDetected(res => {
           const code = res?.codeResult?.code;
-          if(code) onDetected(code);
+          if (code) onDetected(code);
         });
         resolve();
       });
     });
   }
 
-  // ---------- FLUJO PRINCIPAL ----------
+  // -------- flujo principal --------
   async function startScan(){
     openModal();
 
-    // Pre-chequeos clave (evita fallo silencioso en iOS)
     if (!window.isSecureContext) {
       showError(new Error('Requiere HTTPS o localhost'), 'secure-check');
       cleanupAll(); closeModal(); return;
     }
 
     try{
-      await ensurePermissionOnce();     // dispara el diálogo si no está concedido
+      await ensurePermissionOnce();      // dispara diálogo si hace falta
       await loadVideoDevices();
       if (videoDevices.length) currentDeviceIdx = 0;
 
       if ('BarcodeDetector' in window) {
-        try{
+        try {
           await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
           await startBarcodeDetector();
           return;
-        }catch(eBD){
+        } catch (eBD) {
           console.warn('BD falló → fallback Quagga2', eBD);
           cleanupAll();
         }
@@ -348,27 +405,26 @@
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
 
-    // Quagga activo
     if (usingQuagga && window.Quagga){
-      try{ window.Quagga.stop(); }catch(_){}
-      usingQuagga=false;
+      try { window.Quagga.stop(); } catch(_){}
+      usingQuagga = false;
       try { await startQuagga(); } catch (e) { showError(e, 'flip-quagga'); }
       return;
     }
 
-    // BD activo
     cancelLoop();
     try{
       await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-      startBDLoop(); // detector ya creado
+      // detector ya existe si veníamos de BD
+      if (detector) startBDLoop();
     }catch(e){ showError(e, 'flip-bd'); }
   }
 
-  // UI
+  // eventos
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
-  btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if(e.target===modal){ cleanupAll(); closeModal(); } });
+  btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
+  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
 })();
 </script>
 
