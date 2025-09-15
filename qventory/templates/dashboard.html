@@ -182,92 +182,146 @@
   const inputQ    = document.getElementById('q');
   const form      = document.getElementById('filterForm');
 
-  let stream   = null;
-  let rafId    = null;
-  let detector = null;
-  let usingQuagga = false;
+  let stream = null, rafId = null, detector = null, usingQuagga = false;
 
   const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
 
-  function openModal(){
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden','false');
-  }
-  function closeModal(){
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden','true');
-  }
+  function openModal(){ modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
+  function closeModal(){ modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function stopVideo(){
     if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
-    if (stream){
-      stream.getTracks().forEach(t=>t.stop());
-      stream = null;
-    }
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
   }
   function cleanupAll(){
     stopVideo();
-    if (usingQuagga && window.Quagga){
-      try { window.Quagga.stop(); } catch(e){}
-      usingQuagga = false;
-    }
+    if (usingQuagga && window.Quagga){ try{ window.Quagga.stop(); }catch(e){} usingQuagga=false; }
     video.style.display = 'none';
     target.style.display = 'none';
+  }
+  function onDetected(value){
+    cleanupAll(); closeModal();
+    inputQ.value = value;
+    form?.submit(); // quita esta línea si prefieres revisar antes
+  }
+
+  // --- Helpers de cámara robustos ---
+  async function ensureVideoPermission() {
+    // iOS necesita un getUserMedia previo para que enumerateDevices revele labels
+    let tmp;
+    try {
+      tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      tmp.getTracks().forEach(t=>t.stop());
+    } catch (e) {
+      // si el usuario niega, relanzamos
+      throw e;
+    }
+  }
+
+  async function getRearDeviceId() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videos = devices.filter(d => d.kind === 'videoinput');
+    if (!videos.length) return null;
+
+    // Preferir por nombre común de cámara trasera
+    const prefer = ['back', 'rear', 'environment'];
+    const byLabel = videos.find(d => {
+      const L = (d.label || '').toLowerCase();
+      return prefer.some(k => L.includes(k));
+    });
+    if (byLabel) return byLabel.deviceId;
+
+    // Si no hay pistas, devolver la última (suele ser la trasera en móviles)
+    return videos[videos.length - 1].deviceId || videos[0].deviceId;
+  }
+
+  async function getCameraStream() {
+    // Intento 1: facingMode environment
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+    } catch (e1) {
+      // Intento 2: elegir deviceId tras pedir permiso y enumerar
+      try {
+        await ensureVideoPermission();
+        const deviceId = await getRearDeviceId();
+        if (deviceId) {
+          return await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId } }, audio: false
+          });
+        }
+        throw e1;
+      } catch (e2) {
+        // Intento 3: constraints genéricos (cualquier cámara)
+        try {
+          return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (e3) {
+          // Propaga el último error
+          throw e3;
+        }
+      }
+    }
+  }
+
+  function humanizeGetUserMediaError(err){
+    const name = err && (err.name || err.toString());
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      return 'Permiso de cámara denegado. Habilítalo en el navegador y vuelve a intentar.';
+    }
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+      return 'No se encontró una cámara compatible. Revisa que ninguna otra app la esté usando.';
+    }
+    if (name === 'NotReadableError') {
+      return 'La cámara está en uso por otra aplicación. Ciérrala e intenta de nuevo.';
+    }
+    return 'No se pudo acceder a la cámara. Verifica HTTPS/permiso y vuelve a intentar.';
   }
 
   async function startScan(){
     openModal();
 
-    // 1) Intentar BarcodeDetector nativo
-    if ('BarcodeDetector' in window){
-      try{
+    // 1) BarcodeDetector si existe
+    if ('BarcodeDetector' in window) {
+      try {
         detector = new window.BarcodeDetector({ formats: BD_FORMATS });
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }, audio: false
-        });
+        stream = await getCameraStream();
         video.srcObject = stream;
         await video.play();
         video.style.display = 'block';
         target.style.display = 'none';
 
         const tick = async () => {
-          try{
+          try {
             const codes = await detector.detect(video);
-            if (codes && codes.length){
+            if (codes && codes.length) {
               const val = (codes[0].rawValue || '').trim();
-              if (val){ onDetected(val); return; }
+              if (val) { onDetected(val); return; }
             }
-          }catch(e){/* ignore */}
+          } catch (_) { /* ignore frame errors */ }
           rafId = requestAnimationFrame(tick);
         };
         rafId = requestAnimationFrame(tick);
         return;
-      }catch(e){
-        // caer a Quagga
+      } catch (err) {
+        console.warn('BarcodeDetector falló, usando Quagga2. Motivo:', err);
         cleanupAll();
       }
     }
 
-    // 2) Fallback: cargar Quagga2 y arrancar
-    try{
+    // 2) Fallback Quagga2
+    try {
       await loadQuagga();
-      initQuagga();
-    }catch(err){
-      alert('Camera/Scanner not available.');
-      cleanupAll();
-      closeModal();
+      await initQuagga(); // lanza si falla
+    } catch (err) {
+      alert(humanizeGetUserMediaError(err));
+      cleanupAll(); closeModal();
     }
-  }
-
-  function onDetected(value){
-    cleanupAll();
-    closeModal();
-    inputQ.value = value;
-    form?.submit();
   }
 
   function loadQuagga(){
     return new Promise((resolve, reject) => {
-      if (window.Quagga){ resolve(); return; }
+      if (window.Quagga) { resolve(); return; }
       const s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js';
       s.async = true;
@@ -277,49 +331,51 @@
     });
   }
 
-  function initQuagga(){
+  async function initQuagga(){
     usingQuagga = true;
     video.style.display = 'none';
     target.style.display = 'block';
 
-    const constraints = {
-      width:  { ideal: 1280 },
-      height: { ideal: 720 },
-      facingMode: 'environment'
-    };
+    // Preparar constraints robustos para Quagga
+    let constraints;
+    try {
+      await ensureVideoPermission();
+      const deviceId = await getRearDeviceId();
+      constraints = deviceId
+        ? { deviceId: { exact: deviceId } }
+        : { facingMode: 'environment' };
+    } catch {
+      constraints = { facingMode: 'environment' };
+    }
 
-    window.Quagga.init({
-      inputStream: {
-        type: 'LiveStream',
-        constraints,
-        target: target
-      },
-      locator: { patchSize: 'medium', halfSample: true },
-      numOfWorkers: navigator.hardwareConcurrency || 2,
-      frequency: 10,
-      decoder: {
-        readers: [
-          'code_128_reader',
-          'ean_reader',
-          'ean_8_reader',
-          'upc_reader',
-          'upc_e_reader',
-          'code_39_reader'
-        ]
-      },
-    }, (err) => {
-      if (err) {
-        console.error(err);
-        alert('Could not start scanner.');
-        cleanupAll();
-        closeModal();
-        return;
-      }
-      window.Quagga.start();
-
-      window.Quagga.onDetected(result => {
-        const code = result?.codeResult?.code;
-        if (code) onDetected(code);
+    return new Promise((resolve, reject) => {
+      window.Quagga.init({
+        inputStream: {
+          type: 'LiveStream',
+          constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 } },
+          target: target
+        },
+        locator: { patchSize: 'medium', halfSample: true },
+        numOfWorkers: navigator.hardwareConcurrency || 2,
+        frequency: 10,
+        decoder: {
+          readers: [
+            'code_128_reader',
+            'ean_reader',
+            'ean_8_reader',
+            'upc_reader',
+            'upc_e_reader',
+            'code_39_reader'
+          ]
+        }
+      }, (err) => {
+        if (err) return reject(err);
+        window.Quagga.start();
+        window.Quagga.onDetected(res => {
+          const code = res?.codeResult?.code;
+          if (code) onDetected(code);
+        });
+        resolve();
       });
     });
   }
@@ -329,7 +385,11 @@
   btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
 
-  // Mejor experiencia en iOS/Android: requiere HTTPS o localhost
+  // Tips:
+  // - Requiere HTTPS (o localhost) para getUserMedia.
+  // - Si tu app está embebida en un <iframe>, agrega allow="camera" al iframe.
+  // - En iOS, asegúrate de que la PWA/ pestaña tenga foco y no esté en modo “Private Relay” con políticas restrictivas.
 })();
 </script>
+
 {% endblock %}
