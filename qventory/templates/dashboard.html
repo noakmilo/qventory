@@ -4,10 +4,14 @@
 <div class="row">
   <div class="card cardfilters" style="flex:1 1 280px;min-width:280px">
     <h2>Filters</h2>
-    <form method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
+    <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
       <div style="grid-column:1/-1">
-        <input class="input" type="text" name="q" value="{{ q }}" placeholder="Search title or SKU…">
+        <div class="input-with-button">
+          <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title or SKU…">
+          <button class="icon-btn" type="button" id="btnScan" title="Scan barcode with camera" aria-label="Scan barcode">📷</button>
+        </div>
       </div>
+
       {% if settings.enable_A %}
       <div>
         <label>{{ settings.label_A }}</label>
@@ -91,10 +95,8 @@
             <td><span class="tag itsku">{{ it.sku }}</span></td>
             <td>
               {% if it.location_code %}
-              <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{
-                it.location_code }}</a>
-              &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-                target="_blank">QR</a>
+              <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
+              &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" target="_blank">QR</a>
               {% else %}
               —
               {% endif %}
@@ -106,11 +108,9 @@
                 {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
                 {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
                 {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
-                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif
-                %}
+                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
                 {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
-                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or
-                it.poshmark_url or it.depop_url) %}—{% endif %}
+                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
             <td>
@@ -121,8 +121,7 @@
                 <button class="btn settingsbtn" type="submit" title="Print label">🖨️</button>
               </form>
 
-              <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}"
-                onsubmit="return confirm('Delete this item?')">
+              <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
                 <button class="btn settingsbtn" type="submit">❌</button>
               </form>
               {% else %}
@@ -136,4 +135,118 @@
     </div>
   </div>
 </div>
+
+<!-- Modal simple para el escáner -->
+<div id="scanModal" class="scan-modal hidden" aria-hidden="true" aria-label="Barcode scanner">
+  <div class="scan-sheet">
+    <div class="scan-header">
+      <strong>Scan a barcode</strong>
+      <button type="button" id="scanClose" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+    <div class="scan-body">
+      <video id="scanVideo" playsinline autoplay muted></video>
+      <div class="scan-tip">Align the barcode inside the frame</div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .input-with-button{ position:relative; display:flex; align-items:center; }
+  .input-with-button > .input{ padding-right:42px; }
+  .icon-btn{
+    position:absolute; right:8px; border:none; background:transparent;
+    cursor:pointer; line-height:1; font-size:18px; opacity:.8;
+  }
+  .icon-btn:hover{ opacity:1; }
+
+  .scan-modal.hidden{ display:none; }
+  .scan-modal{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999; }
+  .scan-sheet{ width:min(640px,92vw); background:#111; color:#fff; border-radius:10px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .scan-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#181818; border-bottom:1px solid #222; }
+  .scan-body{ position:relative; }
+  #scanVideo{ width:100%; height:auto; display:block; background:#000; }
+  .scan-tip{ text-align:center; font-size:12px; opacity:.8; padding:8px 0 12px; }
+</style>
+
+<script>
+(function(){
+  const btnScan  = document.getElementById('btnScan');
+  const modal    = document.getElementById('scanModal');
+  const btnClose = document.getElementById('scanClose');
+  const video    = document.getElementById('scanVideo');
+  const inputQ   = document.getElementById('q');
+  const form     = document.getElementById('filterForm');
+
+  let stream = null;
+  let rafId  = null;
+  let detector = null;
+
+  function openModal(){
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden','false');
+  }
+  function closeModal(){
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden','true');
+  }
+  function stopVideo(){
+    if (rafId){ cancelAnimationFrame(rafId); rafId = null; }
+    if (stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null;
+    }
+  }
+
+  async function startScan(){
+    if (!('BarcodeDetector' in window)) {
+      alert('BarcodeDetector is not supported on this browser. Try Chrome/Edge/Android or Safari reciente.');
+      return;
+    }
+    try {
+      detector = new window.BarcodeDetector({
+        formats: ['code_128','ean_13','upc_a','upc_e','code_39','qr_code']
+      });
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }, audio: false
+      });
+
+      openModal();
+      video.srcObject = stream;
+      await video.play();
+
+      const tick = async () => {
+        try {
+          const codes = await detector.detect(video);
+          if (codes && codes.length){
+            const val = (codes[0].rawValue || '').trim();
+            if (val){
+              onDetected(val);
+              return;
+            }
+          }
+        } catch(err){ /* frame errors ignored */ }
+        rafId = requestAnimationFrame(tick);
+      };
+      rafId = requestAnimationFrame(tick);
+
+    } catch (err) {
+      console.error(err);
+      alert('Could not access camera.');
+      stopVideo(); closeModal();
+    }
+  }
+
+  function onDetected(value){
+    stopVideo();
+    closeModal();
+    inputQ.value = value;
+    form?.submit();
+  }
+
+  btnScan?.addEventListener('click', startScan);
+  btnClose?.addEventListener('click', () => { stopVideo(); closeModal(); });
+  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ stopVideo(); closeModal(); } });
+})();
+</script>
 {% endblock %}
