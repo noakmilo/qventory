@@ -395,7 +395,6 @@
       setTimeout(()=>{
         const filled = populateLocationFields(loc);
         cleanupAll(); closeModal();
-        alert(filled.length ? `Location populated: ${filled.join(', ')}` : 'QR detected, but no location fields matched.');
       }, 600);
     } else {
       result.textContent = `QR: ${String(v).slice(0,80)}…`;
