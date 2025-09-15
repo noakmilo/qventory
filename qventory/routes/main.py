@@ -633,52 +633,88 @@ def _parse_seller_from_input(source: str) -> str | None:
     Acepta:
       - username directo (sin espacios, alfanumérico y _.-)
       - URL /usr/<seller>
-      - URL /str/<store>  -> intenta resolver seller por _ssn=<seller> u otros hints en el HTML
+      - URL /str/<store>  -> intenta resolver seller con varias heurísticas:
+          * toma el slug como candidato si luce válido
+          * sigue redirecciones y busca _ssn= en URL final
+          * escanea HTML por _ssn= y claves: sellerUsername, sellerUserName, sellerName, userId
+          * si nada aparece, retorna el slug candidato
     """
     if not source:
         return None
     s = source.strip()
 
-    # Username directo
+    # Si parece username directo
     if not re.match(r"^https?://", s, re.I):
         if re.match(r"^[A-Za-z0-9._-]{1,64}$", s):
             return s
         return None
 
-    # Es URL
     try:
         p = urlparse(s)
         path = p.path or "/"
 
-        # /usr/<seller>
+        # --- /usr/<seller> ---
         m = re.search(r"/usr/([^/?#]+)", path, re.I)
         if m:
             return unquote(m.group(1))
 
-        # query param _ssn=<seller>
+        # --- _ssn=<seller> en query ---
         q = parse_qs(p.query or "")
         if "_ssn" in q and q["_ssn"]:
             return q["_ssn"][0]
 
-        # /str/<store> => intentar raspar _ssn o variantes
-        if "/str/" in path.lower():
+        # --- /str/<store> ---
+        if re.search(r"/str/([^/?#]+)", path, re.I):
+            slug = re.search(r"/str/([^/?#]+)", path, re.I).group(1)
+            candidate = unquote(slug) if re.match(r"^[A-Za-z0-9._-]{1,64}$", unquote(slug)) else None
+
+            # Intento de resolución activa con headers "reales"
             try:
-                html = requests.get(s, timeout=15).text
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
+                    "Cache-Control": "no-cache",
+                }
+                r = requests.get(s, headers=headers, timeout=15, allow_redirects=True)
+
+                # 1) Si la URL final trae _ssn=, úsalo
+                try:
+                    pf = urlparse(r.url)
+                    qf = parse_qs(pf.query or "")
+                    if "_ssn" in qf and qf["_ssn"]:
+                        return qf["_ssn"][0]
+                except Exception:
+                    pass
+
+                html = r.text or ""
+
+                # 2) Busca _ssn= en el HTML (enlaces, scripts, etc.)
                 m = re.search(r"[_?&]ssn=([A-Za-z0-9._%-]+)", html, re.I)
                 if m:
                     return unquote(m.group(1))
-                m = re.search(r'"sellerUsername"\s*:\s*"([^"]+)"', html)
-                if m:
-                    return m.group(1)
-                m = re.search(r'"sellerName"\s*:\s*"([^"]+)"', html)
-                if m:
-                    return m.group(1)
+
+                # 3) Busca claves comunes embebidas en JSON
+                for key in [r'sellerUsername', r'sellerUserName', r'sellerName', r'userId']:
+                    m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', html)
+                    if m and re.match(r"^[A-Za-z0-9._-]{1,64}$", m.group(1)):
+                        return m.group(1)
+
             except Exception:
+                # Si el fetch falla, seguimos con candidate si existe
                 pass
 
+            # 4) Si nada funcionó pero el slug era válido, úsalo como fallback
+            if candidate:
+                return candidate
+
+        # Si no coincide con ningún patrón soportado
         return None
+
     except Exception:
         return None
+
 
 
 def _normalize_site_id(domain: str) -> str:
