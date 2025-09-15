@@ -10,7 +10,8 @@ import os
 import base64
 import time
 import requests
-from urllib.parse import urlparse, parse_qs, unquote  # helpers URL eBay
+from urllib.parse import urlparse, parse_qs, unquote
+from html import unescape
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -39,7 +40,6 @@ from . import main_bp
 
 @main_bp.route("/")
 def landing():
-    # Página pública de marketing/SEO
     return render_template("landing.html")
 
 
@@ -50,10 +50,8 @@ def landing():
 def dashboard():
     s = get_or_create_settings(current_user)
 
-    # Conteo total de items del usuario (para el H2)
     total_items = Item.query.filter_by(user_id=current_user.id).count()
 
-    # Filtros de búsqueda
     q = (request.args.get("q") or "").strip()
     fA = (request.args.get("A") or "").strip()
     fB = (request.args.get("B") or "").strip()
@@ -67,7 +65,6 @@ def dashboard():
         like = f"%{q}%"
         items = items.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
 
-    # Filtros de ubicación (solo niveles habilitados)
     if s.enable_A and fA:
         items = items.filter(Item.A == fA)
     if s.enable_B and fB:
@@ -77,7 +74,6 @@ def dashboard():
     if s.enable_C and fC:
         items = items.filter(Item.C == fC)
 
-    # Filtro por plataforma (si el item tiene URL para esa plataforma)
     if fPlatform:
         col = {
             "web": Item.web_url, "ebay": Item.ebay_url, "amazon": Item.amazon_url,
@@ -89,7 +85,6 @@ def dashboard():
 
     items = items.order_by(Item.created_at.desc()).all()
 
-    # Distintos por columna, scope por usuario
     def distinct(col):
         return [
             r[0] for r in db.session.query(col)
@@ -119,13 +114,13 @@ def dashboard():
         items=items,
         settings=s,
         options=options,
-        total_items=total_items,  # <-- para mostrar en el H2: Items ({{ total_items }})
+        total_items=total_items,
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
 
 
-# ---------------------- eBay Browse API (con .env) ----------------------
+# ---------------------- eBay config (Browse + Finding) ----------------------
 
 EBAY_ENV = (os.environ.get("EBAY_ENV") or "production").lower()
 EBAY_CLIENT_ID = os.environ.get("EBAY_CLIENT_ID")
@@ -142,7 +137,6 @@ def _ebay_base():
         "browse": "https://api.ebay.com/buy/browse/v1",
     }
 
-# Cache simple de token en memoria
 _EBAY_TOKEN = {"value": None, "exp": 0}
 
 def _get_ebay_app_token() -> str:
@@ -162,32 +156,119 @@ def _get_ebay_app_token() -> str:
         "Content-Type": "application/x-www-form-urlencoded",
         "Authorization": f"Basic {basic}",
     }
-    r = requests.post(base["oauth"], headers=headers, data=data, timeout=15)
+    r = requests.post(base["oauth"], headers=headers, data=data, timeout=20)
     r.raise_for_status()
     j = r.json()
     _EBAY_TOKEN["value"] = j["access_token"]
     _EBAY_TOKEN["exp"] = now + int(j.get("expires_in", 7200))
     return _EBAY_TOKEN["value"]
 
+
+# ---------------------- Helpers de parseo ----------------------
+
 def _extract_legacy_id(url: str) -> str | None:
-    # patrón principal /itm/<digits>
     m = re.search(r"/itm/(\d+)", url)
     if m:
         return m.group(1)
-    # fallback: primer número largo
     m = re.search(r"(\d{9,})", url)
     return m.group(1) if m else None
 
+def _normalize_site_id(domain: str) -> str:
+    d = (domain or "").lower()
+    if d.endswith(".co.uk"): return "EBAY-GB"
+    if d.endswith(".de"):    return "EBAY-DE"
+    if d.endswith(".fr"):    return "EBAY-FR"
+    if d.endswith(".it"):    return "EBAY-IT"
+    if d.endswith(".es"):    return "EBAY-ES"
+    if d.endswith(".com.au"):return "EBAY-AU"
+    return "EBAY-US"
 
-# ---------------------- API helper: importar título desde URL (eBay API) ----------------------
+def _parse_seller_from_input(source: str) -> str | None:
+    """
+    Acepta:
+      - username directo (A-Za-z0-9._-)
+      - URL /usr/<seller>
+      - URL /str/<store>  -> resuelve username real buscando:
+          * _ssn= en query o en URL final
+          * claves embebidas: sellerUsername, sellerUserName, sellerName, userId
+          * texto visible "Seller: <username>" en el HTML
+          * si nada aparece pero el slug es válido, usa el slug como fallback
+    """
+    if not source:
+        return None
+    s = source.strip()
+
+    if not re.match(r"^https?://", s, re.I):
+        return s if re.match(r"^[A-Za-z0-9._-]{1,64}$", s) else None
+
+    try:
+        p = urlparse(s)
+        path = p.path or "/"
+
+        m = re.search(r"/usr/([^/?#]+)", path, re.I)
+        if m:
+            u = unquote(m.group(1))
+            return u if re.match(r"^[A-Za-z0-9._-]{1,64}$", u) else None
+
+        q = parse_qs(p.query or "")
+        if "_ssn" in q and q["_ssn"]:
+            return q["_ssn"][0]
+
+        mm = re.search(r"/str/([^/?#]+)", path, re.I)
+        if mm:
+            slug = unquote(mm.group(1))
+            candidate = slug if re.match(r"^[A-Za-z0-9._-]{1,64}$", slug) else None
+
+            try:
+                headers = {
+                    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                                   " AppleWebKit/537.36 (KHTML, like Gecko)"
+                                   " Chrome/124.0.0.0 Safari/537.36"),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
+                    "Cache-Control": "no-cache",
+                }
+                r = requests.get(s, headers=headers, timeout=20, allow_redirects=True)
+
+                try:
+                    pf = urlparse(r.url)
+                    qf = parse_qs(pf.query or "")
+                    if "_ssn" in qf and qf["_ssn"]:
+                        return qf["_ssn"][0]
+                except Exception:
+                    pass
+
+                html = r.text or ""
+
+                m = re.search(r"[_?&]ssn=([A-Za-z0-9._%-]+)", html, re.I)
+                if m:
+                    return unquote(m.group(1))
+
+                for key in [r'sellerUsername', r'sellerUserName', r'sellerName', r'userId']:
+                    m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', html)
+                    if m and re.match(r"^[A-Za-z0-9._-]{1,64}$", m.group(1)):
+                        return m.group(1)
+
+                m = re.search(r"Seller:\s*([A-Za-z0-9._-]{1,64})", html, re.I)
+                if m:
+                    return m.group(1)
+
+            except Exception:
+                pass
+
+            if candidate:
+                return candidate
+
+        return None
+    except Exception:
+        return None
+
+
+# ---------------------- API helper: importar título desde URL (Browse) ----------------------
 
 @main_bp.route("/api/fetch-market-title")
 @login_required
 def api_fetch_market_title():
-    """
-    Recibe ?url=... y devuelve {ok, marketplace, title, fill:{title, ebay_url}}
-    Implementación: eBay Browse API (entorno tomado de EBAY_ENV).
-    """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
         return jsonify({"ok": False, "error": "Missing url"}), 400
@@ -205,19 +286,12 @@ def api_fetch_market_title():
             f"{base['browse']}/item/get_item_by_legacy_id",
             params={"legacy_item_id": legacy_id},
             headers={"Authorization": f"Bearer {token}"},
-            timeout=15
+            timeout=20
         )
-
         if r.status_code == 403:
-            return jsonify({
-                "ok": False,
-                "error": f"403 Forbidden: tu app aún no tiene acceso a Browse API en {EBAY_ENV} (o keyset deshabilitado)."
-            }), 403
+            return jsonify({"ok": False, "error": f"403 Forbidden: tu app no tiene acceso a Browse API en {EBAY_ENV}."}), 403
         if r.status_code == 404:
-            return jsonify({
-                "ok": False,
-                "error": "404: legacy_item_id no encontrado en este entorno."
-            }), 404
+            return jsonify({"ok": False, "error": "404: legacy_item_id no encontrado."}), 404
 
         r.raise_for_status()
         data = r.json()
@@ -227,12 +301,8 @@ def api_fetch_market_title():
         if not title:
             return jsonify({"ok": False, "error": "La API no devolvió título"}), 502
 
-        return jsonify({
-            "ok": True,
-            "marketplace": "ebay",
-            "title": title,
-            "fill": {"title": title, "ebay_url": item_web_url}
-        })
+        return jsonify({"ok": True, "marketplace": "ebay", "title": title,
+                        "fill": {"title": title, "ebay_url": item_web_url}})
     except requests.HTTPError as e:
         body = e.response.text[:300] if e.response is not None else ""
         return jsonify({"ok": False, "error": f"HTTP {e.response.status_code}: {body}"}), 502
@@ -240,15 +310,13 @@ def api_fetch_market_title():
         return jsonify({"ok": False, "error": str(e)}), 502
 
 
-# ---------------------- CRUD Items (protegido) ----------------------
+# ---------------------- CRUD Items ----------------------
 
 @main_bp.route("/item/new", methods=["GET", "POST"])
 @login_required
 def new_item():
     s = get_or_create_settings(current_user)
-
     if request.method == "POST":
-        # Campos base
         title = (request.form.get("title") or "").strip()
         listing_link = (request.form.get("listing_link") or "").strip() or None
 
@@ -260,7 +328,6 @@ def new_item():
         poshmark_url= (request.form.get("poshmark_url") or "").strip() or None
         depop_url   = (request.form.get("depop_url") or "").strip() or None
 
-        # Location levels
         A  = (request.form.get("A") or "").strip() or None
         B  = (request.form.get("B") or "").strip() or None
         S_ = (request.form.get("S") or "").strip() or None
@@ -270,41 +337,26 @@ def new_item():
             flash("Title is required.", "error")
             return redirect(url_for("main.new_item"))
 
-        # Crear item
         sku = generate_sku()
         loc = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
         it = Item(
-            user_id=current_user.id,
-            title=title,
-            sku=sku,
-            listing_link=listing_link,
-            web_url=web_url,
-            ebay_url=ebay_url,
-            amazon_url=amazon_url,
-            mercari_url=mercari_url,
-            vinted_url=vinted_url,
-            poshmark_url=poshmark_url,
-            depop_url=depop_url,
-            A=A, B=B, S=S_, C=C,
-            location_code=loc
+            user_id=current_user.id, title=title, sku=sku, listing_link=listing_link,
+            web_url=web_url, ebay_url=ebay_url, amazon_url=amazon_url, mercari_url=mercari_url,
+            vinted_url=vinted_url, poshmark_url=poshmark_url, depop_url=depop_url,
+            A=A, B=B, S=S_, C=C, location_code=loc
         )
         db.session.add(it)
         db.session.commit()
 
         action = (request.form.get("submit_action") or "create").strip()
-
         if action == "create_another":
-            # Guardar y quedarse en la misma página con el formulario limpio
             flash("Item created. You can add another.", "ok")
             return render_template("new_item.html", settings=s, item=None)
 
-        # Flujo normal: redirigir (dashboard o detalle)
         flash("Item created.", "ok")
         return redirect(url_for("main.dashboard"))
 
-    # GET
     return render_template("new_item.html", settings=s, item=None)
-
 
 
 @main_bp.route("/item/<int:item_id>/edit", methods=["GET", "POST"])
@@ -361,7 +413,7 @@ def delete_item(item_id):
     return redirect(url_for("main.dashboard"))
 
 
-# ---------------------- Settings (protegido) ----------------------
+# ---------------------- Settings ----------------------
 
 @main_bp.route("/settings", methods=["GET", "POST"])
 @login_required
@@ -384,7 +436,7 @@ def settings():
     return render_template("settings.html", settings=s)
 
 
-# ---------------------- Batch QR (protegido) ----------------------
+# ---------------------- Batch QR ----------------------
 
 @main_bp.route("/qr/batch", methods=["GET", "POST"])
 @login_required
@@ -419,7 +471,6 @@ def qr_batch():
         flash("No codes generated. Please provide at least one value.", "error")
         return redirect(url_for("main.qr_batch"))
 
-    # Construye links públicos usando el username del dueño
     from ..helpers.utils import build_qr_batch_pdf
     pdf_buf = build_qr_batch_pdf(
         combos, s,
@@ -448,7 +499,6 @@ def public_view_location(username, code):
         q = q.filter(Item.C == parts["C"])
 
     items = q.order_by(Item.created_at.desc()).all()
-    # Pasamos username para usarlo en los enlaces de QR dentro de la plantilla
     return render_template("location.html", code=code, items=items, settings=s, parts=parts, username=username)
 
 
@@ -477,7 +527,7 @@ def qr_for_location(username, code):
     return send_file(buf, mimetype="image/png")
 
 
-# ---------------------- SEO / PWA extra ----------------------
+# ---------------------- SEO / PWA ----------------------
 
 @main_bp.route("/robots.txt")
 def robots_txt():
@@ -498,7 +548,6 @@ def sitemap_xml():
 @main_bp.route("/sw.js")
 def service_worker():
     resp = make_response(send_from_directory("static", "sw.js"))
-    # Evita caché agresiva: así se actualiza bien en clientes
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Content-Type"] = "application/javascript"
     return resp
@@ -506,11 +555,10 @@ def service_worker():
 
 @main_bp.route("/offline")
 def offline():
-    # No requiere login; es fallback de PWA
     return render_template("offline.html")
 
 
-# ====================== helpers + ruta de IMPRESIÓN ======================
+# ====================== Impresión etiqueta ======================
 
 def _ellipsize(s: str, n: int = 20) -> str:
     s = (s or "").strip()
@@ -519,15 +567,8 @@ def _ellipsize(s: str, n: int = 20) -> str:
     return s[:n].rstrip() + "…"
 
 def _build_item_label_pdf(it, settings) -> bytes:
-    """
-    Genera un PDF 40x30 mm con:
-      - Barcode Code128 del SKU
-      - Título (20 chars + …)
-      - Ubicación (location_code)
-    """
     W = 40 * mm
     H = 30 * mm
-
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(W, H))
 
@@ -535,7 +576,6 @@ def _build_item_label_pdf(it, settings) -> bytes:
     inner_w = W - 2 * m
     y = H - m
 
-    # Barcode SKU
     sku = it.sku or ""
     bc = code128.Code128(sku, barHeight=H * 0.38, humanReadable=False)
     bw, bh = bc.width, bc.height
@@ -549,13 +589,11 @@ def _build_item_label_pdf(it, settings) -> bytes:
     c.restoreState()
     y = y_bc - 2
 
-    # Título
     title = _ellipsize(it.title or "", 20)
     c.setFont("Helvetica-Bold", 8)
     c.drawCentredString(W / 2.0, y - 10, title)
-    y = y - 14
+    y -= 14
 
-    # Ubicación
     loc = it.location_code or "-"
     c.setFont("Helvetica", 8)
     c.drawCentredString(W / 2.0, y - 10, loc)
@@ -571,185 +609,53 @@ def _build_item_label_pdf(it, settings) -> bytes:
 def print_item(item_id):
     it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
     s = get_or_create_settings(current_user)
-
     pdf_bytes = _build_item_label_pdf(it, s)
 
-    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional, desde .env
+    printer_name = os.environ.get("QVENTORY_PRINTER")
     try:
         with tempfile.NamedTemporaryFile(prefix="qventory_label_", suffix=".pdf", delete=False) as tmp:
-            tmp.write(pdf_bytes)
-            tmp_path = tmp.name
+            tmp.write(pdf_bytes); tmp_path = tmp.name
 
         lp_cmd = ["lp"]
-        if printer_name:
-            lp_cmd += ["-d", printer_name]
+        if printer_name: lp_cmd += ["-d", printer_name]
         lp_cmd.append(tmp_path)
 
         res = subprocess.run(lp_cmd, capture_output=True, text=True, timeout=15)
         if res.returncode == 0:
             flash("Label sent to printer.", "ok")
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+            try: os.unlink(tmp_path)
+            except Exception: pass
             return redirect(url_for("main.dashboard"))
         else:
             flash("Printing failed. Downloading the label instead.", "error")
-            return send_file(
-                io.BytesIO(pdf_bytes),
-                mimetype="application/pdf",
-                as_attachment=True,
-                download_name=f"label_{it.sku}.pdf",
-            )
+            return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf",
+                             as_attachment=True, download_name=f"label_{it.sku}.pdf")
     except FileNotFoundError:
-        # No existe 'lp' (CUPS) en el sistema: ofrece descarga
         flash("System print not available. Downloading the label.", "error")
-        return send_file(
-            io.BytesIO(pdf_bytes),
-            mimetype="application/pdf",
-            as_attachment=True,
-            download_name=f"label_{it.sku}.pdf",
-        )
+        return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf",
+                         as_attachment=True, download_name=f"label_{it.sku}.pdf")
     except Exception as e:
         flash(f"Unexpected error: {e}. Downloading the label.", "error")
-        return send_file(
-            io.BytesIO(pdf_bytes),
-            mimetype="application/pdf",
-            as_attachment=True,
-            download_name=f"label_{it.sku}.pdf",
-        )
+        return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf",
+                         as_attachment=True, download_name=f"label_{it.sku}.pdf")
 
 
 # ============================================================
-# =============  NUEVO: IMPORT MASIVO DESDE eBay  ============
+# =============  IMPORT MASIVO DESDE eBay  ===================
 # ============================================================
 
 FINDING_ENDPOINT = "https://svcs.ebay.com/services/search/FindingService/v1"
-FINDING_VERSION = "1.13.0"  # estable
+FINDING_VERSION = "1.13.0"
 
-def _parse_seller_from_input(source: str) -> str | None:
-    """
-    Acepta:
-      - username directo (A-Za-z0-9._-)
-      - URL /usr/<seller>
-      - URL /str/<store>  -> resuelve username real buscando:
-          * _ssn= en query o en la URL final (tras redirects)
-          * claves embebidas: sellerUsername, sellerUserName, sellerName, userId
-          * texto visible "Seller: <username>" en el HTML
-          * si nada aparece pero el slug es válido, usa el slug como fallback
-    """
-    if not source:
-        return None
-    s = source.strip()
-
-    # username directo
-    if not re.match(r"^https?://", s, re.I):
-        return s if re.match(r"^[A-Za-z0-9._-]{1,64}$", s) else None
-
-    try:
-        p = urlparse(s)
-        path = p.path or "/"
-
-        # /usr/<seller>
-        m = re.search(r"/usr/([^/?#]+)", path, re.I)
-        if m:
-            u = unquote(m.group(1))
-            return u if re.match(r"^[A-Za-z0-9._-]{1,64}$", u) else None
-
-        # _ssn en query
-        q = parse_qs(p.query or "")
-        if "_ssn" in q and q["_ssn"]:
-            return q["_ssn"][0]
-
-        # /str/<store>
-        mm = re.search(r"/str/([^/?#]+)", path, re.I)
-        if mm:
-            slug = unquote(mm.group(1))
-            candidate = slug if re.match(r"^[A-Za-z0-9._-]{1,64}$", slug) else None
-
-            # Intento activo con headers reales
-            try:
-                headers = {
-                    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                                   "Chrome/124.0.0.0 Safari/537.36"),
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
-                    "Cache-Control": "no-cache",
-                }
-                r = requests.get(s, headers=headers, timeout=15, allow_redirects=True)
-
-                # _ssn en URL final
-                try:
-                    pf = urlparse(r.url)
-                    qf = parse_qs(pf.query or "")
-                    if "_ssn" in qf and qf["_ssn"]:
-                        return qf["_ssn"][0]
-                except Exception:
-                    pass
-
-                html = r.text or ""
-
-                # _ssn embebido
-                m = re.search(r"[_?&]ssn=([A-Za-z0-9._%-]+)", html, re.I)
-                if m:
-                    return unquote(m.group(1))
-
-                # claves frecuentes en JSON embebido
-                for key in [r'sellerUsername', r'sellerUserName', r'sellerName', r'userId']:
-                    m = re.search(rf'"{key}"\s*:\s*"([^"]+)"', html)
-                    if m and re.match(r"^[A-Za-z0-9._-]{1,64}$", m.group(1)):
-                        return m.group(1)
-
-                # texto visible en el HTML: "Seller: <username>"
-                m = re.search(r"Seller:\s*([A-Za-z0-9._-]{1,64})", html, re.I)
-                if m:
-                    return m.group(1)
-
-            except Exception:
-                pass
-
-            # Fallback: slug si luce válido
-            if candidate:
-                return candidate
-
-        return None
-    except Exception:
-        return None
-
-
-def _normalize_site_id(domain: str) -> str:
-    """Mapea dominio eBay a GLOBAL-ID de Finding. Por defecto EBAY-US."""
-    d = (domain or "").lower()
-    if d.endswith(".co.uk"): return "EBAY-GB"
-    if d.endswith(".de"):    return "EBAY-DE"
-    if d.endswith(".fr"):    return "EBAY-FR"
-    if d.endswith(".it"):    return "EBAY-IT"
-    if d.endswith(".es"):    return "EBAY-ES"
-    if d.endswith(".com.au"):return "EBAY-AU"
-    return "EBAY-US"
-
-
-def _ebay_find_items_by_seller(
-    seller: str,
-    page: int = 1,
-    entries_per_page: int = 100,
-    site_id: str = "EBAY-US",
-    max_retries: int = 3,
-    backoff_sec: float = 1.5
-):
-    """
-    Finding API (findItemsAdvanced) filtrando por Seller.
-    Envía headers SOA + User-Agent y hace retry/backoff en 5xx.
-    Devuelve (total_pages, items[]) con items: {"title","url"}.
-    """
+def _ebay_find_items_by_seller(seller: str, page: int = 1, entries_per_page: int = 100,
+                               site_id: str = "EBAY-US", max_retries: int = 3, backoff_sec: float = 1.5):
     if not EBAY_CLIENT_ID:
         raise RuntimeError("Falta EBAY_CLIENT_ID en .env para Finding API")
 
     params = {
         "OPERATION-NAME": "findItemsAdvanced",
         "SERVICE-VERSION": FINDING_VERSION,
-        "SECURITY-APPNAME": EBAY_CLIENT_ID,  # AppID
+        "SECURITY-APPNAME": EBAY_CLIENT_ID,
         "RESPONSE-DATA-FORMAT": "JSON",
         "REST-PAYLOAD": "true",
         "paginationInput.entriesPerPage": str(entries_per_page),
@@ -771,8 +677,7 @@ def _ebay_find_items_by_seller(
         try:
             r = requests.get(FINDING_ENDPOINT, params=params, headers=headers, timeout=20)
             if r.status_code >= 500:
-                time.sleep(backoff_sec * attempt)
-                continue
+                time.sleep(backoff_sec * attempt); continue
             r.raise_for_status()
             data = r.json()
             resp = (data.get("findItemsAdvancedResponse") or [{}])[0]
@@ -809,21 +714,7 @@ def _ebay_find_items_by_seller(
     return 1, []
 
 
-def _browse_search_by_seller(
-    seller: str,
-    limit: int = 200,
-    offset: int = 0
-):
-    """
-    Browse API: /buy/browse/v1/item_summary/search
-    Requiere OAuth app token (ya implementado).
-    Filtros:
-      - sellers:{username}
-      - buyingOptions:{FIXED_PRICE|AUCTION|BEST_OFFER}
-      - itemLocationRegion:WORLDWIDE
-    Paginación por offset/limit (<=200).
-    Devuelve (next_offset, items[])
-    """
+def _browse_search_by_seller(seller: str, limit: int = 200, offset: int = 0):
     base = _ebay_base()
     token = _get_ebay_app_token()
 
@@ -857,22 +748,77 @@ def _browse_search_by_seller(
     total = int(data.get("total", 0))
     new_offset = offset + int(params["limit"])
     if new_offset >= total:
-        new_offset = None  # fin
+        new_offset = None
     return new_offset, items
 
 
-def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, global_id: str = "EBAY-US", dry: bool = False):
+# --------- NUEVO: Scraper de storefront /str/<store> como último fallback ---------
+
+def _scrape_storefront_items(store_url: str, max_pages: int = 5):
     """
-    Itera y crea Items para 'user_id' desde el seller dado.
-    Devuelve dict con métricas y (opcional) preview.
-    Usa Finding API con fallback a Browse API.
+    Lee páginas públicas de un storefront y devuelve [{'title','url'}, ...]
+    Soporta paginación con ?_pgn=N. Evita duplicados. Títulos por aria-label/title o texto.
+    """
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                       " AppleWebKit/537.36 (KHTML, like Gecko)"
+                       " Chrome/124.0.0.0 Safari/537.36"),
+        "Accept": "text/html,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9,es;q=0.8",
+        "Cache-Control": "no-cache",
+    }
+
+    base = store_url.rstrip("/")
+    seen_urls = set()
+    results = []
+
+    def _collect(html: str):
+        nonlocal results
+        # 1) anchors a /itm/... con aria-label (título frecuente)
+        for m in re.finditer(r'<a[^>]+href="(https://www\.ebay\.com/itm/[^"]+)"[^>]*?(?:aria-label|title)="([^"]+)"', html, re.I):
+            href = unescape(m.group(1))
+            title = unescape(m.group(2)).strip()
+            if href not in seen_urls:
+                seen_urls.add(href)
+                results.append({"title": title or "eBay Item", "url": href})
+
+        # 2) anchors a /itm/... sin aria-label (tomar texto)
+        for m in re.finditer(r'<a[^>]+href="(https://www\.ebay\.com/itm/[^"]+)"[^>]*>([^<]{3,120})</a>', html, re.I):
+            href = unescape(m.group(1))
+            text = unescape(m.group(2)).strip()
+            title = text or "eBay Item"
+            if href not in seen_urls:
+                seen_urls.add(href)
+                results.append({"title": title, "url": href})
+
+    for page in range(1, max_pages + 1):
+        url = f"{base}?_pgn={page}"
+        try:
+            r = requests.get(url, headers=headers, timeout=20)
+            if r.status_code >= 400:
+                break
+            _collect(r.text or "")
+            # Heurística: si en esta página no hubo nuevos, paramos
+            if page > 1 and len(results) == len(seen_urls):
+                break
+        except Exception:
+            break
+
+    return results
+
+
+def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500,
+                          global_id: str = "EBAY-US", dry: bool = False, source_input: str = ""):
+    """
+    Intenta importar en capas: Finding -> Browse -> Scraper storefront.
+    Devuelve métricas y (en dry) preview.
     """
     created = 0
     skipped = 0
     seen = 0
     preview = []
 
-    # --- PRIMER INTENTO: Finding API (paginada) ---
+    # 1) Finding API
     use_browse_fallback = False
     try:
         page = 1
@@ -890,32 +836,22 @@ def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, globa
                 if seen >= max_items:
                     break
                 seen += 1
-
-                title = it["title"]
-                url = it["url"]
+                title = it["title"]; url = it["url"]
 
                 exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
                 if exists:
-                    skipped += 1
-                    continue
+                    skipped += 1; continue
 
                 if dry:
-                    preview.append({"title": title, "url": url})
-                    continue
+                    preview.append({"title": title, "url": url}); continue
 
                 sku = generate_sku()
-                new_it = Item(
-                    user_id=user_id,
-                    title=title,
-                    sku=sku,
-                    ebay_url=url,
-                    listing_link=None,
-                    web_url=None, amazon_url=None, mercari_url=None,
+                db.session.add(Item(
+                    user_id=user_id, title=title, sku=sku, ebay_url=url,
+                    listing_link=None, web_url=None, amazon_url=None, mercari_url=None,
                     vinted_url=None, poshmark_url=None, depop_url=None,
-                    A=None, B=None, S=None, C=None,
-                    location_code=None
-                )
-                db.session.add(new_it)
+                    A=None, B=None, S=None, C=None, location_code=None
+                ))
                 created += 1
 
             if not dry and created:
@@ -926,14 +862,14 @@ def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, globa
                 break
 
     except Exception:
-        # cualquier error duro en Finding: caer a Browse
         use_browse_fallback = True
 
-    # --- FALLBACK: Browse API ---
+    # 2) Browse API
+    used_scraper = False
     if use_browse_fallback and seen < max_items:
         try:
             offset = 0
-            per = min(200, max_items)  # Browse permite hasta 200 por página
+            per = min(200, max_items)
             while seen < max_items:
                 next_offset, batch = _browse_search_by_seller(
                     seller, limit=min(per, max_items - seen), offset=offset
@@ -945,32 +881,22 @@ def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, globa
                     if seen >= max_items:
                         break
                     seen += 1
-
-                    title = it["title"]
-                    url = it["url"]
+                    title = it["title"]; url = it["url"]
 
                     exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
                     if exists:
-                        skipped += 1
-                        continue
+                        skipped += 1; continue
 
                     if dry:
-                        preview.append({"title": title, "url": url})
-                        continue
+                        preview.append({"title": title, "url": url}); continue
 
                     sku = generate_sku()
-                    new_it = Item(
-                        user_id=user_id,
-                        title=title,
-                        sku=sku,
-                        ebay_url=url,
-                        listing_link=None,
-                        web_url=None, amazon_url=None, mercari_url=None,
+                    db.session.add(Item(
+                        user_id=user_id, title=title, sku=sku, ebay_url=url,
+                        listing_link=None, web_url=None, amazon_url=None, mercari_url=None,
                         vinted_url=None, poshmark_url=None, depop_url=None,
-                        A=None, B=None, S=None, C=None,
-                        location_code=None
-                    )
-                    db.session.add(new_it)
+                        A=None, B=None, S=None, C=None, location_code=None
+                    ))
                     created += 1
 
                 if not dry and created:
@@ -980,7 +906,38 @@ def _import_ebay_for_user(user_id: int, seller: str, max_items: int = 500, globa
                     break
                 offset = next_offset
         except Exception:
-            # si también falla Browse, devolvemos lo que tengamos
+            used_scraper = True
+    else:
+        # Si Finding devolvió algo, no usamos scraper; si no devolvió y no queremos Browse, cae a scraper
+        if seen == 0:
+            used_scraper = True
+
+    # 3) Scraper storefront (si 0 o poco y tenemos un /str/ en la entrada)
+    if used_scraper and seen < max_items and source_input and "/str/" in source_input:
+        try:
+            store_url = source_input
+            items = _scrape_storefront_items(store_url, max_pages=6)
+            for it in items:
+                if seen >= max_items:
+                    break
+                url = it["url"]; title = it["title"]
+                exists = Item.query.filter_by(user_id=user_id, ebay_url=url).first()
+                if exists:
+                    skipped += 1; continue
+                seen += 1
+                if dry:
+                    preview.append({"title": title, "url": url}); continue
+                sku = generate_sku()
+                db.session.add(Item(
+                    user_id=user_id, title=title, sku=sku, ebay_url=url,
+                    listing_link=None, web_url=None, amazon_url=None, mercari_url=None,
+                    vinted_url=None, poshmark_url=None, depop_url=None,
+                    A=None, B=None, S=None, C=None, location_code=None
+                ))
+                created += 1
+            if not dry and created:
+                db.session.commit()
+        except Exception:
             pass
 
     return {
@@ -999,9 +956,9 @@ def api_ebay_import_seller():
     Body JSON:
       {
         "source": "<username | /usr/... | /str/... URL>",
-        "max_items": 500,        # opcional (default 500; límite de seguridad 2000)
-        "site_hint": "EBAY-US",  # opcional; si no, inferimos por dominio
-        "dry": false             # opcional; si true, no crea y devuelve preview
+        "max_items": 500,        # opcional (default 500; tope 2000)
+        "site_hint": "EBAY-US",  # opcional
+        "dry": false             # opcional; si true, sólo preview
       }
     """
     try:
@@ -1026,7 +983,8 @@ def api_ebay_import_seller():
             except Exception:
                 pass
 
-        result = _import_ebay_for_user(current_user.id, seller, max_items=max_items, global_id=global_id, dry=dry)
+        result = _import_ebay_for_user(current_user.id, seller, max_items=max_items,
+                                       global_id=global_id, dry=dry, source_input=source)
         return jsonify({"ok": True, **result})
     except requests.HTTPError as e:
         body = e.response.text[:300] if e.response is not None else ""
@@ -1040,20 +998,7 @@ def api_ebay_import_seller():
 @main_bp.route("/import/ebay", methods=["GET", "POST"])
 @login_required
 def import_ebay():
-    """
-    Vista con formulario:
-      - source (username o URL eBay)
-      - site_hint (GLOBAL-ID)
-      - max_items
-      - acciones: preview / import
-    """
-    context = {
-        "source": "",
-        "site_hint": "",
-        "max_items": 500,
-        "preview": None,
-        "stats": None
-    }
+    context = {"source": "", "site_hint": "", "max_items": 500, "preview": None, "stats": None}
 
     if request.method == "POST":
         action = (request.form.get("action") or "preview").strip()
@@ -1064,7 +1009,6 @@ def import_ebay():
         except ValueError:
             max_items = 500
         max_items = max(1, min(max_items, 2000))
-
         context.update({"source": source, "site_hint": site_hint, "max_items": max_items})
 
         if not source:
@@ -1083,10 +1027,10 @@ def import_ebay():
             except Exception:
                 pass
 
-        # preview o import
         dry = (action == "preview")
         try:
-            result = _import_ebay_for_user(current_user.id, seller, max_items=max_items, global_id=global_id, dry=dry)
+            result = _import_ebay_for_user(current_user.id, seller, max_items=max_items,
+                                           global_id=global_id, dry=dry, source_input=source)
         except Exception as e:
             flash(f"Error importing from eBay: {e}", "error")
             return render_template("import_ebay.html", **context)
@@ -1102,6 +1046,51 @@ def import_ebay():
                 "seen": result.get("seen"),
                 "global_id": global_id
             }
-            flash(f"Imported {result.get('created')} item(s). Skipped {result.get('skipped')}.", "ok")
+            if result.get("created", 0) == 0 and result.get("seen", 0) == 0 and "/str/" in source:
+                flash("APIs devolvieron 0; se intentó scraping del storefront automáticamente.", "error")
+            else:
+                flash(f"Imported {result.get('created')} item(s). Skipped {result.get('skipped')}.", "ok")
 
     return render_template("import_ebay.html", **context)
+
+
+# --------- Ruta opcional de depuración para ver qué pasó en cada capa ---------
+
+@main_bp.route("/api/ebay/debug")
+@login_required
+def ebay_debug():
+    source = (request.args.get("source") or "").strip()
+    site_hint = (request.args.get("site_hint") or "").strip() or None
+    if not source:
+        return jsonify({"ok": False, "error": "Missing source"}), 400
+    seller = _parse_seller_from_input(source) or ""
+    global_id = site_hint or "EBAY-US"
+    if not site_hint and re.match(r"^https?://", source, re.I):
+        try:
+            global_id = _normalize_site_id(urlparse(source).netloc)
+        except Exception:
+            pass
+
+    info = {"source": source, "seller_resolved": seller, "global_id": global_id, "finding_count": None, "browse_count": None, "scrape_count": None}
+
+    # quick probes (no creación, solo contar)
+    try:
+        _, items = _ebay_find_items_by_seller(seller, page=1, entries_per_page=50, site_id=global_id)
+        info["finding_count"] = len(items)
+    except Exception as e:
+        info["finding_count"] = f"error: {e}"
+
+    try:
+        _, items = _browse_search_by_seller(seller, limit=50, offset=0)
+        info["browse_count"] = len(items)
+    except Exception as e:
+        info["browse_count"] = f"error: {e}"
+
+    if "/str/" in source:
+        try:
+            items = _scrape_storefront_items(source, max_pages=2)
+            info["scrape_count"] = len(items)
+        except Exception as e:
+            info["scrape_count"] = f"error: {e}"
+
+    return jsonify({"ok": True, "probe": info})
