@@ -251,7 +251,39 @@
   let stream = null, rafId = null, detector = null, usingQuagga = false;
   let videoDevices = [], currentDeviceIdx = -1;
 
-  const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
+  // === Ajustes de precisión ===
+  const ALLOWED_FORMATS_BD = ['ean_13','upc_a','code_128'];          // BarcodeDetector
+  const ALLOWED_READERS_QG = ['ean_reader','upc_reader','code_128_reader']; // Quagga
+  const CONSENSUS_NEEDED = 3;
+  const CONSENSUS_WINDOW = 6;
+  let seenBuffer = [];
+  let lastHitAt = 0;
+  const HIT_COOLDOWN_MS = 1200;
+
+  function isValidByFormat(code, format){
+    const onlyDigits = /^\d+$/;
+    const f = (format||'').toLowerCase();
+    if (!code) return false;
+    if (f.includes('ean')) return onlyDigits.test(code) && code.length === 13;
+    if (f.includes('upc')) return onlyDigits.test(code) && (code.length === 12 || code.length === 8);
+    if (f.includes('128')) return /^[A-Za-z0-9\-\._]+$/.test(code) && code.length >= 6;
+    return onlyDigits.test(code) && code.length >= 12;
+  }
+  function pushAndCheckConsensus(code, format){
+    const now = performance.now();
+    seenBuffer.push({code, format, t: now});
+    if (seenBuffer.length > CONSENSUS_WINDOW) seenBuffer.shift();
+    const count = seenBuffer.filter(x => x.code === code).length;
+    return count >= CONSENSUS_NEEDED;
+  }
+  function canHit(){
+    const now = performance.now();
+    if (now - lastHitAt < HIT_COOLDOWN_MS) return false;
+    lastHitAt = now;
+    return true;
+  }
+
+  const BD_FORMATS = ALLOWED_FORMATS_BD; // restringe formatos BD
 
   video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
 
@@ -281,7 +313,6 @@
       try { beepEl.currentTime = 0; beepEl.play().catch(()=>{}); } catch(_) {}
     }
   }
-
   function onDetected(value){
     try { navigator.vibrate && navigator.vibrate([30,40,30]); } catch(_){}
     beep();
@@ -296,7 +327,6 @@
     console.error('[Scanner]', where, err);
     alert(`${name}${msg ? ': ' + msg : ''}`);
   }
-
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
 
   function rememberActiveDevice(){
@@ -311,7 +341,6 @@
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     tmp.getTracks().forEach(t=>t.stop());
   }
-
   async function loadVideoDevices(){
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d => d.kind === 'videoinput');
@@ -338,13 +367,23 @@
     showSpinner(false);
   }
 
+  // ---- BarcodeDetector con consenso ----
   function startBDLoop(){
+    seenBuffer = [];
     const tick = async () => {
       try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length){
-          const val = (codes[0].rawValue || '').trim();
-          if (val){ onDetected(val); return; }
+        const detections = await detector.detect(video);
+        if (detections && detections.length){
+          detections.sort((a,b)=> (b.rawValue?.length||0) - (a.rawValue?.length||0));
+          const best = detections[0];
+          const val = (best.rawValue || '').trim();
+          const fmt = (best.format || '').toLowerCase();
+
+          if (ALLOWED_FORMATS_BD.includes(fmt) && isValidByFormat(val, fmt)) {
+            if (pushAndCheckConsensus(val, fmt) && canHit()) {
+              onDetected(val); return;
+            }
+          }
         }
       } catch(_) {}
       rafId = requestAnimationFrame(tick);
@@ -358,6 +397,7 @@
     startBDLoop();
   }
 
+  // ---- Quagga loader con múltiples CDNs ----
   function loadQuagga(){
     const CANDIDATES = [
       'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
@@ -397,6 +437,7 @@
     }
   }
 
+  // ---- Quagga con ROI + consenso + validación ----
   async function startQuagga(){
     if (!window.Quagga) throw new Error('Quagga global is missing after load');
     usingQuagga = true;
@@ -416,25 +457,47 @@
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          constraints: { ...constraints, width: { ideal: 640 }, height: { ideal: 480 } },
+          // ROI: franja central para reducir falsos positivos
+          area: { top: "40%", right: "10%", left: "10%", bottom: "40%" },
+          constraints: { ...constraints, width: { ideal: 960 }, height: { ideal: 720 } },
           target: target
         },
-        locator: { patchSize: 'small', halfSample: true },
+        locator: { patchSize: 'medium', halfSample: true },
         numOfWorkers: 1,
         frequency: 15,
-        decoder: { readers: ['code_128_reader','ean_reader','upc_reader','upc_e_reader'] }
+        decoder: { readers: ALLOWED_READERS_QG }
       }, (err) => {
         if (err) return reject(err);
         window.Quagga.start();
+
+        seenBuffer = [];
+
         window.Quagga.onDetected(res => {
           const code = res?.codeResult?.code;
-          if (code) onDetected(code);
+          const fmt  = (res?.codeResult?.format || '').toLowerCase();
+
+          // Confianza si está disponible (algunos builds de Quagga2 lo exponen)
+          const conf = res?.codeResult?.confidence;
+          if (conf != null) {
+            const confNorm = conf > 1 ? conf/100 : conf;
+            if (confNorm < 0.4) return; // descarta lecturas pobres
+          }
+
+          if (!code || !fmt) return;
+          // filtro rápido por familia
+          if (!ALLOWED_READERS_QG.some(r => fmt.includes(r.split('_')[0]))) return;
+          if (!isValidByFormat(code, fmt)) return;
+
+          if (pushAndCheckConsensus(code, fmt) && canHit()) {
+            onDetected(code);
+          }
         });
         resolve();
       });
     });
   }
 
+  // ---- Flow principal ----
   async function startScan(){
     openModal();
     try{
