@@ -142,6 +142,7 @@
     <div class="scan-header">
       <strong>Scan a barcode</strong>
       <div class="scan-actions">
+        <button type="button" id="scanFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">🔦</button>
         <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">🔁</button>
         <button type="button" id="scanClose" class="icon-top" aria-label="Close">✕</button>
       </div>
@@ -153,8 +154,10 @@
         <div class="guide"></div>
         <div id="scanTarget" class="scan-target"></div>
         <div id="scanSpinner" class="spinner"></div>
+        <div id="scanSuccess" class="success-indicator">✓</div>
       </div>
       <div class="scan-tip">Align the barcode inside the frame</div>
+      <div id="scanResult" class="scan-result"></div>
     </div>
   </div>
 </div>
@@ -189,6 +192,7 @@
     border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
   }
   .scan-actions .icon-top:hover{ opacity:1; }
+  .scan-actions .icon-top.active{ opacity:1; color:#ffd700; }
 
   .scan-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
 
@@ -214,8 +218,45 @@
     border:2px dashed rgba(255,255,255,.6);
     border-radius:10px;
     pointer-events:none;
+    animation: pulse-guide 2s infinite;
   }
+  
+  @keyframes pulse-guide {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+
+  .success-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    color: #00ff00;
+    display: none;
+    text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+    animation: success-flash 0.5s ease-out;
+  }
+
+  @keyframes success-flash {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
   .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
+  
+  .scan-result {
+    background: #1a1d23;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #0ff;
+    min-height: 20px;
+    display: none;
+  }
 
   /* Spinner simple */
   .spinner{
@@ -238,9 +279,12 @@
   const modal     = document.getElementById('scanModal');
   const btnClose  = document.getElementById('scanClose');
   const btnFlip   = document.getElementById('scanFlip');
+  const btnFlash  = document.getElementById('scanFlashlight');
   const video     = document.getElementById('scanVideo');
   const target    = document.getElementById('scanTarget');
   const spinner   = document.getElementById('scanSpinner');
+  const success   = document.getElementById('scanSuccess');
+  const result    = document.getElementById('scanResult');
   const inputQ    = document.getElementById('q');
   const form      = document.getElementById('filterForm');
 
@@ -250,26 +294,118 @@
 
   let stream = null, rafId = null, detector = null, usingQuagga = false;
   let videoDevices = [], currentDeviceIdx = -1;
+  let flashlightOn = false;
+  let lastDetections = []; // Para validación cruzada
+  let detectionConfidence = 0;
 
-  const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
+  // Formatos de código de barras más completos
+  const BD_FORMATS = [
+    'aztec', 'code_128', 'code_39', 'code_93', 'codabar', 'databar',
+    'databar_expanded', 'data_matrix', 'ean_13', 'ean_8', 'itf',
+    'pdf417', 'qr_code', 'upc_a', 'upc_e'
+  ];
 
-  video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
+  video.setAttribute('playsinline',''); 
+  video.setAttribute('muted',''); 
+  video.setAttribute('autoplay','');
 
-  function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
-  function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
-  function cancelLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
-  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }
+  function openModal(){ 
+    document.body.classList.add('modal-open'); 
+    modal.classList.remove('hidden'); 
+    modal.setAttribute('aria-hidden','false'); 
+  }
+  
+  function closeModal(){ 
+    document.body.classList.remove('modal-open'); 
+    modal.classList.add('hidden'); 
+    modal.setAttribute('aria-hidden','true'); 
+  }
+  
+  function cancelLoop(){ 
+    if (rafId){ cancelAnimationFrame(rafId); rafId = null; } 
+  }
+  
+  function stopStream(){ 
+    if (stream){ 
+      stream.getTracks().forEach(t=>t.stop()); 
+      stream = null; 
+    } 
+  }
+  
   function cleanupAll(){
-    cancelLoop(); stopStream();
-    if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; }
-    video.style.display='none'; target.style.display='none';
+    cancelLoop(); 
+    stopStream();
+    flashlightOn = false;
+    btnFlash.classList.remove('active');
+    if (usingQuagga && window.Quagga){ 
+      try { window.Quagga.stop(); } catch(e){} 
+      usingQuagga=false; 
+    }
+    video.style.display='none'; 
+    target.style.display='none';
+    success.style.display='none';
+    result.style.display='none';
+    lastDetections = [];
+    detectionConfidence = 0;
   }
+
+  function showSuccessAnimation(){
+    success.style.display = 'block';
+    setTimeout(() => {
+      success.style.display = 'none';
+    }, 500);
+  }
+
+  // Validación cruzada para mejorar precisión
+  function validateDetection(value) {
+    if (!value || value.length < 3) return false;
+    
+    lastDetections.push(value);
+    if (lastDetections.length > 5) {
+      lastDetections.shift();
+    }
+
+    // Contar ocurrencias del mismo código
+    const counts = {};
+    lastDetections.forEach(code => {
+      counts[code] = (counts[code] || 0) + 1;
+    });
+
+    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    
+    // Si el mismo código aparece al menos 2 veces en las últimas 5 detecciones
+    if (mostCommon && mostCommon[1] >= 2) {
+      return mostCommon[0];
+    }
+
+    return false;
+  }
+  
   function onDetected(value){
-    try { navigator.vibrate && navigator.vibrate(50); } catch(_){}
-    cleanupAll(); closeModal();
-    inputQ.value = value;
-    form?.submit();
+    const validatedCode = validateDetection(value);
+    
+    if (validatedCode) {
+      result.textContent = `Detected: ${validatedCode}`;
+      result.style.display = 'block';
+      showSuccessAnimation();
+      
+      try { 
+        navigator.vibrate && navigator.vibrate([100, 50, 100]); 
+      } catch(_){}
+      
+      setTimeout(() => {
+        cleanupAll(); 
+        closeModal();
+        inputQ.value = validatedCode;
+        form?.submit();
+      }, 800);
+    } else {
+      // Mostrar detección tentativa
+      result.textContent = `Reading: ${value}`;
+      result.style.display = 'block';
+    }
   }
+  
   function showError(err, where=''){
     const name = err?.name || String(err) || 'Error';
     const msg  = err?.message || '';
@@ -277,7 +413,36 @@
     alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
-  function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
+  function showSpinner(on){ 
+    spinner.style.display = on ? 'flex' : 'none'; 
+  }
+
+  async function toggleFlashlight(){
+    if (!stream) return;
+    
+    try {
+      const track = stream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities();
+      
+      if (capabilities.torch) {
+        flashlightOn = !flashlightOn;
+        await track.applyConstraints({
+          advanced: [{torch: flashlightOn}]
+        });
+        
+        if (flashlightOn) {
+          btnFlash.classList.add('active');
+        } else {
+          btnFlash.classList.remove('active');
+        }
+      } else {
+        alert('Flashlight not supported on this camera');
+      }
+    } catch (err) {
+      console.error('Flashlight error:', err);
+      alert('Unable to control flashlight');
+    }
+  }
 
   function rememberActiveDevice(){
     try {
@@ -291,7 +456,6 @@
   }
 
   async function ensurePermissionOnce(){
-    // solo llamar si no tenemos deviceId cacheado
     const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     tmp.getTracks().forEach(t=>t.stop());
   }
@@ -309,14 +473,30 @@
   }
 
   async function startWithDevice(deviceId){
-    stopStream(); cancelLoop();
+    stopStream(); 
+    cancelLoop();
     showSpinner(true);
+    
     const constraints = {
       video: deviceId
-        ? { deviceId: { exact: deviceId }, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} }
-        : { facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} },
+        ? { 
+            deviceId: { exact: deviceId }, 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 720, min: 480 }, 
+            frameRate: { ideal: 30 },
+            focusMode: 'continuous',
+            zoom: { ideal: 1.0 }
+          }
+        : { 
+            facingMode: { ideal: 'environment' }, 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 720, min: 480 }, 
+            frameRate: { ideal: 30 },
+            focusMode: 'continuous'
+          },
       audio: false
     };
+    
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
@@ -324,18 +504,33 @@
   }
 
   function startBDLoop(){
+    let frameCount = 0;
     const tick = async () => {
       try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length){
-          const val = (codes[0].rawValue || '').trim();
-          if (val){ onDetected(val); return; }
+        frameCount++;
+        // Solo procesar cada 3er frame para mejor rendimiento
+        if (frameCount % 3 === 0) {
+          const codes = await detector.detect(video);
+          if (codes && codes.length){
+            // Tomar el código con mayor confianza
+            const bestCode = codes.reduce((best, current) => {
+              return current.boundingBox?.width * current.boundingBox?.height > 
+                     (best.boundingBox?.width * best.boundingBox?.height || 0) ? current : best;
+            });
+            
+            const val = (bestCode.rawValue || '').trim();
+            if (val && val.length >= 3){ 
+              onDetected(val); 
+              return; 
+            }
+          }
         }
       } catch(_) {}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
+
   async function startBarcodeDetector(){
     detector = new window.BarcodeDetector({ formats: BD_FORMATS });
     video.style.display = 'block';
@@ -356,8 +551,13 @@
         try {
           await inject(url);
           const ok = await waitGlobal('Quagga', 3000);
-          if (ok) { console.log('[Scanner] Quagga loaded from:', url); return resolve(url); }
-        } catch (e) { console.warn('[Scanner] Failed', url, e); }
+          if (ok) { 
+            console.log('[Scanner] Quagga loaded from:', url); 
+            return resolve(url); 
+          }
+        } catch (e) { 
+          console.warn('[Scanner] Failed', url, e); 
+        }
       }
       reject(new Error('Quagga2 could not be loaded from any CDN'));
     });
@@ -365,11 +565,15 @@
     function inject(src){
       return new Promise((resolve,reject)=>{
         if ([...document.scripts].some(s => s.src === src)) return resolve();
-        const s=document.createElement('script'); s.src=src; s.async=true;
-        s.onload=()=>resolve(); s.onerror=()=>reject(new Error('script load error'));
+        const s=document.createElement('script'); 
+        s.src=src; 
+        s.async=true;
+        s.onload=()=>resolve(); 
+        s.onerror=()=>reject(new Error('script load error'));
         document.head.appendChild(s);
       });
     }
+    
     function waitGlobal(name, ms){
       return new Promise((resolve)=>{
         const t0=performance.now();
@@ -401,20 +605,41 @@
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          constraints: { ...constraints, width: { ideal: 640 }, height: { ideal: 480 } },
+          constraints: { 
+            ...constraints, 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          },
           target: target
         },
-        locator: { patchSize: 'small', halfSample: true },
-        numOfWorkers: 1,
-        frequency: 15,
-        decoder: { readers: ['code_128_reader','ean_reader','upc_reader','upc_e_reader'] }
+        locator: { 
+          patchSize: 'medium', 
+          halfSample: false 
+        },
+        numOfWorkers: 2,
+        frequency: 10,
+        decoder: { 
+          readers: [
+            'code_128_reader',
+            'ean_reader',
+            'upc_reader',
+            'upc_e_reader',
+            'code_39_reader',
+            'codabar_reader'
+          ],
+          multiple: false
+        },
+        locate: true
       }, (err) => {
         if (err) return reject(err);
         window.Quagga.start();
+        
         window.Quagga.onDetected(res => {
           const code = res?.codeResult?.code;
           if (code) onDetected(code);
         });
+        
         resolve();
       });
     });
@@ -422,17 +647,17 @@
 
   async function startScan(){
     openModal();
+    lastDetections = [];
+    detectionConfidence = 0;
+    result.style.display = 'none';
+    
     try{
-      // leer cache
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
-
       await loadVideoDevices();
 
       if (cachedDeviceId) {
-        // ruta rápida: usar la última cámara buena
         await startWithDevice(cachedDeviceId);
       } else {
-        // primera vez: pedir permiso y enumerar
         await ensurePermissionOnce();
         await loadVideoDevices();
         if (videoDevices.length) currentDeviceIdx = 0;
@@ -446,10 +671,11 @@
         await startQuagga();
       }
 
-      rememberActiveDevice(); // cachear para próximas veces
+      rememberActiveDevice();
     }catch(err){
       showError(err, 'startScan');
-      cleanupAll(); closeModal();
+      cleanupAll(); 
+      closeModal();
     }
   }
 
@@ -474,8 +700,11 @@
 
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
+  btnFlash?.addEventListener('click', toggleFlashlight);
   btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
+  modal?.addEventListener('click', (e)=>{ 
+    if (e.target === modal){ cleanupAll(); closeModal(); } 
+  });
 })();
 </script>
 {% endblock %}
