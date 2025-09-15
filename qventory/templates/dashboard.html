@@ -142,6 +142,7 @@
     <div class="scan-header">
       <strong>Scan a barcode</strong>
       <div class="scan-actions">
+        <button type="button" id="scanTorch" class="icon-top" aria-label="Toggle torch" title="Toggle flashlight">💡</button>
         <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">🔁</button>
         <button type="button" id="scanClose" class="icon-top" aria-label="Close">✕</button>
       </div>
@@ -155,126 +156,112 @@
         <div id="scanSpinner" class="spinner"></div>
       </div>
       <div class="scan-tip">Align the barcode inside the frame</div>
+      <audio id="scanBeep" preload="auto">
+        <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAABkYXRhAAAAAA==" type="audio/wav">
+      </audio>
     </div>
   </div>
 </div>
 
 <style>
-  /* input con botón */
   .input-with-button{ position:relative; display:flex; align-items:center; }
   .input-with-button > .input{ padding-right:42px; }
-  .icon-btn{
-    position:absolute; right:8px; border:none; background:transparent;
-    cursor:pointer; line-height:1; font-size:18px; opacity:.8;
-  }
+  .icon-btn{ position:absolute; right:8px; border:none; background:transparent; cursor:pointer; line-height:1; font-size:18px; opacity:.8; }
   .icon-btn:hover{ opacity:1; }
 
-  /* Modal compacto y bloqueo de scroll */
   body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
-  .scan-modal{
-    position:fixed; inset:0; background:rgba(0,0,0,.6);
-    display:grid; place-items:center; z-index:9999; padding:16px;
-  }
-  .scan-sheet{
-    width:min(420px, 92vw); background:#0f1115; color:#fff;
-    border-radius:14px; overflow:hidden;
-    box-shadow:0 20px 60px rgba(0,0,0,.5); border:1px solid #222;
-  }
-  .scan-header{
-    display:flex; align-items:center; justify-content:space-between;
-    padding:10px 12px; background:#141821; border-bottom:1px solid #222;
-  }
-  .scan-actions .icon-top{
-    border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
-  }
+  .scan-modal{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:grid; place-items:center; z-index:9999; padding:16px; }
+  .scan-sheet{ width:min(420px, 92vw); background:#0f1115; color:#fff; border-radius:14px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.5); border:1px solid #222; }
+  .scan-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#141821; border-bottom:1px solid #222; }
+  .scan-actions .icon-top{ border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer; }
   .scan-actions .icon-top:hover{ opacity:1; }
-
   .scan-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
 
-  /* Viewport fijo */
-  .viewport{
-    position:relative;
-    width:100%;
-    aspect-ratio: 3 / 4;
-    max-height: 60vh;
-    border-radius:12px;
-    overflow:hidden;
-    background:#000;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-  }
-  #scanVideo, .scan-target{
-    position:absolute; inset:0;
-    width:100%; height:100%;
-    object-fit:cover;
-    display:none;
-  }
-  .guide{
-    position:absolute; inset:10%;
-    border:2px dashed rgba(255,255,255,.6);
-    border-radius:10px;
-    pointer-events:none;
-  }
+  .viewport{ position:relative; width:100%; aspect-ratio: 3 / 4; max-height: 60vh; border-radius:12px; overflow:hidden; background:#000; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+  #scanVideo, .scan-target{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
+  .guide{ position:absolute; inset:10%; border:2px dashed rgba(255,255,255,.6); border-radius:10px; pointer-events:none; }
   .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
 
-  /* Spinner simple */
-  .spinner{
-    position:absolute; inset:0; display:none;
-    align-items:center; justify-content:center;
-    background:rgba(0,0,0,.25);
-  }
-  .spinner::after{
-    content:"";
-    width:28px; height:28px; border-radius:50%;
-    border:3px solid rgba(255,255,255,.3);
-    border-top-color:#fff; animation:spin 0.9s linear infinite;
-  }
+  .spinner{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); }
+  .spinner::after{ content:""; width:28px; height:28px; border-radius:50%; border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 
 <script>
-(function(){
+document.addEventListener('DOMContentLoaded', () => {
   const btnScan   = document.getElementById('btnScan');
   const modal     = document.getElementById('scanModal');
   const btnClose  = document.getElementById('scanClose');
   const btnFlip   = document.getElementById('scanFlip');
+  const btnTorch  = document.getElementById('scanTorch');
   const video     = document.getElementById('scanVideo');
   const target    = document.getElementById('scanTarget');
   const spinner   = document.getElementById('scanSpinner');
   const inputQ    = document.getElementById('q');
   const form      = document.getElementById('filterForm');
+  const beepEl    = document.getElementById('scanBeep');
 
-  // ---- cache de cámara para abrir rápido la trasera en siguientes usos
   const CAM_CACHE_KEY = 'qv_cam_device_id';
   let cachedDeviceId = null;
 
   let stream = null, rafId = null, detector = null, usingQuagga = false;
-  let videoDevices = [], currentDeviceIdx = -1;
+  let videoDevices = [], currentDeviceIdx = -1, currentTrack = null, torchOn = false;
 
-  const BD_FORMATS = ['code_128','ean_13','upc_a','upc_e','code_39','qr_code'];
+  // Formatos/lectores permitidos (restringimos para menos falsos positivos)
+  const ALLOWED_FORMATS_BD = ['ean_13','ean_8','upc_a','upc_e','code_128'];
+  const ALLOWED_READERS_QG = ['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'];
 
-  video.setAttribute('playsinline',''); video.setAttribute('muted',''); video.setAttribute('autoplay','');
+  // Consenso para robustez
+  const CONSENSUS_NEEDED = 2, CONSENSUS_WINDOW = 5;
+  let seenBuffer = [];
+  let lastHitAt = 0; const HIT_COOLDOWN_MS = 900;
+
+  function isValidByFormat(code, format){
+    const onlyDigits = /^\d+$/; const f = (format||'').toLowerCase();
+    if (!code) return false;
+    if (f.includes('ean')) {
+      if (!(onlyDigits.test(code) && (code.length===13 || code.length===8))) return false;
+      if (code.length===13) return ean13ChecksumValid(code);
+      if (code.length===8)  return ean8ChecksumValid(code);
+      return true;
+    }
+    if (f.includes('upc')) {
+      if (!(onlyDigits.test(code) && (code.length===12 || code.length===8))) return false;
+      if (code.length===12) return upcChecksumValid(code);
+      return true;
+    }
+    if (f.includes('128')) return /^[A-Za-z0-9\-\._]+$/.test(code) && code.length >= 6;
+    return onlyDigits.test(code) && code.length >= 12;
+  }
+  function ean13ChecksumValid(s){ let sum=0; for(let i=0;i<12;i++){ sum += (i%2?3:1)*parseInt(s[i],10); } const check=(10-(sum%10))%10; return check===parseInt(s[12],10); }
+  function ean8ChecksumValid(s){ let sum=0; for(let i=0;i<7;i++){ sum += (i%2?3:1)*parseInt(s[i],10); } const check=(10-(sum%10))%10; return check===parseInt(s[7],10); }
+  function upcChecksumValid(s){ let odd=0,even=0; for(let i=0;i<11;i++){ (i%2?even:odd)+=parseInt(s[i],10); } const check=(10-(((odd*3)+even)%10))%10; return check===parseInt(s[11],10); }
+
+  function pushAndCheckConsensus(code){ seenBuffer.push({code}); if (seenBuffer.length>CONSENSUS_WINDOW) seenBuffer.shift(); return seenBuffer.filter(x=>x.code===code).length>=CONSENSUS_NEEDED; }
+  function canHit(){ const now=performance.now(); if (now-lastHitAt<HIT_COOLDOWN_MS) return false; lastHitAt=now; return true; }
 
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function cancelLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId = null; } }
-  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; } }
-  function cleanupAll(){
-    cancelLoop(); stopStream();
-    if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; }
-    video.style.display='none'; target.style.display='none';
+  function stopStream(){ if (stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; currentTrack=null; } }
+  function cleanupAll(){ cancelLoop(); stopStream(); if (usingQuagga && window.Quagga){ try { window.Quagga.stop(); } catch(e){} usingQuagga=false; } video.style.display='none'; target.style.display='none'; seenBuffer=[]; }
+
+  function beep(){
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type='sine'; o.frequency.value=880;
+      g.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.32, ctx.currentTime+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime+0.12);
+      o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+0.14);
+    } catch { try { beepEl.currentTime=0; beepEl.play().catch(()=>{});} catch{} }
   }
   function onDetected(value){
-    try { navigator.vibrate && navigator.vibrate(50); } catch(_){}
-    cleanupAll(); closeModal();
-    inputQ.value = value;
-    form?.submit();
-  }
-  function showError(err, where=''){
-    const name = err?.name || String(err) || 'Error';
-    const msg  = err?.message || '';
-    console.error('[Scanner]', where, err);
-    alert(`${name}${msg ? ': ' + msg : ''}`);
+    try { navigator.vibrate && navigator.vibrate([30,40,30]); } catch{}
+    beep(); cleanupAll(); closeModal();
+    inputQ.value = value; form?.submit();
   }
 
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
@@ -282,138 +269,110 @@
   function rememberActiveDevice(){
     try {
       const track = stream?.getVideoTracks?.()[0];
-      const id = track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
-      if (id) {
-        localStorage.setItem(CAM_CACHE_KEY, id);
-        cachedDeviceId = id;
+      const id = track?.getSettings?.().deviceId;
+      if (id) { localStorage.setItem(CAM_CACHE_KEY, id); cachedDeviceId = id; }
+      currentTrack = track || null;
+    } catch {}
+  }
+
+  async function ensurePermissionOnce(){ const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); tmp.getTracks().forEach(t=>t.stop()); }
+  async function loadVideoDevices(){ const devices = await navigator.mediaDevices.enumerateDevices(); videoDevices = devices.filter(d => d.kind === 'videoinput'); }
+
+  async function startWithDevice(deviceId){
+    cancelLoop(); stopStream(); showSpinner(true);
+    const constraints = {
+      video: deviceId
+        ? { deviceId: { exact: deviceId }, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} }
+        : { facingMode:{ideal:'environment'}, width:{ideal:1280}, height:{ideal:720}, frameRate:{ideal:30} },
+      audio: false
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream; await video.play();
+    showSpinner(false); rememberActiveDevice();
+  }
+
+  async function setTorch(on){
+    try {
+      const track = currentTrack || stream?.getVideoTracks?.()[0];
+      const caps = track?.getCapabilities?.();
+      if (caps && 'torch' in caps) {
+        await track.applyConstraints({ advanced: [{ torch: !!on }] });
+        torchOn = !!on;
+        btnTorch.classList.toggle('active', torchOn);
+      } else {
+        // si no hay torch, intenta subir exposure/brightness (no todos soportan)
+        await track.applyConstraints({ advanced: [{ exposureCompensation: 0 }]}).catch(()=>{});
       }
     } catch {}
   }
 
-  async function ensurePermissionOnce(){
-    // solo llamar si no tenemos deviceId cacheado
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    tmp.getTracks().forEach(t=>t.stop());
-  }
-
-  async function loadVideoDevices(){
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    videoDevices = devices.filter(d => d.kind === 'videoinput');
-    const prefers = ['back','rear','environment'];
-    videoDevices.sort((a,b)=>{
-      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
-      const as = prefers.some(p=>la.includes(p)) ? 1 : 0;
-      const bs = prefers.some(p=>lb.includes(p)) ? 1 : 0;
-      return bs - as;
-    });
-  }
-
-  async function startWithDevice(deviceId){
-    stopStream(); cancelLoop();
-    showSpinner(true);
-    const constraints = {
-      video: deviceId
-        ? { deviceId: { exact: deviceId }, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} }
-        : { facingMode:{ideal:'environment'}, width:{ideal:640}, height:{ideal:480}, frameRate:{ideal:24} },
-      audio: false
-    };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    await video.play();
-    showSpinner(false);
-  }
-
+  // ---- BarcodeDetector con consenso
   function startBDLoop(){
+    seenBuffer = [];
     const tick = async () => {
       try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length){
-          const val = (codes[0].rawValue || '').trim();
-          if (val){ onDetected(val); return; }
+        const detections = await detector.detect(video);
+        if (detections?.length){
+          detections.sort((a,b)=> (b.rawValue?.length||0) - (a.rawValue?.length||0));
+          for (const d of detections){
+            const val = (d.rawValue||'').trim();
+            const fmt = (d.format||'').toLowerCase();
+            if (!ALLOWED_FORMATS_BD.includes(fmt)) continue;
+            if (!isValidByFormat(val, fmt)) continue;
+            if (pushAndCheckConsensus(val) && canHit()) { onDetected(val); return; }
+          }
         }
-      } catch(_) {}
+      } catch {}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
   async function startBarcodeDetector(){
-    detector = new window.BarcodeDetector({ formats: BD_FORMATS });
-    video.style.display = 'block';
-    target.style.display = 'none';
+    detector = new window.BarcodeDetector({ formats: ALLOWED_FORMATS_BD });
+    video.style.display = 'block'; target.style.display = 'none';
     startBDLoop();
   }
 
+  // ---- Quagga2 (fallback) con ROI y params más robustos
   function loadQuagga(){
-    const CANDIDATES = [
-      'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
-      'https://unpkg.com/@ericblade/quagga2@0.0.14/dist/quagga.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
-    ];
-    if (window.Quagga) return Promise.resolve('existing');
-
-    return new Promise(async (resolve, reject) => {
-      for (const url of CANDIDATES) {
-        try {
-          await inject(url);
-          const ok = await waitGlobal('Quagga', 3000);
-          if (ok) { console.log('[Scanner] Quagga loaded from:', url); return resolve(url); }
-        } catch (e) { console.warn('[Scanner] Failed', url, e); }
-      }
-      reject(new Error('Quagga2 could not be loaded from any CDN'));
+    const url = 'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@0.0.14/dist/quagga.min.js';
+    if (window.Quagga) return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script'); s.src=url; s.async=true;
+      s.onload=()=>resolve(); s.onerror=()=>reject(new Error('Failed to load Quagga2'));
+      document.head.appendChild(s);
     });
-
-    function inject(src){
-      return new Promise((resolve,reject)=>{
-        if ([...document.scripts].some(s => s.src === src)) return resolve();
-        const s=document.createElement('script'); s.src=src; s.async=true;
-        s.onload=()=>resolve(); s.onerror=()=>reject(new Error('script load error'));
-        document.head.appendChild(s);
-      });
-    }
-    function waitGlobal(name, ms){
-      return new Promise((resolve)=>{
-        const t0=performance.now();
-        (function loop(){
-          if (window[name]) return resolve(true);
-          if (performance.now()-t0>ms) return resolve(false);
-          requestAnimationFrame(loop);
-        })();
-      });
-    }
   }
-
   async function startQuagga(){
-    if (!window.Quagga) throw new Error('Quagga global is missing after load');
-    usingQuagga = true;
-    video.style.display = 'none';
-    target.style.display = 'block';
-
-    let constraints = {};
-    if (videoDevices.length && currentDeviceIdx >= 0) {
-      constraints.deviceId = { exact: videoDevices[currentDeviceIdx].deviceId };
-    } else if (cachedDeviceId) {
-      constraints.deviceId = { exact: cachedDeviceId };
-    } else {
-      constraints.facingMode = 'environment';
-    }
-
-    await new Promise((resolve, reject) => {
+    if (!window.Quagga) throw new Error('Quagga missing');
+    usingQuagga = true; video.style.display='none'; target.style.display='block';
+    await new Promise((resolve,reject)=>{
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          constraints: { ...constraints, width: { ideal: 640 }, height: { ideal: 480 } },
+          area: { top: "28%", right: "6%", left: "6%", bottom: "28%" }, // banda central amplia
+          constraints: { width: { ideal: 1280 }, height: { ideal: 720 } },
           target: target
         },
-        locator: { patchSize: 'small', halfSample: true },
+        locator: { patchSize: 'large', halfSample: false },
         numOfWorkers: 1,
-        frequency: 15,
-        decoder: { readers: ['code_128_reader','ean_reader','upc_reader','upc_e_reader'] }
-      }, (err) => {
+        frequency: 25,
+        decoder: { readers: ALLOWED_READERS_QG }
+      }, (err)=>{
         if (err) return reject(err);
         window.Quagga.start();
-        window.Quagga.onDetected(res => {
+        seenBuffer = [];
+        window.Quagga.onDetected(res=>{
           const code = res?.codeResult?.code;
-          if (code) onDetected(code);
+          const fmt  = (res?.codeResult?.format || '').toLowerCase();
+          const conf = res?.codeResult?.confidence;
+          if (conf != null) {
+            const confNorm = conf > 1 ? conf/100 : conf;
+            if (confNorm < 0.20) return; // umbral laxo pero evita ruidos
+          }
+          if (!code || !fmt) return;
+          if (!isValidByFormat(code, fmt)) return;
+          if (pushAndCheckConsensus(code) && canHit()) onDetected(code);
         });
         resolve();
       });
@@ -423,21 +382,20 @@
   async function startScan(){
     openModal();
     try{
-      // leer cache
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
-
       await loadVideoDevices();
 
       if (cachedDeviceId) {
-        // ruta rápida: usar la última cámara buena
         await startWithDevice(cachedDeviceId);
       } else {
-        // primera vez: pedir permiso y enumerar
         await ensurePermissionOnce();
         await loadVideoDevices();
         if (videoDevices.length) currentDeviceIdx = 0;
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
+
+      // intenta linterna por defecto (mejora precisión)
+      setTorch(true);
 
       if ('BarcodeDetector' in window) {
         await startBarcodeDetector();
@@ -445,10 +403,8 @@
         await loadQuagga();
         await startQuagga();
       }
-
-      rememberActiveDevice(); // cachear para próximas veces
     }catch(err){
-      showError(err, 'startScan');
+      alert((err?.name||'Error') + (err?.message?(': '+err.message):''));
       cleanupAll(); closeModal();
     }
   }
@@ -462,20 +418,19 @@
       try { window.Quagga.stop(); } catch(_){}
       usingQuagga=false;
       await startQuagga();
-      rememberActiveDevice();
       return;
     }
-
     cancelLoop();
     await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-    rememberActiveDevice();
     if (detector) startBDLoop();
   }
 
-  btnScan?.addEventListener('click', startScan);
-  btnFlip?.addEventListener('click', flipCamera);
-  btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
-})();
+  // --- Eventos
+  btnScan.addEventListener('click', (e)=>{ e.preventDefault(); startScan(); }, { passive:true });
+  btnFlip.addEventListener('click', (e)=>{ e.preventDefault(); flipCamera(); }, { passive:true });
+  btnTorch.addEventListener('click', (e)=>{ e.preventDefault(); setTorch(!torchOn); }, { passive:true });
+  btnClose.addEventListener('click', (e)=>{ e.preventDefault(); setTorch(false); cleanupAll(); closeModal(); }, { passive:true });
+  modal.addEventListener('click', (e)=>{ if (e.target===modal){ setTorch(false); cleanupAll(); closeModal(); } }, { passive:true });
+});
 </script>
 {% endblock %}
