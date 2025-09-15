@@ -31,17 +31,7 @@
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
   "description": "QR-powered inventory management with in-browser scanning (BarcodeDetector + jsQR fallback), flashlight/flip, flexible A/B/S/C locations, 40×30 mm labels, eBay URL import, and multi-marketplace links.",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": [
-    "In-browser QR scanner (BarcodeDetector + jsQR fallback)",
-    "Flashlight toggle and camera flip",
-    "Scan locations inside Add/Edit forms",
-    "Flexible A/B/S/C (enable/disable levels)",
-    "Batch PDF labels 40×30 mm (QR + text side-by-side)",
-    "eBay URL import (auto-fill title)",
-    "Multi-marketplace links (eBay, Amazon, Mercari, Vinted, Poshmark, Depop)",
-    "Mobile-friendly dark UI"
-  ]
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
 
@@ -140,6 +130,17 @@
   </div>
 </section>
 
+{# ===== NEW: APP / PWA CARD ===== #}
+<section class="card" style="background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">
+  <h2 style="margin-top:0;">Do you have an app?</h2>
+  <p style="color:var(--sub); margin-bottom:10px;">Yes — Qventory works as a <strong>Progressive Web App (PWA)</strong>. Install it from your browser and use it like a native app:</p>
+  <div style="display:flex; flex-direction:column; gap:8px; font-size:15px; line-height:1.6;">
+    <div>➜ <strong>On Chrome (Android/Desktop):</strong> Menu ⋮ ⟶ <em>Add to Home screen</em> ⟶ Install.</div>
+    <div>➝ <strong>On Safari (iPhone/iPad):</strong> Share ⬆️ ⟶ <em>Add to Home Screen</em> ⟶ Done.</div>
+    <div>⟶ Launch Qventory directly from your home screen, full screen, no browser chrome.</div>
+  </div>
+</section>
+
 {# ===== CTA ===== #}
 <section class="card" style="text-align:center;">
   <h2>Ready to organize your inventory?</h2>
@@ -166,7 +167,7 @@
     <div>
       <h3>Which marketplaces are supported?</h3>
       <p>Save links for eBay, Amazon, Mercari, Vinted, Poshmark, and Depop. eBay URL import auto-fills titles.</p>
-      </div>
+    </div>
   </div>
 </section>
 
@@ -195,6 +196,11 @@
       "@type": "Question",
       "name": "Which marketplaces are supported?",
       "acceptedAnswer": { "@type": "Answer", "text": "Save links for eBay, Amazon, Mercari, Vinted, Poshmark, and Depop. eBay URL import auto-fills titles." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you have an app?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Qventory is a Progressive Web App (PWA). Install it from Chrome (Menu ⟶ Add to Home screen ⟶ Install) or Safari (Share ⟶ Add to Home Screen ⟶ Done). It runs full screen like a native app." }
     }
   ]
 }
