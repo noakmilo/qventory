@@ -112,7 +112,7 @@
   </form>
 </div>
 
-<!-- Modal del QR Scanner (igual que el barcode scanner) -->
+<!-- Modal del QR Scanner -->
 <div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code scanner">
   <div class="scan-sheet">
     <div class="scan-header">
@@ -293,7 +293,7 @@
   });
 })();
 
-// Script para QR Scanner de ubicaciones
+// Script para QR Scanner de ubicaciones (usando el módulo que funciona)
 (function(){
   const btnScan = document.getElementById('btnScanLocation');
   const modal = document.getElementById('qrModal');
@@ -313,10 +313,13 @@
   let videoDevices = [], currentDeviceIdx = -1;
   let flashlightOn = false;
   let lastDetections = [];
+  let detectionConfidence = 0;
   let devicesLoaded = false;
 
-  // Formatos QR
-  const QR_FORMATS = ['qr_code', 'data_matrix', 'aztec', 'pdf417'];
+  // Formatos QR compatibles
+  const QR_FORMATS = [
+    'qr_code', 'data_matrix', 'aztec', 'pdf417'
+  ];
 
   video.setAttribute('playsinline',''); 
   video.setAttribute('muted',''); 
@@ -359,6 +362,7 @@
     success.style.display='none';
     result.style.display='none';
     lastDetections = [];
+    detectionConfidence = 0;
   }
 
   function showSuccessAnimation(){
@@ -425,15 +429,16 @@
     return populated;
   }
 
+  // Validación cruzada para mejorar precisión (adaptado para QR)
   function validateDetection(value) {
     if (!value || value.length < 3) return false;
     
     lastDetections.push(value);
-    if (lastDetections.length > 3) { // Menos strict para QR
+    if (lastDetections.length > 3) { // Menos estricto para QR
       lastDetections.shift();
     }
 
-    // Para QR de ubicación, ser más permisivo
+    // Contar ocurrencias del mismo código
     const counts = {};
     lastDetections.forEach(code => {
       counts[code] = (counts[code] || 0) + 1;
@@ -441,7 +446,8 @@
 
     const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     
-    if (mostCommon && mostCommon[1] >= 1) { // Solo necesita 1 detección para QR
+    // Para QR de ubicación, ser más permisivo (solo necesita 1 detección)
+    if (mostCommon && mostCommon[1] >= 1) {
       return mostCommon[0];
     }
 
@@ -480,9 +486,17 @@
         result.style.display = 'block';
       }
     } else {
+      // Mostrar detección tentativa
       result.textContent = `Reading QR...`;
       result.style.display = 'block';
     }
+  }
+
+  function showError(err, where=''){
+    const name = err?.name || String(err) || 'Error';
+    const msg  = err?.message || '';
+    console.error('[QR Scanner]', where, err);
+    alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
   function showSpinner(on){ 
@@ -528,29 +542,9 @@
     } catch {}
   }
 
-  function findBestRearCamera(devices) {
-    const rearKeywords = ['back', 'rear', 'environment', 'main', 'primary'];
-    const frontKeywords = ['front', 'user', 'selfie', 'face'];
-    
-    const scored = devices.map(device => {
-      const label = (device.label || '').toLowerCase();
-      let score = 0;
-      
-      rearKeywords.forEach(keyword => {
-        if (label.includes(keyword)) score += 10;
-      });
-      
-      frontKeywords.forEach(keyword => {
-        if (label.includes(keyword)) score -= 15;
-      });
-      
-      if (devices.indexOf(device) === 0 && score >= 0) score += 5;
-      
-      return { device, score };
-    });
-    
-    scored.sort((a, b) => b.score - a.score);
-    return scored.map(item => item.device);
+  async function ensurePermissionOnce(){
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    tmp.getTracks().forEach(t=>t.stop());
   }
 
   async function loadVideoDevices(){
@@ -559,9 +553,14 @@
     }
     
     const devices = await navigator.mediaDevices.enumerateDevices();
-    const rawVideoDevices = devices.filter(d => d.kind === 'videoinput');
-    
-    videoDevices = findBestRearCamera(rawVideoDevices);
+    videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const prefers = ['back','rear','environment'];
+    videoDevices.sort((a,b)=>{
+      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
+      const as = prefers.some(p=>la.includes(p)) ? 1 : 0;
+      const bs = prefers.some(p=>lb.includes(p)) ? 1 : 0;
+      return bs - as;
+    });
     devicesLoaded = true;
   }
 
@@ -570,63 +569,30 @@
     cancelLoop();
     showSpinner(true);
     
-    const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                       (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
+    const constraints = {
+      video: deviceId
+        ? { 
+            deviceId: { exact: deviceId }, 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 720, min: 480 }, 
+            frameRate: { ideal: 30 },
+            focusMode: 'continuous',
+            zoom: { ideal: 1.0 }
+          }
+        : { 
+            facingMode: { ideal: 'environment' }, 
+            width: { ideal: 1280, min: 640 }, 
+            height: { ideal: 720, min: 480 }, 
+            frameRate: { ideal: 30 },
+            focusMode: 'continuous'
+          },
+      audio: false
+    };
     
-    let constraints;
-    
-    if (deviceId) {
-      constraints = {
-        video: isIOSSafari ? {
-          deviceId: { exact: deviceId },
-          width: { ideal: 640, max: 1280 },
-          height: { ideal: 480, max: 720 },
-          frameRate: { ideal: 24, max: 30 }
-        } : {
-          deviceId: { exact: deviceId }, 
-          width: { ideal: 1280, min: 640 }, 
-          height: { ideal: 720, min: 480 }, 
-          frameRate: { ideal: 30 }
-        },
-        audio: false
-      };
-    } else {
-      constraints = {
-        video: isIOSSafari ? {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 24 }
-        } : {
-          facingMode: { ideal: 'environment' }, 
-          width: { ideal: 1280, min: 640 }, 
-          height: { ideal: 720, min: 480 }, 
-          frameRate: { ideal: 30 }
-        },
-        audio: false
-      };
-    }
-    
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.srcObject = stream;
-      
-      if (isIOSSafari) {
-        await new Promise((resolve) => {
-          video.onloadedmetadata = () => {
-            video.play().then(resolve).catch(resolve);
-          };
-        });
-      } else {
-        await video.play();
-      }
-      
-      showSpinner(false);
-    } catch (error) {
-      console.error('[QR Scanner] Error starting camera:', error);
-      showSpinner(false);
-      throw error;
-    }
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+    await video.play();
+    showSpinner(false);
   }
 
   function startBDLoop(){
@@ -634,10 +600,17 @@
     const tick = async () => {
       try {
         frameCount++;
-        if (frameCount % 5 === 0) { // Menos frecuente para QR
+        // Solo procesar cada 3er frame para mejor rendimiento
+        if (frameCount % 3 === 0) {
           const codes = await detector.detect(video);
           if (codes && codes.length){
-            const qrCode = codes.find(code => code.format === 'qr_code') || codes[0];
+            // Buscar específicamente códigos QR o tomar el mejor
+            const qrCode = codes.find(code => code.format === 'qr_code') || 
+                          codes.reduce((best, current) => {
+                            return current.boundingBox?.width * current.boundingBox?.height > 
+                                   (best.boundingBox?.width * best.boundingBox?.height || 0) ? current : best;
+                          });
+            
             const val = (qrCode.rawValue || '').trim();
             if (val && val.length >= 5){ 
               onDetected(val); 
@@ -658,64 +631,137 @@
     startBDLoop();
   }
 
-  async function startScan(){
-    if (!('BarcodeDetector' in window) && !window.Quagga) {
-      alert('QR scanning not supported in this browser. Please use Chrome, Safari, or Firefox.');
-      return;
+  function loadQuagga(){
+    const CANDIDATES = [
+      'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
+      'https://unpkg.com/@ericblade/quagga2@0.0.14/dist/quagga.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
+    ];
+    if (window.Quagga) return Promise.resolve('existing');
+
+    return new Promise(async (resolve, reject) => {
+      for (const url of CANDIDATES) {
+        try {
+          await inject(url);
+          const ok = await waitGlobal('Quagga', 3000);
+          if (ok) { 
+            console.log('[QR Scanner] Quagga loaded from:', url); 
+            return resolve(url); 
+          }
+        } catch (e) { 
+          console.warn('[QR Scanner] Failed', url, e); 
+        }
+      }
+      reject(new Error('Quagga2 could not be loaded from any CDN'));
+    });
+
+    function inject(src){
+      return new Promise((resolve,reject)=>{
+        if ([...document.scripts].some(s => s.src === src)) return resolve();
+        const s=document.createElement('script'); 
+        s.src=src; s.async=true;
+        s.onload=()=>resolve(); 
+        s.onerror=()=>reject(new Error('script load error'));
+        document.head.appendChild(s);
+      });
+    }
+    
+    function waitGlobal(name, ms){
+      return new Promise((resolve)=>{
+        const t0=performance.now();
+        (function loop(){
+          if (window[name]) return resolve(true);
+          if (performance.now()-t0>ms) return resolve(false);
+          requestAnimationFrame(loop);
+        })();
+      });
+    }
+  }
+
+  async function startQuagga(){
+    if (!window.Quagga) throw new Error('Quagga global is missing after load');
+    usingQuagga = true;
+    video.style.display = 'none';
+    target.style.display = 'block';
+
+    let constraints = {};
+    if (videoDevices.length && currentDeviceIdx >= 0) {
+      constraints.deviceId = { exact: videoDevices[currentDeviceIdx].deviceId };
+    } else if (cachedDeviceId) {
+      constraints.deviceId = { exact: cachedDeviceId };
+    } else {
+      constraints.facingMode = 'environment';
     }
 
+    await new Promise((resolve, reject) => {
+      window.Quagga.init({
+        inputStream: {
+          type: 'LiveStream',
+          constraints: { 
+            ...constraints, 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
+          },
+          target: target
+        },
+        locator: { 
+          patchSize: 'medium', 
+          halfSample: false 
+        },
+        numOfWorkers: 2,
+        frequency: 10,
+        decoder: { 
+          readers: [
+            'code_128_reader' // Quagga no soporta QR nativamente, pero podemos usarlo como fallback
+          ],
+          multiple: false
+        },
+        locate: true
+      }, (err) => {
+        if (err) return reject(err);
+        window.Quagga.start();
+        
+        window.Quagga.onDetected(res => {
+          const code = res?.codeResult?.code;
+          if (code) onDetected(code);
+        });
+        
+        resolve();
+      });
+    });
+  }
+
+  async function startScan(){
     openModal();
     lastDetections = [];
+    detectionConfidence = 0;
     result.style.display = 'none';
     
     try{
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
       
-      const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                         (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
-      
-      if (isIOSSafari && cachedDeviceId) {
-        try {
-          await startWithDevice(cachedDeviceId);
-        } catch (error) {
-          cachedDeviceId = null;
-          localStorage.removeItem(CAM_CACHE_KEY);
-          await startWithDevice(null);
-        }
-      } else if (isIOSSafari) {
-        await startWithDevice(null);
-        loadVideoDevices().catch(console.warn);
+      if (cachedDeviceId) {
+        await startWithDevice(cachedDeviceId);
       } else {
+        await ensurePermissionOnce();
         await loadVideoDevices();
-        
-        if (cachedDeviceId) {
-          const deviceExists = videoDevices.some(d => d.deviceId === cachedDeviceId);
-          if (deviceExists) {
-            await startWithDevice(cachedDeviceId);
-          } else {
-            cachedDeviceId = null;
-            localStorage.removeItem(CAM_CACHE_KEY);
-            currentDeviceIdx = 0;
-            await startWithDevice(videoDevices[0]?.deviceId);
-          }
-        } else {
-          if (videoDevices.length) {
-            currentDeviceIdx = 0;
-            await startWithDevice(videoDevices[0]?.deviceId);
-          } else {
-            await startWithDevice(null);
-          }
-        }
+        if (videoDevices.length) currentDeviceIdx = 0;
+        await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
+      // Priorizar BarcodeDetector para QR codes
       if ('BarcodeDetector' in window) {
         await startBarcodeDetector();
+      } else {
+        // Fallback a Quagga (aunque no detecta QR, puede servir como backup)
+        await loadQuagga();
+        await startQuagga();
       }
 
       rememberActiveDevice();
     }catch(err){
-      console.error('[QR Scanner] Error:', err);
-      alert('Camera access failed. Please allow camera permission and try again.');
+      showError(err, 'startScan');
       cleanupAll(); 
       closeModal();
     }
@@ -729,10 +775,35 @@
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
 
+    console.log(`[QR Scanner] Switching to camera ${currentDeviceIdx}: ${videoDevices[currentDeviceIdx].label}`);
+
+    if (usingQuagga && window.Quagga){
+      try { window.Quagga.stop(); } catch(_){}
+      usingQuagga=false;
+      await startQuagga();
+      rememberActiveDevice();
+      return;
+    }
+
     cancelLoop();
     await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
     rememberActiveDevice();
     if (detector) startBDLoop();
+  }
+
+  // Pre-cargar devices cuando se carga la página para mayor velocidad
+  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
+    // Solo precargar si no es Safari iOS (para evitar prompts innecesarios)
+    const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                       (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
+    if (!isIOSSafari) {
+      navigator.mediaDevices.enumerateDevices()
+        .then(devices => {
+          const videoDevicesCount = devices.filter(d => d.kind === 'videoinput').length;
+          console.log(`[QR Scanner] Found ${videoDevicesCount} video devices`);
+        })
+        .catch(() => {}); // Silently fail
+    }
   }
 
   // Event listeners
