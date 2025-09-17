@@ -159,7 +159,7 @@ def qr_label_image(code, human_text, link, qr_px=None, *, dpi=300):
             except Exception:
                 return ImageFont.load_default()
 
-    font_px = max(10, int(round(8 * dpi / 72.0)))  # 8pt → px
+    font_px = max(16, int(round(12 * dpi / 72.0)))  # 8pt → px
     font = _load_bold(font_px)
     text = f"Location: {code or ''}"
 
