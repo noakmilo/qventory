@@ -6,10 +6,13 @@
   {# ---- Filtros: solo si la vista pasó "options" ---- #}
   {% if options is defined %}
   <div class="card" style="flex:1 1 280px;min-width:280px">
-    <h2>Filters</h2>
+    <h2><i class="fas fa-filter"></i> Filters</h2>
     <form method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
       <div style="grid-column:1/-1">
-        <input class="input" type="text" name="q" value="{{ q|default('') }}" placeholder="Search title or SKU…">
+        <div class="input-with-icon">
+          <i class="fas fa-search"></i>
+          <input class="input" type="text" name="q" value="{{ q|default('') }}" placeholder="Search title or SKU…">
+        </div>
       </div>
 
       {% if settings.enable_A %}
@@ -62,7 +65,7 @@
 
       {% if PLATFORMS %}
       <div>
-        <label>Platform</label>
+        <label><i class="fas fa-store"></i> Platform</label>
         <select name="platform">
           <option value="">All</option>
           {% for key,label in PLATFORMS %}
@@ -73,8 +76,8 @@
       {% endif %}
 
       <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" type="submit">Apply</button>
-        <a class="btn" href="{{ url_for('main.dashboard') }}">Clear</a>
+        <button class="btn" type="submit"><i class="fas fa-check"></i> Apply</button>
+        <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-times"></i> Clear</a>
       </div>
     </form>
   </div>
@@ -82,7 +85,7 @@
 
   <!-- Tabla / Cards -->
   <div class="card" style="flex:3 1 600px;min-width:320px">
-    <h2>Items</h2>
+    <h2><i class="fas fa-boxes"></i> Items</h2>
 
     {# Username seguro #}
     {% set un = (current_user.is_authenticated and current_user.username) or username|default('') %}
@@ -102,36 +105,36 @@
         {% for it in items %}
           <tr>
             <td data-th="Title">{{ it.title }}</td>
-            <td data-th="SKU"><span class="tag">{{ it.sku }}</span></td>
+            <td data-th="SKU"><span class="tag"><i class="fas fa-barcode"></i> {{ it.sku }}</span></td>
             <td data-th="Location">
               {% if it.location_code %}
-                <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
+                <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}"><i class="fas fa-map-marker-alt"></i> {{ it.location_code }}</a>
                 &nbsp;
                 <!-- Abrir QR en modal -->
                 <a class="tag qr-link"
                    href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-                   data-caption="QR for {{ it.location_code }}">QR</a>
+                   data-caption="QR for {{ it.location_code }}"><i class="fas fa-qrcode"></i> QR</a>
               {% else %}
                 —
               {% endif %}
             </td>
             <td data-th="Listings">
               <div class="platform-badges">
-                {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
-                {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank">eBay</a>{% endif %}
-                {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
-                {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
-                {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
-                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
-                {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
+                {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank"><i class="fas fa-globe"></i> Web</a>{% endif %}
+                {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank"><i class="fab fa-ebay"></i> eBay</a>{% endif %}
+                {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank"><i class="fab fa-amazon"></i> Amazon</a>{% endif %}
+                {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank"><i class="fas fa-store"></i> Mercari</a>{% endif %}
+                {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank"><i class="fas fa-tshirt"></i> Vinted</a>{% endif %}
+                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank"><i class="fas fa-shopping-bag"></i> Poshmark</a>{% endif %}
+                {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank"><i class="fas fa-shopping-cart"></i> Depop</a>{% endif %}
                 {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
             <td data-th="Actions">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}">Edit</a>
+                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i> Edit</a>
                 <form method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                  <button class="btn" type="submit">Delete</button>
+                  <button class="btn btn-danger" type="submit"><i class="fas fa-trash-alt"></i> Delete</button>
                 </form>
               </div>
             </td>
@@ -143,16 +146,20 @@
   </div>
 </div>
 
-<a class="btn fab" href="{{ url_for('main.new_item') }}">＋ Add Item</a>
+<a class="btn fab" href="{{ url_for('main.new_item') }}"><i class="fas fa-plus"></i> Add Item</a>
 
 <!-- ===== Modal para ver QR ===== -->
 <div id="qrModal" class="qr-modal hidden" aria-hidden="true" aria-label="QR code">
   <div class="qr-sheet">
     <div class="qr-header">
-      <strong id="qrTitle">QR</strong>
+      <strong id="qrTitle"><i class="fas fa-qrcode"></i> QR</strong>
       <div class="qr-actions">
-        <a id="qrOpenNew" class="qr-icon" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">⧉</a>
-        <button type="button" id="qrClose" class="qr-icon" aria-label="Close">✕</button>
+        <a id="qrOpenNew" class="qr-icon" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <button type="button" id="qrClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
     <div class="qr-body">
@@ -188,6 +195,11 @@
   .qr-icon{
     border:none; background:transparent; color:#fff;
     font-size:18px; cursor:pointer; opacity:.9; text-decoration:none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
   }
   .qr-icon:hover{ opacity:1; }
 
@@ -199,6 +211,44 @@
   #qrImage{ width:100%; height:100%; object-fit:contain; display:block; }
 
   .qr-tip{ text-align:center; font-size:12px; opacity:.8; }
+  
+  /* Estilos para iconos */
+  .input-with-icon {
+    position: relative;
+  }
+  .input-with-icon i {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+  }
+  .input-with-icon input {
+    padding-left: 35px;
+  }
+  .tag i, .btn i {
+    margin-right: 5px;
+  }
+  .btn-danger {
+    background-color: #e74c3c;
+    color: white;
+  }
+  .btn-danger:hover {
+    background-color: #c0392b;
+  }
+  .fab {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
 </style>
 
 <script>
