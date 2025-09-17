@@ -1,5 +1,5 @@
 /* =========================
-   QVENTORY – Mobile-first UI (Liquid Glass + Responsive Table)
+   QVENTORY – Mobile-first UI (Liquid Glass + Compact Mobile Table)
    ========================= */
 
 :root{
@@ -13,25 +13,20 @@
   --err:#feb2b2;
   --border:#2d3a5a;
 
-  /* Espaciado y radios */
   --space-1:6px; --space-2:10px; --space-3:14px; --space-4:18px; --space-5:22px;
   --radius:14px; --radius-lg:18px;
 
-  /* Tipografía fluida */
   --fs-base:clamp(13px,1vw + 11px,15px);
   --fs-sm:clamp(11.5px,0.85vw + 9px,13px);
   --fs-xs:11px;
   --fs-lg:clamp(15px,1.1vw + 12px,17px);
   --fs-xl:clamp(19px,1.6vw + 13px,22px);
 
-  /* Tap target */
   --tap-target:42px;
 
-  /* Safe area */
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
 
-  /* Elevation & Glass */
   --elev:0 6px 18px rgba(0,0,0,.28);
   --glass-bg:rgba(17,24,52,.38);
   --glass-bg-strong:rgba(17,24,52,.55);
@@ -43,19 +38,15 @@
 
 *{box-sizing:border-box}
 html,body{height:100%}
-
 body{
   margin:0; background:var(--bg); color:var(--text);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
   font-size:var(--fs-base); line-height:1.4; -webkit-tap-highlight-color:transparent;
 }
-
 :focus-visible{ outline:2px solid var(--accent); outline-offset:2px }
 a{ color:var(--accent); text-decoration:none }
 
-/* ==========
-   LIQUID GLASS CORE
-   ========== */
+/* ---- Liquid glass core ---- */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass{
     background:var(--glass-bg);
@@ -158,7 +149,7 @@ select{
   background:var(--glass-bg-strong);
 }
 
-/* ===== TABLES ===== */
+/* ===== TABLES (desktop/tablet) ===== */
 .table-wrap{
   overflow-x:auto; overflow-y:visible;
   -webkit-overflow-scrolling:touch;
@@ -199,82 +190,86 @@ footer a{ color:var(--sub); text-decoration:none }
 .platform-badges{ display:flex; flex-wrap:wrap; gap:6px }
 
 /* ================
-   VISTA MÓVIL PRIMERA
+   VISTA MÓVIL: MISMA TABLA PERO MINI
    ================ */
 @media (max-width:720px){
   .wrap{ padding:10px }
   header{ flex-direction:column; gap:8px; align-items:stretch }
   .card{ padding:var(--space-2) }
 
-  .cardfilters{ font-size:var(--fs-sm) }
+  /* Filtros compactos */
+  .cardfilters{ font-size:12px }
   .cardfilters .input, .cardfilters select, .cardfilters .btn{
-    min-height:40px; font-size:14px; padding:8px 10px
+    min-height:38px; font-size:13px; padding:7px 9px
   }
 
-  .grid{ gap:8px } .row{ gap:10px }
-
-  /* Tablas en modo apilado tipo tabla */
-  .table-wrap{ overflow-x:visible; padding-right:0 }
-  .table-wrap table{ display:block; width:100%; table-layout:auto }
-  .table-wrap thead{ display:none }
-  .table-wrap tbody{ display:block }
-
-  .table-wrap tr{
-    display:grid; grid-template-columns:1fr; gap:8px;
-    border:1px solid var(--glass-border); border-radius:var(--radius);
-    padding:var(--space-2); margin-bottom:var(--space-2);
-    background:var(--glass-bg);
-    backdrop-filter:blur(var(--blur));
-    -webkit-backdrop-filter:blur(var(--blur));
-    box-shadow:0 10px 22px var(--glass-shadow);
+  /* --- Tabla compacta, sin scroll horizontal --- */
+  .table-wrap{ overflow-x:hidden; padding-right:0 }
+  .table-wrap table{
+    table-layout:fixed;  /* forzamos ajuste por columnas */
+    width:100%;
   }
 
-  .table-wrap td{
-    display:grid;
-    grid-template-columns:minmax(92px,36%) 1fr;
-    align-items:center;
-    gap:8px;
-    border:0;
-    padding:2px 0;
-    font-size:var(--fs-sm);
-    min-width:0;
-  }
-  .table-wrap td::before{
-    content:attr(data-th);
-    color:var(--sub);
-    font-size:var(--fs-xs);
-    line-height:1.2;
-    white-space:normal;
-    align-self:start;
-  }
+  /* Tipografías y paddings reducidos */
+  th, td{ padding:6px 6px; font-size:12px; line-height:1.25 }
 
-  .table-wrap td[data-th="Title"],
-  .table-wrap td[data-th="Description"]{
+  /* Anchos por columna (Title, SKU, Location, Listings, Actions) */
+  /* Ajusta si tu orden/num de columnas cambia */
+  th:nth-child(1), td:nth-child(1){ width:50%; }
+  th:nth-child(2), td:nth-child(2){ width:18%; }
+  th:nth-child(3), td:nth-child(3){ width:14%; }
+  th:nth-child(4), td:nth-child(4){ width:12%; }
+  th:nth-child(5), td:nth-child(5){ width:6%; } /* acciones */
+
+  /* Título: 2 líneas máximo con ellipsis */
+  td:nth-child(1){
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+    text-overflow:ellipsis;
     word-break:break-word;
     overflow-wrap:anywhere;
   }
 
-  .table-wrap td > *{ min-width:0; max-width:100% }
-  .table-wrap .tag, .table-wrap .pill, .table-wrap .btn{
-    display:inline-flex; flex-wrap:wrap; white-space:normal;
-    min-height:34px; padding:6px 10px;
+  /* Pills / chips más chicos */
+  .tag,
+  .pill,
+  .table-wrap .btn{
+    transform:scale(.92);
+    transform-origin:left center;
+    min-height:28px;
+    padding:4px 8px;
+    font-size:11px;
+    border-radius:999px;
   }
 
-  .table-wrap td.actions{ grid-template-columns:1fr }
-  .table-wrap td.actions > *{ display:flex; flex-wrap:wrap; gap:8px }
-  .table-wrap .btn.settingsbtn{ font-size:12px; min-height:34px; white-space:normal }
+  /* Botones de acción mini (icons) */
+  .table-wrap .btn.settingsbtn,
+  .table-wrap td:last-child .btn{
+    width:28px; height:28px; padding:0;
+    display:inline-grid; place-items:center;
+    font-size:14px;
+    border-radius:10px;
+  }
 
+  /* Evitar quiebres raros */
+  .table-wrap td > *{ min-width:0; max-width:100% }
   .table-wrap td img{ max-width:100%; height:auto; border-radius:8px }
 
+  /* FAB reducido */
   .fab{
-    position:fixed; right:14px; bottom:calc(14px + var(--safe-b)); z-index:50;
-    border-radius:999px; padding:11px 14px; box-shadow:0 8px 20px rgba(0,0,0,.35);
+    position:fixed; right:12px; bottom:calc(12px + var(--safe-b)); z-index:50;
+    border-radius:999px; padding:9px 12px; box-shadow:0 8px 20px rgba(0,0,0,.35);
     background:var(--glass-bg-strong);
+    font-size:12px;
   }
 
+  /* Grids a una columna */
   .grid.cols-3,.grid.cols-2{ grid-template-columns:1fr }
+
   .icon-top{
-    min-width:36px; min-height:36px; padding:0 8px; font-size:16px;
+    min-width:34px; min-height:34px; padding:0 8px; font-size:15px;
     border-radius:10px; border:1px solid var(--glass-border); background:var(--glass-bg-strong);
   }
 }
