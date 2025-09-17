@@ -297,21 +297,21 @@ footer a{ color:var(--sub); text-decoration:none }
   /* Botones de acción horizontales y compactos */
   .table-wrap td:last-child{
     text-align:center;
-    padding:4px 2px;
+    padding:3px 1px;
   }
 
   .table-wrap .btn.settingsbtn,
   .table-wrap td:last-child .btn{
-    width:24px; 
-    height:28px; 
+    width:22px; 
+    height:26px; 
     padding:0;
     margin:0 1px;
     display:inline-flex; 
     align-items:center; 
     justify-content:center;
-    font-size:14px;
+    font-size:12px;
     border-radius:6px;
-    min-height:28px;
+    min-height:26px;
     vertical-align:middle;
   }
 
