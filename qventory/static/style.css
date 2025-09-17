@@ -193,14 +193,14 @@ footer a{ color:var(--sub); text-decoration:none }
    VISTA MÓVIL: TABLA MEJORADA SIN SCROLL HORIZONTAL
    ================ */
 @media (max-width:720px){
-  .wrap{ padding:8px }
+  .wrap{ padding:7px }
   header{ flex-direction:column; gap:8px; align-items:stretch }
   .card{ padding:var(--space-2) }
 
   /* Filtros compactos */
-  .cardfilters{ font-size:12px }
+  .cardfilters{ font-size:11px }
   .cardfilters .input, .cardfilters select, .cardfilters .btn{
-    min-height:36px; font-size:12px; padding:6px 8px
+    min-height:36px; font-size:11px; padding:6px 8px
   }
 
   /* --- Tabla móvil optimizada --- */
@@ -384,7 +384,7 @@ footer a{ color:var(--sub); text-decoration:none }
   .grid.cols-3{ grid-template-columns:repeat(2,minmax(0,1fr)) }
   
   /* Tabla tablet - intermedio entre mobile y desktop */
-  th,td{ padding:8px 10px; font-size:13px }
+  th,td{ padding:8px 10px; font-size:11px }
   .table-wrap .btn.settingsbtn{ padding:4px 8px; font-size:11px }
 }
 
