@@ -149,6 +149,8 @@ select{
   background:var(--glass-bg-strong);
 }
 
+i {color: #8ab4fd;}
+
 /* ===== TABLES (desktop/tablet) ===== */
 .table-wrap{
   overflow-x:auto; overflow-y:visible;

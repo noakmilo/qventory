@@ -135,7 +135,7 @@
 
               <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
                 <button class="btn settingsbtn" type="submit">
-                  <i class="fas fa-times"></i>
+                  <i class="fas fa-trash-alt"></i>
                 </button>
               </form>
               {% else %}
