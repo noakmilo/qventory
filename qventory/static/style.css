@@ -236,31 +236,29 @@ footer a{ color:var(--sub); text-decoration:none }
   }
 
   /* Distribución de columnas mejorada */
-  th:nth-child(1), td:nth-child(1){ width:42%; } /* Título */
-  th:nth-child(2), td:nth-child(2){ width:20%; } /* SKU */
-  th:nth-child(3), td:nth-child(3){ width:16%; } /* Location */
-  th:nth-child(4), td:nth-child(4){ width:14%; } /* Listings */
-  th:nth-child(5), td:nth-child(5){ width:8%; }  /* Actions */
+  th:nth-child(1), td:nth-child(1){ width:35%; } /* Título */
+  th:nth-child(2), td:nth-child(2){ width:18%; } /* SKU */
+  th:nth-child(3), td:nth-child(3){ width:15%; } /* Location */
+  th:nth-child(4), td:nth-child(4){ width:12%; } /* Listings */
+  th:nth-child(5), td:nth-child(5){ width:20%; } /* Actions - más espacio */
 
-  /* Título del producto - manejo mejorado del texto */
+  /* Título del producto - texto más pequeño pero visible */
   td:nth-child(1){
+    font-size:10px;
+    line-height:1.3;
     word-wrap:break-word;
     overflow-wrap:break-word;
     hyphens:auto;
-    line-height:1.25;
-    max-height:2.5em; /* Aproximadamente 2 líneas */
-    overflow:hidden;
-    display:-webkit-box;
-    -webkit-line-clamp:2;
-    -webkit-box-orient:vertical;
+    /* Removemos la restricción de altura para que se vea más texto */
   }
 
   /* SKU más legible */
   td:nth-child(2){
     font-family:ui-monospace, 'SF Mono', Consolas, monospace;
-    font-size:10px;
+    font-size:9px;
     word-break:break-all;
     line-height:1.2;
+    padding:8px 2px;
   }
 
   /* Location compacta */
@@ -296,19 +294,31 @@ footer a{ color:var(--sub); text-decoration:none }
     min-width:0;
   }
 
-  /* Botones de acción compactos pero táctiles */
+  /* Botones de acción horizontales y compactos */
+  .table-wrap td:last-child{
+    text-align:center;
+    padding:4px 2px;
+  }
+
   .table-wrap .btn.settingsbtn,
   .table-wrap td:last-child .btn{
-    width:32px; 
-    height:32px; 
+    width:24px; 
+    height:28px; 
     padding:0;
-    margin:0 auto;
-    display:flex; 
+    margin:0 1px;
+    display:inline-flex; 
     align-items:center; 
     justify-content:center;
-    font-size:16px;
-    border-radius:8px;
-    min-height:32px;
+    font-size:14px;
+    border-radius:6px;
+    min-height:28px;
+    vertical-align:middle;
+  }
+
+  /* Contenedor de botones horizontal */
+  .table-wrap td:last-child > *{
+    display:inline-block;
+    margin:0 1px;
   }
 
   /* Iconos de impresora y eliminar */
