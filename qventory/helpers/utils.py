@@ -130,19 +130,26 @@ def _make_qr_pil(link: str, target_side_pt: float, dpi: int = 300, *, border: in
 #   Etiqueta individual QR (PIL) 40x30mm
 # =========================
 
-def qr_label_image(code, human_text, link, *, dpi=300):
+def qr_label_image(code, human_text, link, qr_px=None, *, dpi=300):
     """
     Devuelve una imagen PIL de 40x30 mm a 'dpi' con:
       - QR centrado arriba
-      - "Location: CODE" centrado debajo
+      - "Location: CODE" centrado debajo (Helvetica-Bold 8pt)
+    Param:
+      qr_px: tamaño máximo deseado del QR en píxeles (opcional). Si no se da,
+              se calcula automáticamente según la etiqueta.
     """
+    # --- Tamaño etiqueta 40x30mm en píxeles ---
     LABEL_W_MM, LABEL_H_MM = 40.0, 30.0
     W_px = int(round(mm_to_pt(LABEL_W_MM) * dpi / 72.0))
     H_px = int(round(mm_to_pt(LABEL_H_MM) * dpi / 72.0))
 
-    PAD_Y_px = int(round(mm_to_pt(3) * dpi / 72.0))
-    GAP_px   = int(round(mm_to_pt(1.5) * dpi / 72.0))
+    # Márgenes/gaps
+    PAD_Y_px = int(round(mm_to_pt(3) * dpi / 72.0))     # ≈3 mm
+    GAP_px   = int(round(mm_to_pt(1.5) * dpi / 72.0))   # ≈1.5 mm
+    MIN_QR_PX = 64
 
+    # Fuente 8pt bold
     def _load_bold(size_px):
         try:
             return ImageFont.truetype("Helvetica-Bold.ttf", size_px)
@@ -152,25 +159,38 @@ def qr_label_image(code, human_text, link, *, dpi=300):
             except Exception:
                 return ImageFont.load_default()
 
-    font_px = max(10, int(round(8 * dpi / 72.0)))
+    font_px = max(10, int(round(8 * dpi / 72.0)))  # 8pt → px
     font = _load_bold(font_px)
     text = f"Location: {code or ''}"
 
+    # Medición de texto
     tmp = Image.new("RGB", (10, 10), "white")
     d0 = ImageDraw.Draw(tmp)
     l, t, r, b = d0.textbbox((0, 0), text, font=font)
     text_w, text_h = r - l, b - t
 
+    # Alto disponible para QR (arriba)
     available_qr_h = H_px - 2 * PAD_Y_px - GAP_px - text_h
-    qr_side_px = max(64, min(available_qr_h, W_px - 2 * PAD_Y_px))
+    available_qr_w = W_px - 2 * PAD_Y_px
+    auto_qr_side = max(MIN_QR_PX, min(available_qr_h, available_qr_w))
 
+    # Si viene qr_px desde la ruta, úsalo como tope superior (sin romper layout)
+    if isinstance(qr_px, (int, float)) and qr_px > 0:
+        qr_side_px = int(min(qr_px, auto_qr_side))
+        qr_side_px = max(MIN_QR_PX, qr_side_px)
+    else:
+        qr_side_px = auto_qr_side
+
+    # Generar QR nítido
     qr_img = _make_qr_pil(link, target_side_pt=qr_side_px * 72.0 / dpi, dpi=dpi, border=2)
 
+    # Lienzo
     out = Image.new("RGB", (W_px, H_px), "white")
     d = ImageDraw.Draw(out)
 
+    # Posiciones centradas
     qr_x = (W_px - qr_side_px) // 2
-    qr_y = PAD_Y_px
+    qr_y = PAD_Y_px  # bloque superior
     out.paste(qr_img.resize((qr_side_px, qr_side_px), Image.NEAREST), (qr_x, qr_y))
 
     text_x = (W_px - text_w) // 2
@@ -178,6 +198,7 @@ def qr_label_image(code, human_text, link, *, dpi=300):
     d.text((text_x, text_y), text, fill=(0, 0, 0), font=font)
 
     return out
+
 
 # =========================
 #   PDF batch 40x30mm
