@@ -584,10 +584,11 @@ def _ellipsize(s: str, n: int = 20) -> str:
 
 def _build_item_label_pdf(it, settings) -> bytes:
     """
-    Genera un PDF 40x30 mm con:
-      - Barcode Code128 del SKU
-      - Título (20 chars + …)
-      - Ubicación (location_code)
+    PDF 40x30 mm con:
+      - Code128 del SKU centrado
+      - Título (20 chars + …) centrado
+      - Ubicación centrada
+    Todo el bloque queda centrado verticalmente en el sticker.
     """
     W = 40 * mm
     H = 30 * mm
@@ -595,40 +596,68 @@ def _build_item_label_pdf(it, settings) -> bytes:
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(W, H))
 
+    # Márgenes
     m = 3 * mm
     inner_w = W - 2 * m
-    y = H - m
+    inner_h = H - 2 * m
 
-    # Barcode SKU
+    # Fuentes / métricas
+    title_fs = 8
+    loc_fs = 8
+    leading = 1.2  # factor de línea para estimar altura de texto
+    title_h = title_fs * leading
+    loc_h = loc_fs * leading
+
+    # Separaciones entre elementos
+    gap_bc_title = 1.5 * mm
+    gap_title_loc = 0.8 * mm
+
+    # Altura máxima del barcode para que quepa todo centrado
+    max_bc_h = inner_h - (gap_bc_title + gap_title_loc + title_h + loc_h)
+    if max_bc_h < 6 * mm:
+        # Si queda muy pequeño, reducimos ligeramente interlineados/gaps
+        max_bc_h = max(6 * mm, inner_h - (title_h + loc_h) - (0.5 * mm + 0.5 * mm))
+
+    # --- BARCODE ---
     sku = it.sku or ""
-    bc = code128.Code128(sku, barHeight=H * 0.38, humanReadable=False)
-    bw, bh = bc.width, bc.height
-    scale = min(1.0, inner_w / bw)
-    x_bc = m + (inner_w - bw * scale) / 2.0
-    y_bc = y - bh * scale
+    # Creamos el barcode con la altura "objetivo"; lo escalaremos en ancho si hace falta
+    bc = code128.Code128(sku, barHeight=max_bc_h, humanReadable=False)
+    bw, bh = bc.width, bc.height  # bh ≈ max_bc_h
+    scale_w = min(1.0, inner_w / bw)
+
+    # Altura total del bloque para centrarlo verticalmente
+    block_h = (bh) + gap_bc_title + title_h + gap_title_loc + loc_h
+    y0 = m + (inner_h - block_h) / 2.0  # base del bloque (fondo del barcode)
+
+    # X centrado del barcode (con posible escala horizontal)
+    x_bc = m + (inner_w - bw * scale_w) / 2.0
+
+    # Dibuja barcode
     c.saveState()
-    c.translate(x_bc, y_bc)
-    c.scale(scale, scale)
+    c.translate(x_bc, y0)          # bottom-left del barcode
+    c.scale(scale_w, 1.0)          # solo ajustamos ancho
     bc.drawOn(c, 0, 0)
     c.restoreState()
-    y = y_bc - 2
 
-    # Título
+    # --- TÍTULO ---
     title = _ellipsize(it.title or "", 20)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(W / 2.0, y - 10, title)
-    y = y - 14
+    c.setFont("Helvetica-Bold", title_fs)
+    # drawCentredString usa baseline; posicionamos baseline = fondo + alto barcode + gap + tamaño de fuente
+    y_title = y0 + bh + gap_bc_title + title_fs
+    c.drawCentredString(W / 2.0, y_title, title)
 
-    # Ubicación
+    # --- UBICACIÓN ---
     loc = it.location_code or "-"
-    c.setFont("Helvetica", 8)
-    c.drawCentredString(W / 2.0, y - 10, loc)
+    c.setFont("Helvetica", loc_fs)
+    y_loc = y0 + bh + gap_bc_title + title_h + gap_title_loc + loc_fs
+    c.drawCentredString(W / 2.0, y_loc, loc)
 
     c.showPage()
     c.save()
     pdf_bytes = buf.getvalue()
     buf.close()
     return pdf_bytes
+
 
 @main_bp.route("/item/<int:item_id>/print", methods=["POST"])
 @login_required
