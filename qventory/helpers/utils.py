@@ -1,10 +1,12 @@
 import datetime, random, string, io
 from PIL import Image, ImageDraw, ImageFont
 import qrcode
+from qrcode.constants import ERROR_CORRECT_L
 from flask import current_app
-from reportlab.pdfgen import canvas
+from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
+from reportlab.lib.units import mm
 
 from ..extensions import db
 from ..models.setting import Setting
@@ -96,127 +98,113 @@ def human_from_code(code, settings):
     return " • ".join(segs) if segs else "Location"
 
 # =========================
-#   Render QR (PIL) - fila horizontal
+#   Helpers unidades
 # =========================
 
-def qr_label_image(code, human_text, link, qr_px=220, *, min_qr_px=140):
-    """
-    Genera una imagen PIL con layout horizontal:
-      [ QR ]  [ B1S2C1 ]
-    - Solo dibuja 'code' (p.ej. B1S2C1), NO el human_text.
-    - QR y texto quedan en la MISMA FILA, centrados verticalmente.
-    """
-    pad = 20
-    gap = 16
-    pref_font_px = 48
-    min_font_px  = 22
+def mm_to_pt(mm_val: float) -> float:
+    return mm_val * 72.0 / 25.4
 
-    def _load_font(size):
+# =========================
+#   QR nítido (PIL)
+# =========================
+
+def _make_qr_pil(link: str, target_side_pt: float, dpi: int = 300, *, border: int = 2):
+    """
+    Crea un QR cuadrado de ~target_side_pt (en puntos) a 'dpi', con
+    bordes pequeños y corrección L para mayor nitidez.
+    """
+    target_px = max(64, int(round(target_side_pt * dpi / 72.0)))
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=ERROR_CORRECT_L,
+        box_size=10,
+        border=border,
+    )
+    qr.add_data(link or "")
+    qr.make(fit=True)
+    base = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+    img = base.resize((target_px, target_px), Image.NEAREST)
+    return img
+
+# =========================
+#   Etiqueta individual QR (PIL) 40x30mm
+# =========================
+
+def qr_label_image(code, human_text, link, *, dpi=300):
+    """
+    Devuelve una imagen PIL de 40x30 mm a 'dpi' con:
+      - QR centrado arriba
+      - "Location: CODE" centrado debajo
+    """
+    LABEL_W_MM, LABEL_H_MM = 40.0, 30.0
+    W_px = int(round(mm_to_pt(LABEL_W_MM) * dpi / 72.0))
+    H_px = int(round(mm_to_pt(LABEL_H_MM) * dpi / 72.0))
+
+    PAD_Y_px = int(round(mm_to_pt(3) * dpi / 72.0))
+    GAP_px   = int(round(mm_to_pt(1.5) * dpi / 72.0))
+
+    def _load_bold(size_px):
         try:
-            return ImageFont.truetype("DejaVuSans.ttf", size)
+            return ImageFont.truetype("Helvetica-Bold.ttf", size_px)
         except Exception:
-            return ImageFont.load_default()
+            try:
+                return ImageFont.truetype("DejaVuSans-Bold.ttf", size_px)
+            except Exception:
+                return ImageFont.load_default()
 
-    # QR inicial
-    qr_side = max(min_qr_px, int(qr_px))
-    qr_img = qrcode.make(link).convert("RGB").resize((qr_side, qr_side), Image.NEAREST)
+    font_px = max(10, int(round(8 * dpi / 72.0)))
+    font = _load_bold(font_px)
+    text = f"Location: {code or ''}"
 
-    # Texto
-    font_size = pref_font_px
-    font = _load_font(font_size)
+    tmp = Image.new("RGB", (10, 10), "white")
+    d0 = ImageDraw.Draw(tmp)
+    l, t, r, b = d0.textbbox((0, 0), text, font=font)
+    text_w, text_h = r - l, b - t
 
-    def measure_text(txt, fnt):
-        tmp = Image.new("RGB", (10, 10), "white")
-        d0 = ImageDraw.Draw(tmp)
-        l, t, r, b = d0.textbbox((0, 0), txt, font=fnt)
-        return (r - l), (b - t)
+    available_qr_h = H_px - 2 * PAD_Y_px - GAP_px - text_h
+    qr_side_px = max(64, min(available_qr_h, W_px - 2 * PAD_Y_px))
 
-    text_w, text_h = measure_text(code or "", font)
-    out_h = qr_side + pad*2
+    qr_img = _make_qr_pil(link, target_side_pt=qr_side_px * 72.0 / dpi, dpi=dpi, border=2)
 
-    # Reducir fuente si el texto es más alto que QR
-    while (text_h > qr_side) and (font_size > min_font_px):
-        font_size -= 1
-        font = _load_font(font_size)
-        text_w, text_h = measure_text(code or "", font)
-
-    # Reducir QR si aún no cabe
-    while (text_h > qr_side) and (qr_side > min_qr_px):
-        qr_side -= 2
-        qr_img = qrcode.make(link).convert("RGB").resize((qr_side, qr_side), Image.NEAREST)
-        out_h = qr_side + pad*2
-
-    # Calcular ancho total
-    out_w = pad + qr_side + gap + max(1, text_w) + pad
-
-    out = Image.new("RGB", (out_w, out_h), "white")
+    out = Image.new("RGB", (W_px, H_px), "white")
     d = ImageDraw.Draw(out)
 
-    # Pegar QR
-    qr_x = pad
-    qr_y = pad
-    out.paste(qr_img, (qr_x, qr_y))
+    qr_x = (W_px - qr_side_px) // 2
+    qr_y = PAD_Y_px
+    out.paste(qr_img.resize((qr_side_px, qr_side_px), Image.NEAREST), (qr_x, qr_y))
 
-    # Texto centrado verticalmente
-    text_x = qr_x + qr_side + gap
-    text_y = pad + (qr_side - text_h) // 2
-    d.text((text_x, text_y), code or "", fill=(0, 0, 0), font=font)
+    text_x = (W_px - text_w) // 2
+    text_y = qr_y + qr_side_px + GAP_px
+    d.text((text_x, text_y), text, fill=(0, 0, 0), font=font)
 
     return out
 
 # =========================
-#   PDF 40x30 mm: QR izq + SOLO código a la derecha
+#   PDF batch 40x30mm
 # =========================
 
-def mm_to_pt(mm: float) -> float:
-    return mm * 72.0 / 25.4
-
-def _make_qr_pil(link: str, target_pt: float, dpi: int = 300):
-    px = max(16, int(round(target_pt * dpi / 72.0)))
-    img = qrcode.make(link).convert("RGB").resize((px, px), Image.NEAREST)
-    return img
-
-def build_qr_batch_pdf(codes, settings, make_link):
+def build_qr_batch_pdf(codes, settings, make_link, *, dpi=300):
     page_w, page_h = letter
     margin = 18
 
     LABEL_W_PT = mm_to_pt(40.0)
     LABEL_H_PT = mm_to_pt(30.0)
 
-    PAD = 4
-    TEXT_FONT = "Helvetica"
-    PREF_TEXT_SIZE = 12
-    MIN_TEXT_SIZE = 9
-    DPI = 300
+    GAP    = mm_to_pt(1.5)
+    TEXT_FONT = "Helvetica-Bold"
+    TEXT_SIZE = 8
 
-    QR_MAX_PT = max(1.0, LABEL_H_PT - 2 * PAD)
-    QR_MIN_PT = mm_to_pt(16.0)
-
-    cols = max(1, int((page_w - 2*margin) // LABEL_W_PT))
-    rows = max(1, int((page_h - 2*margin) // LABEL_H_PT))
+    cols = max(1, int((page_w - 2 * margin) // LABEL_W_PT))
+    rows = max(1, int((page_h - 2 * margin) // LABEL_H_PT))
     grid_w = cols * LABEL_W_PT
     grid_h = rows * LABEL_H_PT
     left = (page_w - grid_w) / 2.0
     bottom = (page_h - grid_h) / 2.0
 
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=letter)
+    c = rl_canvas.Canvas(buf, pagesize=letter)
     c.setAuthor("Qventory")
     c.setTitle("QR Labels 40x30mm")
-
-    def _truncate_to_width(text: str, max_width_pt: float, font_size: int) -> str:
-        if not text:
-            return ""
-        if c.stringWidth(text, TEXT_FONT, font_size) <= max_width_pt:
-            return text
-        ell = "…"
-        ell_w = c.stringWidth(ell, TEXT_FONT, font_size)
-        acc = ""
-        for ch in text:
-            if c.stringWidth(acc + ch, TEXT_FONT, font_size) + ell_w > max_width_pt:
-                break
-            acc += ch
-        return acc + ell
 
     for i, code in enumerate(codes):
         if i > 0 and i % (cols * rows) == 0:
@@ -229,60 +217,35 @@ def build_qr_batch_pdf(codes, settings, make_link):
         x0 = left + col * LABEL_W_PT
         y0 = bottom + row * LABEL_H_PT
 
+        text_val = f"Location: {code or ''}"
+        c.setFont(TEXT_FONT, TEXT_SIZE)
+        text_w = c.stringWidth(text_val, TEXT_FONT, TEXT_SIZE)
+        text_h = TEXT_SIZE
+
+        inner_w = LABEL_W_PT
+        inner_h = LABEL_H_PT
+
+        qr_max_side = min(inner_w, inner_h - GAP - text_h)
+        qr_max_side = max(mm_to_pt(16.0), qr_max_side)
+
         link = make_link(code)
-        text_value = code or ""
+        qr_img = _make_qr_pil(link, target_side_pt=qr_max_side, dpi=dpi, border=2)
 
-        chosen_font = PREF_TEXT_SIZE
-        qr_side_pt = QR_MAX_PT
+        block_h = qr_max_side + GAP + text_h
+        block_y0 = y0 + (LABEL_H_PT - block_h) / 2.0
 
-        def text_area_width(qr_pt: float):
-            return max(1.0, LABEL_W_PT - (qr_pt + 3 * PAD))
-
-        def text_width(font_size: int):
-            return c.stringWidth(text_value, TEXT_FONT, font_size)
-
-        tw = text_area_width(qr_side_pt)
-        required = text_width(chosen_font)
-
-        if required > tw:
-            qr_allowed = LABEL_W_PT - (required + 3 * PAD)
-            qr_side_pt = max(QR_MIN_PT, min(QR_MAX_PT, qr_allowed))
-            tw = text_area_width(qr_side_pt)
-
-        if required > tw:
-            for size in (11, 10, 9):
-                required = text_width(size)
-                qr_allowed = LABEL_W_PT - (required + 3 * PAD)
-                if qr_allowed >= QR_MIN_PT:
-                    chosen_font = size
-                    qr_side_pt = min(QR_MAX_PT, qr_allowed)
-                    tw = text_area_width(qr_side_pt)
-                    break
-                else:
-                    chosen_font = size
-                    qr_side_pt = QR_MIN_PT
-                    tw = text_area_width(qr_side_pt)
-                    if required <= tw:
-                        break
-
-        c.setFont(TEXT_FONT, chosen_font)
-        line = _truncate_to_width(text_value, tw, chosen_font)
-
-        qr_img = _make_qr_pil(link, qr_side_pt, dpi=DPI)
-        qr_y = y0 + (LABEL_H_PT - qr_side_pt) / 2.0
         c.drawImage(
             ImageReader(qr_img),
-            x0 + PAD,
-            qr_y,
-            width=qr_side_pt,
-            height=qr_side_pt,
+            x0 + (LABEL_W_PT - qr_max_side) / 2.0,
+            block_y0 + text_h + GAP,
+            width=qr_max_side,
+            height=qr_max_side,
             preserveAspectRatio=True,
             mask='auto'
         )
 
-        text_x = x0 + PAD + qr_side_pt + PAD
-        text_y = y0 + (LABEL_H_PT - chosen_font) / 2.0
-        c.drawString(text_x, text_y, line)
+        c.setFont(TEXT_FONT, TEXT_SIZE)
+        c.drawCentredString(x0 + LABEL_W_PT / 2.0, block_y0, text_val)
 
     c.save()
     buf.seek(0)
