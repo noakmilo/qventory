@@ -96,7 +96,11 @@
             <td>
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
-              &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" target="_blank">QR</a>
+              &nbsp;
+              <!-- Abrir QR en modal (ya no target=_blank) -->
+              <a class="tag qr-link"
+                 href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
+                 data-caption="QR for {{ it.location_code }}">QR</a>
               {% else %}
               —
               {% endif %}
@@ -162,6 +166,25 @@
   </div>
 </div>
 
+<!-- Modal para ver QR -->
+<div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code">
+  <div class="scan-sheet" style="width:min(380px,92vw)">
+    <div class="scan-header">
+      <strong id="qrTitle">QR</strong>
+      <div class="scan-actions">
+        <a id="qrOpenNew" class="icon-top" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">⧉</a>
+        <button type="button" id="qrClose" class="icon-top" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="scan-body" style="align-items:center; gap:12px">
+      <div class="viewport" style="aspect-ratio:1 / 1; max-height:none; background:#fff;">
+        <img id="qrImage" alt="QR code" style="display:block; width:100%; height:100%; object-fit:contain;">
+      </div>
+      <div id="qrCaption" class="scan-tip"></div>
+    </div>
+  </div>
+</div>
+
 <style>
   /* input con botón */
   .input-with-button{ position:relative; display:flex; align-items:center; }
@@ -190,6 +213,7 @@
   }
   .scan-actions .icon-top{
     border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
+    text-decoration: none;
   }
   .scan-actions .icon-top:hover{ opacity:1; }
   .scan-actions .icon-top.active{ opacity:1; color:#ffd700; }
@@ -336,7 +360,7 @@
     cancelLoop(); 
     stopStream();
     flashlightOn = false;
-    btnFlash.classList.remove('active');
+    btnFlash?.classList.remove('active');
     if (usingQuagga && window.Quagga){ 
       try { window.Quagga.stop(); } catch(e){} 
       usingQuagga=false; 
@@ -365,7 +389,6 @@
       lastDetections.shift();
     }
 
-    // Contar ocurrencias del mismo código
     const counts = {};
     lastDetections.forEach(code => {
       counts[code] = (counts[code] || 0) + 1;
@@ -373,11 +396,9 @@
 
     const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     
-    // Si el mismo código aparece al menos 2 veces en las últimas 5 detecciones
     if (mostCommon && mostCommon[1] >= 2) {
       return mostCommon[0];
     }
-
     return false;
   }
   
@@ -400,7 +421,6 @@
         form?.submit();
       }, 800);
     } else {
-      // Mostrar detección tentativa
       result.textContent = `Reading: ${value}`;
       result.style.display = 'block';
     }
@@ -419,22 +439,13 @@
 
   async function toggleFlashlight(){
     if (!stream) return;
-    
     try {
       const track = stream.getVideoTracks()[0];
       const capabilities = track.getCapabilities();
-      
       if (capabilities.torch) {
         flashlightOn = !flashlightOn;
-        await track.applyConstraints({
-          advanced: [{torch: flashlightOn}]
-        });
-        
-        if (flashlightOn) {
-          btnFlash.classList.add('active');
-        } else {
-          btnFlash.classList.remove('active');
-        }
+        await track.applyConstraints({ advanced: [{torch: flashlightOn}] });
+        btnFlash.classList.toggle('active', flashlightOn);
       } else {
         alert('Flashlight not supported on this camera');
       }
@@ -476,27 +487,12 @@
     stopStream(); 
     cancelLoop();
     showSpinner(true);
-    
     const constraints = {
       video: deviceId
-        ? { 
-            deviceId: { exact: deviceId }, 
-            width: { ideal: 1280, min: 640 }, 
-            height: { ideal: 720, min: 480 }, 
-            frameRate: { ideal: 30 },
-            focusMode: 'continuous',
-            zoom: { ideal: 1.0 }
-          }
-        : { 
-            facingMode: { ideal: 'environment' }, 
-            width: { ideal: 1280, min: 640 }, 
-            height: { ideal: 720, min: 480 }, 
-            frameRate: { ideal: 30 },
-            focusMode: 'continuous'
-          },
+        ? { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 }, focusMode: 'continuous', zoom: { ideal: 1.0 } }
+        : { facingMode: { ideal: 'environment' }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 }, focusMode: 'continuous' },
       audio: false
     };
-    
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.srcObject = stream;
     await video.play();
@@ -508,16 +504,13 @@
     const tick = async () => {
       try {
         frameCount++;
-        // Solo procesar cada 3er frame para mejor rendimiento
         if (frameCount % 3 === 0) {
           const codes = await detector.detect(video);
           if (codes && codes.length){
-            // Tomar el código con mayor confianza
             const bestCode = codes.reduce((best, current) => {
               return current.boundingBox?.width * current.boundingBox?.height > 
                      (best.boundingBox?.width * best.boundingBox?.height || 0) ? current : best;
             });
-            
             const val = (bestCode.rawValue || '').trim();
             if (val && val.length >= 3){ 
               onDetected(val); 
@@ -545,7 +538,6 @@
       'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
     ];
     if (window.Quagga) return Promise.resolve('existing');
-
     return new Promise(async (resolve, reject) => {
       for (const url of CANDIDATES) {
         try {
@@ -555,9 +547,7 @@
             console.log('[Scanner] Quagga loaded from:', url); 
             return resolve(url); 
           }
-        } catch (e) { 
-          console.warn('[Scanner] Failed', url, e); 
-        }
+        } catch (e) { console.warn('[Scanner] Failed', url, e); }
       }
       reject(new Error('Quagga2 could not be loaded from any CDN'));
     });
@@ -573,7 +563,6 @@
         document.head.appendChild(s);
       });
     }
-    
     function waitGlobal(name, ms){
       return new Promise((resolve)=>{
         const t0=performance.now();
@@ -591,7 +580,6 @@
     usingQuagga = true;
     video.style.display = 'none';
     target.style.display = 'block';
-
     let constraints = {};
     if (videoDevices.length && currentDeviceIdx >= 0) {
       constraints.deviceId = { exact: videoDevices[currentDeviceIdx].deviceId };
@@ -605,41 +593,24 @@
       window.Quagga.init({
         inputStream: {
           type: 'LiveStream',
-          constraints: { 
-            ...constraints, 
-            width: { ideal: 1280 }, 
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
-          },
+          constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
           target: target
         },
-        locator: { 
-          patchSize: 'medium', 
-          halfSample: false 
-        },
+        locator: { patchSize: 'medium', halfSample: false },
         numOfWorkers: 2,
         frequency: 10,
         decoder: { 
-          readers: [
-            'code_128_reader',
-            'ean_reader',
-            'upc_reader',
-            'upc_e_reader',
-            'code_39_reader',
-            'codabar_reader'
-          ],
+          readers: ['code_128_reader','ean_reader','upc_reader','upc_e_reader','code_39_reader','codabar_reader'],
           multiple: false
         },
         locate: true
       }, (err) => {
         if (err) return reject(err);
         window.Quagga.start();
-        
         window.Quagga.onDetected(res => {
           const code = res?.codeResult?.code;
           if (code) onDetected(code);
         });
-        
         resolve();
       });
     });
@@ -650,11 +621,9 @@
     lastDetections = [];
     detectionConfidence = 0;
     result.style.display = 'none';
-    
     try{
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
       await loadVideoDevices();
-
       if (cachedDeviceId) {
         await startWithDevice(cachedDeviceId);
       } else {
@@ -663,14 +632,12 @@
         if (videoDevices.length) currentDeviceIdx = 0;
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
-
       if ('BarcodeDetector' in window) {
         await startBarcodeDetector();
       } else {
         await loadQuagga();
         await startQuagga();
       }
-
       rememberActiveDevice();
     }catch(err){
       showError(err, 'startScan');
@@ -680,14 +647,9 @@
   }
 
   async function flipCamera(){
-    if (!devicesLoaded) {
-      await loadVideoDevices();
-    }
-    
+    if (!videoDevices.length) await loadVideoDevices();
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
-
-    console.log(`[Scanner] Switching to camera ${currentDeviceIdx}: ${videoDevices[currentDeviceIdx].label}`);
 
     if (usingQuagga && window.Quagga){
       try { window.Quagga.stop(); } catch(_){}
@@ -696,25 +658,18 @@
       rememberActiveDevice();
       return;
     }
-
     cancelLoop();
     await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
     rememberActiveDevice();
     if (detector) startBDLoop();
   }
 
-  // Pre-cargar devices cuando se carga la página para mayor velocidad
+  // Pre-cargar devices cuando se carga la página
   if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
-    // Solo precargar si no es Safari iOS (para evitar prompts innecesarios)
     const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                        (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
     if (!isIOSSafari) {
-      navigator.mediaDevices.enumerateDevices()
-        .then(devices => {
-          const videoDevicesCount = devices.filter(d => d.kind === 'videoinput').length;
-          console.log(`[Scanner] Found ${videoDevicesCount} video devices`);
-        })
-        .catch(() => {}); // Silently fail
+      navigator.mediaDevices.enumerateDevices().catch(() => {});
     }
   }
 
@@ -722,9 +677,50 @@
   btnFlip?.addEventListener('click', flipCamera);
   btnFlash?.addEventListener('click', toggleFlashlight);
   btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ 
-    if (e.target === modal){ cleanupAll(); closeModal(); } 
+  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
+
+  // ====== QR MODAL ======
+  const qrModal   = document.getElementById('qrModal');
+  const qrClose   = document.getElementById('qrClose');
+  const qrImage   = document.getElementById('qrImage');
+  const qrOpenNew = document.getElementById('qrOpenNew');
+  const qrCaption = document.getElementById('qrCaption');
+  const qrTitle   = document.getElementById('qrTitle');
+
+  function openQrModal(url, caption){
+    document.body.classList.add('modal-open');
+    qrModal.classList.remove('hidden');
+    qrModal.setAttribute('aria-hidden','false');
+    qrImage.src = ''; // evita mostrar viejo mientras carga
+    // Pequeño delay para asegurar transición en algunos navegadores
+    setTimeout(()=>{ qrImage.src = url; }, 0);
+    qrOpenNew.href = url;
+    qrCaption.textContent = caption || '';
+    qrTitle.textContent = caption || 'QR';
+  }
+
+  function closeQrModal(){
+    document.body.classList.remove('modal-open');
+    qrModal.classList.add('hidden');
+    qrModal.setAttribute('aria-hidden','true');
+    // liberar recurso si el backend soporta URLs dinámicas
+    qrImage.src = '';
+  }
+
+  // Delegación de clic para enlaces .qr-link
+  document.body.addEventListener('click', (e) => {
+    const a = e.target.closest('a.qr-link');
+    if (!a) return;
+    e.preventDefault();
+    const url = a.getAttribute('href');
+    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
+    openQrModal(url, caption);
   });
+
+  qrClose?.addEventListener('click', closeQrModal);
+  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
+
 })();
 </script>
 {% endblock %}
