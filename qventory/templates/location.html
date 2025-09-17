@@ -132,9 +132,9 @@
             </td>
             <td data-th="Actions">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i> Edit</a>
+                <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
                 <form method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                  <button class="btn btn-danger" type="submit"><i class="fas fa-trash-alt"></i> Delete</button>
+                  <button class="btn btn-danger" type="submit"><i class="fas fa-trash-alt"></i> </button>
                 </form>
               </div>
             </td>

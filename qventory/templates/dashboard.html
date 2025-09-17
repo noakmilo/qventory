@@ -124,7 +124,7 @@
             <td>
               {% if current_user.is_authenticated %}
               <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">
-                <i class="fas fa-pen"></i>
+                <i class="fas fa-edit"></i>
               </a>
 
               <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">

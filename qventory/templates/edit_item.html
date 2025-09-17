@@ -2,53 +2,53 @@
 {% block title %}Edit Item – Qventory{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>Edit Item</h2>
+  <h2><i class="fas fa-edit"></i> Edit Item</h2>
 
   <form method="post" class="grid cols-3" id="editItemForm">
     <!-- Título -->
     <div style="grid-column:1/-1">
-      <label>Title</label>
+      <label><i class="fas fa-heading"></i> Title</label>
       <input class="input" type="text" name="title" value="{{ item.title }}" required>
     </div>
 
     <!-- Listing principal -->
     <div style="grid-column:1/-1">
-      <label>Listing Link (optional)</label>
+      <label><i class="fas fa-link"></i> Listing Link (optional)</label>
       <input class="input" type="url" name="listing_link" value="{{ item.listing_link or '' }}">
     </div>
 
     <!-- Bloque de Links de Marketplace -->
     <div style="grid-column:1/-1"><hr style="border-color:var(--border);opacity:.3;margin:8px 0"></div>
     <div style="grid-column:1/-1">
-      <h3 style="margin:0 0 8px 0;font-size:16px">Marketplace Links (optional)</h3>
+      <h3 style="margin:0 0 8px 0;font-size:16px"><i class="fas fa-store"></i> Marketplace Links (optional)</h3>
     </div>
 
     <div>
-      <label>Website</label>
+      <label><i class="fas fa-globe"></i> Website</label>
       <input class="input" type="url" name="web_url" value="{{ item.web_url or '' }}">
     </div>
     <div>
-      <label>eBay</label>
+      <label><i class="fab fa-ebay"></i> eBay</label>
       <input class="input" type="url" name="ebay_url" value="{{ item.ebay_url or '' }}">
     </div>
     <div>
-      <label>Amazon</label>
+      <label><i class="fab fa-amazon"></i> Amazon</label>
       <input class="input" type="url" name="amazon_url" value="{{ item.amazon_url or '' }}">
     </div>
     <div>
-      <label>Mercari</label>
+      <label><i class="fas fa-store"></i> Mercari</label>
       <input class="input" type="url" name="mercari_url" value="{{ item.mercari_url or '' }}">
     </div>
     <div>
-      <label>Vinted</label>
+      <label><i class="fas fa-tshirt"></i> Vinted</label>
       <input class="input" type="url" name="vinted_url" value="{{ item.vinted_url or '' }}">
     </div>
     <div>
-      <label>Poshmark</label>
+      <label><i class="fas fa-shopping-bag"></i> Poshmark</label>
       <input class="input" type="url" name="poshmark_url" value="{{ item.poshmark_url or '' }}">
     </div>
     <div>
-      <label>Depop</label>
+      <label><i class="fas fa-shopping-cart"></i> Depop</label>
       <input class="input" type="url" name="depop_url" value="{{ item.depop_url or '' }}">
     </div>
 
@@ -56,34 +56,36 @@
     <div style="grid-column:1/-1; margin-top:16px">
       <div class="card" style="margin:0">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
-          <h3 style="margin:0;font-size:16px">Location</h3>
-          <button type="button" id="btnScanLocation" class="btn" style="padding:4px 8px; font-size:12px" title="Scan location QR code">📱 Scan QR</button>
+          <h3 style="margin:0;font-size:16px"><i class="fas fa-map-marker-alt"></i> Location</h3>
+          <button type="button" id="btnScanLocation" class="btn" style="padding:4px 8px; font-size:12px" title="Scan location QR code">
+            <i class="fas fa-qrcode"></i> Scan QR
+          </button>
         </div>
 
         {% if settings.enable_A %}
         <div>
-          <label>{{ settings.label_A }} (A)</label>
+          <label><i class="fas fa-tag"></i> {{ settings.label_A }} (A)</label>
           <input class="input" type="text" name="A" id="input_A" value="{{ item.A or '' }}" placeholder="e.g., 1">
         </div>
         {% endif %}
 
         {% if settings.enable_B %}
         <div>
-          <label>{{ settings.label_B }} (B)</label>
+          <label><i class="fas fa-tag"></i> {{ settings.label_B }} (B)</label>
           <input class="input" type="text" name="B" id="input_B" value="{{ item.B or '' }}" placeholder="e.g., 1">
         </div>
         {% endif %}
 
         {% if settings.enable_S %}
         <div>
-          <label>{{ settings.label_S }} (S)</label>
+          <label><i class="fas fa-tag"></i> {{ settings.label_S }} (S)</label>
           <input class="input" type="text" name="S" id="input_S" value="{{ item.S or '' }}" placeholder="e.g., 1">
         </div>
         {% endif %}
 
         {% if settings.enable_C %}
         <div>
-          <label>{{ settings.label_C }} (C)</label>
+          <label><i class="fas fa-tag"></i> {{ settings.label_C }} (C)</label>
           <input class="input" type="text" name="C" id="input_C" value="{{ item.C or '' }}" placeholder="e.g., 1">
         </div>
         {% endif %}
@@ -92,8 +94,8 @@
 
     <!-- Acciones -->
     <div style="grid-column:1/-1; margin-top:8px">
-      <button class="btn" type="submit">Save</button>
-      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
+      <button class="btn" type="submit"><i class="fas fa-save"></i> Save</button>
+      <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-times"></i> Cancel</a>
     </div>
   </form>
 </div>
@@ -102,11 +104,17 @@
 <div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code scanner">
   <div class="scan-sheet">
     <div class="scan-header">
-      <strong>Scan location QR code</strong>
+      <strong><i class="fas fa-qrcode"></i> Scan location QR code</strong>
       <div class="scan-actions">
-        <button type="button" id="qrFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">🔦</button>
-        <button type="button" id="qrFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">🔁</button>
-        <button type="button" id="qrClose" class="icon-top" aria-label="Close">✕</button>
+        <button type="button" id="qrFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">
+          <i class="fas fa-lightbulb"></i>
+        </button>
+        <button type="button" id="qrFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button type="button" id="qrClose" class="icon-top" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
 
@@ -116,7 +124,9 @@
         <div class="guide"></div>
         <div id="qrTarget" class="scan-target"></div>
         <div id="qrSpinner" class="spinner"></div>
-        <div id="qrSuccess" class="success-indicator">✓</div>
+        <div id="qrSuccess" class="success-indicator">
+          <i class="fas fa-check"></i>
+        </div>
       </div>
       <div class="scan-tip">Align the QR code inside the frame</div>
       <div id="qrResult" class="scan-result"></div>
@@ -143,6 +153,11 @@
   }
   .scan-actions .icon-top{
     border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
   }
   .scan-actions .icon-top:hover{ opacity:1; }
   .scan-actions .icon-top.active{ opacity:1; color:#ffd700; }
@@ -196,6 +211,17 @@
     border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin .9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Estilos para iconos en formulario */
+  label i {
+    margin-right: 8px;
+    width: 16px;
+    color: #666;
+  }
+  
+  .btn i {
+    margin-right: 5px;
+  }
 </style>
 
 <script>
