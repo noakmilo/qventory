@@ -8,7 +8,9 @@
       <div style="grid-column:1/-1">
         <div class="input-with-button">
           <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title or SKU…">
-          <button class="icon-btn" type="button" id="btnScan" title="Scan barcode with camera" aria-label="Scan barcode">📷</button>
+          <button class="icon-btn" type="button" id="btnScan" title="Scan barcode with camera" aria-label="Scan barcode">
+            <i class="fas fa-camera"></i>
+          </button>
         </div>
       </div>
 
@@ -100,7 +102,9 @@
               <!-- Abrir QR en modal (ya no target=_blank) -->
               <a class="tag qr-link"
                  href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-                 data-caption="QR for {{ it.location_code }}">QR</a>
+                 data-caption="QR for {{ it.location_code }}">
+                <i class="fas fa-qrcode"></i>
+              </a>
               {% else %}
               —
               {% endif %}
@@ -119,14 +123,20 @@
             </td>
             <td>
               {% if current_user.is_authenticated %}
-              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">📝</a>
+              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">
+                <i class="fas fa-pen"></i>
+              </a>
 
               <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                <button class="btn settingsbtn" type="submit" title="Print label">🖨️</button>
+                <button class="btn settingsbtn" type="submit" title="Print label">
+                  <i class="fas fa-print"></i>
+                </button>
               </form>
 
               <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                <button class="btn settingsbtn" type="submit">❌</button>
+                <button class="btn settingsbtn" type="submit">
+                  <i class="fas fa-times"></i>
+                </button>
               </form>
               {% else %}
               <span class="tag ">Login to edit</span>
@@ -146,9 +156,15 @@
     <div class="scan-header">
       <strong>Scan a barcode</strong>
       <div class="scan-actions">
-        <button type="button" id="scanFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">🔦</button>
-        <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">🔁</button>
-        <button type="button" id="scanClose" class="icon-top" aria-label="Close">✕</button>
+        <button type="button" id="scanFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">
+          <i class="fas fa-lightbulb"></i>
+        </button>
+        <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button type="button" id="scanClose" class="icon-top" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
 
@@ -158,7 +174,9 @@
         <div class="guide"></div>
         <div id="scanTarget" class="scan-target"></div>
         <div id="scanSpinner" class="spinner"></div>
-        <div id="scanSuccess" class="success-indicator">✓</div>
+        <div id="scanSuccess" class="success-indicator">
+          <i class="fas fa-check"></i>
+        </div>
       </div>
       <div class="scan-tip">Align the barcode inside the frame</div>
       <div id="scanResult" class="scan-result"></div>
@@ -172,8 +190,12 @@
     <div class="scan-header">
       <strong id="qrTitle">QR</strong>
       <div class="scan-actions">
-        <a id="qrOpenNew" class="icon-top" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">⧉</a>
-        <button type="button" id="qrClose" class="icon-top" aria-label="Close">✕</button>
+        <a id="qrOpenNew" class="icon-top" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <button type="button" id="qrClose" class="icon-top" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
     <div class="scan-body" style="align-items:center; gap:12px">
