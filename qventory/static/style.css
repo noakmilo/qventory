@@ -248,6 +248,10 @@ footer a{ color:var(--sub); text-decoration:none }
     line-height:1.3;
     word-wrap:break-word;
     overflow-wrap:break-word;
+    overflow: hidden;
+    text-overflow:ellipsis;
+    display:-webkit-box;
+    -webkit-line-clamp:3; /* Mostrar hasta 3 líneas */
     hyphens:auto;
     /* Removemos la restricción de altura para que se vea más texto */
   }
