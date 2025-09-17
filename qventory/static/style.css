@@ -190,87 +190,180 @@ footer a{ color:var(--sub); text-decoration:none }
 .platform-badges{ display:flex; flex-wrap:wrap; gap:6px }
 
 /* ================
-   VISTA MÓVIL: MISMA TABLA PERO MINI
+   VISTA MÓVIL: TABLA MEJORADA SIN SCROLL HORIZONTAL
    ================ */
 @media (max-width:720px){
-  .wrap{ padding:10px }
+  .wrap{ padding:8px }
   header{ flex-direction:column; gap:8px; align-items:stretch }
   .card{ padding:var(--space-2) }
 
   /* Filtros compactos */
   .cardfilters{ font-size:12px }
   .cardfilters .input, .cardfilters select, .cardfilters .btn{
-    min-height:38px; font-size:13px; padding:7px 9px
+    min-height:36px; font-size:12px; padding:6px 8px
   }
 
-  /* --- Tabla compacta, sin scroll horizontal --- */
-  .table-wrap{ overflow-x:hidden; padding-right:0 }
+  /* --- Tabla móvil optimizada --- */
+  .table-wrap{ 
+    overflow-x:hidden; 
+    padding:0; 
+    margin:0 -4px; /* Usar todo el ancho disponible */
+  }
+  
   .table-wrap table{
-    table-layout:fixed;  /* forzamos ajuste por columnas */
+    table-layout:fixed;
     width:100%;
+    margin:0;
   }
 
-  /* Tipografías y paddings reducidos */
-  th, td{ padding:6px 6px; font-size:12px; line-height:1.25 }
+  /* Headers más compactos */
+  th{ 
+    padding:8px 4px 6px 4px; 
+    font-size:10px; 
+    font-weight:600;
+    line-height:1.2;
+    color:var(--sub);
+    text-transform:uppercase;
+    letter-spacing:0.5px;
+  }
 
-  /* Anchos por columna (Title, SKU, Location, Listings, Actions) */
-  /* Ajusta si tu orden/num de columnas cambia */
-  th:nth-child(1), td:nth-child(1){ width:50%; }
-  th:nth-child(2), td:nth-child(2){ width:18%; }
-  th:nth-child(3), td:nth-child(3){ width:14%; }
-  th:nth-child(4), td:nth-child(4){ width:12%; }
-  th:nth-child(5), td:nth-child(5){ width:6%; } /* acciones */
+  /* Celdas optimizadas */
+  td{ 
+    padding:8px 4px; 
+    font-size:11px; 
+    line-height:1.3;
+    vertical-align:top;
+  }
 
-  /* Título: 2 líneas máximo con ellipsis */
+  /* Distribución de columnas mejorada */
+  th:nth-child(1), td:nth-child(1){ width:42%; } /* Título */
+  th:nth-child(2), td:nth-child(2){ width:20%; } /* SKU */
+  th:nth-child(3), td:nth-child(3){ width:16%; } /* Location */
+  th:nth-child(4), td:nth-child(4){ width:14%; } /* Listings */
+  th:nth-child(5), td:nth-child(5){ width:8%; }  /* Actions */
+
+  /* Título del producto - manejo mejorado del texto */
   td:nth-child(1){
+    word-wrap:break-word;
+    overflow-wrap:break-word;
+    hyphens:auto;
+    line-height:1.25;
+    max-height:2.5em; /* Aproximadamente 2 líneas */
+    overflow:hidden;
     display:-webkit-box;
     -webkit-line-clamp:2;
     -webkit-box-orient:vertical;
+  }
+
+  /* SKU más legible */
+  td:nth-child(2){
+    font-family:ui-monospace, 'SF Mono', Consolas, monospace;
+    font-size:10px;
+    word-break:break-all;
+    line-height:1.2;
+  }
+
+  /* Location compacta */
+  td:nth-child(3){
+    font-size:10px;
+    text-align:center;
+  }
+
+  /* Pills y badges más pequeños pero legibles */
+  .tag,
+  .pill{
+    font-size:9px;
+    padding:2px 6px;
+    border-radius:12px;
+    margin:1px;
+    display:inline-block;
+    white-space:nowrap;
+    max-width:100%;
     overflow:hidden;
     text-overflow:ellipsis;
-    word-break:break-word;
-    overflow-wrap:anywhere;
   }
 
-  /* Pills / chips más chicos */
-  .tag,
-  .pill,
-  .table-wrap .btn{
-    transform:scale(.92);
-    transform-origin:left center;
-    min-height:28px;
-    padding:4px 8px;
-    font-size:11px;
-    border-radius:999px;
+  /* Badges de plataforma apilados */
+  .platform-badges{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    align-items:flex-start;
   }
 
-  /* Botones de acción mini (icons) */
+  .platform-badges .tag{
+    width:fit-content;
+    min-width:0;
+  }
+
+  /* Botones de acción compactos pero táctiles */
   .table-wrap .btn.settingsbtn,
   .table-wrap td:last-child .btn{
-    width:28px; height:28px; padding:0;
-    display:inline-grid; place-items:center;
-    font-size:14px;
-    border-radius:10px;
+    width:32px; 
+    height:32px; 
+    padding:0;
+    margin:0 auto;
+    display:flex; 
+    align-items:center; 
+    justify-content:center;
+    font-size:16px;
+    border-radius:8px;
+    min-height:32px;
   }
 
-  /* Evitar quiebres raros */
-  .table-wrap td > *{ min-width:0; max-width:100% }
-  .table-wrap td img{ max-width:100%; height:auto; border-radius:8px }
+  /* Iconos de impresora y eliminar */
+  .table-wrap .btn svg,
+  .table-wrap .btn::before{
+    font-size:14px;
+  }
+
+  /* Imagen de producto en tabla */
+  .table-wrap td img{
+    max-width:20px;
+    height:20px;
+    border-radius:4px;
+    object-fit:cover;
+  }
+
+  /* Mejorar legibilidad de números */
+  .table-wrap td:nth-child(4){
+    font-family:ui-monospace, 'SF Mono', Consolas, monospace;
+    text-align:center;
+    font-size:10px;
+  }
 
   /* FAB reducido */
   .fab{
-    position:fixed; right:12px; bottom:calc(12px + var(--safe-b)); z-index:50;
-    border-radius:999px; padding:9px 12px; box-shadow:0 8px 20px rgba(0,0,0,.35);
+    position:fixed; 
+    right:12px; 
+    bottom:calc(12px + var(--safe-b)); 
+    z-index:50;
+    border-radius:999px; 
+    padding:12px 16px; 
+    box-shadow:0 8px 20px rgba(0,0,0,.35);
     background:var(--glass-bg-strong);
-    font-size:12px;
+    font-size:13px;
+    min-height:44px;
   }
 
   /* Grids a una columna */
   .grid.cols-3,.grid.cols-2{ grid-template-columns:1fr }
 
+  /* Botones de navegación más pequeños */
   .icon-top{
-    min-width:34px; min-height:34px; padding:0 8px; font-size:15px;
-    border-radius:10px; border:1px solid var(--glass-border); background:var(--glass-bg-strong);
+    min-width:36px; 
+    min-height:36px; 
+    padding:0 10px; 
+    font-size:14px;
+    border-radius:10px; 
+    border:1px solid var(--glass-border); 
+    background:var(--glass-bg-strong);
+  }
+
+  /* Overflow handling para toda la tabla */
+  .table-wrap *{
+    max-width:100%;
+    word-wrap:break-word;
   }
 }
 
@@ -279,6 +372,10 @@ footer a{ color:var(--sub); text-decoration:none }
    ================ */
 @media (min-width:721px) and (max-width:1024px){
   .grid.cols-3{ grid-template-columns:repeat(2,minmax(0,1fr)) }
+  
+  /* Tabla tablet - intermedio entre mobile y desktop */
+  th,td{ padding:8px 10px; font-size:13px }
+  .table-wrap .btn.settingsbtn{ padding:4px 8px; font-size:11px }
 }
 
 /* ================
