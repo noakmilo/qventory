@@ -22,21 +22,21 @@
   --radius: 14px;
   --radius-lg: 18px;
 
-  /* Tipografía fluida (más compacta) */
+  /* Tipografía fluida */
   --fs-base: clamp(13px, 1vw + 11px, 15px);
   --fs-sm: clamp(11.5px, 0.85vw + 9px, 13px);
   --fs-xs: 11px;
   --fs-lg: clamp(15px, 1.1vw + 12px, 17px);
   --fs-xl: clamp(19px, 1.6vw + 13px, 22px);
 
-  /* Tocar accesible pero compacto */
+  /* Tocar accesible */
   --tap-target: 42px;
 
   /* Safe area (PWA iOS) */
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 
-  /* Sombra sutil */
+  /* Sombra */
   --elev: 0 6px 18px rgba(0,0,0,.28);
 }
 
@@ -81,19 +81,11 @@ a { color: var(--accent); text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 .btn.block { display: flex; justify-content: center; width: 100%; }
 .submitbtn { color: #f5f5f5; }
-.settingsbtn { font-size: var(--fs-xs); margin: 2px; padding: 6px 8px; }
+.settingsbtn { font-size: var(--fs-xs); margin: 2px; padding: 6px 10px; }
 
 /* Layout */
-.wrap {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--space-3);
-}
-.row {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
+.wrap { max-width: 1200px; margin: 0 auto; padding: var(--space-3); }
+.row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 
 /* Tarjetas */
 .card {
@@ -103,21 +95,13 @@ a { color: var(--accent); text-decoration: none; }
   padding: var(--space-3);
   box-shadow: var(--elev);
 }
-.card h2 {
-  margin: 0 0 var(--space-2) 0;
-  font-size: var(--fs-lg);
-  letter-spacing: .2px;
-}
+.card h2 { margin: 0 0 var(--space-2) 0; font-size: var(--fs-lg); }
 h1 { font-size: var(--fs-xl); margin: 0 0 var(--space-2); }
 
 /* Header */
 header {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, rgba(11,16,32,.94), rgba(11,16,32,.72));
@@ -140,11 +124,9 @@ header nav .btn { padding: 7px 10px; font-size: var(--fs-xs); white-space: nowra
   display: block;
   color: var(--sub);
   font-size: var(--fs-xs);
-  letter-spacing: .2px;
   margin: 2px 0 6px;
 }
-.input,
-select {
+.input, select {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -152,7 +134,7 @@ select {
   background: #0e1630;
   color: var(--text);
   min-height: var(--tap-target);
-  font-size: 15px; /* evita zoom iOS, sigue compacto */
+  font-size: 15px;
   line-height: 1.1;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
 }
@@ -161,8 +143,6 @@ select {
   box-shadow: 0 0 0 3px rgba(138,180,255,.15);
 }
 .input::placeholder { color: #b9c7e4; opacity: .5; }
-
-/* Select flecha */
 select {
   appearance: none;
   background-image:
@@ -173,34 +153,33 @@ select {
   background-repeat: no-repeat;
   padding-right: 34px;
 }
-
-/* Inline input+button (e.g. scan/generate) */
-.input-with-button {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
-}
+.input-with-button { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 .icon-btn {
-  display: inline-grid;
-  place-items: center;
-  min-width: var(--tap-target);
-  min-height: var(--tap-target);
+  display: inline-grid; place-items: center;
+  min-width: var(--tap-target); min-height: var(--tap-target);
   padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--muted);
-  font-size: 18px;
-  line-height: 1;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--muted); font-size: 18px; line-height: 1;
 }
 
-/* Table base */
-.table-wrap {
-  overflow: auto;
+/* ===== TABLES – RESPONSIVE & NO-CLIP ===== */
+.table-wrap{
+  overflow-x: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
   border: 1px solid var(--border);
+  padding-right: 8px;
 }
+.table-wrap table,
+.table-wrap th,
+.table-wrap td{ overflow: visible; background: transparent; }
+.table-wrap .btn.settingsbtn{
+  position: relative; z-index: 1; white-space: nowrap;
+}
+.table-wrap td:nth-child(1){ word-break: break-word; }
+.table-wrap td:last-child{ white-space: nowrap; }
+
 table { width: 100%; border-collapse: collapse; }
 th, td {
   padding: 9px 10px;
@@ -237,78 +216,56 @@ footer a { color: var(--sub); text-decoration: none; }
 /* Platform badges */
 .platform-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 
-/* =================
+/* ================
    VISTA MÓVIL PRIMERA
-   ================= */
-@media (max-width: 720px) {
+   ================ */
+@media (max-width: 720px){
   .wrap { padding: 10px; }
-
-  header {
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
-  }
-
-  /* Cards compactas y más densas */
+  header { flex-direction: column; gap: 8px; align-items: stretch; }
   .card { padding: var(--space-2); }
 
-  /* Filtros del dashboard (compacto pero legible) */
-  .cardfilters {
-    --field-gap: 8px;
-    font-size: var(--fs-sm);
-  }
-  .cardfilters .grid { gap: var(--space-2); }
-  .cardfilters .label { margin-bottom: 4px; }
-  .cardfilters .input,
-  .cardfilters select {
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 14px;
-  }
-  .cardfilters .btn {
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 13px;
+  /* Filtros compactos */
+  .cardfilters{ font-size: var(--fs-sm); }
+  .cardfilters .input, .cardfilters select, .cardfilters .btn{
+    min-height: 40px; font-size: 14px; padding: 8px 10px;
   }
 
-  /* Reducción de gaps globales en móvil */
   .grid { gap: 8px; }
   .row { gap: 10px; }
 
-  /* Tablas como “cards” */
-  .table-cards { border-collapse: separate; border-spacing: 0 var(--space-2); }
-  .table-cards thead { display: none; }
-  .table-cards tr {
-    display: block;
+  /* Tablas como tarjetas */
+  .table-wrap{ overflow-x: visible; padding-right: 0; }
+  .table-wrap table{ display: block; }
+  .table-wrap thead{ display: none; }
+  .table-wrap tbody{ display: grid; gap: 10px; padding: var(--space-2); }
+  .table-wrap tr{
+    display: grid; gap: 6px;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: var(--space-2);
     box-shadow: var(--elev);
   }
-  .table-cards td {
+  .table-wrap td{
     display: grid;
     grid-template-columns: 110px 1fr;
-    gap: 6px;
-    border: none;
-    padding: 6px 0;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    padding: 4px 0;
     font-size: var(--fs-sm);
   }
-  .table-cards td + td {
-    border-top: 1px dashed rgba(255,255,255,.08);
-    padding-top: 8px;
-    margin-top: 4px;
-  }
-  .table-cards td::before {
+  .table-wrap td::before{
     content: attr(data-th);
     color: var(--sub);
     font-size: var(--fs-xs);
   }
+  .table-wrap td.actions{ grid-template-columns: 1fr; }
+  .table-wrap td.actions > *{ display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .table-wrap .btn.settingsbtn{ min-height: 36px; font-size: 12px; }
 
-  /* FAB */
-  .fab {
-    position: fixed;
-    right: 14px;
+  .fab{
+    position: fixed; right: 14px;
     bottom: calc(14px + var(--safe-b));
     z-index: 50;
     border-radius: 999px;
@@ -316,17 +273,11 @@ footer a { color: var(--sub); text-decoration: none; }
     box-shadow: 0 8px 20px rgba(0,0,0,.35);
   }
 
-  /* Grids a una columna */
   .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; }
-
-  /* Icon buttons superiores (scanner, flip, flash) */
-  .icon-top {
-    min-width: 36px;
-    min-height: 36px;
-    padding: 0 8px;
-    font-size: 16px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
+  .icon-top{
+    min-width: 36px; min-height: 36px;
+    padding: 0 8px; font-size: 16px;
+    border-radius: 10px; border: 1px solid var(--border);
     background: var(--muted);
   }
 }
@@ -334,20 +285,20 @@ footer a { color: var(--sub); text-decoration: none; }
 /* ================
    TABLET
    ================ */
-@media (min-width: 721px) and (max-width: 1024px) {
-  .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 721px) and (max-width: 1024px){
+  .grid.cols-3{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ================
-   DESKTOP ajustes sutiles
+   DESKTOP ajustes
    ================ */
-@media (min-width: 1025px) {
+@media (min-width: 1025px){
   .card { padding: 16px 18px; }
   .input, select { padding: 10px 12px; }
   th, td { padding: 10px 12px; }
 }
 
 /* Reduce motion */
-@media (prefers-reduced-motion: reduce) {
+@media (prefers-reduced-motion: reduce){
   * { animation: none !important; transition: none !important; }
 }

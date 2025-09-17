@@ -84,7 +84,7 @@
   <div class="card" style="flex:3 1 600px;min-width:320px">
     <h2>Items</h2>
 
-    {# Username seguro: si hay sesión usa current_user, si no, usa la variable "username" de la ruta #}
+    {# Username seguro #}
     {% set un = (current_user.is_authenticated and current_user.username) or username|default('') %}
 
     <div class="table-wrap">
@@ -106,7 +106,11 @@
             <td data-th="Location">
               {% if it.location_code %}
                 <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
-                &nbsp; <a class="tag" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" target="_blank">QR</a>
+                &nbsp;
+                <!-- Abrir QR en modal -->
+                <a class="tag qr-link"
+                   href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
+                   data-caption="QR for {{ it.location_code }}">QR</a>
               {% else %}
                 —
               {% endif %}
@@ -140,5 +144,106 @@
 </div>
 
 <a class="btn fab" href="{{ url_for('main.new_item') }}">＋ Add Item</a>
+
+<!-- ===== Modal para ver QR ===== -->
+<div id="qrModal" class="qr-modal hidden" aria-hidden="true" aria-label="QR code">
+  <div class="qr-sheet">
+    <div class="qr-header">
+      <strong id="qrTitle">QR</strong>
+      <div class="qr-actions">
+        <a id="qrOpenNew" class="qr-icon" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">⧉</a>
+        <button type="button" id="qrClose" class="qr-icon" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport">
+        <img id="qrImage" alt="QR code">
+      </div>
+      <div id="qrCaption" class="qr-tip"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Bloqueo de scroll cuando modal está abierto */
+  body.modal-open{ overflow:hidden; touch-action:none; }
+
+  /* Modal base */
+  .qr-modal.hidden{ display:none; }
+  .qr-modal{
+    position:fixed; inset:0; z-index:9999;
+    display:grid; place-items:center; padding:16px;
+    background:rgba(0,0,0,.6);
+  }
+  .qr-sheet{
+    width:min(380px,92vw); background:#0f1115; color:#fff;
+    border-radius:14px; overflow:hidden;
+    border:1px solid #222; box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .qr-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; background:#141821; border-bottom:1px solid #222;
+  }
+  .qr-actions{ display:flex; align-items:center; gap:6px; }
+  .qr-icon{
+    border:none; background:transparent; color:#fff;
+    font-size:18px; cursor:pointer; opacity:.9; text-decoration:none;
+  }
+  .qr-icon:hover{ opacity:1; }
+
+  .qr-body{ padding:12px; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .qr-viewport{
+    width:100%; aspect-ratio:1/1; background:#fff;
+    border-radius:10px; overflow:hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+  }
+  #qrImage{ width:100%; height:100%; object-fit:contain; display:block; }
+
+  .qr-tip{ text-align:center; font-size:12px; opacity:.8; }
+</style>
+
+<script>
+(function(){
+  const qrModal   = document.getElementById('qrModal');
+  const qrClose   = document.getElementById('qrClose');
+  const qrImage   = document.getElementById('qrImage');
+  const qrOpenNew = document.getElementById('qrOpenNew');
+  const qrCaption = document.getElementById('qrCaption');
+  const qrTitle   = document.getElementById('qrTitle');
+
+  function openQrModal(url, caption){
+    document.body.classList.add('modal-open');
+    qrModal.classList.remove('hidden');
+    qrModal.setAttribute('aria-hidden','false');
+    // Reset y cargar
+    qrImage.src = '';
+    // Carga inmediata (si prefieres, puedes mostrar un spinner)
+    qrImage.src = url;
+    qrOpenNew.href = url;
+    qrCaption.textContent = caption || '';
+    qrTitle.textContent = caption || 'QR';
+  }
+
+  function closeQrModal(){
+    document.body.classList.remove('modal-open');
+    qrModal.classList.add('hidden');
+    qrModal.setAttribute('aria-hidden','true');
+    qrImage.src = ''; // liberar si backend genera URLs dinámicas
+  }
+
+  // Delegación de clicks: cualquier <a class="qr-link">
+  document.body.addEventListener('click', (e) => {
+    const a = e.target.closest('a.qr-link');
+    if (!a) return;
+    e.preventDefault();
+    const url = a.getAttribute('href');
+    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
+    openQrModal(url, caption);
+  });
+
+  qrClose?.addEventListener('click', closeQrModal);
+  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
+})();
+</script>
 
 {% endblock %}
