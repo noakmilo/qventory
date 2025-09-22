@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Import CSV – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card" style="flex:1 1 100%;max-width:600px;margin:0 auto">
+    <h2>Import Items from CSV</h2>
+    <p>Upload a CSV file to import items into your inventory. The CSV should contain columns for item data.</p>
+    
+    <form method="post" enctype="multipart/form-data" class="grid cols-1">
+      <div>
+        <label for="csv_file">Select CSV File</label>
+        <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+        <small>Only .csv files are accepted</small>
+      </div>
+      
+      <div>
+        <label for="import_mode">Import Mode</label>
+        <select name="import_mode" id="import_mode">
+          <option value="add">Add/Update - Keep existing items, add new ones, update existing SKUs</option>
+          <option value="replace">Replace - Delete items not in CSV, add new ones from CSV</option>
+        </select>
+        <small>
+          <strong>Add/Update:</strong> Existing items with matching SKUs will be updated with new data. New items will be added.<br>
+          <strong>Replace:</strong> All existing items not found in the CSV will be deleted. Use with caution!
+        </small>
+      </div>
+      
+      <div>
+        <button type="submit" class="btn submitbtn">Import CSV</button>
+        <a href="{{ url_for('main.dashboard') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+    
+    <hr style="margin:24px 0">
+    
+    <div>
+      <h3>CSV Format Requirements</h3>
+      <ul>
+        <li><strong>Required columns:</strong> <code>sku</code>, <code>title</code></li>
+        <li><strong>Optional columns:</strong> <code>listing_link</code>, <code>web_url</code>, <code>ebay_url</code>, <code>amazon_url</code>, <code>mercari_url</code>, <code>vinted_url</code>, <code>poshmark_url</code>, <code>depop_url</code>, <code>A</code>, <code>B</code>, <code>S</code>, <code>C</code>, <code>location_code</code></li>
+        <li><strong>Format:</strong> Standard CSV with comma separators</li>
+        <li><strong>Encoding:</strong> UTF-8 recommended</li>
+      </ul>
+      
+      <p><strong>Example CSV format:</strong></p>
+      <pre style="background:#f5f5f5;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto">sku,title,ebay_url,A,B,location_code
+QV001,Sample Item,https://ebay.com/itm/123,A1,B2,A1-B2
+QV002,Another Item,,A2,B1,A2-B1</pre>
+      
+      <p><strong>Tips:</strong></p>
+      <ul>
+        <li>Make sure your CSV has headers in the first row</li>
+        <li>Empty cells are allowed for optional fields</li>
+        <li>SKUs should be unique within your inventory</li>
+        <li>You can export your current data first to see the exact format</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<style>
+pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+small {
+  color: #666;
+  font-size: 12px;
+  display: block;
+  margin-top: 4px;
+}
+
+ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+li {
+  margin-bottom: 4px;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #ddd;
+}
+</style>
+{% endblock %}

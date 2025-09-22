@@ -77,7 +77,18 @@
   </div>
 
   <div class="card" style="flex:3 1 600px;min-width:320px">
-    <h2>Items ({{ total_items }})</h2>
+    <div class="items-header">
+      <h2>Items ({{ total_items }})</h2>
+      <div class="backup-actions">
+        <a class="btn backup-btn" href="{{ url_for('main.export_csv') }}" title="Export all items to CSV">
+          <i class="fas fa-download"></i> Export
+        </a>
+        <a class="btn backup-btn" href="{{ url_for('main.import_csv') }}" title="Import items from CSV">
+          <i class="fas fa-upload"></i> Import
+        </a>
+      </div>
+    </div>
+    
     <div class="table-wrap">
       {% set un = current_user.username %}
       <table>
@@ -217,6 +228,50 @@
   }
   .icon-btn:hover{ opacity:1; }
 
+  /* Header con botones de backup */
+  .items-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .items-header h2 {
+    margin: 0;
+  }
+  
+  .backup-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  
+  .backup-btn {
+    padding: 6px 12px !important;
+    font-size: 13px !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    color: #495057;
+    transition: all 0.2s ease;
+  }
+  
+  .backup-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .backup-btn i {
+    font-size: 12px;
+  }
+
   /* Modal compacto y bloqueo de scroll */
   body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
@@ -317,6 +372,23 @@
     border-top-color:#fff; animation:spin 0.9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Responsive para dispositivos pequeños */
+  @media (max-width: 768px) {
+    .items-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    
+    .backup-actions {
+      justify-content: center;
+    }
+    
+    .backup-btn {
+      flex: 1;
+      justify-content: center;
+    }
+  }
 </style>
 
 <script>

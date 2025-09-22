@@ -11,6 +11,8 @@ import base64
 import time
 import requests
 from urllib.parse import urlparse, parse_qs
+import csv
+from datetime import datetime
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -123,6 +125,191 @@ def dashboard():
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
+
+
+# ---------------------- CSV Export/Import (protegido) ----------------------
+
+@main_bp.route("/export/csv")
+@login_required
+def export_csv():
+    """Exporta todos los items del usuario a CSV"""
+    items = Item.query.filter_by(user_id=current_user.id).order_by(Item.created_at.asc()).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Escribir headers
+    headers = [
+        'id', 'sku', 'title', 'listing_link', 'web_url', 'ebay_url', 
+        'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 
+        'depop_url', 'A', 'B', 'S', 'C', 'location_code', 'created_at'
+    ]
+    writer.writerow(headers)
+    
+    # Escribir datos
+    for item in items:
+        row = [
+            item.id,
+            item.sku,
+            item.title,
+            item.listing_link or '',
+            item.web_url or '',
+            item.ebay_url or '',
+            item.amazon_url or '',
+            item.mercari_url or '',
+            item.vinted_url or '',
+            item.poshmark_url or '',
+            item.depop_url or '',
+            item.A or '',
+            item.B or '',
+            item.S or '',
+            item.C or '',
+            item.location_code or '',
+            item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else ''
+        ]
+        writer.writerow(row)
+    
+    output.seek(0)
+    csv_data = output.getvalue().encode('utf-8')
+    output.close()
+    
+    # Crear nombre de archivo con timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"qventory_backup_{current_user.username}_{timestamp}.csv"
+    
+    return send_file(
+        io.BytesIO(csv_data),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@main_bp.route("/import/csv", methods=["GET", "POST"])
+@login_required
+def import_csv():
+    """Importa items desde CSV - página de confirmación y procesamiento"""
+    if request.method == "GET":
+        return render_template("import_csv.html")
+    
+    # POST: procesar archivo
+    if 'csv_file' not in request.files:
+        flash("No file selected.", "error")
+        return redirect(url_for('main.import_csv'))
+    
+    file = request.files['csv_file']
+    if file.filename == '' or not file.filename.lower().endswith('.csv'):
+        flash("Please select a valid CSV file.", "error")
+        return redirect(url_for('main.import_csv'))
+    
+    mode = request.form.get('import_mode', 'add')  # 'add' o 'replace'
+    
+    try:
+        # Leer archivo CSV
+        csv_content = file.read().decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(csv_content))
+        
+        expected_headers = [
+            'id', 'sku', 'title', 'listing_link', 'web_url', 'ebay_url',
+            'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url',
+            'depop_url', 'A', 'B', 'S', 'C', 'location_code', 'created_at'
+        ]
+        
+        # Verificar headers
+        if not all(header in csv_reader.fieldnames for header in ['sku', 'title']):
+            flash("CSV must contain at least 'sku' and 'title' columns.", "error")
+            return redirect(url_for('main.import_csv'))
+        
+        items_to_import = []
+        existing_skus = set()
+        
+        # Si es modo replace, obtener SKUs existentes
+        if mode == 'replace':
+            existing_items = Item.query.filter_by(user_id=current_user.id).all()
+            existing_skus = {item.sku for item in existing_items}
+        
+        # Procesar filas
+        imported_count = 0
+        updated_count = 0
+        skipped_count = 0
+        
+        for row_num, row in enumerate(csv_reader, start=2):  # start=2 because header is row 1
+            sku = (row.get('sku') or '').strip()
+            title = (row.get('title') or '').strip()
+            
+            if not sku or not title:
+                skipped_count += 1
+                continue
+            
+            # Verificar si ya existe el SKU
+            existing_item = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
+            
+            if existing_item and mode == 'add':
+                # Modo add: actualizar item existente
+                existing_item.title = title
+                existing_item.listing_link = (row.get('listing_link') or '').strip() or None
+                existing_item.web_url = (row.get('web_url') or '').strip() or None
+                existing_item.ebay_url = (row.get('ebay_url') or '').strip() or None
+                existing_item.amazon_url = (row.get('amazon_url') or '').strip() or None
+                existing_item.mercari_url = (row.get('mercari_url') or '').strip() or None
+                existing_item.vinted_url = (row.get('vinted_url') or '').strip() or None
+                existing_item.poshmark_url = (row.get('poshmark_url') or '').strip() or None
+                existing_item.depop_url = (row.get('depop_url') or '').strip() or None
+                existing_item.A = (row.get('A') or '').strip() or None
+                existing_item.B = (row.get('B') or '').strip() or None
+                existing_item.S = (row.get('S') or '').strip() or None
+                existing_item.C = (row.get('C') or '').strip() or None
+                existing_item.location_code = (row.get('location_code') or '').strip() or None
+                updated_count += 1
+            
+            elif not existing_item:
+                # Crear nuevo item
+                new_item = Item(
+                    user_id=current_user.id,
+                    sku=sku,
+                    title=title,
+                    listing_link=(row.get('listing_link') or '').strip() or None,
+                    web_url=(row.get('web_url') or '').strip() or None,
+                    ebay_url=(row.get('ebay_url') or '').strip() or None,
+                    amazon_url=(row.get('amazon_url') or '').strip() or None,
+                    mercari_url=(row.get('mercari_url') or '').strip() or None,
+                    vinted_url=(row.get('vinted_url') or '').strip() or None,
+                    poshmark_url=(row.get('poshmark_url') or '').strip() or None,
+                    depop_url=(row.get('depop_url') or '').strip() or None,
+                    A=(row.get('A') or '').strip() or None,
+                    B=(row.get('B') or '').strip() or None,
+                    S=(row.get('S') or '').strip() or None,
+                    C=(row.get('C') or '').strip() or None,
+                    location_code=(row.get('location_code') or '').strip() or None
+                )
+                db.session.add(new_item)
+                imported_count += 1
+        
+        # Si es modo replace, eliminar items que no están en el CSV
+        if mode == 'replace':
+            csv_skus = {(row.get('sku') or '').strip() for row in csv.DictReader(io.StringIO(csv_content)) if (row.get('sku') or '').strip()}
+            items_to_delete = Item.query.filter_by(user_id=current_user.id).filter(~Item.sku.in_(csv_skus)).all()
+            for item in items_to_delete:
+                db.session.delete(item)
+        
+        db.session.commit()
+        
+        # Mensaje de resultado
+        messages = []
+        if imported_count > 0:
+            messages.append(f"{imported_count} items imported")
+        if updated_count > 0:
+            messages.append(f"{updated_count} items updated")
+        if skipped_count > 0:
+            messages.append(f"{skipped_count} rows skipped")
+        
+        flash(f"Import completed: {', '.join(messages)}.", "ok")
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Import failed: {str(e)}", "error")
+    
+    return redirect(url_for('main.dashboard'))
 
 
 # ---------------------- eBay Browse API (con .env) ----------------------
