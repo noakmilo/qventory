@@ -18,12 +18,13 @@ from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv("/opt/qventory/qventory/.env")
 
-# >>> IMPRESIÓN (lo existente)
+# >>> IMPRESIÓN (lo existente + QR)
 import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
-from reportlab.graphics.barcode import code128
 from reportlab.lib.units import mm
+# Importamos el módulo de QR en lugar de barcode
+import qrcode
 # <<<
 
 from ..extensions import db
@@ -761,7 +762,7 @@ def offline():
     return render_template("offline.html")
 
 
-# ====================== helpers + ruta de IMPRESIÓN ======================
+# ====================== helpers + ruta de IMPRESIÓN con QR ======================
 
 def _ellipsize(s: str, n: int = 20) -> str:
     s = (s or "").strip()
@@ -772,7 +773,7 @@ def _ellipsize(s: str, n: int = 20) -> str:
 def _build_item_label_pdf(it, settings) -> bytes:
     """
     PDF 40x30 mm con:
-      - Code128 del SKU centrado
+      - QR code del SKU centrado
       - Título (20 chars + …) centrado
       - Ubicación centrada
     Todo el bloque queda centrado verticalmente en el sticker.
@@ -796,47 +797,53 @@ def _build_item_label_pdf(it, settings) -> bytes:
     loc_h = loc_fs * leading
 
     # Separaciones entre elementos
-    gap_bc_title = 1.5 * mm
+    gap_qr_title = 1.5 * mm
     gap_title_loc = 0.8 * mm
 
-    # Altura máxima del barcode para que quepa todo centrado
-    max_bc_h = inner_h - (gap_bc_title + gap_title_loc + title_h + loc_h)
-    if max_bc_h < 6 * mm:
-        # Si queda muy pequeño, reducimos ligeramente interlineados/gaps
-        max_bc_h = max(6 * mm, inner_h - (title_h + loc_h) - (0.5 * mm + 0.5 * mm))
-
-    # --- BARCODE ---
-    sku = it.sku or ""
-    # Creamos el barcode con la altura "objetivo"; lo escalaremos en ancho si hace falta
-    bc = code128.Code128(sku, barHeight=max_bc_h, humanReadable=False)
-    bw, bh = bc.width, bc.height  # bh ≈ max_bc_h
-    scale_w = min(1.0, inner_w / bw)
-
+    # Tamaño del QR code (cuadrado)
+    qr_size = 15 * mm  # Tamaño del QR en el PDF
+    
     # Altura total del bloque para centrarlo verticalmente
-    block_h = (bh) + gap_bc_title + title_h + gap_title_loc + loc_h
-    y0 = m + (inner_h - block_h) / 2.0  # base del bloque (fondo del barcode)
+    block_h = qr_size + gap_qr_title + title_h + gap_title_loc + loc_h
+    y0 = m + (inner_h - block_h) / 2.0  # base del bloque
 
-    # X centrado del barcode (con posible escala horizontal)
-    x_bc = m + (inner_w - bw * scale_w) / 2.0
-
-    # Dibuja barcode
-    c.saveState()
-    c.translate(x_bc, y0)          # bottom-left del barcode
-    c.scale(scale_w, 1.0)          # solo ajustamos ancho
-    bc.drawOn(c, 0, 0)
-    c.restoreState()
+    # --- QR CODE ---
+    sku = it.sku or ""
+    
+    # Generar QR code con el SKU
+    qr = qrcode.QRCode(
+        version=1,  # Tamaño automático
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(sku)
+    qr.make(fit=True)
+    
+    # Crear imagen del QR
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Guardar QR en buffer temporal
+    qr_buf = io.BytesIO()
+    qr_img.save(qr_buf, format='PNG')
+    qr_buf.seek(0)
+    
+    # Calcular posición centrada del QR
+    x_qr = m + (inner_w - qr_size) / 2.0
+    
+    # Dibujar QR code
+    c.drawImage(qr_buf, x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
     # --- TÍTULO ---
     title = _ellipsize(it.title or "", 20)
     c.setFont("Helvetica-Bold", title_fs)
-    # drawCentredString usa baseline; posicionamos baseline = fondo + alto barcode + gap + tamaño de fuente
-    y_title = y0 + bh + gap_bc_title + title_fs
+    y_title = y0 + qr_size + gap_qr_title + title_fs
     c.drawCentredString(W / 2.0, y_title, title)
 
     # --- UBICACIÓN ---
     loc = it.location_code or "-"
     c.setFont("Helvetica", loc_fs)
-    y_loc = y0 + bh + gap_bc_title + title_h + gap_title_loc + loc_fs
+    y_loc = y0 + qr_size + gap_qr_title + title_h + gap_title_loc + loc_fs
     c.drawCentredString(W / 2.0, y_loc, loc)
 
     c.showPage()

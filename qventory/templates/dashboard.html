@@ -8,8 +8,8 @@
       <div style="grid-column:1/-1">
         <div class="input-with-button">
           <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title or SKU…">
-          <button class="icon-btn" type="button" id="btnScan" title="Scan barcode with camera" aria-label="Scan barcode">
-            <i class="fas fa-camera"></i>
+          <button class="icon-btn" type="button" id="btnScanQR" title="Scan QR code with camera" aria-label="Scan QR code">
+            <i class="fas fa-qrcode"></i>
           </button>
         </div>
       </div>
@@ -161,19 +161,19 @@
   </div>
 </div>
 
-<!-- Modal del escáner (compacto) -->
-<div id="scanModal" class="scan-modal hidden" aria-hidden="true" aria-label="Barcode scanner">
+<!-- Modal del escáner QR (compacto) -->
+<div id="scanQRModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code scanner">
   <div class="scan-sheet">
     <div class="scan-header">
-      <strong>Scan a barcode</strong>
+      <strong>Scan a QR code</strong>
       <div class="scan-actions">
-        <button type="button" id="scanFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">
+        <button type="button" id="scanQRFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">
           <i class="fas fa-lightbulb"></i>
         </button>
-        <button type="button" id="scanFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">
+        <button type="button" id="scanQRFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">
           <i class="fas fa-sync-alt"></i>
         </button>
-        <button type="button" id="scanClose" class="icon-top" aria-label="Close">
+        <button type="button" id="scanQRClose" class="icon-top" aria-label="Close">
           <i class="fas fa-times"></i>
         </button>
       </div>
@@ -181,21 +181,21 @@
 
     <div class="scan-body">
       <div class="viewport">
-        <video id="scanVideo" playsinline autoplay muted></video>
+        <video id="scanQRVideo" playsinline autoplay muted></video>
         <div class="guide"></div>
-        <div id="scanTarget" class="scan-target"></div>
-        <div id="scanSpinner" class="spinner"></div>
-        <div id="scanSuccess" class="success-indicator">
+        <div id="scanQRTarget" class="scan-target"></div>
+        <div id="scanQRSpinner" class="spinner"></div>
+        <div id="scanQRSuccess" class="success-indicator">
           <i class="fas fa-check"></i>
         </div>
       </div>
-      <div class="scan-tip">Align the barcode inside the frame</div>
-      <div id="scanResult" class="scan-result"></div>
+      <div class="scan-tip">Align the QR code inside the frame</div>
+      <div id="scanQRResult" class="scan-result"></div>
     </div>
   </div>
 </div>
 
-<!-- Modal para ver QR -->
+<!-- Modal para ver QR de ubicación -->
 <div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code">
   <div class="scan-sheet" style="width:min(380px,92vw)">
     <div class="scan-header">
@@ -308,7 +308,7 @@
     background:#000;
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
   }
-  #scanVideo, .scan-target{
+  #scanQRVideo, .scan-target{
     position:absolute; inset:0;
     width:100%; height:100%;
     object-fit:cover;
@@ -392,388 +392,306 @@
 </style>
 
 <script>
+/* ========== SCRIPT SCANNER QR (para búsqueda de SKU en dashboard) ========== */
 (function(){
-  const btnScan   = document.getElementById('btnScan');
-  const modal     = document.getElementById('scanModal');
-  const btnClose  = document.getElementById('scanClose');
-  const btnFlip   = document.getElementById('scanFlip');
-  const btnFlash  = document.getElementById('scanFlashlight');
-  const video     = document.getElementById('scanVideo');
-  const target    = document.getElementById('scanTarget');
-  const spinner   = document.getElementById('scanSpinner');
-  const success   = document.getElementById('scanSuccess');
-  const result    = document.getElementById('scanResult');
-  const inputQ    = document.getElementById('q');
-  const form      = document.getElementById('filterForm');
+  const btnScan = document.getElementById('btnScanQR');
+  const modal = document.getElementById('scanQRModal');
+  const btnClose = document.getElementById('scanQRClose');
+  const btnFlip = document.getElementById('scanQRFlip');
+  const btnFlash = document.getElementById('scanQRFlashlight');
+  const video = document.getElementById('scanQRVideo');
+  const target = document.getElementById('scanQRTarget');
+  const spinner = document.getElementById('scanQRSpinner');
+  const success = document.getElementById('scanQRSuccess');
+  const result = document.getElementById('scanQRResult');
+  const inputQ = document.getElementById('q');
+  const form = document.getElementById('filterForm');
 
-  // ---- cache de cámara para abrir rápido la trasera en siguientes usos
-  const CAM_CACHE_KEY = 'qv_cam_device_id';
+  // ===== Estado =====
+  const CAM_CACHE_KEY = 'qv_dashboard_qr_cam_device_id';
   let cachedDeviceId = null;
-
-  let stream = null, rafId = null, detector = null, usingQuagga = false;
+  let stream = null, rafId = null;
+  let detector = null;
+  let usingBD = false;
+  let usingJsQR = false;
+  let jsQRLoaded = false;
   let videoDevices = [], currentDeviceIdx = -1;
+  let devicesLoaded = false;
   let flashlightOn = false;
-  let lastDetections = []; // Para validación cruzada
-  let detectionConfidence = 0;
+  let lastDetections = [];
 
-  // Formatos de código de barras más completos
-  const BD_FORMATS = [
-    'aztec', 'code_128', 'code_39', 'code_93', 'codabar', 'databar',
-    'databar_expanded', 'data_matrix', 'ean_13', 'ean_8', 'itf',
-    'pdf417', 'qr_code', 'upc_a', 'upc_e'
-  ];
-
-  video.setAttribute('playsinline',''); 
-  video.setAttribute('muted',''); 
-  video.setAttribute('autoplay','');
-
+  // ===== Utils UI =====
   function openModal(){ 
     document.body.classList.add('modal-open'); 
     modal.classList.remove('hidden'); 
     modal.setAttribute('aria-hidden','false'); 
   }
-  
   function closeModal(){ 
     document.body.classList.remove('modal-open'); 
     modal.classList.add('hidden'); 
     modal.setAttribute('aria-hidden','true'); 
   }
-  
-  function cancelLoop(){ 
-    if (rafId){ cancelAnimationFrame(rafId); rafId = null; } 
+  function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
+  function showSuccess(){ 
+    success.style.display='block'; 
+    setTimeout(()=>success.style.display='none',500); 
   }
-  
-  function stopStream(){ 
-    if (stream){ 
-      stream.getTracks().forEach(t=>t.stop()); 
-      stream = null; 
-    } 
-  }
-  
   function cleanupAll(){
-    cancelLoop(); 
-    stopStream();
-    flashlightOn = false;
-    btnFlash?.classList.remove('active');
-    if (usingQuagga && window.Quagga){ 
-      try { window.Quagga.stop(); } catch(e){} 
-      usingQuagga=false; 
-    }
-    video.style.display='none'; 
-    target.style.display='none';
-    success.style.display='none';
+    if (rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    flashlightOn=false; 
+    btnFlash.classList.remove('active');
+    video.srcObject=null; 
+    video.style.display='none';
+    target.style.display='none'; 
     result.style.display='none';
-    lastDetections = [];
-    detectionConfidence = 0;
+    usingBD=false; 
+    usingJsQR=false; 
+    lastDetections.length=0;
   }
-
-  function showSuccessAnimation(){
-    success.style.display = 'block';
-    setTimeout(() => {
-      success.style.display = 'none';
-    }, 500);
-  }
-
-  // Validación cruzada para mejorar precisión
-  function validateDetection(value) {
-    if (!value || value.length < 3) return false;
-    
-    lastDetections.push(value);
-    if (lastDetections.length > 5) {
-      lastDetections.shift();
-    }
-
-    const counts = {};
-    lastDetections.forEach(code => {
-      counts[code] = (counts[code] || 0) + 1;
-    });
-
-    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    
-    if (mostCommon && mostCommon[1] >= 2) {
-      return mostCommon[0];
-    }
-    return false;
-  }
-  
-  function onDetected(value){
-    const validatedCode = validateDetection(value);
-    
-    if (validatedCode) {
-      result.textContent = `Detected: ${validatedCode}`;
-      result.style.display = 'block';
-      showSuccessAnimation();
-      
-      try { 
-        navigator.vibrate && navigator.vibrate([100, 50, 100]); 
-      } catch(_){}
-      
-      setTimeout(() => {
-        cleanupAll(); 
-        closeModal();
-        inputQ.value = validatedCode;
-        form?.submit();
-      }, 800);
-    } else {
-      result.textContent = `Reading: ${value}`;
-      result.style.display = 'block';
-    }
-  }
-  
   function showError(err, where=''){
-    const name = err?.name || String(err) || 'Error';
-    const msg  = err?.message || '';
-    console.error('[Scanner]', where, err);
+    const name = err?.name || 'Error';
+    const msg  = err?.message || String(err || '');
+    console.error('[QR Dashboard]', where, err);
     alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
-  function showSpinner(on){ 
-    spinner.style.display = on ? 'flex' : 'none'; 
+  // ===== Cámara =====
+  async function loadVideoDevices(){
+    if (devicesLoaded) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    videoDevices = devices.filter(d=>d.kind==='videoinput');
+    // prioriza "back"/"environment"
+    const prefers = ['back','rear','environment'];
+    videoDevices.sort((a,b)=>{
+      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
+      const as = prefers.some(p=>la.includes(p)) ? 1:0;
+      const bs = prefers.some(p=>lb.includes(p)) ? 1:0;
+      return bs - as;
+    });
+    devicesLoaded = true;
   }
 
-  async function toggleFlashlight(){
-    if (!stream) return;
-    try {
-      const track = stream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities();
-      if (capabilities.torch) {
-        flashlightOn = !flashlightOn;
-        await track.applyConstraints({ advanced: [{torch: flashlightOn}] });
-        btnFlash.classList.toggle('active', flashlightOn);
-      } else {
-        alert('Flashlight not supported on this camera');
-      }
-    } catch (err) {
-      console.error('Flashlight error:', err);
-      alert('Unable to control flashlight');
-    }
+  async function startWithDevice(deviceId){
+    cleanupLoop();
+    showSpinner(true);
+    const constraints = {
+      video: deviceId ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
+                      : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
+      audio: false
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.setAttribute('playsinline','');
+    video.setAttribute('autoplay','');
+    video.setAttribute('muted','');
+    video.srcObject = stream;
+    await video.play();
+    showSpinner(false);
+    rememberActiveDevice();
   }
 
   function rememberActiveDevice(){
     try {
       const track = stream?.getVideoTracks?.()[0];
-      const id = track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
-      if (id) {
-        localStorage.setItem(CAM_CACHE_KEY, id);
-        cachedDeviceId = id;
-      }
+      const settings = track?.getSettings?.() || {};
+      const id = settings.deviceId || track?.getConstraints?.().deviceId?.exact;
+      if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
     } catch {}
   }
 
-  async function ensurePermissionOnce(){
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-    tmp.getTracks().forEach(t=>t.stop());
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+
+  async function flipCamera(){
+    await loadVideoDevices();
+    if (!videoDevices.length) return;
+    currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
+    cleanupLoop();
+    await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
+    // reanudar el método activo
+    if (usingBD) startBDLoop();
+    if (usingJsQR) startJsQRLoop();
   }
 
-  async function loadVideoDevices(){
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    videoDevices = devices.filter(d => d.kind === 'videoinput');
-    const prefers = ['back','rear','environment'];
-    videoDevices.sort((a,b)=>{
-      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
-      const as = prefers.some(p=>la.includes(p)) ? 1 : 0;
-      const bs = prefers.some(p=>lb.includes(p)) ? 1 : 0;
-      return bs - as;
+  async function toggleFlashlight(){
+    if (!stream) return;
+    try{
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+      if (!caps.torch) return alert('Flashlight not supported on this camera');
+      flashlightOn = !flashlightOn;
+      await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
+      btnFlash.classList.toggle('active', flashlightOn);
+    }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
+  }
+
+  // ===== Detección =====
+  function validateDetection(val){
+    if (!val || val.length<3) return false;
+    lastDetections.push(val);
+    if (lastDetections.length>3) lastDetections.shift();
+    // Con 2 detecciones iguales consecutivas lo aceptamos
+    const counts = {};
+    lastDetections.forEach(code => {
+      counts[code] = (counts[code] || 0) + 1;
     });
+    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    if (mostCommon && mostCommon[1] >= 2) {
+      return mostCommon[0];
+    }
+    return false;
   }
 
-  async function startWithDevice(deviceId){
-    stopStream(); 
-    cancelLoop();
-    showSpinner(true);
-    const constraints = {
-      video: deviceId
-        ? { deviceId: { exact: deviceId }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 }, focusMode: 'continuous', zoom: { ideal: 1.0 } }
-        : { facingMode: { ideal: 'environment' }, width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, frameRate: { ideal: 30 }, focusMode: 'continuous' },
-      audio: false
-    };
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.srcObject = stream;
-    await video.play();
-    showSpinner(false);
+  function onDetected(raw){
+    const v = validateDetection(raw);
+    if (!v) {
+      result.textContent = `Reading: ${String(raw).slice(0,80)}`;
+      result.style.display='block';
+      return;
+    }
+    
+    // El QR contiene el SKU directamente
+    result.textContent = `SKU detected: ${v}`;
+    result.style.display='block';
+    showSuccess();
+    
+    try{ navigator.vibrate && navigator.vibrate([100, 50, 100]); }catch(_){}
+    
+    setTimeout(()=>{
+      cleanupAll(); 
+      closeModal();
+      inputQ.value = v;
+      form?.submit();
+    }, 800);
+  }
+
+  // ===== BarcodeDetector (nativo) =====
+  async function startBarcodeDetector(){
+    // Asegura que realmente soporta qr_code
+    let supported = [];
+    try{
+      supported = await window.BarcodeDetector.getSupportedFormats();
+    }catch{}
+    if (!supported.includes('qr_code')) return false;
+
+    detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    usingBD = true; usingJsQR = false;
+    video.style.display='block'; target.style.display='none';
+    startBDLoop();
+    return true;
   }
 
   function startBDLoop(){
-    let frameCount = 0;
-    const tick = async () => {
-      try {
-        frameCount++;
-        if (frameCount % 3 === 0) {
+    cleanupLoop();
+    // procesar 1 de cada 3 frames
+    let frame=0;
+    const tick = async ()=>{
+      try{
+        frame++;
+        if (frame%3===0 && detector){
           const codes = await detector.detect(video);
-          if (codes && codes.length){
-            const bestCode = codes.reduce((best, current) => {
-              return current.boundingBox?.width * current.boundingBox?.height > 
-                     (best.boundingBox?.width * best.boundingBox?.height || 0) ? current : best;
-            });
-            const val = (bestCode.rawValue || '').trim();
-            if (val && val.length >= 3){ 
-              onDetected(val); 
-              return; 
-            }
+          if (codes?.length){
+            const qr = codes.find(c=>c.format==='qr_code') || codes[0];
+            const val = (qr.rawValue||'').trim();
+            if (val){ onDetected(val); return; }
           }
         }
-      } catch(_) {}
+      }catch(_){}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
 
-  async function startBarcodeDetector(){
-    detector = new window.BarcodeDetector({ formats: BD_FORMATS });
-    video.style.display = 'block';
-    target.style.display = 'none';
-    startBDLoop();
-  }
-
-  function loadQuagga(){
-    const CANDIDATES = [
-      'https://cdn.jsdelivr.net/npm/@ericblade/quagga2@v0.0.14/dist/quagga.min.js',
-      'https://unpkg.com/@ericblade/quagga2@0.0.14/dist/quagga.min.js',
-      'https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js'
-    ];
-    if (window.Quagga) return Promise.resolve('existing');
-    return new Promise(async (resolve, reject) => {
-      for (const url of CANDIDATES) {
-        try {
-          await inject(url);
-          const ok = await waitGlobal('Quagga', 3000);
-          if (ok) { 
-            console.log('[Scanner] Quagga loaded from:', url); 
-            return resolve(url); 
-          }
-        } catch (e) { console.warn('[Scanner] Failed', url, e); }
-      }
-      reject(new Error('Quagga2 could not be loaded from any CDN'));
-    });
-
-    function inject(src){
-      return new Promise((resolve,reject)=>{
-        if ([...document.scripts].some(s => s.src === src)) return resolve();
-        const s=document.createElement('script'); 
-        s.src=src; 
-        s.async=true;
-        s.onload=()=>resolve(); 
-        s.onerror=()=>reject(new Error('script load error'));
-        document.head.appendChild(s);
-      });
-    }
-    function waitGlobal(name, ms){
-      return new Promise((resolve)=>{
-        const t0=performance.now();
-        (function loop(){
-          if (window[name]) return resolve(true);
-          if (performance.now()-t0>ms) return resolve(false);
-          requestAnimationFrame(loop);
-        })();
-      });
-    }
-  }
-
-  async function startQuagga(){
-    if (!window.Quagga) throw new Error('Quagga global is missing after load');
-    usingQuagga = true;
-    video.style.display = 'none';
-    target.style.display = 'block';
-    let constraints = {};
-    if (videoDevices.length && currentDeviceIdx >= 0) {
-      constraints.deviceId = { exact: videoDevices[currentDeviceIdx].deviceId };
-    } else if (cachedDeviceId) {
-      constraints.deviceId = { exact: cachedDeviceId };
-    } else {
-      constraints.facingMode = 'environment';
-    }
-
-    await new Promise((resolve, reject) => {
-      window.Quagga.init({
-        inputStream: {
-          type: 'LiveStream',
-          constraints: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-          target: target
-        },
-        locator: { patchSize: 'medium', halfSample: false },
-        numOfWorkers: 2,
-        frequency: 10,
-        decoder: { 
-          readers: ['code_128_reader','ean_reader','upc_reader','upc_e_reader','code_39_reader','codabar_reader'],
-          multiple: false
-        },
-        locate: true
-      }, (err) => {
-        if (err) return reject(err);
-        window.Quagga.start();
-        window.Quagga.onDetected(res => {
-          const code = res?.codeResult?.code;
-          if (code) onDetected(code);
-        });
-        resolve();
-      });
+  // ===== jsQR (fallback universal) =====
+  function loadJsQR(){
+    if (jsQRLoaded) return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.async=true;
+      s.onload=()=>{ jsQRLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('Failed to load jsQR'));
+      document.head.appendChild(s);
     });
   }
 
+  function startJsQRLoop(){
+    usingBD=false; usingJsQR=true;
+    video.style.display='block'; target.style.display='none';
+    cleanupLoop();
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    // procesar el ROI (caja punteada: inset 10%)
+    const ROI_INSET = 0.10;
+
+    let lastTS = 0;
+    const MIN_INTERVAL = 80; // ms
+
+    const tick = (now)=>{
+      try{
+        if (!usingJsQR) return;
+        if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0){
+          lastTS = now;
+
+          const vw = video.videoWidth, vh = video.videoHeight;
+          const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
+          const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
+
+          canvas.width = rw; canvas.height = rh;
+          ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+
+          const img = ctx.getImageData(0, 0, rw, rh);
+          const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
+          const val = (qr?.data || '').trim();
+          if (val){ onDetected(val); return; }
+        }
+      }catch(_){}
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ===== Orquestación =====
   async function startScan(){
-    openModal();
+    openModal(); 
+    result.style.display='none'; 
+    success.style.display='none';
     lastDetections = [];
-    detectionConfidence = 0;
-    result.style.display = 'none';
+    
     try{
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
-      await loadVideoDevices();
-      if (cachedDeviceId) {
-        await startWithDevice(cachedDeviceId);
+      if (cachedDeviceId){ 
+        await startWithDevice(cachedDeviceId); 
       } else {
-        await ensurePermissionOnce();
         await loadVideoDevices();
         if (videoDevices.length) currentDeviceIdx = 0;
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
-      if ('BarcodeDetector' in window) {
-        await startBarcodeDetector();
-      } else {
-        await loadQuagga();
-        await startQuagga();
+
+      // 1) intenta BarcodeDetector con qr_code
+      if ('BarcodeDetector' in window){
+        const ok = await startBarcodeDetector();
+        if (ok) return; // ya arrancó BD
       }
-      rememberActiveDevice();
-    }catch(err){
-      showError(err, 'startScan');
-      cleanupAll(); 
-      closeModal();
+
+      // 2) fallback jsQR
+      await loadJsQR();
+      startJsQRLoop();
+    }catch(e){
+      showError(e, 'startScan');
+      cleanupAll(); closeModal();
     }
   }
 
-  async function flipCamera(){
-    if (!videoDevices.length) await loadVideoDevices();
-    if (!videoDevices.length) return;
-    currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
-
-    if (usingQuagga && window.Quagga){
-      try { window.Quagga.stop(); } catch(_){}
-      usingQuagga=false;
-      await startQuagga();
-      rememberActiveDevice();
-      return;
-    }
-    cancelLoop();
-    await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
-    rememberActiveDevice();
-    if (detector) startBDLoop();
-  }
-
-  // Pre-cargar devices cuando se carga la página
-  if ('mediaDevices' in navigator && 'enumerateDevices' in navigator.mediaDevices) {
-    const isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                       (navigator.userAgent.includes('Safari') && !navigator.userAgent.includes('Chrome'));
-    if (!isIOSSafari) {
-      navigator.mediaDevices.enumerateDevices().catch(() => {});
-    }
-  }
-
+  // ===== Eventos =====
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
   btnFlash?.addEventListener('click', toggleFlashlight);
-  btnClose?.addEventListener('click', () => { cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target === modal){ cleanupAll(); closeModal(); } });
+  btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
+  modal?.addEventListener('click', (e)=>{ if (e.target===modal){ cleanupAll(); closeModal(); } });
 
-  // ====== QR MODAL ======
+  // ====== QR MODAL para ver códigos de ubicación ======
   const qrModal   = document.getElementById('qrModal');
   const qrClose   = document.getElementById('qrClose');
   const qrImage   = document.getElementById('qrImage');
@@ -785,8 +703,7 @@
     document.body.classList.add('modal-open');
     qrModal.classList.remove('hidden');
     qrModal.setAttribute('aria-hidden','false');
-    qrImage.src = ''; // evita mostrar viejo mientras carga
-    // Pequeño delay para asegurar transición en algunos navegadores
+    qrImage.src = '';
     setTimeout(()=>{ qrImage.src = url; }, 0);
     qrOpenNew.href = url;
     qrCaption.textContent = caption || '';
@@ -797,7 +714,6 @@
     document.body.classList.remove('modal-open');
     qrModal.classList.add('hidden');
     qrModal.setAttribute('aria-hidden','true');
-    // liberar recurso si el backend soporta URLs dinámicas
     qrImage.src = '';
   }
 
