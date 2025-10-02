@@ -133,6 +133,7 @@ header nav .btn{
   header{ padding:8px 10px }
   .brand .tag, .brand .badge { display:none !important }
   header nav .btn{ padding:6px 10px; min-height:32px; font-size:9px }
+  .brand a{ font-size:11px}
 }
 
 /* ===== Grid utilidades ===== */
