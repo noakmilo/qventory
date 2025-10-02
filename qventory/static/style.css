@@ -81,8 +81,8 @@ a{ color:var(--accent); text-decoration:none }
 .submitbtn{ color:#f5f5f5 }
 .settingsbtn{ font-size:var(--fs-xs); margin:2px; padding:6px 10px }
 
-/* Layout */
-.wrap{ max-width:1200px; margin:0 auto; padding:var(--space-3) }
+/* Layout (95% width) */
+.wrap{ width:95%; max-width:1600px; margin:0 auto; padding:var(--space-3) }
 .row{ display:flex; gap:var(--space-3); flex-wrap:wrap }
 
 /* Tarjetas */
@@ -161,10 +161,10 @@ select{
   border:1px solid var(--glass-border);
   background:var(--glass-bg-strong);
 }
-
-i {color: #8ab4fd;}
+i {color:#8ab4fd;}
 
 /* ===== TABLES (desktop/tablet) ===== */
+.inventory-shell{ width:100% }
 .table-wrap{
   overflow-x:auto; overflow-y:visible;
   -webkit-overflow-scrolling:touch;
@@ -336,16 +336,41 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .backup-btn i{ font-size:12px }
 
-/* Ajustes de tag + SKU compactos (compatibles con tema) */
-.tag{ display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px }
-.itsku{ font-family:ui-monospace,'SF Mono',Consolas,monospace }
+/* ===== Filtros como barra (desktop) y colapsable (móvil) ===== */
+.filters-shell{ width:100%; margin-bottom:12px; }
+.filters-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin:0 0 8px 0;
+}
+.filters-toggle{ display:none }            /* escondido en desktop */
+.filters-toggle.visible-toggle{ display:inline-flex } /* visible en móvil (via JS) */
+
+.filters-content{ width:100% }
+.filters-grid{
+  display:grid; gap:10px;
+  grid-template-columns: repeat(6, minmax(0,1fr));
+}
+.filters-grid > div[style*="grid-column:1/-1"]{ grid-column:1/-1 !important }
+
+/* Desktop: filtros más compactos visualmente */
+@media (min-width:1025px){
+  .cardfilters{ padding:12px 14px }
+  .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
+  .cardfilters .btn{ min-height:38px; padding:8px 10px; font-size:12px }
+}
 
 /* ================
    VISTA MÓVIL
    ================ */
 @media (max-width:720px){
   .wrap{ padding:7px }
-  header{ flex-direction:column; gap:8px; align-items:stretch }
+
+  /* Filtros colapsables */
+  .filters-grid{
+    grid-template-columns:1fr;
+  }
+  .filters-content[hidden]{ display:none !important }
+
   .card{ padding:var(--space-2) }
 
   /* Filtros compactos */
@@ -356,7 +381,7 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 
   /* --- Tabla móvil optimizada --- */
   .table-wrap{ 
-    overflow-x:hidden; 
+    overflow-x:auto;
     padding:0; 
     margin:0 -4px;
   }
@@ -439,6 +464,16 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
   .input, select{ padding:10px 12px }
   th,td{ padding:10px 12px }
 }
+
+/* Desktop: filtros como barra sticky bajo el header */
+@media (min-width:1025px){
+  .filters-shell{
+    position: sticky;
+    top: calc(56px + var(--safe-t)); /* altura aprox del header */
+    z-index: 15;
+  }
+}
+
 
 /* Reduce motion/transparency */
 @media (prefers-reduced-motion: reduce){

@@ -1,96 +1,111 @@
 {% extends "base.html" %}
 {% block title %}Dashboard – Qventory{% endblock %}
 {% block content %}
-<div class="row">
-  <div class="card cardfilters" style="flex:1 1 280px;min-width:280px">
-    <h2>Filters</h2>
-    <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
-      <div style="grid-column:1/-1">
-        <div class="input-with-button">
-          <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…">
-          <button class="icon-btn" type="button" id="btnScanQR" title="Scan QR code with camera" aria-label="Scan QR code">
-            <i class="fas fa-qrcode"></i>
-          </button>
+
+<div class="wrap">  {# ahora la .wrap ocupa 95% width (ver main.css) #}
+
+  <!-- ======== Filters (barra superior en desktop / colapsable en móvil) ======== -->
+  <section class="card cardfilters filters-shell">
+    <div class="filters-bar">
+      <h2>Filters</h2>
+      <button type="button" class="btn small filters-toggle" id="filtersToggle" aria-expanded="true" aria-controls="filtersContent">
+        <i class="fas fa-sliders-h"></i> Toggle
+      </button>
+    </div>
+
+    <div id="filtersContent" class="filters-content">
+      <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="grid filters-grid">
+        <div style="grid-column:1/-1">
+          <div class="input-with-button">
+            <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…">
+            <button class="icon-btn" type="button" id="btnScanQR" title="Scan QR code with camera" aria-label="Scan QR code">
+              <i class="fas fa-qrcode"></i>
+            </button>
+          </div>
         </div>
-      </div>
 
-      {% if settings.enable_A %}
-      <div>
-        <label>{{ settings.label_A }}</label>
-        <select name="A">
-          <option value="">All</option>
-          {% for opt in options.A %}
-          <option value="{{ opt }}" {% if fA==opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
-      {% if settings.enable_B %}
-      <div>
-        <label>{{ settings.label_B }}</label>
-        <select name="B">
-          <option value="">All</option>
-          {% for opt in options.B %}
-          <option value="{{ opt }}" {% if fB==opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
-      {% if settings.enable_S %}
-      <div>
-        <label>{{ settings.label_S }}</label>
-        <select name="S">
-          <option value="">All</option>
-          {% for opt in options.S %}
-          <option value="{{ opt }}" {% if fS==opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
-      {% if settings.enable_C %}
-      <div>
-        <label>{{ settings.label_C }}</label>
-        <select name="C">
-          <option value="">All</option>
-          {% for opt in options.C %}
-          <option value="{{ opt }}" {% if fC==opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
+        {% if settings.enable_A %}
+        <div>
+          <label class="label">{{ settings.label_A }}</label>
+          <select name="A">
+            <option value="">All</option>
+            {% for opt in options.A %}
+            <option value="{{ opt }}" {% if fA==opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
 
-      {% if options.supplier and options.supplier|length %}
-      <div>
-        <label>Supplier</label>
-        <select name="supplier">
-          <option value="">All</option>
-          {% for opt in options.supplier %}
-          <option value="{{ opt }}" {% if fSupplier==opt %}selected{% endif %}>{{ opt }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
+        {% if settings.enable_B %}
+        <div>
+          <label class="label">{{ settings.label_B }}</label>
+          <select name="B">
+            <option value="">All</option>
+            {% for opt in options.B %}
+            <option value="{{ opt }}" {% if fB==opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
 
-      {% if PLATFORMS %}
-      <div>
-        <label>Platform</label>
-        <select name="platform">
-          <option value="">All</option>
-          {% for key,label in PLATFORMS %}
-          <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
+        {% if settings.enable_S %}
+        <div>
+          <label class="label">{{ settings.label_S }}</label>
+          <select name="S">
+            <option value="">All</option>
+            {% for opt in options.S %}
+            <option value="{{ opt }}" {% if fS==opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
 
-      <div style="grid-column:1/-1">
-        <button class="btn submitbtn" type="submit">Apply</button>
-        <a class="btn" href="{{ url_for('main.dashboard') }}">Clear</a>
-      </div>
-    </form>
-  </div>
+        {% if settings.enable_C %}
+        <div>
+          <label class="label">{{ settings.label_C }}</label>
+          <select name="C">
+            <option value="">All</option>
+            {% for opt in options.C %}
+            <option value="{{ opt }}" {% if fC==opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
 
-  <div class="card" style="flex:3 1 600px;min-width:320px">
+        {% if options.supplier and options.supplier|length %}
+        <div>
+          <label class="label">Supplier</label>
+          <select name="supplier">
+            <option value="">All</option>
+            {% for opt in options.supplier %}
+            <option value="{{ opt }}" {% if fSupplier==opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        {% if PLATFORMS %}
+        <div>
+          <label class="label">Platform</label>
+          <select name="platform">
+            <option value="">All</option>
+            {% for key,label in PLATFORMS %}
+            <option value="{{ key }}" {% if fPlatform==key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap">
+          <button class="btn submitbtn" type="submit"><i class="fas fa-check"></i> Apply</button>
+          <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-broom"></i> Clear</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ======== Inventory ======== -->
+  <section class="card inventory-shell">
     <div class="items-header">
       <h2>Items ({{ total_items }})</h2>
       <div class="backup-actions">
@@ -102,7 +117,7 @@
         </a>
       </div>
     </div>
-    
+
     <div class="table-wrap">
       {% set un = current_user.username %}
       <table>
@@ -127,9 +142,9 @@
           <tr>
             <td>
               {% if it.item_thumb %}
-                <img src="{{ it.item_thumb }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+                <img src="{{ it.item_thumb }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2d3a5a;">
               {% else %}
-                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
+                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #2d3a5a;display:grid;place-items:center;font-size:12px;color:#8892a6;">—</div>
               {% endif %}
             </td>
             <td>{{ it.title }}</td>
@@ -210,7 +225,7 @@
         </tbody>
       </table>
     </div>
-  </div>
+  </section>
 </div>
 
 <!-- Modal del escáner QR (compacto) -->
@@ -269,6 +284,37 @@
     </div>
   </div>
 </div>
+
+<script>
+/* ===== Toggle filtros colapsables en móvil ===== */
+(function(){
+  const btn = document.getElementById('filtersToggle');
+  const content = document.getElementById('filtersContent');
+  const mq = window.matchMedia('(max-width: 720px)');
+
+  function setByMedia(){
+    if (mq.matches){
+      // móvil: arranca expandido
+      content.hidden = false;
+      btn?.setAttribute('aria-expanded','true');
+      btn?.classList.add('visible-toggle');
+    } else {
+      // desktop: siempre visible + ocultar botón
+      content.hidden = false;
+      btn?.setAttribute('aria-expanded','true');
+      btn?.classList.remove('visible-toggle');
+    }
+  }
+  setByMedia();
+  mq.addEventListener?.('change', setByMedia);
+
+  btn?.addEventListener('click', ()=>{
+    const isHidden = content.hasAttribute('hidden');
+    if (isHidden){ content.hidden = false; btn.setAttribute('aria-expanded','true'); }
+    else { content.hidden = true; btn.setAttribute('aria-expanded','false'); }
+  });
+})();
+</script>
 
 
 <script>
@@ -540,3 +586,4 @@
 </script>
 
 {% endblock %}
+
