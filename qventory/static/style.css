@@ -141,7 +141,7 @@ select{
   background-size:6px 6px,6px 6px; background-repeat:no-repeat; padding-right:34px;
 }
 
-/* ===== Input con botón (overlay dentro del input) ===== */
+/* ===== Input con botón (overlay) ===== */
 .input-with-button{ position:relative; display:flex; align-items:center; gap:8px }
 .input-with-button > .input{ padding-right:42px }
 .input-with-button > .icon-btn{
@@ -153,7 +153,7 @@ select{
 .input-with-button > .icon-btn:hover{ opacity:1 }
 .input-with-button > .icon-btn i{ margin:0 }
 
-/* Botón icono (uso general) */
+/* Icon button (general) */
 .icon-btn{
   display:inline-grid; place-items:center;
   min-width:var(--tap-target); min-height:var(--tap-target);
@@ -336,13 +336,13 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .backup-btn i{ font-size:12px }
 
-/* ===== Filtros: barra + colapsable (desktop y móvil) ===== */
+/* ===== Filtros: barra + colapsable ===== */
 .filters-shell{ width:100%; margin-bottom:12px; transition:box-shadow .15s ease }
 .filters-bar{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   margin:0 0 8px 0;
 }
-.filters-toggle{ display:inline-flex; align-items:center; gap:6px } /* visible en desktop y móvil */
+.filters-toggle{ display:inline-flex; align-items:center; gap:6px }
 .filters-content{ width:100% }
 .filters-grid{
   display:grid; gap:10px;
@@ -350,20 +350,13 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .filters-grid > div[style*="grid-column:1/-1"]{ grid-column:1/-1 !important }
 
-/* Sticky bajo el header en desktop */
+/* Sticky en desktop */
 @media (min-width:1025px){
   .filters-shell{
     position: sticky;
     top: calc(56px + var(--safe-t));
     z-index: 15;
   }
-  .filters-shell.collapsed{
-    padding-bottom:10px;
-  }
-}
-
-/* Desktop: filtros más compactos */
-@media (min-width:1025px){
   .cardfilters{ padding:12px 14px }
   .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
   .cardfilters .btn{ min-height:38px; padding:8px 10px; font-size:12px }
@@ -387,71 +380,61 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
     min-height:36px; font-size:11px; padding:6px 8px
   }
 
-  /* --- Tabla móvil optimizada --- */
+  /* Export/Import menos intrusivos */
+  .backup-btn{
+    background:var(--glass-bg-strong);
+    color:var(--text);
+    border-color:var(--glass-border);
+    padding:6px 10px !important;
+    font-size:12px !important;
+  }
+
+  /* --- Tabla móvil optimizada (scroll real y headers sin ruptura) --- */
   .table-wrap{ 
     overflow-x:auto;
     padding:0; 
     margin:0 -4px;
   }
-  
-  .table-wrap table{ table-layout:fixed; width:100%; margin:0 }
+  /* fuerza ancho mínimo para que haya scroll horizontal y no se apilen */
+  .table-wrap table{ min-width: 1100px; table-layout:fixed; margin:0 }
 
-  th{ padding:8px 4px 6px 4px; font-size:10px; font-weight:600; line-height:1.2;
-      color:var(--sub); text-transform:uppercase; letter-spacing:0.5px; }
-
-  td{ padding:8px 4px; font-size:11px; line-height:1.3; vertical-align:top }
-
-  th:nth-child(1), td:nth-child(1){ width:35% }
-  th:nth-child(2), td:nth-child(2){ width:18% }
-  th:nth-child(3), td:nth-child(3){ width:15% }
-  th:nth-child(4), td:nth-child(4){ width:12% }
-  th:nth-child(5), td:nth-child(5){ width:20% }
-
-  td:nth-child(1){ font-size:9px; line-height:1.3; word-wrap:break-word; overflow-wrap:break-word;
-    overflow:hidden; text-overflow:ellipsis; hyphens:auto; }
-  td:nth-child(2){ font-family:ui-monospace,'SF Mono',Consolas,monospace; font-size:9px;
-    word-break:break-all; line-height:1.2; padding:8px 2px }
-  td:nth-child(3){ font-size:10px; text-align:center }
-
-  .tag,.pill{ font-size:9px; padding:2px 6px; border-radius:12px; margin:1px;
-    display:inline-block; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis }
-  .platform-badges{ display:flex; flex-direction:column; gap:2px; align-items:flex-start }
-  .platform-badges .tag{ width:fit-content; min-width:0 }
-
-  .table-wrap td:last-child{ text-align:center; padding:3px 1px }
-  .table-wrap .btn.settingsbtn,
-  .table-wrap td:last-child .btn{
-    width:22px; height:26px; padding:0; margin:0 1px;
-    display:inline-flex; align-items:center; justify-content:center;
-    font-size:12px; border-radius:6px; min-height:26px; vertical-align:middle;
+  th{
+    padding:8px 6px 6px 6px;
+    font-size:10px; font-weight:600; line-height:1.2;
+    color:var(--sub); text-transform:uppercase; letter-spacing:0.3px;
+    white-space:nowrap; hyphens:none;
   }
-  .table-wrap td:last-child > *{ display:inline-block; margin:0 1px }
-  .table-wrap .btn svg, .table-wrap .btn::before{ font-size:14px }
+  td{ padding:8px 6px; font-size:11px; line-height:1.3; vertical-align:top; white-space:nowrap }
+  /* el título sí puede envolver para aprovechar espacio */
+  td:nth-child(2){ white-space:normal; word-break:break-word; overflow-wrap:break-word }
+
+  /* estilos de columnas numéricas/monospace */
+  td:nth-child(3), /* SKU */
+  td:nth-child(5), /* Cost */
+  td:nth-child(6), /* Price */
+  td:nth-child(7)  /* ROI */
+  { font-family:ui-monospace,'SF Mono',Consolas,monospace; font-size:10px; }
+
   .table-wrap td img{ max-width:20px; height:20px; border-radius:4px; object-fit:cover }
-  .table-wrap td:nth-child(4){ font-family:ui-monospace,'SF Mono',Consolas,monospace; text-align:center; font-size:10px }
-
-  .fab{ position:fixed; right:12px; bottom:calc(12px + var(--safe-b)); z-index:50;
-    border-radius:999px; padding:12px 16px; box-shadow:0 8px 20px rgba(0,0,0,.35);
-    background:var(--glass-bg-strong); font-size:13px; min-height:44px }
-
-  .grid.cols-3,.grid.cols-2{ grid-template-columns:1fr }
-
-  .icon-top{ min-width:36px; min-height:36px; padding:0 10px; font-size:14px;
-    border-radius:10px; border:1px solid var(--glass-border); background:var(--glass-bg-strong) }
-
-  .table-wrap *{ max-width:100%; word-wrap:break-word }
+  .table-wrap td:last-child{ text-align:center; }
+  .table-wrap .btn.settingsbtn{
+    width:24px; height:26px; padding:0; margin:0 2px;
+    display:inline-flex; align-items:center; justify-content:center;
+    font-size:12px; border-radius:6px; min-height:26px;
+  }
 }
 
 /* ====== Extra responsive ====== */
 @media (max-width: 900px) {
   table thead th:nth-child(3),
-  table thead th:nth-child(5){ width:1%; white-space:nowrap; }
+  table thead th:nth-child(5),
+  table thead th:nth-child(6),
+  table thead th:nth-child(7){ width:1%; }
 }
 @media (max-width: 768px) {
   .items-header { flex-direction:column; align-items:stretch }
   .backup-actions { justify-content:center }
   .backup-btn { flex:1; justify-content:center }
-  td:nth-child(2){ max-width:220px; overflow:hidden; text-overflow:ellipsis }
 }
 
 /* ================
