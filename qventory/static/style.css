@@ -97,7 +97,7 @@ a{ color:var(--accent); text-decoration:none }
 .card h2{ margin:0 0 var(--space-2) 0; font-size:var(--fs-lg) }
 h1{ font-size:var(--fs-xl); margin:0 0 var(--space-2) }
 
-/* ===== Header (base.html) ===== */
+/* ===== HEADER (full-width horizontal, compacto en móvil) ===== */
 header{
   position:sticky; top:0; z-index:20;
   display:flex; align-items:center; justify-content:space-between;
@@ -109,11 +109,31 @@ header{
   -webkit-backdrop-filter:blur(calc(var(--blur)*.8));
   padding-top:calc(10px + var(--safe-t));
   box-shadow:0 8px 18px var(--glass-shadow);
+  width:100%;
 }
-.brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto }
+.brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto; min-width:0 }
 .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent) }
-header nav{ display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; max-width:100% }
-header nav .btn{ padding:7px 12px; font-size:var(--fs-xs); white-space:nowrap; border-radius:14px }
+
+/* Nav siempre horizontal; si no cabe, scroll-x */
+header nav{
+  display:flex; align-items:center; gap:8px;
+  flex:1 1 auto; justify-content:flex-end;
+  overflow-x:auto; overflow-y:hidden;
+  white-space:nowrap; -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+header nav::-webkit-scrollbar{ display:none }
+header nav .btn{
+  padding:7px 12px; font-size:12px; line-height:1; min-height:34px;
+  border-radius:14px; white-space:nowrap; flex:0 0 auto;
+}
+
+/* Oculta badges/píldoras dentro de la marca en móvil para evitar solapes */
+@media (max-width:720px){
+  header{ padding:8px 10px }
+  .brand .tag, .brand .badge { display:none !important }
+  header nav .btn{ padding:6px 10px; min-height:32px; font-size:12px }
+}
 
 /* ===== Grid utilidades ===== */
 .grid{ display:grid; gap:var(--space-2) }
@@ -214,7 +234,7 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
 .platform-badges{ display:flex; flex-wrap:wrap; gap:6px }
 
 /* =========================
-   Uploader & Scanner (sin cambios)
+   Uploader & Scanner (sin cambios clave)
    ========================= */
 .muted{ font-size:12px; opacity:.8; min-height:1.2em }
 .btn.small{ padding:4px 8px; font-size:12px }
@@ -236,39 +256,21 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
    MÓVIL
    ================ */
 @media (max-width:720px){
-
-  /* — Tipografías y paddings más compactos en TODO: */
-  :root{
-    --fs-base: 13px;
-    --fs-sm: 12px;
-    --fs-xs: 10px;
-  }
-
   .wrap{ width:98%; padding:7px }
-
-  /* Header: no se amontonan los botones */
-  header{ align-items:flex-start }
-  header nav{
-    width:100%;
-    display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
-    gap:8px; justify-content:stretch;
-  }
-  header nav .btn{ width:100%; justify-content:center; padding:8px 10px; font-size:12px; border-radius:12px }
 
   /* Filtros colapsables */
   .filters-grid{ grid-template-columns:1fr }
   .filters-content[hidden]{ display:none !important }
   .card{ padding:var(--space-2) }
-
   .cardfilters{ font-size:11px }
   .cardfilters .input, .cardfilters select, .cardfilters .btn{ min-height:36px; font-size:12px; padding:6px 8px }
 
-  /* Export/Import más discretos */
+  /* Export/Import menos intrusivos */
   .backup-btn{ background:var(--glass-bg-strong); color:var(--text); border-color:var(--glass-border); padding:6px 10px !important; font-size:12px !important }
 
-  /* Tabla: sin solapes, cada cosa con espacio */
+  /* Tabla: sin solapes, con scroll-x si hace falta */
   .table-wrap{ width:98%; margin:0 auto; overflow-x:auto; padding:0 }
-  .table-wrap table{ min-width: 1000px; table-layout:fixed } /* fuerza scroll horizontal */
+  .table-wrap table{ min-width: 1000px; table-layout:fixed }
   th{
     padding:8px 6px 6px 6px;
     font-size:10px; font-weight:600; line-height:1.2;
@@ -279,12 +281,10 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
     padding:8px 6px; font-size:12px; line-height:1.35; vertical-align:top;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  /* Permitir envolver en columnas textuales largas */
   td:nth-child(2), /* Title */
-  td:nth-child(4)  /* Supplier */
+  td:nth-child(4)  /* Supplier (cuando se muestre) */
   { white-space:normal; word-break:break-word; overflow-wrap:break-word }
 
-  /* Columnas numéricas en mono y compactas */
   td:nth-child(3), /* SKU */
   td:nth-child(5), /* Cost */
   td:nth-child(6), /* Price */
@@ -297,6 +297,17 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
     width:24px; height:26px; padding:0; margin:0 2px;
     display:inline-flex; align-items:center; justify-content:center; font-size:12px; border-radius:6px; min-height:26px;
   }
+}
+
+/* ===== Control de columnas no críticas ===== */
+/* Oculta en móvil vertical */
+@media (max-width: 720px) and (orientation: portrait) {
+  .mobile-hide { display: none !important; }
+}
+/* En landscape/tablet/desktop se muestran */
+@media (max-width: 1024px) and (orientation: landscape),
+       (min-width: 721px) {
+  .mobile-hide { display: table-cell !important; }
 }
 
 /* ===== Tablets ===== */
@@ -313,24 +324,10 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
   th,td{ padding:10px 12px }
 }
 
-/* === Accesibilidad: reduce motion/transparency === */
+/* === Accesibilidad === */
 @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important } }
 @media (prefers-reduced-transparency: reduce){
   .glass, .card, header, .table-wrap, .btn, .icon-btn, .fab, .tag, .input, select{
     backdrop-filter:none !important; -webkit-backdrop-filter:none !important; background:#111834 !important; box-shadow:var(--elev)
   }
 }
-
-/* === Control de columnas no críticas === */
-
-/* En móvil portrait: ocultar supplier, cost, ROI, listings */
-@media (max-width: 720px) and (orientation: portrait) {
-  .mobile-hide { display: none !important; }
-}
-
-/* En landscape o pantallas mayores: volver a mostrar */
-@media (max-width: 1024px) and (orientation: landscape),
-       (min-width: 721px) {
-  .mobile-hide { display: table-cell !important; }
-}
-
