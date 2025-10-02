@@ -25,48 +25,6 @@
       <input class="input" type="text" name="title" id="title" placeholder="Item title" required>
     </div>
 
-    {# -------- Imagen / Cloudinary -------- #}
-    <div>
-      <label><i class="fas fa-camera"></i> Image (upload to Cloudinary)</label>
-      <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="Cloudinary URL will appear here…" readonly>
-      <div class="thumb-uploader">
-        <div class="thumb-preview" id="thumbPreview"><span class="thumb-placeholder">No image</span></div>
-        {% if cloudinary_enabled %}
-        <div class="uploader-actions">
-          <input type="file" id="file_input" accept="image/*" capture="environment" style="display:none">
-          <button class="btn" type="button" id="btnPick"><i class="fas fa-upload"></i> Choose / Camera</button>
-          <button class="btn" type="button" id="btnUpload" disabled><i class="fas fa-cloud-upload-alt"></i> Upload to Cloudinary</button>
-          <div id="upload_status" class="hint"></div>
-        </div>
-        {% else %}
-        <div class="hint">Cloudinary is not configured.</div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div>
-      <label><i class="fas fa-truck"></i> Supplier</label>
-      <input class="input" type="text" name="supplier" placeholder="e.g., Goodwill / Target / Wholesale ABC">
-    </div>
-
-    <div>
-      <label><i class="fas fa-dollar-sign"></i> Cost</label>
-      <input class="input" type="number" step="0.01" min="0" name="item_cost" id="item_cost" placeholder="0.00">
-    </div>
-    <div>
-      <label><i class="fas fa-tags"></i> Price</label>
-      <input class="input" type="number" step="0.01" min="0" name="item_price" id="item_price" placeholder="0.00">
-    </div>
-    <div>
-      <label><i class="fas fa-percentage"></i> ROI (auto)</label>
-      <input class="input" type="text" id="roi_display" value="—" disabled>
-    </div>
-
-    <div>
-      <label><i class="far fa-calendar-alt"></i> Listing Date</label>
-      <input class="input" type="date" name="listing_date" id="listing_date">
-    </div>
-
     <div style="grid-column:1/-1">
       <label><i class="fas fa-link"></i> Listing Link (optional)</label>
       <input class="input" type="url" name="listing_link" placeholder="https://...">
@@ -107,6 +65,63 @@
     <div>
       <label><i class="fas fa-shopping-cart"></i> Depop</label>
       <input class="input" type="url" name="depop_url" placeholder="https://www.depop.com/products/...">
+    </div>
+
+    {# ---------- Foto (Cloudinary) + nuevos campos ---------- #}
+    <div style="grid-column:1/-1">
+      <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
+    </div>
+
+    <div style="grid-column:1/-1">
+      <h3 style="margin:0 0 8px 0;font-size:16px"><i class="fas fa-image"></i> Photo & Details</h3>
+    </div>
+
+    <div style="grid-column:1/-1" class="card">
+      {% if cloudinary_enabled %}
+        <div class="grid cols-3" style="gap:12px; align-items:end">
+          <div>
+            <label><i class="fas fa-camera"></i> Take/Choose Photo</label>
+            <input id="item_thumb_file" type="file" accept="image/*" capture="environment">
+            <small id="upload_status"></small>
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <button class="btn" type="button" id="btnUploadThumb"><i class="fas fa-upload"></i> Upload to Cloudinary</button>
+          </div>
+          <div>
+            <label><i class="fas fa-link"></i> Image URL</label>
+            <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="https://res.cloudinary.com/...">
+          </div>
+          <div style="grid-column:1/-1">
+            <img id="item_thumb_preview" alt="Preview" style="max-height:180px; max-width:100%; display:block; border:1px solid var(--border); border-radius:6px; background:#fff">
+          </div>
+        </div>
+      {% else %}
+        <div class="alert" style="background:#fff3cd;border:1px solid #ffeeba;color:#856404;border-radius:6px;padding:8px">
+          <strong>Cloudinary is not configured.</strong> Add <code>CLOUDINARY_CLOUD_NAME</code>, <code>CLOUDINARY_API_KEY</code>, <code>CLOUDINARY_API_SECRET</code> to your <code>.env</code>.
+        </div>
+        <div>
+          <label><i class="fas fa-link"></i> Image URL (manual)</label>
+          <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="https://...">
+        </div>
+      {% endif %}
+    </div>
+
+    <div>
+      <label><i class="fas fa-truck-loading"></i> Supplier</label>
+      <input class="input" type="text" name="supplier" placeholder="Store / Supplier name">
+    </div>
+    <div>
+      <label><i class="fas fa-dollar-sign"></i> Cost</label>
+      <input class="input" type="number" name="item_cost" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div>
+      <label><i class="fas fa-tags"></i> Price</label>
+      <input class="input" type="number" name="item_price" step="0.01" min="0" placeholder="0.00">
+    </div>
+    <div>
+      <label><i class="fas fa-calendar-day"></i> Listing date</label>
+      <input class="input" type="date" name="listing_date">
     </div>
 
     <div class="card" style="grid-column:1/-1; margin-top:16px">
@@ -314,77 +329,9 @@
   .btn i {
     margin-right: 5px;
   }
-
-  /* --- Uploader / thumb --- */
-  .thumb-uploader{ display:flex; gap:10px; align-items:flex-start; margin-top:6px; }
-  .thumb-preview{ width:140px; aspect-ratio:1/1; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#f8f9fa; }
-  .thumb-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .thumb-placeholder{ font-size:12px; color:#888; padding:10px; }
-  .uploader-actions{ display:flex; flex-direction:column; gap:6px; }
-  .hint{ font-size:12px; opacity:.8; }
 </style>
 
 <script>
-/* -------- Cloudinary upload (via backend) -------- */
-(function(){
-  const enabled = {{ 'true' if cloudinary_enabled else 'false' }};
-  if (!enabled) return;
-
-  const pick = document.getElementById('btnPick');
-  const up = document.getElementById('btnUpload');
-  const file = document.getElementById('file_input');
-  const status = document.getElementById('upload_status');
-  const thumb = document.getElementById('item_thumb');
-  const preview = document.getElementById('thumbPreview');
-
-  function setPreview(objUrl){
-    preview.innerHTML='';
-    if (objUrl){
-      const img=document.createElement('img');
-      img.src=objUrl; img.alt='preview';
-      preview.appendChild(img);
-    } else {
-      const s=document.createElement('span'); s.className='thumb-placeholder'; s.textContent='No image';
-      preview.appendChild(s);
-    }
-  }
-
-  pick?.addEventListener('click', ()=> file?.click());
-
-  file?.addEventListener('change', ()=>{
-    const f = file.files && file.files[0];
-    if (!f){ up.disabled = true; setPreview(null); return; }
-    setPreview(URL.createObjectURL(f));
-    up.disabled = false;
-    status.textContent = '';
-  });
-
-  up?.addEventListener('click', async ()=>{
-    const f = file.files && file.files[0];
-    if (!f){ return; }
-    up.disabled = true; pick.disabled = true;
-    status.textContent = 'Uploading…';
-
-    const fd = new FormData();
-    fd.append('file', f);
-
-    try{
-      const resp = await fetch('{{ url_for("main.api_upload_image") }}', { method:'POST', body:fd, credentials:'same-origin' });
-      const data = await resp.json();
-      if (!resp.ok || !data.ok){
-        throw new Error(data.error || ('HTTP '+resp.status));
-      }
-      thumb.value = data.url || '';
-      status.textContent = '✓ Uploaded';
-    }catch(e){
-      status.textContent = 'Upload failed: ' + (e.message||e);
-      up.disabled = false; pick.disabled = false;
-      return;
-    }
-    up.disabled = false; pick.disabled = false;
-  });
-})();
-
 /* ========== SCRIPT GET desde eBay ========== */
 document.addEventListener('DOMContentLoaded', () => {
   const btn   = document.getElementById('btnFetch');
@@ -441,6 +388,66 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
+/* ========== PATCH SUBIDA CLOUDINARY (iPhone-safe) ========== */
+(function(){
+  const fileInput   = document.getElementById('item_thumb_file');
+  const uploadBtn   = document.getElementById('btnUploadThumb');
+  const previewImg  = document.getElementById('item_thumb_preview');
+  const urlField    = document.getElementById('item_thumb');
+  const statusEl    = document.getElementById('upload_status');
+
+  function setStatus(msg, ok=null){
+    if (!statusEl) return;
+    statusEl.textContent = msg || '';
+    statusEl.style.color = ok === null ? '' : ok ? '#22c55e' : '#ef4444';
+  }
+
+  async function uploadToCloudinary(){
+    try {
+      const f = fileInput?.files && fileInput.files[0];
+      if (!f) { setStatus('Choose or take a photo first', false); return; }
+
+      try { if (previewImg) previewImg.src = URL.createObjectURL(f); } catch {}
+
+      const fd = new FormData();
+      fd.append('file', f, f.name || `camera-${Date.now()}.jpg`);
+
+      uploadBtn.disabled = true;
+      const original = uploadBtn.innerHTML;
+      uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+      setStatus('Uploading...', null);
+
+      const resp = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      });
+
+      let data = {};
+      try { data = await resp.json(); } catch {}
+
+      if (!resp.ok || !data.ok) {
+        const msg = (data && (data.error || data.message)) || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+
+      if (urlField) urlField.value = data.url || '';
+      setStatus('✓ Uploaded', true);
+      uploadBtn.innerHTML = '<i class="fas fa-check"></i> Uploaded';
+      setTimeout(()=> uploadBtn.innerHTML = original, 1200);
+    } catch (err) {
+      console.error(err);
+      setStatus(`Upload failed: ${err.message || err}`, false);
+    } finally {
+      uploadBtn && (uploadBtn.disabled = false);
+    }
+  }
+
+  uploadBtn?.addEventListener('click', uploadToCloudinary);
+})();
+</script>
+
+<script>
 /* ========== SCRIPT SCANNER QR (completo) ========== */
 (function(){
   const btnScan = document.getElementById('btnScanLocation');
@@ -454,7 +461,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const success = document.getElementById('qrSuccess');
   const result = document.getElementById('qrResult');
 
-  // ===== Estado =====
   const CAM_CACHE_KEY = 'qv_qr_cam_device_id';
   let cachedDeviceId = null;
   let stream = null, rafId = null;
@@ -467,7 +473,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let flashlightOn = false;
   let lastDetections = [];
 
-  // ===== Utils UI =====
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
@@ -487,12 +492,10 @@ document.addEventListener('DOMContentLoaded', () => {
     alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
-  // ===== Cámara =====
   async function loadVideoDevices(){
     if (devicesLoaded) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d=>d.kind==='videoinput');
-    // prioriza "back"/"environment"
     const prefers = ['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
@@ -502,6 +505,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     devicesLoaded = true;
   }
+
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
 
   async function startWithDevice(deviceId){
     cleanupLoop();
@@ -530,15 +535,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch {}
   }
 
-  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
-
   async function flipCamera(){
     await loadVideoDevices();
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
     cleanupLoop();
     await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
-    // reanudar el método activo
     if (usingBD) startBDLoop();
     if (usingJsQR) startJsQRLoop();
   }
@@ -555,12 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
   }
 
-  // ===== Detección =====
   function validateDetection(val){
     if (!val || val.length<3) return false;
     lastDetections.push(val);
     if (lastDetections.length>3) lastDetections.shift();
-    // bastará con 1 coincidencia (rápido)
     return lastDetections[lastDetections.length-1];
   }
 
@@ -568,7 +568,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try{
       let locationPart = qrText.includes('/location/') ? qrText.split('/location/')[1] : qrText;
       if (!locationPart) return null;
-      // admite "A1B2S3C4" en cualquier combinación
       const m = locationPart.match(/^(?:.*?)(A(\d+))?(B(\d+))?(S(\d+))?(C(\d+))?/i);
       if (!m) return null;
       return { A: m[2]||null, B: m[4]||null, S: m[6]||null, C: m[8]||null, original: locationPart };
@@ -594,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showSuccess();
       try{ navigator.vibrate && navigator.vibrate([80,40,80]); }catch(_){}
       setTimeout(()=>{
-        const filled = populateLocationFields(loc);
+        populateLocationFields(loc);
         cleanupAll(); closeModal();
       }, 600);
     } else {
@@ -603,13 +602,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== BarcodeDetector (nativo) =====
   async function startBarcodeDetector(){
-    // Asegura que realmente soporta qr_code
     let supported = [];
-    try{
-      supported = await window.BarcodeDetector.getSupportedFormats();
-    }catch{}
+    try{ supported = await window.BarcodeDetector.getSupportedFormats(); }catch{}
     if (!supported.includes('qr_code')) return false;
 
     detector = new window.BarcodeDetector({ formats: ['qr_code'] });
@@ -621,7 +616,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startBDLoop(){
     cleanupLoop();
-    // procesar 1 de cada 3 frames
     let frame=0;
     const tick = async ()=>{
       try{
@@ -640,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
     rafId = requestAnimationFrame(tick);
   }
 
-  // ===== jsQR (fallback universal) =====
   function loadJsQR(){
     if (jsQRLoaded) return Promise.resolve();
     return new Promise((resolve,reject)=>{
@@ -661,25 +654,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    // procesar el ROI (caja punteada: inset 10%)
     const ROI_INSET = 0.10;
-
-    let lastTS = 0;
-    const MIN_INTERVAL = 80; // ms
+    let lastTS = 0; const MIN_INTERVAL = 80;
 
     const tick = (now)=>{
       try{
         if (!usingJsQR) return;
         if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0){
           lastTS = now;
-
           const vw = video.videoWidth, vh = video.videoHeight;
           const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
           const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
-
           canvas.width = rw; canvas.height = rh;
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-
           const img = ctx.getImageData(0, 0, rw, rh);
           const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
           const val = (qr?.data || '').trim();
@@ -691,7 +678,6 @@ document.addEventListener('DOMContentLoaded', () => {
     rafId = requestAnimationFrame(tick);
   }
 
-  // ===== Orquestación =====
   async function startScan(){
     openModal(); result.style.display='none'; success.style.display='none';
     try{
@@ -703,13 +689,10 @@ document.addEventListener('DOMContentLoaded', () => {
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
-      // 1) intenta BarcodeDetector con qr_code
       if ('BarcodeDetector' in window){
         const ok = await startBarcodeDetector();
-        if (ok) return; // ya arrancó BD
+        if (ok) return;
       }
-
-      // 2) fallback jsQR
       await loadJsQR();
       startJsQRLoop();
     }catch(e){
@@ -718,30 +701,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== Eventos =====
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
   btnFlash?.addEventListener('click', toggleFlashlight);
   btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target===modal){ cleanupAll(); closeModal(); } });
 
-})();
-</script>
-
-<script>
-/* ROI live */
-(function(){
-  const cost = document.getElementById('item_cost');
-  const price = document.getElementById('item_price');
-  const roi = document.getElementById('roi_display');
-  function update(){
-    const c = parseFloat(cost?.value||'');
-    const p = parseFloat(price?.value||'');
-    if (!isFinite(c) || c<=0 || !isFinite(p)){ roi.value='—'; return; }
-    roi.value = Math.round(((p-c)/c)*100) + '%';
-  }
-  cost?.addEventListener('input', update);
-  price?.addEventListener('input', update);
 })();
 </script>
 
