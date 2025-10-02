@@ -23,6 +23,7 @@ import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader   # <-- Import necesario para dibujar PIL.Image
 # Importamos el módulo de QR en lugar de barcode
 import qrcode
 # <<<
@@ -812,7 +813,7 @@ def _build_item_label_pdf(it, settings) -> bytes:
     
     # Generar QR code con el SKU
     qr = qrcode.QRCode(
-        version=1,  # Tamaño automático
+        version=None,  # automático
         error_correction=qrcode.constants.ERROR_CORRECT_L,
         box_size=10,
         border=1,
@@ -824,14 +825,14 @@ def _build_item_label_pdf(it, settings) -> bytes:
     qr_img = qr.make_image(fill_color="black", back_color="white")
     
     # Convertir a RGB si es necesario (qrcode puede devolver modo '1' o 'L')
-    if qr_img.mode != 'RGB':
+    if getattr(qr_img, "mode", None) != 'RGB':
         qr_img = qr_img.convert('RGB')
     
     # Calcular posición centrada del QR
     x_qr = m + (inner_w - qr_size) / 2.0
     
-    # Dibujar QR code directamente desde PIL Image
-    c.drawImage(qr_img, x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
+    # ⬅️ Diferencia clave: envolver en ImageReader para que ReportLab acepte PIL.Image
+    c.drawImage(ImageReader(qr_img), x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
     # --- TÍTULO ---
     title = _ellipsize(it.title or "", 20)
