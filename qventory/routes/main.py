@@ -23,8 +23,7 @@ import tempfile
 import subprocess
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.lib.units import mm
-from reportlab.lib.utils import ImageReader   # <-- Import necesario para dibujar PIL.Image
-# Importamos el módulo de QR en lugar de barcode
+from reportlab.lib.utils import ImageReader
 import qrcode
 # <<<
 
@@ -38,45 +37,33 @@ from ..helpers import (
 )
 from . import main_bp
 
+# ==================== Cloudinary ====================
+# pip install cloudinary
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
+CLOUDINARY_UPLOAD_FOLDER = os.environ.get("CLOUDINARY_UPLOAD_FOLDER", "qventory/items")
 
-# ---------------------- Utilidades locales para nuevos campos ----------------------
+cloudinary_enabled = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
 
-def _parse_float(val):
-    """Convierte '1,234.56', '$12.34', '  12 ' a float o None."""
-    s = (val or "").strip()
-    if not s:
-        return None
+if cloudinary_enabled:
     try:
-        s = s.replace("$", "").replace(",", "")
-        return float(s)
-    except Exception:
-        return None
-
-def _parse_date(val):
-    """Devuelve date o None. Acepta 'YYYY-MM-DD', 'MM/DD/YYYY', 'YYYY/MM/DD'."""
-    s = (val or "").strip()
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except Exception:
-            continue
-    # Último recurso: try ISO general
-    try:
-        return datetime.fromisoformat(s).date()
-    except Exception:
-        return None
-
-def _fmt_date(d: date | None):
-    return d.strftime("%Y-%m-%d") if isinstance(d, date) else ""
+        import cloudinary
+        import cloudinary.uploader
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET,
+            secure=True
+        )
+    except Exception as _e:
+        cloudinary_enabled = False
 
 
 # ---------------------- Landing pública ----------------------
 
 @main_bp.route("/")
 def landing():
-    # Página pública de marketing/SEO
     return render_template("landing.html")
 
 
@@ -86,36 +73,21 @@ def landing():
 @login_required
 def dashboard():
     s = get_or_create_settings(current_user)
-
-    # Conteo total de items del usuario (para el H2)
     total_items = Item.query.filter_by(user_id=current_user.id).count()
 
-    # Filtros de búsqueda
     q = (request.args.get("q") or "").strip()
     fA = (request.args.get("A") or "").strip()
     fB = (request.args.get("B") or "").strip()
     fS = (request.args.get("S") or "").strip()
     fC = (request.args.get("C") or "").strip()
     fPlatform = (request.args.get("platform") or "").strip()
-    fSupplier = (request.args.get("supplier") or "").strip()   # NUEVO (opcional)
 
     items = Item.query.filter_by(user_id=current_user.id)
 
     if q:
         like = f"%{q}%"
-        # Ampliamos búsqueda a supplier y location_code (útil)
-        items = items.filter(or_(
-            Item.title.ilike(like),
-            Item.sku.ilike(like),
-            Item.supplier.ilike(like),
-            Item.location_code.ilike(like)
-        ))
+        items = items.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
 
-    # Filtro por supplier (si viene)
-    if fSupplier:
-        items = items.filter(Item.supplier == fSupplier)
-
-    # Filtros de ubicación (solo niveles habilitados)
     if s.enable_A and fA:
         items = items.filter(Item.A == fA)
     if s.enable_B and fB:
@@ -125,7 +97,6 @@ def dashboard():
     if s.enable_C and fC:
         items = items.filter(Item.C == fC)
 
-    # Filtro por plataforma (si el item tiene URL para esa plataforma)
     if fPlatform:
         col = {
             "web": Item.web_url, "ebay": Item.ebay_url, "amazon": Item.amazon_url,
@@ -137,7 +108,6 @@ def dashboard():
 
     items = items.order_by(Item.created_at.desc()).all()
 
-    # Distintos por columna, scope por usuario
     def distinct(col):
         return [
             r[0] for r in db.session.query(col)
@@ -150,7 +120,6 @@ def dashboard():
         "B": distinct(Item.B) if s.enable_B else [],
         "S": distinct(Item.S) if s.enable_S else [],
         "C": distinct(Item.C) if s.enable_C else [],
-        "supplier": distinct(Item.supplier),  # NUEVO (para dropdown opcional en UI)
     }
 
     PLATFORMS = [
@@ -168,10 +137,9 @@ def dashboard():
         items=items,
         settings=s,
         options=options,
-        total_items=total_items,  # <-- para mostrar en el H2: Items ({{ total_items }})
+        total_items=total_items,
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
-        fPlatform=fPlatform, PLATFORMS=PLATFORMS,
-        fSupplier=fSupplier
+        fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
 
 
@@ -180,13 +148,11 @@ def dashboard():
 @main_bp.route("/export/csv")
 @login_required
 def export_csv():
-    """Exporta todos los items del usuario a CSV"""
     items = Item.query.filter_by(user_id=current_user.id).order_by(Item.created_at.asc()).all()
-    
+
     output = io.StringIO()
     writer = csv.writer(output)
-    
-    # Escribir headers (ACTUALIZADO)
+
     headers = [
         'id', 'sku', 'title', 'listing_link',
         'web_url', 'ebay_url', 'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 'depop_url',
@@ -196,44 +162,41 @@ def export_csv():
         'created_at'
     ]
     writer.writerow(headers)
-    
-    # Escribir datos (ACTUALIZADO)
-    for item in items:
+
+    for it in items:
         row = [
-            item.id,
-            item.sku,
-            item.title,
-            item.listing_link or '',
-            item.web_url or '',
-            item.ebay_url or '',
-            item.amazon_url or '',
-            item.mercari_url or '',
-            item.vinted_url or '',
-            item.poshmark_url or '',
-            item.depop_url or '',
-            item.A or '',
-            item.B or '',
-            item.S or '',
-            item.C or '',
-            item.location_code or '',
-            # nuevos
-            item.item_thumb or '',
-            item.supplier or '',
-            f"{item.item_cost:.2f}" if isinstance(item.item_cost, (int, float)) else '',
-            f"{item.item_price:.2f}" if isinstance(item.item_price, (int, float)) else '',
-            _fmt_date(item.listing_date),
-            item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else ''
+            it.id,
+            it.sku,
+            it.title,
+            it.listing_link or '',
+            it.web_url or '',
+            it.ebay_url or '',
+            it.amazon_url or '',
+            it.mercari_url or '',
+            it.vinted_url or '',
+            it.poshmark_url or '',
+            it.depop_url or '',
+            it.A or '',
+            it.B or '',
+            it.S or '',
+            it.C or '',
+            it.location_code or '',
+            it.item_thumb or '',
+            it.supplier or '',
+            f"{it.item_cost:.2f}" if it.item_cost is not None else '',
+            f"{it.item_price:.2f}" if it.item_price is not None else '',
+            it.listing_date.strftime('%Y-%m-%d') if isinstance(it.listing_date, (date, datetime)) and it.listing_date else '',
+            it.created_at.strftime('%Y-%m-%d %H:%M:%S') if it.created_at else ''
         ]
         writer.writerow(row)
-    
+
     output.seek(0)
     csv_data = output.getvalue().encode('utf-8')
     output.close()
-    
-    # Crear nombre de archivo con timestamp
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     filename = f"qventory_backup_{current_user.username}_{timestamp}.csv"
-    
+
     return send_file(
         io.BytesIO(csv_data),
         mimetype='text/csv',
@@ -245,166 +208,138 @@ def export_csv():
 @main_bp.route("/import/csv", methods=["GET", "POST"])
 @login_required
 def import_csv():
-    """Importa items desde CSV - página de confirmación y procesamiento"""
     if request.method == "GET":
         return render_template("import_csv.html")
-    
-    # POST: procesar archivo
+
     if 'csv_file' not in request.files:
         flash("No file selected.", "error")
         return redirect(url_for('main.import_csv'))
-    
+
     file = request.files['csv_file']
     if file.filename == '' or not file.filename.lower().endswith('.csv'):
         flash("Please select a valid CSV file.", "error")
         return redirect(url_for('main.import_csv'))
-    
-    mode = request.form.get('import_mode', 'add')  # 'add' o 'replace'
-    
+
+    mode = request.form.get('import_mode', 'add')
+
     try:
-        # Leer archivo CSV
         csv_content = file.read().decode('utf-8')
         csv_reader = csv.DictReader(io.StringIO(csv_content))
-        
-        # Headers esperados (ACTUALIZADO)
-        expected_headers = {
-            'id', 'sku', 'title', 'listing_link',
-            'web_url', 'ebay_url', 'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 'depop_url',
-            'A', 'B', 'S', 'C', 'location_code',
-            'item_thumb', 'supplier', 'item_cost', 'item_price', 'listing_date',
-            'created_at'
-        }
 
-        # Verificar al menos mínimos
-        if not all(h in csv_reader.fieldnames for h in ['sku', 'title']):
+        if not all(header in csv_reader.fieldnames for header in ['sku', 'title']):
             flash("CSV must contain at least 'sku' and 'title' columns.", "error")
             return redirect(url_for('main.import_csv'))
-        
-        # Si el archivo no trae los nuevos, no rompemos (modo compatible)
-        has_new_cols = any(h in csv_reader.fieldnames for h in ['item_thumb','supplier','item_cost','item_price','listing_date'])
 
-        existing_skus = set()
-        if mode == 'replace':
-            existing_items = Item.query.filter_by(user_id=current_user.id).all()
-            existing_skus = {item.sku for item in existing_items}
-        
         imported_count = 0
         updated_count = 0
         skipped_count = 0
-        
-        for row_num, row in enumerate(csv_reader, start=2):  # start=2 because header is row 1
+
+        for row in csv_reader:
             sku = (row.get('sku') or '').strip()
             title = (row.get('title') or '').strip()
             if not sku or not title:
                 skipped_count += 1
                 continue
 
-            # Valores base
-            listing_link = (row.get('listing_link') or '').strip() or None
-            web_url     = (row.get('web_url') or '').strip() or None
-            ebay_url    = (row.get('ebay_url') or '').strip() or None
-            amazon_url  = (row.get('amazon_url') or '').strip() or None
-            mercari_url = (row.get('mercari_url') or '').strip() or None
-            vinted_url  = (row.get('vinted_url') or '').strip() or None
-            poshmark_url= (row.get('poshmark_url') or '').strip() or None
-            depop_url   = (row.get('depop_url') or '').strip() or None
-            A  = (row.get('A') or '').strip() or None
-            B  = (row.get('B') or '').strip() or None
-            S_ = (row.get('S') or '').strip() or None
-            C  = (row.get('C') or '').strip() or None
-            location_code = (row.get('location_code') or '').strip() or None
-
-            # Nuevos
-            item_thumb   = (row.get('item_thumb') or '').strip() or None
-            supplier     = (row.get('supplier') or '').strip() or None
-            item_cost    = _parse_float(row.get('item_cost'))
-            item_price   = _parse_float(row.get('item_price'))
-            listing_date = _parse_date(row.get('listing_date'))
+            # parse helpers
+            def fstr(k): return (row.get(k) or '').strip() or None
+            def ffloat(k):
+                v = (row.get(k) or '').strip()
+                try:
+                    return float(v) if v != '' else None
+                except:
+                    return None
+            def fdate(k):
+                v = (row.get(k) or '').strip()
+                if not v:
+                    return None
+                for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+                    try:
+                        dt = datetime.strptime(v, fmt)
+                        return dt.date() if fmt == "%Y-%m-%d" else dt
+                    except:
+                        pass
+                return None
 
             existing_item = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
-            
+
             if existing_item and mode == 'add':
-                existing_item.title = title
-                existing_item.listing_link = listing_link
-                existing_item.web_url = web_url
-                existing_item.ebay_url = ebay_url
-                existing_item.amazon_url = amazon_url
-                existing_item.mercari_url = mercari_url
-                existing_item.vinted_url = vinted_url
-                existing_item.poshmark_url = poshmark_url
-                existing_item.depop_url = depop_url
-                existing_item.A = A
-                existing_item.B = B
-                existing_item.S = S_
-                existing_item.C = C
-                existing_item.location_code = location_code
-
+                it = existing_item
+                it.title = title
+                it.listing_link = fstr('listing_link')
+                it.web_url = fstr('web_url')
+                it.ebay_url = fstr('ebay_url')
+                it.amazon_url = fstr('amazon_url')
+                it.mercari_url = fstr('mercari_url')
+                it.vinted_url = fstr('vinted_url')
+                it.poshmark_url = fstr('poshmark_url')
+                it.depop_url = fstr('depop_url')
+                it.A = fstr('A')
+                it.B = fstr('B')
+                it.S = fstr('S')
+                it.C = fstr('C')
+                it.location_code = fstr('location_code')
                 # nuevos
-                if has_new_cols:
-                    existing_item.item_thumb = item_thumb
-                    existing_item.supplier = supplier
-                    existing_item.item_cost = item_cost
-                    existing_item.item_price = item_price
-                    existing_item.listing_date = listing_date
-
+                it.item_thumb = fstr('item_thumb')
+                it.supplier = fstr('supplier')
+                it.item_cost = ffloat('item_cost')
+                it.item_price = ffloat('item_price')
+                ld = fdate('listing_date')
+                it.listing_date = ld if isinstance(ld, date) else None
                 updated_count += 1
-            
+
             elif not existing_item:
+                ld = fdate('listing_date')
                 new_item = Item(
                     user_id=current_user.id,
                     sku=sku,
                     title=title,
-                    listing_link=listing_link,
-                    web_url=web_url,
-                    ebay_url=ebay_url,
-                    amazon_url=amazon_url,
-                    mercari_url=mercari_url,
-                    vinted_url=vinted_url,
-                    poshmark_url=poshmark_url,
-                    depop_url=depop_url,
-                    A=A, B=B, S=S_, C=C,
-                    location_code=location_code,
+                    listing_link=fstr('listing_link'),
+                    web_url=fstr('web_url'),
+                    ebay_url=fstr('ebay_url'),
+                    amazon_url=fstr('amazon_url'),
+                    mercari_url=fstr('mercari_url'),
+                    vinted_url=fstr('vinted_url'),
+                    poshmark_url=fstr('poshmark_url'),
+                    depop_url=fstr('depop_url'),
+                    A=fstr('A'),
+                    B=fstr('B'),
+                    S=fstr('S'),
+                    C=fstr('C'),
+                    location_code=fstr('location_code'),
                     # nuevos
-                    item_thumb=item_thumb,
-                    supplier=supplier,
-                    item_cost=item_cost,
-                    item_price=item_price,
-                    listing_date=listing_date
+                    item_thumb=fstr('item_thumb'),
+                    supplier=fstr('supplier'),
+                    item_cost=ffloat('item_cost'),
+                    item_price=ffloat('item_price'),
+                    listing_date=ld if isinstance(ld, date) else None
                 )
                 db.session.add(new_item)
                 imported_count += 1
-            else:
-                # existing + mode replace lo manejamos más abajo con borrado
-                updated_count += 0  # no-op
 
-        # Si es modo replace, eliminar items que no están en el CSV
         if mode == 'replace':
-            csv_skus = {(row.get('sku') or '').strip() for row in csv.DictReader(io.StringIO(csv_content)) if (row.get('sku') or '').strip()}
+            csv_skus = {(r.get('sku') or '').strip() for r in csv.DictReader(io.StringIO(csv_content)) if (r.get('sku') or '').strip()}
             items_to_delete = Item.query.filter_by(user_id=current_user.id).filter(~Item.sku.in_(csv_skus)).all()
             for item in items_to_delete:
                 db.session.delete(item)
-        
+
         db.session.commit()
-        
-        # Mensaje de resultado
+
         messages = []
-        if imported_count > 0:
-            messages.append(f"{imported_count} items imported")
-        if updated_count > 0:
-            messages.append(f"{updated_count} items updated")
-        if skipped_count > 0:
-            messages.append(f"{skipped_count} rows skipped")
-        
+        if imported_count > 0: messages.append(f"{imported_count} items imported")
+        if updated_count > 0: messages.append(f"{updated_count} items updated")
+        if skipped_count > 0: messages.append(f"{skipped_count} rows skipped")
+
         flash(f"Import completed: {', '.join(messages)}.", "ok")
-        
+
     except Exception as e:
         db.session.rollback()
         flash(f"Import failed: {str(e)}", "error")
-    
+
     return redirect(url_for('main.dashboard'))
 
 
-# ---------------------- eBay Browse API (con .env) ----------------------
+# ---------------------- eBay Browse API ----------------------
 
 EBAY_ENV = (os.environ.get("EBAY_ENV") or "production").lower()
 EBAY_CLIENT_ID = os.environ.get("EBAY_CLIENT_ID")
@@ -421,7 +356,6 @@ def _ebay_base():
         "browse": "https://api.ebay.com/buy/browse/v1",
     }
 
-# Cache simple de token en memoria
 _EBAY_TOKEN = {"value": None, "exp": 0}
 
 def _get_ebay_app_token() -> str:
@@ -433,14 +367,8 @@ def _get_ebay_app_token() -> str:
         return _EBAY_TOKEN["value"]
 
     basic = base64.b64encode(f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}".encode()).decode()
-    data = {
-        "grant_type": "client_credentials",
-        "scope": "https://api.ebay.com/oauth/api_scope"
-    }
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": f"Basic {basic}",
-    }
+    data = { "grant_type": "client_credentials", "scope": "https://api.ebay.com/oauth/api_scope" }
+    headers = { "Content-Type": "application/x-www-form-urlencoded", "Authorization": f"Basic {basic}" }
     r = requests.post(base["oauth"], headers=headers, data=data, timeout=15)
     r.raise_for_status()
     j = r.json()
@@ -449,7 +377,7 @@ def _get_ebay_app_token() -> str:
     return _EBAY_TOKEN["value"]
 
 
-# ---------------------- Utilidades URL eBay (solo ID) ----------------------
+# ---------------------- Utilidades URL eBay ----------------------
 
 _EBAY_HOSTS = (
     "ebay.com", "www.ebay.com", "m.ebay.com",
@@ -458,39 +386,23 @@ _EBAY_HOSTS = (
 )
 
 def _looks_like_ebay_store_or_search(path: str) -> bool:
-    # /str/… (tienda), /sch/… (búsqueda), /b/… (browsing de categoría)
     return bool(re.match(r"^/(?:str|sch|b)/", path, re.I))
 
 def _extract_legacy_id(url: str) -> str | None:
-    """
-    Extrae el legacy item id desde URLs comunes de eBay.
-    Soporta:
-      - /itm/123456789012
-      - /itm/Titulo/123456789012
-      - /itm/123456789012?hash=...
-      - parámetros de query: ?item=..., ?iid=..., ?itemid=..., ?itemId=...
-      - subdominio móvil m.ebay.*
-    """
     try:
         u = urlparse(url)
         path = u.path or ""
-
-        # Si es tienda/búsqueda/categoría, no intentamos
         if _looks_like_ebay_store_or_search(path):
             return None
-
-        # Patrones comunes en el path
         rx_list = [
-            r"/itm/(?:[^/]+/)?(\d{9,})",  # /itm/Titulo/123...
-            r"/itm/(\d{9,})",            # /itm/123...
-            r"/(\d{12})(?:[/?]|$)",      # por si el path termina en el ID
+            r"/itm/(?:[^/]+/)?(\d{9,})",
+            r"/itm/(\d{9,})",
+            r"/(\d{12})(?:[/?]|$)",
         ]
         for rx in rx_list:
             m = re.search(rx, path)
             if m:
                 return m.group(1)
-
-        # Revisa querystring
         qs = parse_qs(u.query)
         for key in ("item", "iid", "itemid", "legacyItemId", "itemId"):
             vals = qs.get(key)
@@ -498,24 +410,17 @@ def _extract_legacy_id(url: str) -> str | None:
                 m = re.search(r"\d{9,}", vals[0])
                 if m:
                     return m.group(0)
-
-        # Último recurso: cualquier número largo en toda la URL
         m = re.search(r"(\d{12,})", url)
         return m.group(1) if m else None
     except Exception:
         return None
 
 
-# ---------------------- API helper: importar título desde URL (SOLO eBay API) ----------------------
+# ---------------------- API helper eBay ----------------------
 
 @main_bp.route("/api/fetch-market-title")
 @login_required
 def api_fetch_market_title():
-    """
-    Recibe ?url=... y devuelve {ok, marketplace, title, fill:{title, ebay_url}}
-    Implementación: SOLO eBay Browse API (sin scraping HTML).
-    Requiere URL de ítem con legacy_item_id extraíble.
-    """
     raw_url = (request.args.get("url") or "").strip()
     if not raw_url:
         return jsonify({"ok": False, "error": "Missing url"}), 400
@@ -526,7 +431,6 @@ def api_fetch_market_title():
     host = (u.netloc or "").lower()
     path = u.path or ""
 
-    # Verificación temprana: si es eBay pero NO es /itm/... (o similar), error claro
     if any(host.endswith(h) for h in _EBAY_HOSTS) and _looks_like_ebay_store_or_search(path):
         return jsonify({
             "ok": False,
@@ -556,16 +460,12 @@ def api_fetch_market_title():
                 "error": f"403 Forbidden: la app no tiene acceso a Browse API en {EBAY_ENV} (o keyset deshabilitado)."
             }), 403
         if r.status_code == 404:
-            return jsonify({
-                "ok": False,
-                "error": "404: legacy_item_id no encontrado por Browse API en este entorno."
-            }), 404
+            return jsonify({ "ok": False, "error": "404: legacy_item_id no encontrado por Browse API en este entorno." }), 404
 
         r.raise_for_status()
         data = r.json()
         title = (data.get("title") or "").strip()
         item_web_url = (data.get("itemWebUrl") or raw_url).strip()
-
         if not title:
             return jsonify({"ok": False, "error": "La Browse API no devolvió título para este ítem."}), 502
 
@@ -578,12 +478,72 @@ def api_fetch_market_title():
     except requests.HTTPError as e:
         body = e.response.text[:300] if e.response is not None else ""
         code = e.response.status_code if e.response is not None else 502
-        return jsonify({"ok": False, "error": f"HTTP {code}: {body}"}), 502
+        return jsonify({"ok": False, "error": f"HTTP {code}: {body}"}), code
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+# ---------------------- API: Upload imagen a Cloudinary ----------------------
+
+@main_bp.route("/api/upload-image", methods=["POST"])
+@login_required
+def api_upload_image():
+    if not cloudinary_enabled:
+        return jsonify({"ok": False, "error": "Cloudinary not configured"}), 503
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "Missing file"}), 400
+
+    # Validación simple
+    ct = (f.mimetype or "").lower()
+    if not ct.startswith("image/"):
+        return jsonify({"ok": False, "error": "Only image files are allowed"}), 400
+
+    # Opcional: límite de ~8 MB
+    f.seek(0, io.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 8 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "Image too large (max 8MB)"}), 400
+
+    try:
+        up = cloudinary.uploader.upload(
+            f,
+            folder=CLOUDINARY_UPLOAD_FOLDER,
+            overwrite=True,
+            resource_type="image",
+            transformation=[{"quality": "auto", "fetch_format": "auto"}]
+        )
+        url = up.get("secure_url") or up.get("url")
+        public_id = up.get("public_id")
+        width = up.get("width")
+        height = up.get("height")
+        return jsonify({"ok": True, "url": url, "public_id": public_id, "width": width, "height": height})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 502
 
 
 # ---------------------- CRUD Items (protegido) ----------------------
+
+def _parse_float(s: str | None):
+    if s is None or s == "":
+        return None
+    try:
+        return float(s)
+    except:
+        return None
+
+def _parse_date(s: str | None):
+    s = (s or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d",):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except:
+            pass
+    return None
 
 @main_bp.route("/item/new", methods=["GET", "POST"])
 @login_required
@@ -591,7 +551,6 @@ def new_item():
     s = get_or_create_settings(current_user)
 
     if request.method == "POST":
-        # Campos base
         title = (request.form.get("title") or "").strip()
         listing_link = (request.form.get("listing_link") or "").strip() or None
 
@@ -603,24 +562,22 @@ def new_item():
         poshmark_url= (request.form.get("poshmark_url") or "").strip() or None
         depop_url   = (request.form.get("depop_url") or "").strip() or None
 
-        # Location levels
+        # Nuevos campos
+        item_thumb  = (request.form.get("item_thumb") or "").strip() or None
+        supplier    = (request.form.get("supplier") or "").strip() or None
+        item_cost   = _parse_float(request.form.get("item_cost"))
+        item_price  = _parse_float(request.form.get("item_price"))
+        listing_date= _parse_date(request.form.get("listing_date"))
+
         A  = (request.form.get("A") or "").strip() or None
         B  = (request.form.get("B") or "").strip() or None
         S_ = (request.form.get("S") or "").strip() or None
         C  = (request.form.get("C") or "").strip() or None
 
-        # NUEVOS campos de inventario
-        item_thumb   = (request.form.get("item_thumb") or "").strip() or None
-        supplier     = (request.form.get("supplier") or "").strip() or None
-        item_cost    = _parse_float(request.form.get("item_cost"))
-        item_price   = _parse_float(request.form.get("item_price"))
-        listing_date = _parse_date(request.form.get("listing_date"))
-
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("main.new_item"))
 
-        # Crear item
         sku = generate_sku()
         loc = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
         it = Item(
@@ -628,39 +585,24 @@ def new_item():
             title=title,
             sku=sku,
             listing_link=listing_link,
-            web_url=web_url,
-            ebay_url=ebay_url,
-            amazon_url=amazon_url,
-            mercari_url=mercari_url,
-            vinted_url=vinted_url,
-            poshmark_url=poshmark_url,
-            depop_url=depop_url,
-            A=A, B=B, S=S_, C=C,
-            location_code=loc,
+            web_url=web_url, ebay_url=ebay_url, amazon_url=amazon_url,
+            mercari_url=mercari_url, vinted_url=vinted_url, poshmark_url=poshmark_url, depop_url=depop_url,
+            A=A, B=B, S=S_, C=C, location_code=loc,
             # nuevos
-            item_thumb=item_thumb,
-            supplier=supplier,
-            item_cost=item_cost,
-            item_price=item_price,
-            listing_date=listing_date
+            item_thumb=item_thumb, supplier=supplier, item_cost=item_cost, item_price=item_price, listing_date=listing_date
         )
         db.session.add(it)
         db.session.commit()
 
         action = (request.form.get("submit_action") or "create").strip()
-
         if action == "create_another":
-            # Guardar y quedarse en la misma página con el formulario limpio
             flash("Item created. You can add another.", "ok")
-            return render_template("new_item.html", settings=s, item=None)
+            return render_template("new_item.html", settings=s, item=None, cloudinary_enabled=cloudinary_enabled)
 
-        # Flujo normal: redirigir (dashboard o detalle)
         flash("Item created.", "ok")
         return redirect(url_for("main.dashboard"))
 
-    # GET
-    return render_template("new_item.html", settings=s, item=None)
-
+    return render_template("new_item.html", settings=s, item=None, cloudinary_enabled=cloudinary_enabled)
 
 
 @main_bp.route("/item/<int:item_id>/edit", methods=["GET", "POST"])
@@ -680,17 +622,17 @@ def edit_item(item_id):
         poshmark_url = (request.form.get("poshmark_url") or "").strip() or None
         depop_url = (request.form.get("depop_url") or "").strip() or None
 
+        # Nuevos campos
+        item_thumb  = (request.form.get("item_thumb") or "").strip() or None
+        supplier    = (request.form.get("supplier") or "").strip() or None
+        item_cost   = _parse_float(request.form.get("item_cost"))
+        item_price  = _parse_float(request.form.get("item_price"))
+        listing_date= _parse_date(request.form.get("listing_date"))
+
         A = (request.form.get("A") or "").strip() or None
         B = (request.form.get("B") or "").strip() or None
         S_ = (request.form.get("S") or "").strip() or None
         C = (request.form.get("C") or "").strip() or None
-
-        # nuevos
-        item_thumb   = (request.form.get("item_thumb") or "").strip() or None
-        supplier     = (request.form.get("supplier") or "").strip() or None
-        item_cost    = _parse_float(request.form.get("item_cost"))
-        item_price   = _parse_float(request.form.get("item_price"))
-        listing_date = _parse_date(request.form.get("listing_date"))
 
         if not title:
             flash("Title is required.", "error")
@@ -706,20 +648,18 @@ def edit_item(item_id):
         it.poshmark_url = poshmark_url
         it.depop_url = depop_url
 
-        it.A, it.B, it.S, it.C = A, B, S_, C
-        it.location_code = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
-
-        # nuevos
         it.item_thumb = item_thumb
         it.supplier = supplier
         it.item_cost = item_cost
         it.item_price = item_price
         it.listing_date = listing_date
 
+        it.A, it.B, it.S, it.C = A, B, S_, C
+        it.location_code = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
         db.session.commit()
         flash("Item updated.", "ok")
         return redirect(url_for("main.dashboard"))
-    return render_template("edit_item.html", item=it, settings=s)
+    return render_template("edit_item.html", item=it, settings=s, cloudinary_enabled=cloudinary_enabled)
 
 
 @main_bp.route("/item/<int:item_id>/delete", methods=["POST"])
@@ -790,7 +730,6 @@ def qr_batch():
         flash("No codes generated. Please provide at least one value.", "error")
         return redirect(url_for("main.qr_batch"))
 
-    # Construye links públicos usando el username del dueño
     from ..helpers.utils import build_qr_batch_pdf
     pdf_buf = build_qr_batch_pdf(
         combos, s,
@@ -819,7 +758,6 @@ def public_view_location(username, code):
         q = q.filter(Item.C == parts["C"])
 
     items = q.order_by(Item.created_at.desc()).all()
-    # Pasamos username para usarlo en los enlaces de QR dentro de la plantilla
     return render_template("location.html", code=code, items=items, settings=s, parts=parts, username=username)
 
 
@@ -869,7 +807,6 @@ def sitemap_xml():
 @main_bp.route("/sw.js")
 def service_worker():
     resp = make_response(send_from_directory("static", "sw.js"))
-    # Evita caché agresiva: así se actualiza bien en clientes
     resp.headers["Cache-Control"] = "no-cache"
     resp.headers["Content-Type"] = "application/javascript"
     return resp
@@ -877,7 +814,6 @@ def service_worker():
 
 @main_bp.route("/offline")
 def offline():
-    # No requiere login; es fallback de PWA
     return render_template("offline.html")
 
 
@@ -890,75 +826,50 @@ def _ellipsize(s: str, n: int = 20) -> str:
     return s[:n].rstrip() + "…"
 
 def _build_item_label_pdf(it, settings) -> bytes:
-    """
-    PDF 40x30 mm con:
-      - QR code del SKU centrado
-      - Título (20 chars + …) centrado
-      - Ubicación centrada
-    Todo el bloque queda centrado verticalmente en el sticker.
-    """
     W = 40 * mm
     H = 30 * mm
 
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=(W, H))
 
-    # Márgenes
     m = 3 * mm
     inner_w = W - 2 * m
     inner_h = H - 2 * m
 
-    # Fuentes / métricas
     title_fs = 8
     loc_fs = 8
-    leading = 1.2  # factor de línea para estimar altura de texto
+    leading = 1.2
     title_h = title_fs * leading
     loc_h = loc_fs * leading
 
-    # Separaciones entre elementos
     gap_qr_title = 1.5 * mm
     gap_title_loc = 0.8 * mm
 
-    # Tamaño del QR code (cuadrado)
-    qr_size = 15 * mm  # Tamaño del QR en el PDF
-    
-    # Altura total del bloque para centrarlo verticalmente
-    block_h = qr_size + gap_qr_title + title_h + gap_title_loc + loc_h
-    y0 = m + (inner_h - block_h) / 2.0  # base del bloque
+    qr_size = 15 * mm
 
-    # --- QR CODE ---
+    block_h = qr_size + gap_qr_title + title_h + gap_title_loc + loc_h
+    y0 = m + (inner_h - block_h) / 2.0
+
     sku = it.sku or ""
-    
-    # Generar QR code con el SKU
     qr = qrcode.QRCode(
-        version=None,  # automático
+        version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
         box_size=10,
         border=1,
     )
     qr.add_data(sku)
     qr.make(fit=True)
-    
-    # Crear imagen del QR (PIL Image)
     qr_img = qr.make_image(fill_color="black", back_color="white")
-    
-    # Convertir a RGB si es necesario (qrcode puede devolver modo '1' o 'L')
     if getattr(qr_img, "mode", None) != 'RGB':
         qr_img = qr_img.convert('RGB')
-    
-    # Calcular posición centrada del QR
     x_qr = m + (inner_w - qr_size) / 2.0
-    
-    # ⬅️ Diferencia clave: envolver en ImageReader para que ReportLab acepte PIL.Image
     c.drawImage(ImageReader(qr_img), x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
-    # --- TÍTULO ---
     title = _ellipsize(it.title or "", 20)
     c.setFont("Helvetica-Bold", title_fs)
     y_title = y0 + qr_size + gap_qr_title + title_fs
     c.drawCentredString(W / 2.0, y_title, title)
 
-    # --- UBICACIÓN ---
     loc = it.location_code or "-"
     c.setFont("Helvetica", loc_fs)
     y_loc = y0 + qr_size + gap_qr_title + title_h + gap_title_loc + loc_fs
@@ -979,7 +890,7 @@ def print_item(item_id):
 
     pdf_bytes = _build_item_label_pdf(it, s)
 
-    printer_name = os.environ.get("QVENTORY_PRINTER")  # opcional, desde .env
+    printer_name = os.environ.get("QVENTORY_PRINTER")
     try:
         with tempfile.NamedTemporaryFile(prefix="qventory_label_", suffix=".pdf", delete=False) as tmp:
             tmp.write(pdf_bytes)
@@ -1007,7 +918,6 @@ def print_item(item_id):
                 download_name=f"label_{it.sku}.pdf",
             )
     except FileNotFoundError:
-        # No existe 'lp' (CUPS) en el sistema: ofrece descarga
         flash("System print not available. Downloading the label.", "error")
         return send_file(
             io.BytesIO(pdf_bytes),

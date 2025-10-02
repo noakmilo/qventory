@@ -20,18 +20,27 @@
   <div id="import_status" style="font-size:12px; opacity:.8; min-height:1.2em"></div>
 
   <form method="post" class="grid cols-3" id="newItemForm">
-    <!-- Título -->
     <div style="grid-column:1/-1">
       <label><i class="fas fa-heading"></i> Title</label>
       <input class="input" type="text" name="title" id="title" placeholder="Item title" required>
     </div>
 
-    <!-- Miniatura + Proveedor -->
+    {# -------- Imagen / Cloudinary -------- #}
     <div>
-      <label><i class="fas fa-image"></i> Thumbnail URL (Cloudinary)</label>
-      <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="https://res.cloudinary.com/...">
-      <div class="thumb-preview" id="thumbPreview">
-        <span class="thumb-placeholder">No image</span>
+      <label><i class="fas fa-camera"></i> Image (upload to Cloudinary)</label>
+      <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="Cloudinary URL will appear here…" readonly>
+      <div class="thumb-uploader">
+        <div class="thumb-preview" id="thumbPreview"><span class="thumb-placeholder">No image</span></div>
+        {% if cloudinary_enabled %}
+        <div class="uploader-actions">
+          <input type="file" id="file_input" accept="image/*" capture="environment" style="display:none">
+          <button class="btn" type="button" id="btnPick"><i class="fas fa-upload"></i> Choose / Camera</button>
+          <button class="btn" type="button" id="btnUpload" disabled><i class="fas fa-cloud-upload-alt"></i> Upload to Cloudinary</button>
+          <div id="upload_status" class="hint"></div>
+        </div>
+        {% else %}
+        <div class="hint">Cloudinary is not configured.</div>
+        {% endif %}
       </div>
     </div>
 
@@ -40,7 +49,6 @@
       <input class="input" type="text" name="supplier" placeholder="e.g., Goodwill / Target / Wholesale ABC">
     </div>
 
-    <!-- Pricing -->
     <div>
       <label><i class="fas fa-dollar-sign"></i> Cost</label>
       <input class="input" type="number" step="0.01" min="0" name="item_cost" id="item_cost" placeholder="0.00">
@@ -54,22 +62,20 @@
       <input class="input" type="text" id="roi_display" value="—" disabled>
     </div>
 
-    <!-- Fecha de publicación -->
     <div>
       <label><i class="far fa-calendar-alt"></i> Listing Date</label>
       <input class="input" type="date" name="listing_date" id="listing_date">
     </div>
 
-    <!-- Listing principal -->
     <div style="grid-column:1/-1">
       <label><i class="fas fa-link"></i> Listing Link (optional)</label>
       <input class="input" type="url" name="listing_link" placeholder="https://...">
     </div>
 
-    <!-- Bloque de Links de Marketplace -->
     <div style="grid-column:1/-1">
       <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
     </div>
+
     <div style="grid-column:1/-1">
       <h3 style="margin:0 0 8px 0;font-size:16px"><i class="fas fa-store"></i> Marketplace Links (optional)</h3>
     </div>
@@ -103,7 +109,6 @@
       <input class="input" type="url" name="depop_url" placeholder="https://www.depop.com/products/...">
     </div>
 
-    <!-- Ubicación + QR -->
     <div class="card" style="grid-column:1/-1; margin-top:16px">
       <div style="grid-column:1/-1">
         <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
@@ -194,14 +199,6 @@
 </div>
 
 <style>
-  /* Vista previa de miniatura */
-  .thumb-preview{
-    margin-top:6px; width:100%; max-width:220px; aspect-ratio:1/1; border:1px solid #e5e7eb;
-    border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#f8f9fa;
-  }
-  .thumb-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .thumb-placeholder{ font-size:12px; color:#888; padding:10px; }
-
   /* Modal compacto y bloqueo de scroll */
   body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
@@ -220,7 +217,11 @@
   }
   .scan-actions .icon-top{
     border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
-    display: flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
   }
   .scan-actions .icon-top:hover{ opacity:1; }
   .scan-actions .icon-top.active{ opacity:1; color:#ffd700; }
@@ -251,61 +252,139 @@
     pointer-events:none;
     animation: pulse-guide 2s infinite;
   }
-  @keyframes pulse-guide { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+  
+  @keyframes pulse-guide {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
 
   .success-indicator {
-    position: absolute; top: 50%; left: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 48px; color: #00ff00; display: none;
+    font-size: 48px;
+    color: #00ff00;
+    display: none;
     text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
     animation: success-flash 0.5s ease-out;
   }
-  @keyframes success-flash { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+
+  @keyframes success-flash {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
 
   .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
-  .scan-result { background:#1a1d23; border:1px solid #333; border-radius:8px; padding:8px 12px; font-family:monospace; font-size:12px; color:#0ff; min-height:20px; display:none; }
-  .spinner{ position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); }
-  .spinner::after{ content:""; width:28px; height:28px; border-radius:50%; border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin .9s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .scan-result {
+    background: #1a1d23;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #0ff;
+    min-height: 20px;
+    display: none;
+  }
 
-  /* Iconos en formulario */
-  label i { margin-right: 8px; width: 16px; color: #666; }
-  .btn i { margin-right: 5px; }
+  /* Spinner simple */
+  .spinner{
+    position:absolute; inset:0; display:none;
+    align-items:center; justify-content:center;
+    background:rgba(0,0,0,.25);
+  }
+  .spinner::after{
+    content:"";
+    width:28px; height:28px; border-radius:50%;
+    border:3px solid rgba(255,255,255,.3);
+    border-top-color:#fff; animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Estilos para iconos en formulario */
+  label i {
+    margin-right: 8px;
+    width: 16px;
+    color: #666;
+  }
+  
+  .btn i {
+    margin-right: 5px;
+  }
+
+  /* --- Uploader / thumb --- */
+  .thumb-uploader{ display:flex; gap:10px; align-items:flex-start; margin-top:6px; }
+  .thumb-preview{ width:140px; aspect-ratio:1/1; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#f8f9fa; }
+  .thumb-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb-placeholder{ font-size:12px; color:#888; padding:10px; }
+  .uploader-actions{ display:flex; flex-direction:column; gap:6px; }
+  .hint{ font-size:12px; opacity:.8; }
 </style>
 
 <script>
-/* ========== Vista previa de miniatura + ROI en vivo ========== */
+/* -------- Cloudinary upload (via backend) -------- */
 (function(){
-  const thumbInput = document.getElementById('item_thumb');
-  const thumbBox   = document.getElementById('thumbPreview');
-  function renderPreview(url){
-    if (!thumbBox) return;
-    thumbBox.innerHTML = '';
-    if (!url){
-      const sp = document.createElement('span'); sp.className='thumb-placeholder'; sp.textContent='No image';
-      thumbBox.appendChild(sp);
+  const enabled = {{ 'true' if cloudinary_enabled else 'false' }};
+  if (!enabled) return;
+
+  const pick = document.getElementById('btnPick');
+  const up = document.getElementById('btnUpload');
+  const file = document.getElementById('file_input');
+  const status = document.getElementById('upload_status');
+  const thumb = document.getElementById('item_thumb');
+  const preview = document.getElementById('thumbPreview');
+
+  function setPreview(objUrl){
+    preview.innerHTML='';
+    if (objUrl){
+      const img=document.createElement('img');
+      img.src=objUrl; img.alt='preview';
+      preview.appendChild(img);
+    } else {
+      const s=document.createElement('span'); s.className='thumb-placeholder'; s.textContent='No image';
+      preview.appendChild(s);
+    }
+  }
+
+  pick?.addEventListener('click', ()=> file?.click());
+
+  file?.addEventListener('change', ()=>{
+    const f = file.files && file.files[0];
+    if (!f){ up.disabled = true; setPreview(null); return; }
+    setPreview(URL.createObjectURL(f));
+    up.disabled = false;
+    status.textContent = '';
+  });
+
+  up?.addEventListener('click', async ()=>{
+    const f = file.files && file.files[0];
+    if (!f){ return; }
+    up.disabled = true; pick.disabled = true;
+    status.textContent = 'Uploading…';
+
+    const fd = new FormData();
+    fd.append('file', f);
+
+    try{
+      const resp = await fetch('{{ url_for("main.api_upload_image") }}', { method:'POST', body:fd, credentials:'same-origin' });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok){
+        throw new Error(data.error || ('HTTP '+resp.status));
+      }
+      thumb.value = data.url || '';
+      status.textContent = '✓ Uploaded';
+    }catch(e){
+      status.textContent = 'Upload failed: ' + (e.message||e);
+      up.disabled = false; pick.disabled = false;
       return;
     }
-    const img = document.createElement('img'); img.alt='thumbnail'; img.src=url; thumbBox.appendChild(img);
-  }
-  thumbInput?.addEventListener('input', e => renderPreview(e.target.value.trim()));
-
-  const cost = document.getElementById('item_cost');
-  const price = document.getElementById('item_price');
-  const roi = document.getElementById('roi_display');
-  function updateROI(){
-    const c = parseFloat(cost?.value || '');
-    const p = parseFloat(price?.value || '');
-    if (!isFinite(c) || c<=0 || !isFinite(p)) { roi.value='—'; return; }
-    const r = ((p - c) / c) * 100;
-    roi.value = `${Math.round(r)}%`;
-  }
-  cost?.addEventListener('input', updateROI);
-  price?.addEventListener('input', updateROI);
+    up.disabled = false; pick.disabled = false;
+  });
 })();
-</script>
 
-<script>
 /* ========== SCRIPT GET desde eBay ========== */
 document.addEventListener('DOMContentLoaded', () => {
   const btn   = document.getElementById('btnFetch');
@@ -332,7 +411,10 @@ document.addEventListener('DOMContentLoaded', () => {
     status.style.color = '#aaa';
 
     try {
-      const resp = await fetch(`/api/fetch-market-title?url=${encodeURIComponent(url)}`, { credentials: 'same-origin' });
+      const resp = await fetch(`/api/fetch-market-title?url=${encodeURIComponent(url)}`, {
+        credentials: 'same-origin'
+      });
+
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
         const msg = (data && (data.error || data.message)) || `HTTP ${resp.status}`;
@@ -372,36 +454,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const success = document.getElementById('qrSuccess');
   const result = document.getElementById('qrResult');
 
+  // ===== Estado =====
   const CAM_CACHE_KEY = 'qv_qr_cam_device_id';
   let cachedDeviceId = null;
   let stream = null, rafId = null;
   let detector = null;
-  let usingBD = false, usingJsQR = false, jsQRLoaded = false;
-  let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
-  let flashlightOn = false, lastDetections = [];
+  let usingBD = false;
+  let usingJsQR = false;
+  let jsQRLoaded = false;
+  let videoDevices = [], currentDeviceIdx = -1;
+  let devicesLoaded = false;
+  let flashlightOn = false;
+  let lastDetections = [];
 
+  // ===== Utils UI =====
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
-  function showSuccess(){ success.style.display='block'; setTimeout(()=>success.style.display='none', 450); }
-  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+  function showSuccess(){ success.style.display='block'; setTimeout(()=>success.style.display='none',500); }
   function cleanupAll(){
-    cleanupLoop();
-    if (stream){ try{ stream.getTracks().forEach(t=>t.stop()); }catch{}; stream=null; }
+    if (rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
     flashlightOn=false; btnFlash.classList.remove('active');
     video.srcObject=null; video.style.display='none';
     target.style.display='none'; result.style.display='none';
     usingBD=false; usingJsQR=false; lastDetections.length=0;
   }
   function showError(err, where=''){
+    const name = err?.name || 'Error';
+    const msg  = err?.message || String(err || '');
     console.error('[QR]', where, err);
-    alert((err?.name||'Error') + (err?.message?': '+err.message:''));
+    alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
+  // ===== Cámara =====
   async function loadVideoDevices(){
     if (devicesLoaded) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d=>d.kind==='videoinput');
+    // prioriza "back"/"environment"
     const prefers = ['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
@@ -421,19 +512,33 @@ document.addEventListener('DOMContentLoaded', () => {
       audio: false
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
+    video.setAttribute('playsinline','');
+    video.setAttribute('autoplay','');
+    video.setAttribute('muted','');
     video.srcObject = stream;
     await video.play();
     showSpinner(false);
+    rememberActiveDevice();
   }
 
-  function cleanupBDorJS(){ if (usingBD||usingJsQR){ cleanupLoop(); } }
+  function rememberActiveDevice(){
+    try {
+      const track = stream?.getVideoTracks?.()[0];
+      const settings = track?.getSettings?.() || {};
+      const id = settings.deviceId || track?.getConstraints?.().deviceId?.exact;
+      if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
+    } catch {}
+  }
+
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+
   async function flipCamera(){
     await loadVideoDevices();
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
-    cleanupBDorJS();
+    cleanupLoop();
     await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
+    // reanudar el método activo
     if (usingBD) startBDLoop();
     if (usingJsQR) startJsQRLoop();
   }
@@ -447,61 +552,85 @@ document.addEventListener('DOMContentLoaded', () => {
       flashlightOn = !flashlightOn;
       await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
       btnFlash.classList.toggle('active', flashlightOn);
-    }catch{ alert('Unable to control flashlight'); }
+    }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
+  }
+
+  // ===== Detección =====
+  function validateDetection(val){
+    if (!val || val.length<3) return false;
+    lastDetections.push(val);
+    if (lastDetections.length>3) lastDetections.shift();
+    // bastará con 1 coincidencia (rápido)
+    return lastDetections[lastDetections.length-1];
   }
 
   function parseLocationQR(qrText){
     try{
-      let part = qrText.includes('/location/') ? qrText.split('/location/')[1] : qrText;
-      if (!part) return null;
-      const m = part.match(/^(?:.*?)(A(\d+))?(B(\d+))?(S(\d+))?(C(\d+))?/i);
+      let locationPart = qrText.includes('/location/') ? qrText.split('/location/')[1] : qrText;
+      if (!locationPart) return null;
+      // admite "A1B2S3C4" en cualquier combinación
+      const m = locationPart.match(/^(?:.*?)(A(\d+))?(B(\d+))?(S(\d+))?(C(\d+))?/i);
       if (!m) return null;
-      return { A:m[2]||null, B:m[4]||null, S:m[6]||null, C:m[8]||null, original:part };
-    }catch(e){ return null; }
+      return { A: m[2]||null, B: m[4]||null, S: m[6]||null, C: m[8]||null, original: locationPart };
+    }catch(e){ console.error('parseLocationQR',e); return null; }
   }
 
   function populateLocationFields(loc){
-    ['A','B','S','C'].forEach(k=>{
-      const el=document.getElementById(`input_${k}`);
-      if (el && loc[k]){ el.value=loc[k]; el.style.background='#e8f5e8'; setTimeout(()=>el.style.background='',1200); }
+    const ids = ['A','B','S','C']; const done=[];
+    ids.forEach(k=>{
+      const el = document.getElementById(`input_${k}`);
+      if (el && loc[k]){ el.value = loc[k]; done.push(`${k}=${loc[k]}`); el.style.background='#e8f5e8'; setTimeout(()=>el.style.background='',1500); }
     });
+    return done;
   }
 
   function onDetected(raw){
-    const v = (raw||'').trim();
+    const v = validateDetection(raw);
     if (!v) return;
     const loc = parseLocationQR(v);
     if (loc){
-      document.getElementById('qrResult').textContent = `Location: ${loc.original}`;
-      document.getElementById('qrResult').style.display='block';
+      result.textContent = `Location: ${loc.original}`;
+      result.style.display='block';
       showSuccess();
       try{ navigator.vibrate && navigator.vibrate([80,40,80]); }catch(_){}
-      setTimeout(()=>{ populateLocationFields(loc); cleanupAll(); closeModal(); }, 560);
+      setTimeout(()=>{
+        const filled = populateLocationFields(loc);
+        cleanupAll(); closeModal();
+      }, 600);
+    } else {
+      result.textContent = `QR: ${String(v).slice(0,80)}…`;
+      result.style.display='block';
     }
   }
 
+  // ===== BarcodeDetector (nativo) =====
   async function startBarcodeDetector(){
-    if (!('BarcodeDetector' in window)) return false;
+    // Asegura que realmente soporta qr_code
+    let supported = [];
     try{
-      const supported = await window.BarcodeDetector.getSupportedFormats?.() || [];
-      if (supported.length && !supported.includes('qr_code')) return false;
-      detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      usingBD = true; usingJsQR = false;
-      startBDLoop();
-      return true;
-    }catch{ return false; }
+      supported = await window.BarcodeDetector.getSupportedFormats();
+    }catch{}
+    if (!supported.includes('qr_code')) return false;
+
+    detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    usingBD = true; usingJsQR = false;
+    video.style.display='block'; target.style.display='none';
+    startBDLoop();
+    return true;
   }
 
   function startBDLoop(){
     cleanupLoop();
-    let frame = 0;
+    // procesar 1 de cada 3 frames
+    let frame=0;
     const tick = async ()=>{
-      frame++;
       try{
+        frame++;
         if (frame%3===0 && detector){
           const codes = await detector.detect(video);
           if (codes?.length){
-            const val = (codes[0].rawValue||'').trim();
+            const qr = codes.find(c=>c.format==='qr_code') || codes[0];
+            const val = (qr.rawValue||'').trim();
             if (val){ onDetected(val); return; }
           }
         }
@@ -511,6 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rafId = requestAnimationFrame(tick);
   }
 
+  // ===== jsQR (fallback universal) =====
   function loadJsQR(){
     if (jsQRLoaded) return Promise.resolve();
     return new Promise((resolve,reject)=>{
@@ -525,26 +655,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startJsQRLoop(){
     usingBD=false; usingJsQR=true;
+    video.style.display='block'; target.style.display='none';
     cleanupLoop();
 
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d',{ willReadFrequently:true });
-    const ROI_INSET = 0.10;
-    let lastTS = 0; const MIN_INTERVAL = 80;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    const tick=(now)=>{
+    // procesar el ROI (caja punteada: inset 10%)
+    const ROI_INSET = 0.10;
+
+    let lastTS = 0;
+    const MIN_INTERVAL = 80; // ms
+
+    const tick = (now)=>{
       try{
         if (!usingJsQR) return;
-        if (now-lastTS>=MIN_INTERVAL && video.videoWidth>0){
-          lastTS=now;
-          const vw=video.videoWidth, vh=video.videoHeight;
-          const rx=Math.floor(vw*ROI_INSET), ry=Math.floor(vh*ROI_INSET);
-          const rw=Math.floor(vw*(1-2*ROI_INSET)), rh=Math.floor(vh*(1-2*ROI_INSET));
-          canvas.width=rw; canvas.height=rh;
+        if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0){
+          lastTS = now;
+
+          const vw = video.videoWidth, vh = video.videoHeight;
+          const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
+          const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
+
+          canvas.width = rw; canvas.height = rh;
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-          const img=ctx.getImageData(0,0,rw,rh);
-          const qr=window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
-          const val=(qr?.data||'').trim();
+
+          const img = ctx.getImageData(0, 0, rw, rh);
+          const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
+          const val = (qr?.data || '').trim();
           if (val){ onDetected(val); return; }
         }
       }catch(_){}
@@ -553,30 +691,57 @@ document.addEventListener('DOMContentLoaded', () => {
     rafId = requestAnimationFrame(tick);
   }
 
+  // ===== Orquestación =====
   async function startScan(){
-    openModal(); document.getElementById('qrResult').style.display='none'; success.style.display='none';
+    openModal(); result.style.display='none'; success.style.display='none';
     try{
       cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
       if (cachedDeviceId){ await startWithDevice(cachedDeviceId); }
-      else{
+      else {
         await loadVideoDevices();
-        if (videoDevices.length) currentDeviceIdx=0;
+        if (videoDevices.length) currentDeviceIdx = 0;
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
-      const ok = await startBarcodeDetector();
-      if (!ok){ await loadJsQR(); startJsQRLoop(); }
+      // 1) intenta BarcodeDetector con qr_code
+      if ('BarcodeDetector' in window){
+        const ok = await startBarcodeDetector();
+        if (ok) return; // ya arrancó BD
+      }
+
+      // 2) fallback jsQR
+      await loadJsQR();
+      startJsQRLoop();
     }catch(e){
       showError(e, 'startScan');
       cleanupAll(); closeModal();
     }
   }
 
+  // ===== Eventos =====
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
   btnFlash?.addEventListener('click', toggleFlashlight);
   btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target===modal){ cleanupAll(); closeModal(); } });
+
+})();
+</script>
+
+<script>
+/* ROI live */
+(function(){
+  const cost = document.getElementById('item_cost');
+  const price = document.getElementById('item_price');
+  const roi = document.getElementById('roi_display');
+  function update(){
+    const c = parseFloat(cost?.value||'');
+    const p = parseFloat(price?.value||'');
+    if (!isFinite(c) || c<=0 || !isFinite(p)){ roi.value='—'; return; }
+    roi.value = Math.round(((p-c)/c)*100) + '%';
+  }
+  cost?.addEventListener('input', update);
+  price?.addEventListener('input', update);
 })();
 </script>
 
