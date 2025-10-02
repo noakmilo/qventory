@@ -820,19 +820,18 @@ def _build_item_label_pdf(it, settings) -> bytes:
     qr.add_data(sku)
     qr.make(fit=True)
     
-    # Crear imagen del QR
+    # Crear imagen del QR (PIL Image)
     qr_img = qr.make_image(fill_color="black", back_color="white")
     
-    # Guardar QR en buffer temporal
-    qr_buf = io.BytesIO()
-    qr_img.save(qr_buf, format='PNG')
-    qr_buf.seek(0)
+    # Convertir a RGB si es necesario (qrcode puede devolver modo '1' o 'L')
+    if qr_img.mode != 'RGB':
+        qr_img = qr_img.convert('RGB')
     
     # Calcular posición centrada del QR
     x_qr = m + (inner_w - qr_size) / 2.0
     
-    # Dibujar QR code
-    c.drawImage(qr_buf, x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
+    # Dibujar QR code directamente desde PIL Image
+    c.drawImage(qr_img, x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
     # --- TÍTULO ---
     title = _ellipsize(it.title or "", 20)
