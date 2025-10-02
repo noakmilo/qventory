@@ -235,7 +235,7 @@
 </div>
 
 <!-- ===== Modal de imagen ampliada ===== -->
-<div id="imgModal" class="hidden" aria-hidden="true" role="dialog" aria-modal="true" style="
+<div id="imgModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
   position:fixed; inset:0; display:grid; place-items:center; z-index:1000;
   background:rgba(0,0,0,.55);
 ">
@@ -252,9 +252,14 @@
   </div>
 </div>
 
+
 <!-- (Tus modales y script de QR permanecen igual que antes) -->
 
 <style>
+  /* Modal imagen: cerrado por defecto; sólo visible con .is-open */
+#imgModal[hidden] { display: none !important; }
+#imgModal { display: grid; }            /* El layout deseado cuando NO está oculto */
+.modal-open { overflow: hidden; }       /* Evita scroll del body con modal abierto */
 /* ===== Miniaturas con overlay de lupa ===== */
 .thumb-wrap{
   position:relative; width:36px; height:36px; padding:0; border:0; cursor:zoom-in;
@@ -273,7 +278,7 @@
 .thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
 
 /* Oculta/mostrar modal con clase .hidden (sin depender de frameworks) */
-.hidden{ display:none }
+#imgModal.hidden{ display:none }
 </style>
 
 <script>
