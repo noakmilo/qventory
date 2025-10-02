@@ -252,13 +252,55 @@
   </div>
 </div>
 
+<!-- ===== Modal ESCÁNER QR ===== -->
+<div id="scanQRModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
+  position:fixed; inset:0; display:grid; place-items:center; z-index:1100;
+  background:rgba(0,0,0,.55);
+">
+  <div class="glass" style="
+    position:relative; width:min(96vw,520px); max-height:min(92vh,820px);
+    border-radius:16px; padding:12px; box-sizing:border-box; overflow:hidden;
+  ">
+    <!-- Header -->
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+      <h3 style="margin:0; font-size:16px; display:flex; align-items:center; gap:8px">
+        <i class="fas fa-qrcode"></i> Scan QR
+      </h3>
+      <div style="display:flex; gap:6px">
+        <button id="scanQRFlashlight" class="btn small" type="button" title="Flashlight"><i class="fas fa-bolt"></i></button>
+        <button id="scanQRFlip" class="btn small" type="button" title="Flip camera"><i class="fas fa-sync-alt"></i></button>
+        <button id="scanQRClose" class="btn small" type="button" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
 
-<!-- (Tus modales y script de QR permanecen igual que antes) -->
+    <!-- Viewport -->
+    <div style="position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--glass-border); background:rgba(14,22,48,.55); aspect-ratio: 3/2;">
+      <video id="scanQRVideo" playsinline muted autoplay style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+
+      <!-- Spinner -->
+      <div id="scanQRSpinner" style="
+        position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+        font-size:13px; background:rgba(0,0,0,.25);
+      ">
+        <div class="tag">Initializing camera…</div>
+      </div>
+
+      <!-- Success flash -->
+      <div id="scanQRSuccess" style="
+        position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+        pointer-events:none; background:rgba(0,255,128,.12);
+      "></div>
+    </div>
+
+    <!-- Result -->
+    <div id="scanQRResult" class="muted" style="margin-top:8px; display:none"></div>
+  </div>
+</div>
 
 <style>
-  /* Modal imagen: cerrado por defecto */
-  #imgModal[hidden] { display: none !important; }
-  #imgModal { display: grid; }
+  /* ===== Visibilidad de modales (cerrados por defecto) ===== */
+  #imgModal[hidden], #scanQRModal[hidden] { display: none !important; }
+  #imgModal, #scanQRModal { display: grid; }
   .modal-open { overflow: hidden; }
 
   /* ===== Miniaturas con overlay de lupa ===== */
@@ -293,16 +335,15 @@
   .thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
 </style>
 
-
-
+<!-- ======================= SCRIPTS ======================= -->
 
 <script>
-/* Toggle filtros con persistencia */
+/* Toggle filtros con persistencia (solo si existen IDs) */
 (function(){
   const btn = document.getElementById('filtersToggle');
   const content = document.getElementById('filtersContent');
   const shell = document.getElementById('filtersShell');
-  if(!btn || !content) return; // <- evita errores si no existen
+  if(!btn || !content) return;
   const KEY = 'qv_filters_collapsed';
   function setCollapsed(collapsed){
     content.hidden = collapsed;
@@ -318,7 +359,6 @@
   btn.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
   initState();
 })();
-
 </script>
 
 <script>
@@ -358,12 +398,10 @@
   // Esc para cerrar
   window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeImg(); });
 })();
-
 </script>
 
 <script>
 /* ========== SCRIPT SCANNER QR (robusto) ========== */
-/* (idéntico al que ya tienes en tu versión previa mejorada) */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
   const modal = document.getElementById('scanQRModal');
@@ -384,8 +422,16 @@
   let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
   let flashlightOn = false;
 
-  function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
-  function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
+  function openModal(){
+    document.body.classList.add('modal-open');
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden','false');
+  }
+  function closeModal(){
+    document.body.classList.remove('modal-open');
+    modal.setAttribute('hidden','');
+    modal.setAttribute('aria-hidden','true');
+  }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
   function showSuccess(){ success.style.display='block'; setTimeout(()=>success.style.display='none', 450); }
   function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
@@ -588,10 +634,16 @@
   document.getElementById('scanQRFlip')?.addEventListener('click', async ()=>{ await flipCamera(); });
   document.getElementById('scanQRFlashlight')?.addEventListener('click', async ()=>{ await toggleFlashlight(); });
   document.getElementById('scanQRClose')?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
-  document.getElementById('scanQRModal')?.addEventListener('click', (e)=>{ if (e.target===document.getElementById('scanQRModal')){ cleanupAll(); closeModal(); } });
 
-  // Modal QR imagen
-  const qrModal   = document.getElementById('qrModal');
+  // Cerrar tocando fuera del contenido
+  document.getElementById('scanQRModal')?.addEventListener('click', (e)=>{
+    if (e.target===document.getElementById('scanQRModal')){
+      cleanupAll(); closeModal();
+    }
+  });
+
+  // ===== Modal QR desde enlaces de ubicación (QR PNG) =====
+  const qrModal   = document.getElementById('qrModal');     // Si lo usas en otra parte
   const qrClose   = document.getElementById('qrClose');
   const qrImage   = document.getElementById('qrImage');
   const qrOpenNew = document.getElementById('qrOpenNew');
@@ -599,16 +651,18 @@
   const qrTitle   = document.getElementById('qrTitle');
 
   function openQrModal(url, caption){
+    if(!qrModal) return; // opcional si no está este modal
     document.body.classList.add('modal-open');
     qrModal.classList.remove('hidden');
     qrModal.setAttribute('aria-hidden','false');
     qrImage.src = '';
     setTimeout(()=>{ qrImage.src = url; }, 0);
-    qrOpenNew.href = url;
-    qrCaption.textContent = caption || '';
-    qrTitle.textContent = caption || 'QR';
+    if(qrOpenNew) qrOpenNew.href = url;
+    if(qrCaption) qrCaption.textContent = caption || '';
+    if(qrTitle)   qrTitle.textContent   = caption || 'QR';
   }
   function closeQrModal(){
+    if(!qrModal) return;
     document.body.classList.remove('modal-open');
     qrModal.classList.add('hidden');
     qrModal.setAttribute('aria-hidden','true');
@@ -624,7 +678,8 @@
   });
   qrClose?.addEventListener('click', closeQrModal);
   qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && qrModal && !qrModal.classList.contains('hidden')) closeQrModal(); });
+
 })();
 </script>
 
