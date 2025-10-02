@@ -292,7 +292,7 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
   td:nth-child(7)  /* ROI */
   { font-family:ui-monospace,'SF Mono',Consolas,monospace; font-size:11px }
 
-  .table-wrap td img{ width:20px; height:20px; border-radius:4px; object-fit:cover }
+  .table-wrap td img{ width:20px; height:20px; border-radius:4px; object-fit:cover; border-style: dotted; }
   .table-wrap td:last-child{ text-align:center }
   .table-wrap .btn.settingsbtn{
     width:24px; height:26px; padding:0; margin:0 2px;
