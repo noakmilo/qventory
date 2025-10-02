@@ -7,7 +7,7 @@
     <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="grid cols-3">
       <div style="grid-column:1/-1">
         <div class="input-with-button">
-          <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title or SKU…">
+          <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…">
           <button class="icon-btn" type="button" id="btnScanQR" title="Scan QR code with camera" aria-label="Scan QR code">
             <i class="fas fa-qrcode"></i>
           </button>
@@ -58,6 +58,19 @@
         </select>
       </div>
       {% endif %}
+
+      {% if options.supplier and options.supplier|length %}
+      <div>
+        <label>Supplier</label>
+        <select name="supplier">
+          <option value="">All</option>
+          {% for opt in options.supplier %}
+          <option value="{{ opt }}" {% if fSupplier==opt %}selected{% endif %}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
       {% if PLATFORMS %}
       <div>
         <label>Platform</label>
@@ -69,6 +82,7 @@
         </select>
       </div>
       {% endif %}
+
       <div style="grid-column:1/-1">
         <button class="btn submitbtn" type="submit">Apply</button>
         <a class="btn" href="{{ url_for('main.dashboard') }}">Clear</a>
@@ -94,8 +108,12 @@
       <table>
         <thead>
           <tr>
+            <th style="width:44px"></th>
             <th>Title</th>
             <th>SKU</th>
+            <th>Supplier</th>
+            <th>Pricing</th>
+            <th>Listed</th>
             <th>Location</th>
             <th>Listings</th>
             <th></th>
@@ -103,14 +121,48 @@
         </thead>
         <tbody>
           {% for it in items %}
+          {% set has_price = it.item_price is not none %}
+          {% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
+          {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
           <tr>
+            <td>
+              {% if it.item_thumb %}
+                <img src="{{ it.item_thumb }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+              {% else %}
+                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
+              {% endif %}
+            </td>
             <td>{{ it.title }}</td>
             <td><span class="tag itsku">{{ it.sku }}</span></td>
+            <td>
+              {% if it.supplier %}
+                <span class="tag">{{ it.supplier }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td>
+              <div class="price-badges">
+                {% if has_price %}
+                  <span class="tag" title="Item price"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>
+                {% endif %}
+                {% if has_cost %}
+                  <span class="tag" title="Item cost"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+                {% endif %}
+                {% if roi is not none %}
+                  <span class="tag" title="ROI">ROI {{ roi|round(0) }}%</span>
+                {% endif %}
+                {% if (not has_price) and (not has_cost) %}—{% endif %}
+              </div>
+            </td>
+            <td>
+              {% if it.listing_date %}
+                <span class="tag">{{ it.listing_date.strftime('%Y-%m-%d') }}</span>
+              {% else %}—{% endif %}
+            </td>
             <td>
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
               &nbsp;
-              <!-- Abrir QR en modal (ya no target=_blank) -->
+              <!-- Abrir QR en modal -->
               <a class="tag qr-link"
                  href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
                  data-caption="QR for {{ it.location_code }}">
@@ -237,40 +289,22 @@
     flex-wrap: wrap;
     gap: 12px;
   }
-  
-  .items-header h2 {
-    margin: 0;
-  }
-  
-  .backup-actions {
-    display: flex;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  
+  .items-header h2 { margin: 0; }
+  .backup-actions { display: flex; gap: 8px; flex-shrink: 0; }
   .backup-btn {
-    padding: 6px 12px !important;
-    font-size: 13px !important;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    white-space: nowrap;
-    background: #f8f9fa;
-    border: 1px solid #ddd;
-    color: #495057;
-    transition: all 0.2s ease;
+    padding: 6px 12px !important; font-size: 13px !important;
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    background: #f8f9fa; border: 1px solid #ddd; color: #495057; transition: all 0.2s ease;
   }
-  
   .backup-btn:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
-    transform: translateY(-1px);
+    background: #e9ecef; border-color: #adb5bd; transform: translateY(-1px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
-  
-  .backup-btn i {
-    font-size: 12px;
-  }
+  .backup-btn i { font-size: 12px; }
+
+  /* Tags compactas */
+  .tag { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:999px; background:#f1f3f5; color:#343a40; border:1px solid #e9ecef; font-size:12px; }
+  .itsku { font-family: monospace; }
 
   /* Modal compacto y bloqueo de scroll */
   body.modal-open{ overflow:hidden; touch-action:none; }
@@ -299,100 +333,56 @@
 
   /* Viewport fijo */
   .viewport{
-    position:relative;
-    width:100%;
-    aspect-ratio: 3 / 4;
-    max-height: 60vh;
-    border-radius:12px;
-    overflow:hidden;
-    background:#000;
+    position:relative; width:100%; aspect-ratio: 3 / 4; max-height: 60vh;
+    border-radius:12px; overflow:hidden; background:#000;
     box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
   }
-  #scanQRVideo, .scan-target{
-    position:absolute; inset:0;
-    width:100%; height:100%;
-    object-fit:cover;
-    display:none;
-  }
+  #scanQRVideo, .scan-target{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:none; }
   .guide{
-    position:absolute; inset:10%;
-    border:2px dashed rgba(255,255,255,.6);
-    border-radius:10px;
-    pointer-events:none;
-    animation: pulse-guide 2s infinite;
+    position:absolute; inset:10%; border:2px dashed rgba(255,255,255,.6);
+    border-radius:10px; pointer-events:none; animation: pulse-guide 2s infinite;
   }
-  
-  @keyframes pulse-guide {
-    0%, 100% { opacity: 0.6; }
-    50% { opacity: 1; }
-  }
+  @keyframes pulse-guide { 0%,100%{opacity:.6;} 50%{opacity:1;} }
 
   .success-indicator {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 48px;
-    color: #00ff00;
-    display: none;
-    text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 48px; color: #00ff00; display: none; text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
     animation: success-flash 0.5s ease-out;
   }
-
-  @keyframes success-flash {
-    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
-    50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
-    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  }
+  @keyframes success-flash { 0%{transform:translate(-50%,-50%) scale(.5);opacity:0;}50%{transform:translate(-50%,-50%) scale(1.2);opacity:1;}100%{transform:translate(-50%,-50%) scale(1);opacity:1;} }
 
   .scan-tip{ text-align:center; font-size:12px; opacity:.8; }
-  
   .scan-result {
-    background: #1a1d23;
-    border: 1px solid #333;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-family: monospace;
-    font-size: 12px;
-    color: #0ff;
-    min-height: 20px;
-    display: none;
+    background: #1a1d23; border: 1px solid #333; border-radius: 8px;
+    padding: 8px 12px; font-family: monospace; font-size: 12px; color: #0ff;
+    min-height: 20px; display: none;
   }
-
-  /* Spinner simple */
   .spinner{
-    position:absolute; inset:0; display:none;
-    align-items:center; justify-content:center;
-    background:rgba(0,0,0,.25);
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25);
   }
   .spinner::after{
-    content:"";
-    width:28px; height:28px; border-radius:50%;
-    border:3px solid rgba(255,255,255,.3);
-    border-top-color:#fff; animation:spin 0.9s linear infinite;
+    content:""; width:28px; height:28px; border-radius:50%;
+    border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin 0.9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Responsive para dispositivos pequeños */
+  /* Responsive */
+  @media (max-width: 900px) {
+    table thead th:nth-child(3), /* SKU */
+    table thead th:nth-child(5)  /* Pricing */
+    { width: 1%; white-space: nowrap; }
+  }
   @media (max-width: 768px) {
-    .items-header {
-      flex-direction: column;
-      align-items: stretch;
-    }
-    
-    .backup-actions {
-      justify-content: center;
-    }
-    
-    .backup-btn {
-      flex: 1;
-      justify-content: center;
-    }
+    .items-header { flex-direction: column; align-items: stretch; }
+    .backup-actions { justify-content: center; }
+    .backup-btn { flex: 1; justify-content: center; }
+    td:nth-child(2){ max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
   }
 </style>
 
 <script>
-/* ========== SCRIPT SCANNER QR (parches de robustez) ========== */
+/* ========== SCRIPT SCANNER QR (robusto) ========== */
+/* (idéntico al que ya tienes en tu versión previa mejorada) */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
   const modal = document.getElementById('scanQRModal');
@@ -413,7 +403,6 @@
   let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
   let flashlightOn = false;
 
-  // ---------- UI ----------
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
@@ -428,7 +417,6 @@
   }
   function showError(msg){ console.error('[QR]', msg); alert(msg); }
 
-  // ---------- Cámara ----------
   async function loadVideoDevices(){
     if (devicesLoaded) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -455,7 +443,6 @@
     video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
     video.srcObject = stream;
     await video.play();
-    // asegura metadata cargada
     if (video.readyState < 2){
       await new Promise(res=>{
         const t = setTimeout(res, 250);
@@ -487,15 +474,11 @@
     }catch{ alert('Unable to control flashlight'); }
   }
 
-  // ---------- Detección ----------
-  // Acepta primera lectura y normaliza posible URL -> SKU
   function extractSku(val){
     if (!val) return '';
     const s = String(val).trim();
-    // si es URL, intenta extraer algo con pinta de SKU (12+ dígitos o patrón tipo YYYYMMDD-XXXX)
     try{
       const u = new URL(s);
-      // busca secuencias largas de dígitos o alfanumérico guionado
       const m = u.href.match(/([A-Z0-9]{8,}|\d{10,}|\d{8}-[A-Z0-9]{3,})/i);
       return m ? m[1] : s;
     }catch{ return s; }
@@ -515,13 +498,11 @@
     }, 500);
   }
 
-  // ---------- BarcodeDetector (sin getSupportedFormats) ----------
   async function tryBarcodeDetector(){
     if (!('BarcodeDetector' in window)) return false;
     try{
       detector = new window.BarcodeDetector({ formats: ['qr_code','qr'] });
     }catch{
-      // algunos navegadores requieren sin formatos
       try{ detector = new window.BarcodeDetector(); }catch{ return false; }
     }
     usingBD = true; usingJsQR = false;
@@ -542,13 +523,12 @@
             if (val){ onDetected(val); return; }
           }
         }
-      }catch(e){ /* ignora y sigue */ }
+      }catch(e){}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
 
-  // ---------- jsQR fallback ----------
   function loadJsQR(){
     if (jsQRLoaded) return Promise.resolve();
     return new Promise((resolve,reject)=>{
@@ -567,7 +547,7 @@
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const ROI_INSET = 0.08; // un poco más amplio
+    const ROI_INSET = 0.08;
 
     let lastTS = 0;
     const MIN_INTERVAL = 80;
@@ -593,7 +573,6 @@
     rafId = requestAnimationFrame(tick);
   }
 
-  // ---------- Orquestación ----------
   async function startScan(){
     openModal(); result.style.display='none'; success.style.display='none';
     try{
@@ -609,7 +588,6 @@
       }
       await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
 
-      // intenta BarcodeDetector; si no, jsQR
       const bdOK = await tryBarcodeDetector();
       if (!bdOK){
         try{
@@ -626,14 +604,13 @@
     }
   }
 
-  // ---------- Eventos ----------
   btnScan?.addEventListener('click', startScan);
-  btnFlip?.addEventListener('click', flipCamera);
-  btnFlash?.addEventListener('click', toggleFlashlight);
-  btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
-  modal?.addEventListener('click', (e)=>{ if (e.target===modal){ cleanupAll(); closeModal(); } });
+  document.getElementById('scanQRFlip')?.addEventListener('click', async ()=>{ await flipCamera(); });
+  document.getElementById('scanQRFlashlight')?.addEventListener('click', async ()=>{ await toggleFlashlight(); });
+  document.getElementById('scanQRClose')?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
+  document.getElementById('scanQRModal')?.addEventListener('click', (e)=>{ if (e.target===document.getElementById('scanQRModal')){ cleanupAll(); closeModal(); } });
 
-  // Modal QR imagen (sin cambios relevantes)
+  // Modal QR imagen
   const qrModal   = document.getElementById('qrModal');
   const qrClose   = document.getElementById('qrClose');
   const qrImage   = document.getElementById('qrImage');

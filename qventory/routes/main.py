@@ -12,7 +12,7 @@ import time
 import requests
 from urllib.parse import urlparse, parse_qs
 import csv
-from datetime import datetime
+from datetime import datetime, date
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -37,6 +37,39 @@ from ..helpers import (
     parse_location_code, parse_values, human_from_code, qr_label_image
 )
 from . import main_bp
+
+
+# ---------------------- Utilidades locales para nuevos campos ----------------------
+
+def _parse_float(val):
+    """Convierte '1,234.56', '$12.34', '  12 ' a float o None."""
+    s = (val or "").strip()
+    if not s:
+        return None
+    try:
+        s = s.replace("$", "").replace(",", "")
+        return float(s)
+    except Exception:
+        return None
+
+def _parse_date(val):
+    """Devuelve date o None. Acepta 'YYYY-MM-DD', 'MM/DD/YYYY', 'YYYY/MM/DD'."""
+    s = (val or "").strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except Exception:
+            continue
+    # Último recurso: try ISO general
+    try:
+        return datetime.fromisoformat(s).date()
+    except Exception:
+        return None
+
+def _fmt_date(d: date | None):
+    return d.strftime("%Y-%m-%d") if isinstance(d, date) else ""
 
 
 # ---------------------- Landing pública ----------------------
@@ -64,12 +97,23 @@ def dashboard():
     fS = (request.args.get("S") or "").strip()
     fC = (request.args.get("C") or "").strip()
     fPlatform = (request.args.get("platform") or "").strip()
+    fSupplier = (request.args.get("supplier") or "").strip()   # NUEVO (opcional)
 
     items = Item.query.filter_by(user_id=current_user.id)
 
     if q:
         like = f"%{q}%"
-        items = items.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
+        # Ampliamos búsqueda a supplier y location_code (útil)
+        items = items.filter(or_(
+            Item.title.ilike(like),
+            Item.sku.ilike(like),
+            Item.supplier.ilike(like),
+            Item.location_code.ilike(like)
+        ))
+
+    # Filtro por supplier (si viene)
+    if fSupplier:
+        items = items.filter(Item.supplier == fSupplier)
 
     # Filtros de ubicación (solo niveles habilitados)
     if s.enable_A and fA:
@@ -106,6 +150,7 @@ def dashboard():
         "B": distinct(Item.B) if s.enable_B else [],
         "S": distinct(Item.S) if s.enable_S else [],
         "C": distinct(Item.C) if s.enable_C else [],
+        "supplier": distinct(Item.supplier),  # NUEVO (para dropdown opcional en UI)
     }
 
     PLATFORMS = [
@@ -125,7 +170,8 @@ def dashboard():
         options=options,
         total_items=total_items,  # <-- para mostrar en el H2: Items ({{ total_items }})
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
-        fPlatform=fPlatform, PLATFORMS=PLATFORMS
+        fPlatform=fPlatform, PLATFORMS=PLATFORMS,
+        fSupplier=fSupplier
     )
 
 
@@ -140,15 +186,18 @@ def export_csv():
     output = io.StringIO()
     writer = csv.writer(output)
     
-    # Escribir headers
+    # Escribir headers (ACTUALIZADO)
     headers = [
-        'id', 'sku', 'title', 'listing_link', 'web_url', 'ebay_url', 
-        'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 
-        'depop_url', 'A', 'B', 'S', 'C', 'location_code', 'created_at'
+        'id', 'sku', 'title', 'listing_link',
+        'web_url', 'ebay_url', 'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 'depop_url',
+        'A', 'B', 'S', 'C', 'location_code',
+        # nuevos
+        'item_thumb', 'supplier', 'item_cost', 'item_price', 'listing_date',
+        'created_at'
     ]
     writer.writerow(headers)
     
-    # Escribir datos
+    # Escribir datos (ACTUALIZADO)
     for item in items:
         row = [
             item.id,
@@ -167,6 +216,12 @@ def export_csv():
             item.S or '',
             item.C or '',
             item.location_code or '',
+            # nuevos
+            item.item_thumb or '',
+            item.supplier or '',
+            f"{item.item_cost:.2f}" if isinstance(item.item_cost, (int, float)) else '',
+            f"{item.item_price:.2f}" if isinstance(item.item_price, (int, float)) else '',
+            _fmt_date(item.listing_date),
             item.created_at.strftime('%Y-%m-%d %H:%M:%S') if item.created_at else ''
         ]
         writer.writerow(row)
@@ -211,26 +266,28 @@ def import_csv():
         csv_content = file.read().decode('utf-8')
         csv_reader = csv.DictReader(io.StringIO(csv_content))
         
-        expected_headers = [
-            'id', 'sku', 'title', 'listing_link', 'web_url', 'ebay_url',
-            'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url',
-            'depop_url', 'A', 'B', 'S', 'C', 'location_code', 'created_at'
-        ]
-        
-        # Verificar headers
-        if not all(header in csv_reader.fieldnames for header in ['sku', 'title']):
+        # Headers esperados (ACTUALIZADO)
+        expected_headers = {
+            'id', 'sku', 'title', 'listing_link',
+            'web_url', 'ebay_url', 'amazon_url', 'mercari_url', 'vinted_url', 'poshmark_url', 'depop_url',
+            'A', 'B', 'S', 'C', 'location_code',
+            'item_thumb', 'supplier', 'item_cost', 'item_price', 'listing_date',
+            'created_at'
+        }
+
+        # Verificar al menos mínimos
+        if not all(h in csv_reader.fieldnames for h in ['sku', 'title']):
             flash("CSV must contain at least 'sku' and 'title' columns.", "error")
             return redirect(url_for('main.import_csv'))
         
-        items_to_import = []
+        # Si el archivo no trae los nuevos, no rompemos (modo compatible)
+        has_new_cols = any(h in csv_reader.fieldnames for h in ['item_thumb','supplier','item_cost','item_price','listing_date'])
+
         existing_skus = set()
-        
-        # Si es modo replace, obtener SKUs existentes
         if mode == 'replace':
             existing_items = Item.query.filter_by(user_id=current_user.id).all()
             existing_skus = {item.sku for item in existing_items}
         
-        # Procesar filas
         imported_count = 0
         updated_count = 0
         skipped_count = 0
@@ -238,55 +295,88 @@ def import_csv():
         for row_num, row in enumerate(csv_reader, start=2):  # start=2 because header is row 1
             sku = (row.get('sku') or '').strip()
             title = (row.get('title') or '').strip()
-            
             if not sku or not title:
                 skipped_count += 1
                 continue
-            
-            # Verificar si ya existe el SKU
+
+            # Valores base
+            listing_link = (row.get('listing_link') or '').strip() or None
+            web_url     = (row.get('web_url') or '').strip() or None
+            ebay_url    = (row.get('ebay_url') or '').strip() or None
+            amazon_url  = (row.get('amazon_url') or '').strip() or None
+            mercari_url = (row.get('mercari_url') or '').strip() or None
+            vinted_url  = (row.get('vinted_url') or '').strip() or None
+            poshmark_url= (row.get('poshmark_url') or '').strip() or None
+            depop_url   = (row.get('depop_url') or '').strip() or None
+            A  = (row.get('A') or '').strip() or None
+            B  = (row.get('B') or '').strip() or None
+            S_ = (row.get('S') or '').strip() or None
+            C  = (row.get('C') or '').strip() or None
+            location_code = (row.get('location_code') or '').strip() or None
+
+            # Nuevos
+            item_thumb   = (row.get('item_thumb') or '').strip() or None
+            supplier     = (row.get('supplier') or '').strip() or None
+            item_cost    = _parse_float(row.get('item_cost'))
+            item_price   = _parse_float(row.get('item_price'))
+            listing_date = _parse_date(row.get('listing_date'))
+
             existing_item = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
             
             if existing_item and mode == 'add':
-                # Modo add: actualizar item existente
                 existing_item.title = title
-                existing_item.listing_link = (row.get('listing_link') or '').strip() or None
-                existing_item.web_url = (row.get('web_url') or '').strip() or None
-                existing_item.ebay_url = (row.get('ebay_url') or '').strip() or None
-                existing_item.amazon_url = (row.get('amazon_url') or '').strip() or None
-                existing_item.mercari_url = (row.get('mercari_url') or '').strip() or None
-                existing_item.vinted_url = (row.get('vinted_url') or '').strip() or None
-                existing_item.poshmark_url = (row.get('poshmark_url') or '').strip() or None
-                existing_item.depop_url = (row.get('depop_url') or '').strip() or None
-                existing_item.A = (row.get('A') or '').strip() or None
-                existing_item.B = (row.get('B') or '').strip() or None
-                existing_item.S = (row.get('S') or '').strip() or None
-                existing_item.C = (row.get('C') or '').strip() or None
-                existing_item.location_code = (row.get('location_code') or '').strip() or None
+                existing_item.listing_link = listing_link
+                existing_item.web_url = web_url
+                existing_item.ebay_url = ebay_url
+                existing_item.amazon_url = amazon_url
+                existing_item.mercari_url = mercari_url
+                existing_item.vinted_url = vinted_url
+                existing_item.poshmark_url = poshmark_url
+                existing_item.depop_url = depop_url
+                existing_item.A = A
+                existing_item.B = B
+                existing_item.S = S_
+                existing_item.C = C
+                existing_item.location_code = location_code
+
+                # nuevos
+                if has_new_cols:
+                    existing_item.item_thumb = item_thumb
+                    existing_item.supplier = supplier
+                    existing_item.item_cost = item_cost
+                    existing_item.item_price = item_price
+                    existing_item.listing_date = listing_date
+
                 updated_count += 1
             
             elif not existing_item:
-                # Crear nuevo item
                 new_item = Item(
                     user_id=current_user.id,
                     sku=sku,
                     title=title,
-                    listing_link=(row.get('listing_link') or '').strip() or None,
-                    web_url=(row.get('web_url') or '').strip() or None,
-                    ebay_url=(row.get('ebay_url') or '').strip() or None,
-                    amazon_url=(row.get('amazon_url') or '').strip() or None,
-                    mercari_url=(row.get('mercari_url') or '').strip() or None,
-                    vinted_url=(row.get('vinted_url') or '').strip() or None,
-                    poshmark_url=(row.get('poshmark_url') or '').strip() or None,
-                    depop_url=(row.get('depop_url') or '').strip() or None,
-                    A=(row.get('A') or '').strip() or None,
-                    B=(row.get('B') or '').strip() or None,
-                    S=(row.get('S') or '').strip() or None,
-                    C=(row.get('C') or '').strip() or None,
-                    location_code=(row.get('location_code') or '').strip() or None
+                    listing_link=listing_link,
+                    web_url=web_url,
+                    ebay_url=ebay_url,
+                    amazon_url=amazon_url,
+                    mercari_url=mercari_url,
+                    vinted_url=vinted_url,
+                    poshmark_url=poshmark_url,
+                    depop_url=depop_url,
+                    A=A, B=B, S=S_, C=C,
+                    location_code=location_code,
+                    # nuevos
+                    item_thumb=item_thumb,
+                    supplier=supplier,
+                    item_cost=item_cost,
+                    item_price=item_price,
+                    listing_date=listing_date
                 )
                 db.session.add(new_item)
                 imported_count += 1
-        
+            else:
+                # existing + mode replace lo manejamos más abajo con borrado
+                updated_count += 0  # no-op
+
         # Si es modo replace, eliminar items que no están en el CSV
         if mode == 'replace':
             csv_skus = {(row.get('sku') or '').strip() for row in csv.DictReader(io.StringIO(csv_content)) if (row.get('sku') or '').strip()}
@@ -519,6 +609,13 @@ def new_item():
         S_ = (request.form.get("S") or "").strip() or None
         C  = (request.form.get("C") or "").strip() or None
 
+        # NUEVOS campos de inventario
+        item_thumb   = (request.form.get("item_thumb") or "").strip() or None
+        supplier     = (request.form.get("supplier") or "").strip() or None
+        item_cost    = _parse_float(request.form.get("item_cost"))
+        item_price   = _parse_float(request.form.get("item_price"))
+        listing_date = _parse_date(request.form.get("listing_date"))
+
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("main.new_item"))
@@ -539,7 +636,13 @@ def new_item():
             poshmark_url=poshmark_url,
             depop_url=depop_url,
             A=A, B=B, S=S_, C=C,
-            location_code=loc
+            location_code=loc,
+            # nuevos
+            item_thumb=item_thumb,
+            supplier=supplier,
+            item_cost=item_cost,
+            item_price=item_price,
+            listing_date=listing_date
         )
         db.session.add(it)
         db.session.commit()
@@ -582,6 +685,13 @@ def edit_item(item_id):
         S_ = (request.form.get("S") or "").strip() or None
         C = (request.form.get("C") or "").strip() or None
 
+        # nuevos
+        item_thumb   = (request.form.get("item_thumb") or "").strip() or None
+        supplier     = (request.form.get("supplier") or "").strip() or None
+        item_cost    = _parse_float(request.form.get("item_cost"))
+        item_price   = _parse_float(request.form.get("item_price"))
+        listing_date = _parse_date(request.form.get("listing_date"))
+
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("main.edit_item", item_id=item_id))
@@ -598,6 +708,14 @@ def edit_item(item_id):
 
         it.A, it.B, it.S, it.C = A, B, S_, C
         it.location_code = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
+
+        # nuevos
+        it.item_thumb = item_thumb
+        it.supplier = supplier
+        it.item_cost = item_cost
+        it.item_price = item_price
+        it.listing_date = listing_date
+
         db.session.commit()
         flash("Item updated.", "ok")
         return redirect(url_for("main.dashboard"))
