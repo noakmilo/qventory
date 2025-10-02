@@ -517,7 +517,10 @@
     result.textContent = `Detected: ${v.slice(0,120)}`;
     result.style.display='block';
     showSuccess();
-    try{ navigator.vibrate && navigator.vibrate(80); }catch{}
+    try{ 
+      navigator.vibrate && navigator.vibrate(80); 
+      new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play();
+    }catch{}
     setTimeout(()=>{
       cleanupAll(); closeModal();
       inputQ.value = v;
