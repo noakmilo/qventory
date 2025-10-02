@@ -94,7 +94,7 @@
       <table class="table-cards">
         <thead>
           <tr>
-            <th>Title</th>
+            <th>Item</th>
             <th>SKU</th>
             <th>Location</th>
             <th>Listings</th>
@@ -103,9 +103,34 @@
         </thead>
         <tbody>
         {% for it in items %}
+          {% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
+          {% set has_price = it.item_price is not none %}
+          {% set roi = ((it.item_price - it.item_cost) / it.item_cost * 100) if (has_cost and has_price) else None %}
           <tr>
-            <td data-th="Title">{{ it.title }}</td>
+            <td data-th="Item">
+              <div class="item-cell">
+                <div class="thumb">
+                  {% if it.item_thumb %}
+                    <img src="{{ it.item_thumb }}" alt="thumb {{ it.sku }}">
+                  {% else %}
+                    <div class="thumb-ph"><i class="far fa-image"></i></div>
+                  {% endif %}
+                </div>
+                <div class="meta">
+                  <div class="title">{{ it.title }}</div>
+                  <div class="meta-row">
+                    {% if it.supplier %}<span class="chip"><i class="fas fa-truck"></i> {{ it.supplier }}</span>{% endif %}
+                    {% if has_cost %}<span class="chip dim"><i class="fas fa-dollar-sign"></i> Cost {{ '%.2f'|format(it.item_cost) }}</span>{% endif %}
+                    {% if has_price %}<span class="chip good"><i class="fas fa-tags"></i> {{ '%.2f'|format(it.item_price) }}</span>{% endif %}
+                    {% if roi is not none %}<span class="chip {{ 'good' if roi>=0 else 'bad' }}"><i class="fas fa-percentage"></i> {{ roi|round(0) }}%</span>{% endif %}
+                    {% if it.listing_date %}<span class="chip"><i class="far fa-calendar-alt"></i> {{ it.listing_date.strftime('%Y-%m-%d') }}</span>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </td>
+
             <td data-th="SKU"><span class="tag"><i class="fas fa-barcode"></i> {{ it.sku }}</span></td>
+
             <td data-th="Location">
               {% if it.location_code %}
                 <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}"><i class="fas fa-map-marker-alt"></i> {{ it.location_code }}</a>
@@ -118,6 +143,7 @@
                 —
               {% endif %}
             </td>
+
             <td data-th="Listings">
               <div class="platform-badges">
                 {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank"><i class="fas fa-globe"></i> Web</a>{% endif %}
@@ -130,6 +156,7 @@
                 {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
+
             <td data-th="Actions">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <a class="btn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
@@ -175,6 +202,20 @@
   /* Bloqueo de scroll cuando modal está abierto */
   body.modal-open{ overflow:hidden; touch-action:none; }
 
+  /* Célula de ítem con thumb + metadatos */
+  .item-cell{ display:flex; gap:10px; align-items:stretch; }
+  .thumb{ width:56px; height:56px; border-radius:10px; overflow:hidden; border:1px solid #e5e7eb; background:#f5f6f7; display:grid; place-items:center; flex-shrink:0; }
+  .thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb-ph{ color:#9aa0a6; font-size:18px; }
+  .meta{ min-width:0; }
+  .title{ font-weight:600; line-height:1.2; margin-bottom:6px; word-break:break-word; }
+  .meta-row{ display:flex; flex-wrap:wrap; gap:6px; }
+
+  .chip{ display:inline-flex; align-items:center; gap:6px; padding:2px 8px; font-size:12px; border-radius:999px; border:1px solid #e5e7eb; background:#f8f9fa; color:#444; }
+  .chip.dim{ opacity:.9; }
+  .chip.good{ background:#e8f8ee; border-color:#cbeed9; color:#0a7f3f; }
+  .chip.bad{ background:#fdecea; border-color:#f5c6cb; color:#b33a3a; }
+
   /* Modal base */
   .qr-modal.hidden{ display:none; }
   .qr-modal{
@@ -195,11 +236,7 @@
   .qr-icon{
     border:none; background:transparent; color:#fff;
     font-size:18px; cursor:pointer; opacity:.9; text-decoration:none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
+    display:flex; align-items:center; justify-content:center; width:30px; height:30px;
   }
   .qr-icon:hover{ opacity:1; }
 
@@ -213,41 +250,18 @@
   .qr-tip{ text-align:center; font-size:12px; opacity:.8; }
   
   /* Estilos para iconos */
-  .input-with-icon {
-    position: relative;
-  }
+  .input-with-icon { position: relative; }
   .input-with-icon i {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #666;
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #666;
   }
-  .input-with-icon input {
-    padding-left: 35px;
-  }
-  .tag i, .btn i {
-    margin-right: 5px;
-  }
-  .btn-danger {
-    background-color: #e74c3c;
-    color: white;
-  }
-  .btn-danger:hover {
-    background-color: #c0392b;
-  }
+  .input-with-icon input { padding-left: 35px; }
+  .tag i, .btn i { margin-right: 5px; }
+  .btn-danger { background-color: #e74c3c; color: white; }
+  .btn-danger:hover { background-color: #c0392b; }
   .fab {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 24px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   }
 </style>
 
@@ -264,9 +278,7 @@
     document.body.classList.add('modal-open');
     qrModal.classList.remove('hidden');
     qrModal.setAttribute('aria-hidden','false');
-    // Reset y cargar
     qrImage.src = '';
-    // Carga inmediata (si prefieres, puedes mostrar un spinner)
     qrImage.src = url;
     qrOpenNew.href = url;
     qrCaption.textContent = caption || '';
@@ -277,10 +289,9 @@
     document.body.classList.remove('modal-open');
     qrModal.classList.add('hidden');
     qrModal.setAttribute('aria-hidden','true');
-    qrImage.src = ''; // liberar si backend genera URLs dinámicas
+    qrImage.src = '';
   }
 
-  // Delegación de clicks: cualquier <a class="qr-link">
   document.body.addEventListener('click', (e) => {
     const a = e.target.closest('a.qr-link');
     if (!a) return;
