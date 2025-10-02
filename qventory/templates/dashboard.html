@@ -258,8 +258,8 @@
 <style>
   /* Modal imagen: cerrado por defecto */
   #imgModal[hidden] { display: none !important; }
-  #imgModal { display: grid; }            /* Layout cuando NO está oculto */
-  .modal-open { overflow: hidden; }       /* Evita scroll del body con modal abierto */
+  #imgModal { display: grid; }
+  .modal-open { overflow: hidden; }
 
   /* ===== Miniaturas con overlay de lupa ===== */
   .thumb-wrap{
@@ -272,9 +272,9 @@
     border-radius:6px;
   }
   .thumb-img{
-    width:36px; height:36px;
+    width:100%; height:100%;
     object-fit:cover;
-    border-radius:6px;
+    border-radius:inherit;
     border:1px solid var(--glass-border);
     display:block;
   }
@@ -292,10 +292,9 @@
   }
   .thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
 
-  /* ===== Ajuste especial en móvil (miniatura 20x20 con lupa dentro) ===== */
+  /* ===== Ajuste móvil ===== */
   @media (max-width:720px){
-    .thumb-wrap{ width:36px; height:36px; border-radius:4px; }
-    .thumb-img{ width:36px; height:36px; border-radius:4px; }
+    .thumb-wrap{ width:20px; height:20px; border-radius:4px; }
     .thumb-zoom{
       width:12px; height:12px;
       right:1px; bottom:1px;
@@ -304,6 +303,7 @@
     }
   }
 </style>
+
 
 
 <script>
