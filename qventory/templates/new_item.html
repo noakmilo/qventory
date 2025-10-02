@@ -67,60 +67,69 @@
       <input class="input" type="url" name="depop_url" placeholder="https://www.depop.com/products/...">
     </div>
 
-    {# ---------- Foto (Cloudinary) + nuevos campos ---------- #}
+    {# ===== Imagen / Cloudinary (elige tomar foto o subir archivo) ===== #}
     <div style="grid-column:1/-1">
       <hr style="border-color:var(--border);opacity:.3;margin:8px 0">
     </div>
 
     <div style="grid-column:1/-1">
-      <h3 style="margin:0 0 8px 0;font-size:16px"><i class="fas fa-image"></i> Photo & Details</h3>
+      <h3 style="margin:0 0 8px 0;font-size:16px"><i class="fas fa-image"></i> Item Image</h3>
     </div>
 
-    <div style="grid-column:1/-1" class="card">
-      {% if cloudinary_enabled %}
-        <div class="grid cols-3" style="gap:12px; align-items:end">
-          <div>
-            <label><i class="fas fa-camera"></i> Take/Choose Photo</label>
-            <input id="item_thumb_file" type="file" accept="image/*" capture="environment">
-            <small id="upload_status"></small>
+    {% if cloudinary_enabled %}
+      <div style="grid-column:1/-1">
+        <div class="uploader">
+          <div class="uploader-buttons">
+            <button class="btn" type="button" id="btnTakePhoto" title="Use camera">
+              <i class="fas fa-camera"></i> Take photo
+            </button>
+            <button class="btn" type="button" id="btnChooseFile" title="Choose from library">
+              <i class="fas fa-folder-open"></i> Choose file
+            </button>
+            <button class="btn" type="button" id="btnUploadThumb" title="Upload to Cloudinary" disabled>
+              <i class="fas fa-cloud-upload-alt"></i> Upload
+            </button>
           </div>
-          <div>
-            <label>&nbsp;</label>
-            <button class="btn" type="button" id="btnUploadThumb"><i class="fas fa-upload"></i> Upload to Cloudinary</button>
-          </div>
-          <div>
-            <label><i class="fas fa-link"></i> Image URL</label>
-            <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="https://res.cloudinary.com/...">
-          </div>
-          <div style="grid-column:1/-1">
-            <img id="item_thumb_preview" alt="Preview" style="max-height:180px; max-width:100%; display:block; border:1px solid var(--border); border-radius:6px; background:#fff">
-          </div>
-        </div>
-      {% else %}
-        <div class="alert" style="background:#fff3cd;border:1px solid #ffeeba;color:#856404;border-radius:6px;padding:8px">
-          <strong>Cloudinary is not configured.</strong> Add <code>CLOUDINARY_CLOUD_NAME</code>, <code>CLOUDINARY_API_KEY</code>, <code>CLOUDINARY_API_SECRET</code> to your <code>.env</code>.
-        </div>
-        <div>
-          <label><i class="fas fa-link"></i> Image URL (manual)</label>
-          <input class="input" type="url" name="item_thumb" id="item_thumb" placeholder="https://...">
-        </div>
-      {% endif %}
-    </div>
 
+          <!-- Entradas ocultas: una para cámara, otra para galería -->
+          <input id="item_thumb_camera" type="file" accept="image/*" capture="environment" style="display:none">
+          <input id="item_thumb_library" type="file" accept="image/*" style="display:none">
+
+          <div class="uploader-row">
+            <img id="item_thumb_preview" alt="Preview" class="thumb-preview" style="display:none;">
+            <div class="uploader-right">
+              <label><i class="fas fa-link"></i> Image URL (auto-filled after upload)</label>
+              <input class="input" type="url" id="item_thumb" name="item_thumb" placeholder="https://res.cloudinary.com/...">
+              <small id="upload_status"></small>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <div style="grid-column:1/-1">
+        <div class="alert">
+          <strong>Cloudinary is not configured.</strong> Paste the image URL manually:
+        </div>
+        <label><i class="fas fa-link"></i> Image URL</label>
+        <input class="input" type="url" id="item_thumb" name="item_thumb" placeholder="https://...">
+      </div>
+    {% endif %}
+
+    {# ===== Otros campos nuevos ===== #}
     <div>
-      <label><i class="fas fa-truck-loading"></i> Supplier</label>
-      <input class="input" type="text" name="supplier" placeholder="Store / Supplier name">
+      <label><i class="fas fa-store-alt"></i> Supplier</label>
+      <input class="input" type="text" name="supplier" placeholder="Supplier/store name">
     </div>
     <div>
-      <label><i class="fas fa-dollar-sign"></i> Cost</label>
-      <input class="input" type="number" name="item_cost" step="0.01" min="0" placeholder="0.00">
+      <label><i class="fas fa-dollar-sign"></i> Item Cost</label>
+      <input class="input" type="number" step="0.01" min="0" name="item_cost" placeholder="0.00">
     </div>
     <div>
-      <label><i class="fas fa-tags"></i> Price</label>
-      <input class="input" type="number" name="item_price" step="0.01" min="0" placeholder="0.00">
+      <label><i class="fas fa-tags"></i> Item Price</label>
+      <input class="input" type="number" step="0.01" min="0" name="item_price" placeholder="0.00">
     </div>
     <div>
-      <label><i class="fas fa-calendar-day"></i> Listing date</label>
+      <label><i class="far fa-calendar-plus"></i> Listing Date</label>
       <input class="input" type="date" name="listing_date">
     </div>
 
@@ -214,6 +223,12 @@
 </div>
 
 <style>
+  /* Uploader layout */
+  .uploader { display: grid; gap: 10px; }
+  .uploader-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+  .uploader-row { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+  .thumb-preview { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: #eee; }
+
   /* Modal compacto y bloqueo de scroll */
   body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
@@ -305,20 +320,6 @@
     display: none;
   }
 
-  /* Spinner simple */
-  .spinner{
-    position:absolute; inset:0; display:none;
-    align-items:center; justify-content:center;
-    background:rgba(0,0,0,.25);
-  }
-  .spinner::after{
-    content:"";
-    width:28px; height:28px; border-radius:50%;
-    border:3px solid rgba(255,255,255,.3);
-    border-top-color:#fff; animation:spin 0.9s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  
   /* Estilos para iconos en formulario */
   label i {
     margin-right: 8px;
@@ -388,13 +389,18 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
-/* ========== PATCH SUBIDA CLOUDINARY (iPhone-safe) ========== */
+/* ========== SCRIPT SUBIDA A CLOUDINARY (elige cámara o archivo) ========== */
 (function(){
-  const fileInput   = document.getElementById('item_thumb_file');
-  const uploadBtn   = document.getElementById('btnUploadThumb');
-  const previewImg  = document.getElementById('item_thumb_preview');
-  const urlField    = document.getElementById('item_thumb');
-  const statusEl    = document.getElementById('upload_status');
+  const btnTake  = document.getElementById('btnTakePhoto');
+  const btnPick  = document.getElementById('btnChooseFile');
+  const btnUp    = document.getElementById('btnUploadThumb');
+  const inCam    = document.getElementById('item_thumb_camera');   // accept image/* capture
+  const inLib    = document.getElementById('item_thumb_library');  // accept image/*
+  const preview  = document.getElementById('item_thumb_preview');
+  const urlField = document.getElementById('item_thumb');
+  const statusEl = document.getElementById('upload_status');
+
+  let selectedFile = null;
 
   function setStatus(msg, ok=null){
     if (!statusEl) return;
@@ -402,19 +408,51 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.style.color = ok === null ? '' : ok ? '#22c55e' : '#ef4444';
   }
 
+  function onFileSelected(file){
+    if (!file) return;
+    selectedFile = file;
+    btnUp.disabled = false;
+    try {
+      preview.style.display = 'block';
+      preview.src = URL.createObjectURL(file);
+    } catch (_) {}
+    setStatus(`Selected: ${file.name || 'photo'}`, null);
+  }
+
+  btnTake?.addEventListener('click', () => {
+    // En iPhone/Safari abrirá la cámara trasera
+    inCam?.click();
+  });
+
+  btnPick?.addEventListener('click', () => {
+    // Abrir selector de archivos / fototeca
+    inLib?.click();
+  });
+
+  inCam?.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    onFileSelected(f);
+    // Limpiar el otro input para no confundir
+    if (inLib) inLib.value = '';
+  });
+
+  inLib?.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    onFileSelected(f);
+    if (inCam) inCam.value = '';
+  });
+
   async function uploadToCloudinary(){
     try {
-      const f = fileInput?.files && fileInput.files[0];
-      if (!f) { setStatus('Choose or take a photo first', false); return; }
-
-      try { if (previewImg) previewImg.src = URL.createObjectURL(f); } catch {}
+      if (!selectedFile) { setStatus('Choose or take a photo first', false); return; }
 
       const fd = new FormData();
-      fd.append('file', f, f.name || `camera-${Date.now()}.jpg`);
+      // Nombre amistoso: si no hay nombre, creamos uno (iOS camera)
+      fd.append('file', selectedFile, selectedFile.name || `camera-${Date.now()}.jpg`);
 
-      uploadBtn.disabled = true;
-      const original = uploadBtn.innerHTML;
-      uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
+      btnUp.disabled = true;
+      const original = btnUp.innerHTML;
+      btnUp.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading…';
       setStatus('Uploading...', null);
 
       const resp = await fetch('/api/upload-image', {
@@ -433,17 +471,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (urlField) urlField.value = data.url || '';
       setStatus('✓ Uploaded', true);
-      uploadBtn.innerHTML = '<i class="fas fa-check"></i> Uploaded';
-      setTimeout(()=> uploadBtn.innerHTML = original, 1200);
+      btnUp.innerHTML = '<i class="fas fa-check"></i> Uploaded';
+      setTimeout(()=> btnUp.innerHTML = original, 1200);
     } catch (err) {
       console.error(err);
       setStatus(`Upload failed: ${err.message || err}`, false);
     } finally {
-      uploadBtn && (uploadBtn.disabled = false);
+      btnUp.disabled = false;
     }
   }
 
-  uploadBtn?.addEventListener('click', uploadToCloudinary);
+  btnUp?.addEventListener('click', uploadToCloudinary);
 })();
 </script>
 
@@ -461,6 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const success = document.getElementById('qrSuccess');
   const result = document.getElementById('qrResult');
 
+  // ===== Estado =====
   const CAM_CACHE_KEY = 'qv_qr_cam_device_id';
   let cachedDeviceId = null;
   let stream = null, rafId = null;
@@ -473,6 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let flashlightOn = false;
   let lastDetections = [];
 
+  // ===== Utils UI =====
   function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
   function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
@@ -492,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
     alert(`${name}${msg ? ': ' + msg : ''}`);
   }
 
+  // ===== Cámara =====
   async function loadVideoDevices(){
     if (devicesLoaded) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
@@ -506,8 +547,6 @@ document.addEventListener('DOMContentLoaded', () => {
     devicesLoaded = true;
   }
 
-  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
-
   async function startWithDevice(deviceId){
     cleanupLoop();
     showSpinner(true);
@@ -517,9 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audio: false
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.setAttribute('playsinline','');
-    video.setAttribute('autoplay','');
-    video.setAttribute('muted','');
+    video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
     video.srcObject = stream;
     await video.play();
     showSpinner(false);
@@ -534,6 +571,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
     } catch {}
   }
+
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
 
   async function flipCamera(){
     await loadVideoDevices();
@@ -557,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
   }
 
+  // ===== Detección =====
   function validateDetection(val){
     if (!val || val.length<3) return false;
     lastDetections.push(val);
@@ -593,7 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showSuccess();
       try{ navigator.vibrate && navigator.vibrate([80,40,80]); }catch(_){}
       setTimeout(()=>{
-        populateLocationFields(loc);
+        const filled = populateLocationFields(loc);
         cleanupAll(); closeModal();
       }, 600);
     } else {
@@ -603,7 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function startBarcodeDetector(){
-    let supported = [];
+    let supported=[];
     try{ supported = await window.BarcodeDetector.getSupportedFormats(); }catch{}
     if (!supported.includes('qr_code')) return false;
 
@@ -653,10 +693,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ROI_INSET = 0.10; // 10%
 
-    const ROI_INSET = 0.10;
-    let lastTS = 0; const MIN_INTERVAL = 80;
-
+    let lastTS = 0; const MIN_INTERVAL = 80; // ms
     const tick = (now)=>{
       try{
         if (!usingJsQR) return;
@@ -665,8 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
           const vw = video.videoWidth, vh = video.videoHeight;
           const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
           const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
+
           canvas.width = rw; canvas.height = rh;
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+
           const img = ctx.getImageData(0, 0, rw, rh);
           const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
           const val = (qr?.data || '').trim();
@@ -689,10 +730,13 @@ document.addEventListener('DOMContentLoaded', () => {
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
+      // 1) intenta BarcodeDetector con qr_code
       if ('BarcodeDetector' in window){
         const ok = await startBarcodeDetector();
-        if (ok) return;
+        if (ok) return; // ya arrancó BD
       }
+
+      // 2) fallback jsQR
       await loadJsQR();
       startJsQRLoop();
     }catch(e){
@@ -700,6 +744,9 @@ document.addEventListener('DOMContentLoaded', () => {
       cleanupAll(); closeModal();
     }
   }
+
+  // ===== Eventos =====
+  const cleanupLoop = ()=>{ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } };
 
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
