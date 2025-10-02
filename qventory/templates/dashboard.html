@@ -392,7 +392,7 @@
 </style>
 
 <script>
-/* ========== SCRIPT SCANNER QR (para búsqueda de SKU en dashboard) ========== */
+/* ========== SCRIPT SCANNER QR (parches de robustez) ========== */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
   const modal = document.getElementById('scanQRModal');
@@ -400,68 +400,39 @@
   const btnFlip = document.getElementById('scanQRFlip');
   const btnFlash = document.getElementById('scanQRFlashlight');
   const video = document.getElementById('scanQRVideo');
-  const target = document.getElementById('scanQRTarget');
   const spinner = document.getElementById('scanQRSpinner');
   const success = document.getElementById('scanQRSuccess');
   const result = document.getElementById('scanQRResult');
   const inputQ = document.getElementById('q');
   const form = document.getElementById('filterForm');
 
-  // ===== Estado =====
   const CAM_CACHE_KEY = 'qv_dashboard_qr_cam_device_id';
-  let cachedDeviceId = null;
   let stream = null, rafId = null;
   let detector = null;
-  let usingBD = false;
-  let usingJsQR = false;
-  let jsQRLoaded = false;
-  let videoDevices = [], currentDeviceIdx = -1;
-  let devicesLoaded = false;
+  let usingBD = false, usingJsQR = false, jsQRLoaded = false;
+  let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
   let flashlightOn = false;
-  let lastDetections = [];
 
-  // ===== Utils UI =====
-  function openModal(){ 
-    document.body.classList.add('modal-open'); 
-    modal.classList.remove('hidden'); 
-    modal.setAttribute('aria-hidden','false'); 
-  }
-  function closeModal(){ 
-    document.body.classList.remove('modal-open'); 
-    modal.classList.add('hidden'); 
-    modal.setAttribute('aria-hidden','true'); 
-  }
+  // ---------- UI ----------
+  function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
+  function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
-  function showSuccess(){ 
-    success.style.display='block'; 
-    setTimeout(()=>success.style.display='none',500); 
-  }
+  function showSuccess(){ success.style.display='block'; setTimeout(()=>success.style.display='none', 450); }
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
   function cleanupAll(){
-    if (rafId){ cancelAnimationFrame(rafId); rafId=null; }
-    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    flashlightOn=false; 
-    btnFlash.classList.remove('active');
-    video.srcObject=null; 
-    video.style.display='none';
-    target.style.display='none'; 
-    result.style.display='none';
-    usingBD=false; 
-    usingJsQR=false; 
-    lastDetections.length=0;
+    cleanupLoop();
+    if (stream){ try{ stream.getTracks().forEach(t=>t.stop()); }catch{}; stream=null; }
+    flashlightOn=false; btnFlash.classList.remove('active');
+    video.srcObject=null; video.style.display='none';
+    usingBD=false; usingJsQR=false;
   }
-  function showError(err, where=''){
-    const name = err?.name || 'Error';
-    const msg  = err?.message || String(err || '');
-    console.error('[QR Dashboard]', where, err);
-    alert(`${name}${msg ? ': ' + msg : ''}`);
-  }
+  function showError(msg){ console.error('[QR]', msg); alert(msg); }
 
-  // ===== Cámara =====
+  // ---------- Cámara ----------
   async function loadVideoDevices(){
     if (devicesLoaded) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
     videoDevices = devices.filter(d=>d.kind==='videoinput');
-    // prioriza "back"/"environment"
     const prefers = ['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
@@ -481,33 +452,25 @@
       audio: false
     };
     stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.setAttribute('playsinline','');
-    video.setAttribute('autoplay','');
-    video.setAttribute('muted','');
+    video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
     video.srcObject = stream;
     await video.play();
+    // asegura metadata cargada
+    if (video.readyState < 2){
+      await new Promise(res=>{
+        const t = setTimeout(res, 250);
+        video.onloadedmetadata = ()=>{ clearTimeout(t); res(); };
+      });
+    }
     showSpinner(false);
-    rememberActiveDevice();
+    video.style.display='block';
   }
-
-  function rememberActiveDevice(){
-    try {
-      const track = stream?.getVideoTracks?.()[0];
-      const settings = track?.getSettings?.() || {};
-      const id = settings.deviceId || track?.getConstraints?.().deviceId?.exact;
-      if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
-    } catch {}
-  }
-
-  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
 
   async function flipCamera(){
     await loadVideoDevices();
     if (!videoDevices.length) return;
     currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
-    cleanupLoop();
     await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
-    // reanudar el método activo
     if (usingBD) startBDLoop();
     if (usingJsQR) startJsQRLoop();
   }
@@ -521,87 +484,71 @@
       flashlightOn = !flashlightOn;
       await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
       btnFlash.classList.toggle('active', flashlightOn);
-    }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
+    }catch{ alert('Unable to control flashlight'); }
   }
 
-  // ===== Detección =====
-  function validateDetection(val){
-    if (!val || val.length<3) return false;
-    lastDetections.push(val);
-    if (lastDetections.length>3) lastDetections.shift();
-    // Con 2 detecciones iguales consecutivas lo aceptamos
-    const counts = {};
-    lastDetections.forEach(code => {
-      counts[code] = (counts[code] || 0) + 1;
-    });
-    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-    if (mostCommon && mostCommon[1] >= 2) {
-      return mostCommon[0];
-    }
-    return false;
+  // ---------- Detección ----------
+  // Acepta primera lectura y normaliza posible URL -> SKU
+  function extractSku(val){
+    if (!val) return '';
+    const s = String(val).trim();
+    // si es URL, intenta extraer algo con pinta de SKU (12+ dígitos o patrón tipo YYYYMMDD-XXXX)
+    try{
+      const u = new URL(s);
+      // busca secuencias largas de dígitos o alfanumérico guionado
+      const m = u.href.match(/([A-Z0-9]{8,}|\d{10,}|\d{8}-[A-Z0-9]{3,})/i);
+      return m ? m[1] : s;
+    }catch{ return s; }
   }
 
   function onDetected(raw){
-    const v = validateDetection(raw);
-    if (!v) {
-      result.textContent = `Reading: ${String(raw).slice(0,80)}`;
-      result.style.display='block';
-      return;
-    }
-    
-    // El QR contiene el SKU directamente
-    result.textContent = `SKU detected: ${v}`;
+    const v = extractSku(raw);
+    if (!v) return;
+    result.textContent = `Detected: ${v.slice(0,120)}`;
     result.style.display='block';
     showSuccess();
-    
-    try{ navigator.vibrate && navigator.vibrate([100, 50, 100]); }catch(_){}
-    
+    try{ navigator.vibrate && navigator.vibrate(80); }catch{}
     setTimeout(()=>{
-      cleanupAll(); 
-      closeModal();
+      cleanupAll(); closeModal();
       inputQ.value = v;
       form?.submit();
-    }, 800);
+    }, 500);
   }
 
-  // ===== BarcodeDetector (nativo) =====
-  async function startBarcodeDetector(){
-    // Asegura que realmente soporta qr_code
-    let supported = [];
+  // ---------- BarcodeDetector (sin getSupportedFormats) ----------
+  async function tryBarcodeDetector(){
+    if (!('BarcodeDetector' in window)) return false;
     try{
-      supported = await window.BarcodeDetector.getSupportedFormats();
-    }catch{}
-    if (!supported.includes('qr_code')) return false;
-
-    detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      detector = new window.BarcodeDetector({ formats: ['qr_code','qr'] });
+    }catch{
+      // algunos navegadores requieren sin formatos
+      try{ detector = new window.BarcodeDetector(); }catch{ return false; }
+    }
     usingBD = true; usingJsQR = false;
-    video.style.display='block'; target.style.display='none';
     startBDLoop();
     return true;
   }
 
   function startBDLoop(){
     cleanupLoop();
-    // procesar 1 de cada 3 frames
-    let frame=0;
+    let frame = 0;
     const tick = async ()=>{
+      frame++;
       try{
-        frame++;
-        if (frame%3===0 && detector){
+        if (frame%2===0 && detector && video.readyState >= 2){
           const codes = await detector.detect(video);
-          if (codes?.length){
-            const qr = codes.find(c=>c.format==='qr_code') || codes[0];
-            const val = (qr.rawValue||'').trim();
+          if (codes && codes.length){
+            const val = (codes[0].rawValue || '').trim();
             if (val){ onDetected(val); return; }
           }
         }
-      }catch(_){}
+      }catch(e){ /* ignora y sigue */ }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
 
-  // ===== jsQR (fallback universal) =====
+  // ---------- jsQR fallback ----------
   function loadJsQR(){
     if (jsQRLoaded) return Promise.resolve();
     return new Promise((resolve,reject)=>{
@@ -609,89 +556,84 @@
       s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
       s.async=true;
       s.onload=()=>{ jsQRLoaded=true; resolve(); };
-      s.onerror=()=>reject(new Error('Failed to load jsQR'));
+      s.onerror=()=>reject(new Error('jsQR CDN blocked/failed to load'));
       document.head.appendChild(s);
     });
   }
 
   function startJsQRLoop(){
     usingBD=false; usingJsQR=true;
-    video.style.display='block'; target.style.display='none';
     cleanupLoop();
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-    // procesar el ROI (caja punteada: inset 10%)
-    const ROI_INSET = 0.10;
+    const ROI_INSET = 0.08; // un poco más amplio
 
     let lastTS = 0;
-    const MIN_INTERVAL = 80; // ms
+    const MIN_INTERVAL = 80;
 
     const tick = (now)=>{
       try{
         if (!usingJsQR) return;
         if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0){
           lastTS = now;
-
           const vw = video.videoWidth, vh = video.videoHeight;
           const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
           const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
-
           canvas.width = rw; canvas.height = rh;
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-
           const img = ctx.getImageData(0, 0, rw, rh);
           const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
           const val = (qr?.data || '').trim();
           if (val){ onDetected(val); return; }
         }
-      }catch(_){}
+      }catch{}
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
 
-  // ===== Orquestación =====
+  // ---------- Orquestación ----------
   async function startScan(){
-    openModal(); 
-    result.style.display='none'; 
-    success.style.display='none';
-    lastDetections = [];
-    
+    openModal(); result.style.display='none'; success.style.display='none';
     try{
-      cachedDeviceId = localStorage.getItem(CAM_CACHE_KEY) || null;
-      if (cachedDeviceId){ 
-        await startWithDevice(cachedDeviceId); 
-      } else {
-        await loadVideoDevices();
-        if (videoDevices.length) currentDeviceIdx = 0;
-        await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
+      const cachedId = localStorage.getItem(CAM_CACHE_KEY) || null;
+      await loadVideoDevices();
+      if (videoDevices.length){
+        if (cachedId){
+          const idx = videoDevices.findIndex(d=>d.deviceId===cachedId);
+          currentDeviceIdx = idx >= 0 ? idx : 0;
+        } else {
+          currentDeviceIdx = 0;
+        }
       }
+      await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
 
-      // 1) intenta BarcodeDetector con qr_code
-      if ('BarcodeDetector' in window){
-        const ok = await startBarcodeDetector();
-        if (ok) return; // ya arrancó BD
+      // intenta BarcodeDetector; si no, jsQR
+      const bdOK = await tryBarcodeDetector();
+      if (!bdOK){
+        try{
+          await loadJsQR();
+          startJsQRLoop();
+        }catch(e){
+          showError('No QR engine available (BarcodeDetector unsupported and jsQR blocked).');
+          cleanupAll(); closeModal();
+        }
       }
-
-      // 2) fallback jsQR
-      await loadJsQR();
-      startJsQRLoop();
     }catch(e){
-      showError(e, 'startScan');
+      showError(e?.message || 'Camera error');
       cleanupAll(); closeModal();
     }
   }
 
-  // ===== Eventos =====
+  // ---------- Eventos ----------
   btnScan?.addEventListener('click', startScan);
   btnFlip?.addEventListener('click', flipCamera);
   btnFlash?.addEventListener('click', toggleFlashlight);
   btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if (e.target===modal){ cleanupAll(); closeModal(); } });
 
-  // ====== QR MODAL para ver códigos de ubicación ======
+  // Modal QR imagen (sin cambios relevantes)
   const qrModal   = document.getElementById('qrModal');
   const qrClose   = document.getElementById('qrClose');
   const qrImage   = document.getElementById('qrImage');
@@ -709,15 +651,12 @@
     qrCaption.textContent = caption || '';
     qrTitle.textContent = caption || 'QR';
   }
-
   function closeQrModal(){
     document.body.classList.remove('modal-open');
     qrModal.classList.add('hidden');
     qrModal.setAttribute('aria-hidden','true');
     qrImage.src = '';
   }
-
-  // Delegación de clic para enlaces .qr-link
   document.body.addEventListener('click', (e) => {
     const a = e.target.closest('a.qr-link');
     if (!a) return;
@@ -726,11 +665,10 @@
     const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
     openQrModal(url, caption);
   });
-
   qrClose?.addEventListener('click', closeQrModal);
   qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
   window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
-
 })();
 </script>
+
 {% endblock %}
