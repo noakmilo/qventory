@@ -256,30 +256,55 @@
 <!-- (Tus modales y script de QR permanecen igual que antes) -->
 
 <style>
-  /* Modal imagen: cerrado por defecto; sólo visible con .is-open */
-#imgModal[hidden] { display: none !important; }
-#imgModal { display: grid; }            /* El layout deseado cuando NO está oculto */
-.modal-open { overflow: hidden; }       /* Evita scroll del body con modal abierto */
-/* ===== Miniaturas con overlay de lupa ===== */
-.thumb-wrap{
-  position:relative; width:36px; height:36px; padding:0; border:0; cursor:zoom-in;
-  background:transparent; display:block; border-radius:6px;
-}
-.thumb-img{
-  width:36px; height:36px; object-fit:cover; border-radius:6px; border:1px solid var(--glass-border);
-  display:block;
-}
-.thumb-zoom{
-  position:absolute; inset:auto 2px 2px auto; display:grid; place-items:center;
-  width:18px; height:18px; border-radius:6px; font-size:11px; line-height:1;
-  background:var(--glass-bg-strong); border:1px solid var(--glass-border);
-  color:#cfe0ff; box-shadow:0 2px 6px rgba(0,0,0,.35);
-}
-.thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
+  /* Modal imagen: cerrado por defecto */
+  #imgModal[hidden] { display: none !important; }
+  #imgModal { display: grid; }            /* Layout cuando NO está oculto */
+  .modal-open { overflow: hidden; }       /* Evita scroll del body con modal abierto */
 
-/* Oculta/mostrar modal con clase .hidden (sin depender de frameworks) */
-#imgModal.hidden{ display:none }
+  /* ===== Miniaturas con overlay de lupa ===== */
+  .thumb-wrap{
+    position:relative;
+    width:36px; height:36px;
+    padding:0; border:0;
+    cursor:zoom-in;
+    background:transparent;
+    display:block;
+    border-radius:6px;
+  }
+  .thumb-img{
+    width:36px; height:36px;
+    object-fit:cover;
+    border-radius:6px;
+    border:1px solid var(--glass-border);
+    display:block;
+  }
+  .thumb-zoom{
+    position:absolute;
+    right:2px; bottom:2px;
+    display:grid; place-items:center;
+    width:18px; height:18px;
+    border-radius:4px;
+    font-size:11px; line-height:1;
+    background:var(--glass-bg-strong);
+    border:1px solid var(--glass-border);
+    color:#cfe0ff;
+    box-shadow:0 2px 6px rgba(0,0,0,.35);
+  }
+  .thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
+
+  /* ===== Ajuste especial en móvil (miniatura 20x20 con lupa dentro) ===== */
+  @media (max-width:720px){
+    .thumb-wrap{ width:20px; height:20px; border-radius:4px; }
+    .thumb-img{ width:20px; height:20px; border-radius:4px; }
+    .thumb-zoom{
+      width:12px; height:12px;
+      right:1px; bottom:1px;
+      font-size:8px;
+      border-radius:3px;
+    }
+  }
 </style>
+
 
 <script>
 /* Toggle filtros con persistencia */
