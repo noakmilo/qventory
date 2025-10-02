@@ -132,7 +132,7 @@ header nav .btn{
 @media (max-width:720px){
   header{ padding:8px 8px }
   .brand .tag, .brand .badge { display:none !important }
-  header nav .btn{ padding:6px 8px; min-height:32px; font-size:8px }
+  header nav .btn{ padding:6px 7px; min-height:28px; font-size:8px }
   .brand a{ font-size:16px}
 }
 
