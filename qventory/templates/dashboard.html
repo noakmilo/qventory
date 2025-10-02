@@ -401,7 +401,7 @@
 </script>
 
 <script>
-/* ========== SCRIPT SCANNER QR (robusto) ========== */
+/* ========== SCRIPT SCANNER QR (robusto, iOS + Android feedback) ========== */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
   const modal = document.getElementById('scanQRModal');
@@ -421,6 +421,29 @@
   let usingBD = false, usingJsQR = false, jsQRLoaded = false;
   let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
   let flashlightOn = false;
+
+  // === Beep cross-plataforma ===
+  let beepAudio = null;
+  let beepReady = false;
+  function ensureBeep() {
+    if (beepReady) return;
+    try {
+      beepAudio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
+      beepAudio.preload = "auto";
+      const p = beepAudio.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          beepAudio.pause();
+          beepAudio.currentTime = 0;
+          beepReady = true;
+        }).catch(()=>{});
+      } else {
+        beepAudio.pause();
+        beepAudio.currentTime = 0;
+        beepReady = true;
+      }
+    } catch(e) {}
+  }
 
   function openModal(){
     document.body.classList.add('modal-open');
@@ -517,10 +540,12 @@
     result.textContent = `Detected: ${v.slice(0,120)}`;
     result.style.display='block';
     showSuccess();
-    try{ 
-      navigator.vibrate && navigator.vibrate(80); 
-      new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play();
+
+    try{
+      if (navigator.vibrate) navigator.vibrate(80); // Android (iOS no soporta)
+      if (beepReady && beepAudio) beepAudio.play().catch(()=>{});
     }catch{}
+
     setTimeout(()=>{
       cleanupAll(); closeModal();
       inputQ.value = v;
@@ -603,6 +628,7 @@
   }
 
   async function startScan(){
+    ensureBeep(); // <- autoriza audio en iOS al tocar el botón
     openModal(); result.style.display='none'; success.style.display='none';
     try{
       const cachedId = localStorage.getItem(CAM_CACHE_KEY) || null;
@@ -646,7 +672,7 @@
   });
 
   // ===== Modal QR desde enlaces de ubicación (QR PNG) =====
-  const qrModal   = document.getElementById('qrModal');     // Si lo usas en otra parte
+  const qrModal   = document.getElementById('qrModal');
   const qrClose   = document.getElementById('qrClose');
   const qrImage   = document.getElementById('qrImage');
   const qrOpenNew = document.getElementById('qrOpenNew');
@@ -654,7 +680,7 @@
   const qrTitle   = document.getElementById('qrTitle');
 
   function openQrModal(url, caption){
-    if(!qrModal) return; // opcional si no está este modal
+    if(!qrModal) return;
     document.body.classList.add('modal-open');
     qrModal.classList.remove('hidden');
     qrModal.setAttribute('aria-hidden','false');
@@ -685,5 +711,6 @@
 
 })();
 </script>
+
 
 {% endblock %}
