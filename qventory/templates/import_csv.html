@@ -37,22 +37,31 @@
       <h3>CSV Format Requirements</h3>
       <ul>
         <li><strong>Required columns:</strong> <code>sku</code>, <code>title</code></li>
-        <li><strong>Optional columns:</strong> <code>listing_link</code>, <code>web_url</code>, <code>ebay_url</code>, <code>amazon_url</code>, <code>mercari_url</code>, <code>vinted_url</code>, <code>poshmark_url</code>, <code>depop_url</code>, <code>A</code>, <code>B</code>, <code>S</code>, <code>C</code>, <code>location_code</code></li>
-        <li><strong>Format:</strong> Standard CSV with comma separators</li>
+        <li><strong>Optional columns:</strong> 
+          <code>listing_link</code>, 
+          <code>web_url</code>, <code>ebay_url</code>, <code>amazon_url</code>, <code>mercari_url</code>, <code>vinted_url</code>, <code>poshmark_url</code>, <code>depop_url</code>,
+          <code>A</code>, <code>B</code>, <code>S</code>, <code>C</code>, <code>location_code</code>,
+          <code>item_thumb</code> (Cloudinary URL), <code>supplier</code>, <code>item_cost</code>, <code>item_price</code>, <code>listing_date</code>,
+          <code>created_at</code>
+        </li>
+        <li><strong>Date format:</strong> <code>listing_date</code> y <code>created_at</code> aceptan <code>YYYY-MM-DD</code> (o <code>YYYY-MM-DD HH:MM:SS</code> para <code>created_at</code>)</li>
+        <li><strong>Numbers:</strong> use a dot for decimals (e.g., <code>12.99</code>)</li>
         <li><strong>Encoding:</strong> UTF-8 recommended</li>
+        <li><strong>Tip:</strong> You can <a href="{{ url_for('main.export_csv') }}">export your current data</a> to get an exact template</li>
       </ul>
       
       <p><strong>Example CSV format:</strong></p>
-      <pre style="background:#3c3b3b;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto">sku,title,ebay_url,A,B,location_code
-QV001,Sample Item,https://ebay.com/itm/123,A1,B2,A1-B2
-QV002,Another Item,,A2,B1,A2-B1</pre>
+      <pre style="background:#3c3b3b;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto">sku,title,listing_link,web_url,ebay_url,amazon_url,mercari_url,vinted_url,poshmark_url,depop_url,A,B,S,C,location_code,item_thumb,supplier,item_cost,item_price,listing_date,created_at
+QV001,Sample Item,,https://yourstore.com/item-1,https://www.ebay.com/itm/123,,,,,,A1,B2,,C3,A1-B2-C3,https://res.cloudinary.com/yourcloud/image/upload/v123/thumb.jpg,Goodwill,5.50,19.99,2025-09-14,2025-09-15 10:23:11
+QV002,Another Item,,,,,,,,A2,B1,,,A2-B1,,,Wholesale ABC,0,12.00,2025-09-20,</pre>
       
-      <p><strong>Tips:</strong></p>
+      <p><strong>Notes:</strong></p>
       <ul>
-        <li>Make sure your CSV has headers in the first row</li>
-        <li>Empty cells are allowed for optional fields</li>
-        <li>SKUs should be unique within your inventory</li>
-        <li>You can export your current data first to see the exact format</li>
+        <li>Empty cells are allowed for optional fields.</li>
+        <li><code>item_cost</code> and <code>item_price</code> are numeric; leave blank if unknown.</li>
+        <li><code>item_thumb</code> is typically a Cloudinary image URL but any reachable image URL works.</li>
+        <li><code>location_code</code> can be provided directly (e.g., <code>A1-B2</code>) or derived from A/B/S/C by the app in other flows.</li>
+        <li>If <code>created_at</code> is omitted, the system sets it automatically.</li>
       </ul>
     </div>
   </div>
