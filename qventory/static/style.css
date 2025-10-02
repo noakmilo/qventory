@@ -320,3 +320,17 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
     backdrop-filter:none !important; -webkit-backdrop-filter:none !important; background:#111834 !important; box-shadow:var(--elev)
   }
 }
+
+/* === Control de columnas no críticas === */
+
+/* En móvil portrait: ocultar supplier, cost, ROI, listings */
+@media (max-width: 720px) and (orientation: portrait) {
+  .mobile-hide { display: none !important; }
+}
+
+/* En landscape o pantallas mayores: volver a mostrar */
+@media (max-width: 1024px) and (orientation: landscape),
+       (min-width: 721px) {
+  .mobile-hide { display: table-cell !important; }
+}
+

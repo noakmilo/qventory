@@ -1,20 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Dashboard – Qventory{% endblock %}
 {% block content %}
+<div class="row">
 
-<div class="wrap">
-
-  <!-- ===== Filters (sticky + colapsable) ===== -->
-  <section class="card cardfilters filters-shell" id="filtersShell">
+  <!-- Filtros -->
+  <div class="card cardfilters filters-shell" style="flex:1 1 100%;min-width:280px">
     <div class="filters-bar">
       <h2>Filters</h2>
-      <button type="button" class="btn small filters-toggle" id="filtersToggle" aria-expanded="true" aria-controls="filtersContent">
-        <i class="fas fa-sliders-h"></i> Toggle
+      <button class="btn filters-toggle" type="button" onclick="document.querySelector('.filters-content').toggleAttribute('hidden')">
+        <i class="fas fa-filter"></i> Toggle
       </button>
     </div>
-
-    <div id="filtersContent" class="filters-content">
-      <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="grid filters-grid">
+    <div class="filters-content">
+      <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="filters-grid">
         <div style="grid-column:1/-1">
           <div class="input-with-button">
             <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…">
@@ -26,7 +24,7 @@
 
         {% if settings.enable_A %}
         <div>
-          <label class="label">{{ settings.label_A }}</label>
+          <label>{{ settings.label_A }}</label>
           <select name="A">
             <option value="">All</option>
             {% for opt in options.A %}
@@ -35,10 +33,9 @@
           </select>
         </div>
         {% endif %}
-
         {% if settings.enable_B %}
         <div>
-          <label class="label">{{ settings.label_B }}</label>
+          <label>{{ settings.label_B }}</label>
           <select name="B">
             <option value="">All</option>
             {% for opt in options.B %}
@@ -47,10 +44,9 @@
           </select>
         </div>
         {% endif %}
-
         {% if settings.enable_S %}
         <div>
-          <label class="label">{{ settings.label_S }}</label>
+          <label>{{ settings.label_S }}</label>
           <select name="S">
             <option value="">All</option>
             {% for opt in options.S %}
@@ -59,10 +55,9 @@
           </select>
         </div>
         {% endif %}
-
         {% if settings.enable_C %}
         <div>
-          <label class="label">{{ settings.label_C }}</label>
+          <label>{{ settings.label_C }}</label>
           <select name="C">
             <option value="">All</option>
             {% for opt in options.C %}
@@ -74,7 +69,7 @@
 
         {% if options.supplier and options.supplier|length %}
         <div>
-          <label class="label">Supplier</label>
+          <label>Supplier</label>
           <select name="supplier">
             <option value="">All</option>
             {% for opt in options.supplier %}
@@ -86,7 +81,7 @@
 
         {% if PLATFORMS %}
         <div>
-          <label class="label">Platform</label>
+          <label>Platform</label>
           <select name="platform">
             <option value="">All</option>
             {% for key,label in PLATFORMS %}
@@ -96,16 +91,16 @@
         </div>
         {% endif %}
 
-        <div style="grid-column:1/-1; display:flex; gap:8px; flex-wrap:wrap">
-          <button class="btn submitbtn" type="submit"><i class="fas fa-check"></i> Apply</button>
-          <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-broom"></i> Clear</a>
+        <div style="grid-column:1/-1">
+          <button class="btn submitbtn" type="submit">Apply</button>
+          <a class="btn" href="{{ url_for('main.dashboard') }}">Clear</a>
         </div>
       </form>
     </div>
-  </section>
+  </div>
 
-  <!-- ===== Inventory ===== -->
-  <section class="card inventory-shell">
+  <!-- Inventario -->
+  <div class="card inventory-shell" style="flex:1 1 100%;min-width:320px">
     <div class="items-header">
       <h2>Items ({{ total_items }})</h2>
       <div class="backup-actions">
@@ -117,7 +112,7 @@
         </a>
       </div>
     </div>
-
+    
     <div class="table-wrap">
       {% set un = current_user.username %}
       <table>
@@ -126,12 +121,12 @@
             <th style="width:44px"></th>
             <th>Title</th>
             <th>SKU</th>
-            <th>Supplier</th>
-            <th>Cost</th>
+            <th class="mobile-hide">Supplier</th>
+            <th class="mobile-hide">Cost</th>
             <th>Price</th>
-            <th>ROI</th>
+            <th class="mobile-hide">ROI</th>
             <th>Location</th>
-            <th>Listings</th>
+            <th class="mobile-hide">Listings</th>
             <th></th>
           </tr>
         </thead>
@@ -143,34 +138,59 @@
           <tr>
             <td>
               {% if it.item_thumb %}
-                <img src="{{ it.item_thumb }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #2d3a5a;">
+                <img src="{{ it.item_thumb }}" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
               {% else %}
-                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #2d3a5a;display:grid;place-items:center;font-size:12px;color:#8892a6;">—</div>
+                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
               {% endif %}
             </td>
             <td>{{ it.title }}</td>
             <td><span class="tag itsku">{{ it.sku }}</span></td>
-            <td>
+
+            <!-- Supplier -->
+            <td class="mobile-hide">
               {% if it.supplier %}
                 <span class="tag">{{ it.supplier }}</span>
               {% else %}—{% endif %}
             </td>
 
-            <td>{% if has_cost %}<span class="tag" title="Item cost"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>{% else %}—{% endif %}</td>
-            <td>{% if has_price %}<span class="tag" title="Item price"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
-            <td>{% if roi is not none %}<span class="tag" title="Return on Investment">{{ roi|round(0) }}%</span>{% else %}—{% endif %}</td>
+            <!-- Cost -->
+            <td class="mobile-hide">
+              {% if it.item_cost %}
+                <span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+              {% else %}—{% endif %}
+            </td>
 
+            <!-- Price -->
+            <td>
+              {% if it.item_price %}
+                <span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- ROI -->
+            <td class="mobile-hide">
+              {% if has_price and has_cost %}
+                <span class="tag">ROI {{ roi|round(0) }}%</span>
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- Location -->
             <td>
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
               &nbsp;
-              <a class="tag qr-link" href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}" data-caption="QR for {{ it.location_code }}">
+              <a class="tag qr-link"
+                 href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
+                 data-caption="QR for {{ it.location_code }}">
                 <i class="fas fa-qrcode"></i>
               </a>
-              {% else %}—{% endif %}
+              {% else %}
+              —
+              {% endif %}
             </td>
 
-            <td>
+            <!-- Listings -->
+            <td class="mobile-hide">
               <div class="platform-badges">
                 {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
                 {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank">eBay</a>{% endif %}
@@ -179,31 +199,38 @@
                 {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
                 {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
                 {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
-                {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
 
+            <!-- Acciones -->
             <td>
               {% if current_user.is_authenticated %}
-              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
+              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">
+                <i class="fas fa-edit"></i>
+              </a>
               <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                <button class="btn settingsbtn" type="submit" title="Print label"><i class="fas fa-print"></i></button>
+                <button class="btn settingsbtn" type="submit" title="Print label">
+                  <i class="fas fa-print"></i>
+                </button>
               </form>
               <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
+                <button class="btn settingsbtn" type="submit">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
               </form>
               {% else %}
               <span class="tag">Login to edit</span>
               {% endif %}
             </td>
-
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </section>
+  </div>
 </div>
+
+
 
 <!-- (Tus modales y script de QR permanecen igual que antes) -->
 
