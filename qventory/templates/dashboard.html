@@ -4,11 +4,11 @@
 
 <div class="wrap">
 
-  <!-- ======== Filters (sticky + colapsable en desktop y móvil) ======== -->
+  <!-- ======== Filters (sticky + colapsable) ======== -->
   <section class="card cardfilters filters-shell" id="filtersShell">
     <div class="filters-bar">
       <h2>Filters</h2>
-      <button type="button" class="btn small filters-toggle submitbtn" id="filtersToggle" aria-expanded="true" aria-controls="filtersContent">
+      <button type="button" class="btn small filters-toggle" id="filtersToggle" aria-expanded="true" aria-controls="filtersContent">
         <i class="fas fa-sliders-h"></i> Toggle
       </button>
     </div>
@@ -127,7 +127,9 @@
             <th>Title</th>
             <th>SKU</th>
             <th>Supplier</th>
-            <th>Pricing</th>
+            <th>Cost</th>
+            <th>Price</th>
+            <th>ROI</th>
             <th>Listed</th>
             <th>Location</th>
             <th>Listings</th>
@@ -154,25 +156,34 @@
                 <span class="tag">{{ it.supplier }}</span>
               {% else %}—{% endif %}
             </td>
+
+            <!-- Cost -->
             <td>
-              <div class="price-badges">
-                {% if has_price %}
-                  <span class="tag" title="Item price"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>
-                {% endif %}
-                {% if has_cost %}
-                  <span class="tag" title="Item cost"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
-                {% endif %}
-                {% if roi is not none %}
-                  <span class="tag" title="ROI">ROI {{ roi|round(0) }}%</span>
-                {% endif %}
-                {% if (not has_price) and (not has_cost) %}—{% endif %}
-              </div>
+              {% if has_cost %}
+                <span class="tag" title="Item cost"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+              {% else %}—{% endif %}
             </td>
+
+            <!-- Price -->
+            <td>
+              {% if has_price %}
+                <span class="tag" title="Item price"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>
+              {% else %}—{% endif %}
+            </td>
+
+            <!-- ROI -->
+            <td>
+              {% if roi is not none %}
+                <span class="tag" title="Return on Investment">{{ roi|round(0) }}%</span>
+              {% else %}—{% endif %}
+            </td>
+
             <td>
               {% if it.listing_date %}
                 <span class="tag">{{ it.listing_date.strftime('%Y-%m-%d') }}</span>
               {% else %}—{% endif %}
             </td>
+
             <td>
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
@@ -186,6 +197,7 @@
               —
               {% endif %}
             </td>
+
             <td>
               <div class="platform-badges">
                 {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
@@ -198,27 +210,27 @@
                 {% if not (it.web_url or it.ebay_url or it.amazon_url or it.mercari_url or it.vinted_url or it.poshmark_url or it.depop_url) %}—{% endif %}
               </div>
             </td>
+
             <td>
               {% if current_user.is_authenticated %}
               <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">
                 <i class="fas fa-edit"></i>
               </a>
-
               <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
                 <button class="btn settingsbtn" type="submit" title="Print label">
                   <i class="fas fa-print"></i>
                 </button>
               </form>
-
               <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
                 <button class="btn settingsbtn" type="submit">
                   <i class="fas fa-trash-alt"></i>
                 </button>
               </form>
               {% else %}
-              <span class="tag ">Login to edit</span>
+              <span class="tag">Login to edit</span>
               {% endif %}
             </td>
+
           </tr>
           {% endfor %}
         </tbody>
@@ -227,7 +239,7 @@
   </section>
 </div>
 
-<!-- Modal del escáner QR (compacto) -->
+<!-- Modales y scripts (idénticos a tu versión anterior) -->
 <div id="scanQRModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code scanner">
   <div class="scan-sheet">
     <div class="scan-header">
@@ -244,7 +256,6 @@
         </button>
       </div>
     </div>
-
     <div class="scan-body">
       <div class="viewport">
         <video id="scanQRVideo" playsinline autoplay muted></video>
@@ -261,7 +272,6 @@
   </div>
 </div>
 
-<!-- Modal para ver QR de ubicación -->
 <div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code">
   <div class="scan-sheet" style="width:min(380px,92vw)">
     <div class="scan-header">
@@ -285,32 +295,24 @@
 </div>
 
 <script>
-/* ===== Toggle filtros colapsables (desktop + móvil) con persistencia ===== */
+/* Toggle filtros con persistencia */
 (function(){
   const btn = document.getElementById('filtersToggle');
   const content = document.getElementById('filtersContent');
   const shell = document.getElementById('filtersShell');
   const KEY = 'qv_filters_collapsed';
-
   function setCollapsed(collapsed){
-    if (!content) return;
     content.hidden = collapsed;
     btn?.setAttribute('aria-expanded', String(!collapsed));
     shell?.classList.toggle('collapsed', collapsed);
     try{ localStorage.setItem(KEY, collapsed ? '1':'0'); }catch{}
   }
-
   function initState(){
     let collapsed = false;
     try{ collapsed = localStorage.getItem(KEY) === '1'; }catch{}
     setCollapsed(collapsed);
   }
-
-  btn?.addEventListener('click', ()=>{
-    const collapsed = !content.hasAttribute('hidden') ? true : false;
-    setCollapsed(collapsed);
-  });
-
+  btn?.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
   initState();
 })();
 </script>
