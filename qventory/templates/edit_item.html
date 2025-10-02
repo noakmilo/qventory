@@ -2,212 +2,223 @@
 {% extends "base.html" %}
 {% block title %}Edit Item – Qventory{% endblock %}
 {% block content %}
+
 <div class="card">
   <h2><i class="fas fa-edit"></i> Edit Item</h2>
 
   <form method="post" class="grid cols-3" id="editItemForm">
     <!-- Título -->
     <div style="grid-column:1/-1">
-      <label><i class="fas fa-heading"></i> Title</label>
+      <label class="label"><i class="fas fa-heading"></i> Title</label>
       <input class="input" type="text" name="title" value="{{ item.title }}" required>
     </div>
 
-    <!-- Uploader de imagen (Cloudinary) -->
-    <div style="grid-column:1/-1" class="uploader-card">
-      <div class="uploader-head">
-        <h3 class="h3"><i class="far fa-image"></i> Item Photo</h3>
-        <div class="uploader-actions">
-          <label for="fileLibrary" class="btn ghost">
+    <!-- Uploader de imagen -->
+    <div class="card" style="grid-column:1/-1">
+      <div class="items-header" style="margin:0; gap:8px">
+        <h3 class="h3" style="margin:0"><i class="far fa-image"></i> Item Photo</h3>
+        <div class="backup-actions">
+          <label for="fileLibrary" class="btn">
             <i class="far fa-image"></i> Choose photo
           </label>
-          <input id="fileLibrary" type="file" accept="image/*" class="hidden-input">
+          <input id="fileLibrary" type="file" accept="image/*" style="display:none">
           <button type="button" class="btn submitbtn" id="btnUpload" disabled>
             <i class="fas fa-cloud-upload-alt"></i> Upload
           </button>
         </div>
       </div>
 
-      <div class="uploader-body">
-        <div class="thumb-wrap" id="thumbWrap">
-          <div id="thumbSkeleton" class="thumb-skeleton {% if item.item_thumb %}hidden{% endif %}">
+      <div class="row" style="align-items:center; gap:12px">
+        <div class="thumb-wrap" id="thumbWrap" style="width:72px;height:72px">
+          <div id="thumbSkeleton" class="{% if item.item_thumb %}hidden{% endif %}" style="display:grid;place-items:center;width:100%;height:100%;border:1px dashed var(--glass-border);border-radius:10px;color:var(--sub);font-size:12px">
             <i class="far fa-image"></i>
-            <span>No image selected</span>
+            <span class="muted">No image</span>
           </div>
           <img
             id="thumbPreview"
             alt="Preview"
-            class="thumb-img {% if not item.item_thumb %}hidden{% endif %}"
+            class="{% if not item.item_thumb %}hidden{% endif %}"
             src="{{ item.item_thumb or '' }}"
+            style="display:block;width:100%;height:100%;object-fit:cover;border-radius:10px;border:1px solid var(--glass-border)"
           >
         </div>
 
-        <div class="uploader-meta">
-          <div class="rowy" style="display: none;">
-            <label class="inline"><i class="fas fa-link"></i> CDN URL</label>
-            <input class="input" type="url" name="item_thumb" id="item_thumb" value="{{ item.item_thumb or '' }}" placeholder="(auto-filled after upload)">
+        <div class="grid cols-1" style="flex:1; gap:8px">
+          <div>
+            <label class="label"><i class="fas fa-link"></i> CDN URL</label>
+            <input class="input" type="url" name="item_thumb" id="item_thumb" value="{{ item.item_thumb or '' }}" placeholder="Filled after upload">
           </div>
-          <div class="progress hidden" id="uploadProgress">
-            <div class="bar" id="uploadBar" style="width:0%"></div>
+
+          <div id="uploadProgress" class="hidden" style="width:100%;height:8px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(26,36,70,.55);overflow:hidden">
+            <div id="uploadBar" style="width:0%;height:100%;background:var(--accent)"></div>
           </div>
           <div class="muted" id="uploadStatus"></div>
           {% if not cloudinary_enabled %}
-            <div class="muted" style="color:#ef4444">Cloudinary is not configured.</div>
+            <div class="muted" style="color:var(--err)">Cloudinary is not configured.</div>
           {% endif %}
         </div>
       </div>
 
-      <div class="uploader-foot">
-        <small>
-          We compress on device (~100 KB) before uploading to avoid 413 errors.  
-          Formats: JPG/PNG/HEIC/HEIF/WebP (iOS/Android supported).
-        </small>
+      <div class="muted" style="margin-top:8px">
+        We compress on device (~100 KB) before uploading. Formats: JPG/PNG/HEIC/HEIF/WebP.
       </div>
     </div>
 
     <!-- Campos adicionales -->
     <div>
-      <label><i class="fas fa-truck"></i> Supplier</label>
+      <label class="label"><i class="fas fa-truck"></i> Supplier</label>
       <input class="input" type="text" name="supplier" value="{{ item.supplier or '' }}">
     </div>
     <div>
-      <label><i class="fas fa-dollar-sign"></i> Cost</label>
+      <label class="label"><i class="fas fa-dollar-sign"></i> Cost</label>
       <input class="input" type="number" step="0.01" min="0" name="item_cost" id="item_cost" value="{{ '%.2f'|format(item.item_cost) if item.item_cost is not none else '' }}">
     </div>
     <div>
-      <label><i class="fas fa-tags"></i> Price</label>
+      <label class="label"><i class="fas fa-tags"></i> Price</label>
       <input class="input" type="number" step="0.01" min="0" name="item_price" id="item_price" value="{{ '%.2f'|format(item.item_price) if item.item_price is not none else '' }}">
     </div>
     <div>
-      <label><i class="fas fa-percentage"></i> ROI (auto)</label>
+      <label class="label"><i class="fas fa-percentage"></i> ROI (auto)</label>
       {% set roi = ((item.item_price - item.item_cost) / item.item_cost * 100) if (item.item_cost is not none and item.item_cost>0 and item.item_price is not none) else None %}
       <input class="input" type="text" id="roi_display" value="{{ (roi|round(0)|string + '%') if roi is not none else '—' }}" disabled>
     </div>
     <div>
-      <label><i class="far fa-calendar-alt"></i> Listing Date</label>
+      <label class="label"><i class="far fa-calendar-alt"></i> Listing Date</label>
       <input class="input" type="date" name="listing_date" id="listing_date" value="{{ item.listing_date.strftime('%Y-%m-%d') if item.listing_date }}">
     </div>
 
     <!-- Listing principal -->
     <div style="grid-column:1/-1">
-      <label><i class="fas fa-link"></i> Listing Link (optional)</label>
+      <label class="label"><i class="fas fa-link"></i> Listing Link (optional)</label>
       <input class="input" type="url" name="listing_link" value="{{ item.listing_link or '' }}">
     </div>
 
-    <!-- Bloque de Links de Marketplace -->
-    <div style="grid-column:1/-1"><hr class="sep"></div>
+    <!-- Marketplace Links -->
     <div style="grid-column:1/-1">
       <h3 class="h3"><i class="fas fa-store"></i> Marketplace Links (optional)</h3>
     </div>
 
     <div>
-      <label><i class="fas fa-globe"></i> Website</label>
+      <label class="label"><i class="fas fa-globe"></i> Website</label>
       <input class="input" type="url" name="web_url" value="{{ item.web_url or '' }}">
     </div>
     <div>
-      <label><i class="fab fa-ebay"></i> eBay</label>
+      <label class="label"><i class="fab fa-ebay"></i> eBay</label>
       <input class="input" type="url" name="ebay_url" value="{{ item.ebay_url or '' }}">
     </div>
     <div>
-      <label><i class="fab fa-amazon"></i> Amazon</label>
+      <label class="label"><i class="fab fa-amazon"></i> Amazon</label>
       <input class="input" type="url" name="amazon_url" value="{{ item.amazon_url or '' }}">
     </div>
     <div>
-      <label><i class="fas fa-store"></i> Mercari</label>
+      <label class="label"><i class="fas fa-store"></i> Mercari</label>
       <input class="input" type="url" name="mercari_url" value="{{ item.mercari_url or '' }}">
     </div>
     <div>
-      <label><i class="fas fa-tshirt"></i> Vinted</label>
+      <label class="label"><i class="fas fa-tshirt"></i> Vinted</label>
       <input class="input" type="url" name="vinted_url" value="{{ item.vinted_url or '' }}">
     </div>
     <div>
-      <label><i class="fas fa-shopping-bag"></i> Poshmark</label>
+      <label class="label"><i class="fas fa-shopping-bag"></i> Poshmark</label>
       <input class="input" type="url" name="poshmark_url" value="{{ item.poshmark_url or '' }}">
     </div>
     <div>
-      <label><i class="fas fa-shopping-cart"></i> Depop</label>
+      <label class="label"><i class="fas fa-shopping-cart"></i> Depop</label>
       <input class="input" type="url" name="depop_url" value="{{ item.depop_url or '' }}">
     </div>
 
     <!-- Location -->
-    <div style="grid-column:1/-1; margin-top:16px">
+    <div style="grid-column:1/-1; margin-top:8px">
       <div class="card" style="margin:0">
-        <div class="loc-head">
-          <h3 class="h3"><i class="fas fa-map-marker-alt"></i> Location</h3>
+        <div class="items-header" style="margin:0; gap:8px">
+          <h3 class="h3" style="margin:0"><i class="fas fa-map-marker-alt"></i> Location</h3>
           <button type="button" id="btnScanLocation" class="btn small" title="Scan location QR code">
             <i class="fas fa-qrcode"></i> Scan QR
           </button>
         </div>
 
         {% if settings.enable_A %}
-        <div>
-          <label><i class="fas fa-tag"></i> {{ settings.label_A }} (A)</label>
-          <input class="input" type="text" name="A" id="input_A" value="{{ item.A or '' }}" placeholder="e.g., 1">
+        <div class="grid cols-3" style="gap:10px; margin-top:8px">
+          <div>
+            <label class="label"><i class="fas fa-tag"></i> {{ settings.label_A }} (A)</label>
+            <input class="input" type="text" name="A" id="input_A" value="{{ item.A or '' }}" placeholder="e.g., 1">
+          </div>
+          {% endif %}
+          {% if settings.enable_B %}
+          <div>
+            <label class="label"><i class="fas fa-tag"></i> {{ settings.label_B }} (B)</label>
+            <input class="input" type="text" name="B" id="input_B" value="{{ item.B or '' }}" placeholder="e.g., 1">
+          </div>
+          {% endif %}
+          {% if settings.enable_S %}
+          <div>
+            <label class="label"><i class="fas fa-tag"></i> {{ settings.label_S }} (S)</label>
+            <input class="input" type="text" name="S" id="input_S" value="{{ item.S or '' }}" placeholder="e.g., 1">
+          </div>
+          {% endif %}
+          {% if settings.enable_C %}
+          <div>
+            <label class="label"><i class="fas fa-tag"></i> {{ settings.label_C }} (C)</label>
+            <input class="input" type="text" name="C" id="input_C" value="{{ item.C or '' }}" placeholder="e.g., 1">
+          </div>
+          {% endif %}
         </div>
-        {% endif %}
-        {% if settings.enable_B %}
-        <div>
-          <label><i class="fas fa-tag"></i> {{ settings.label_B }} (B)</label>
-          <input class="input" type="text" name="B" id="input_B" value="{{ item.B or '' }}" placeholder="e.g., 1">
-        </div>
-        {% endif %}
-        {% if settings.enable_S %}
-        <div>
-          <label><i class="fas fa-tag"></i> {{ settings.label_S }} (S)</label>
-          <input class="input" type="text" name="S" id="input_S" value="{{ item.S or '' }}" placeholder="e.g., 1">
-        </div>
-        {% endif %}
-        {% if settings.enable_C %}
-        <div>
-          <label><i class="fas fa-tag"></i> {{ settings.label_C }} (C)</label>
-          <input class="input" type="text" name="C" id="input_C" value="{{ item.C or '' }}" placeholder="e.g., 1">
-        </div>
-        {% endif %}
       </div>
     </div>
 
     <!-- Acciones -->
-    <div style="grid-column:1/-1; margin-top:8px">
-      <button class="btn" type="submit"><i class="fas fa-save"></i> Save</button>
+    <div style="grid-column:1/-1; margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
+      <button class="btn submitbtn" type="submit"><i class="fas fa-save"></i> Save</button>
       <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-times"></i> Cancel</a>
     </div>
   </form>
 </div>
 
-<!-- Modal del QR Scanner -->
-<div id="qrModal" class="scan-modal hidden" aria-hidden="true" aria-label="QR code scanner">
-  <div class="scan-sheet">
-    <div class="scan-header">
-      <strong><i class="fas fa-qrcode"></i> Scan location QR code</strong>
-      <div class="scan-actions">
-        <button type="button" id="qrFlashlight" class="icon-top" aria-label="Toggle flashlight" title="Toggle flashlight">
-          <i class="fas fa-lightbulb"></i>
-        </button>
-        <button type="button" id="qrFlip" class="icon-top" aria-label="Flip camera" title="Flip camera">
-          <i class="fas fa-sync-alt"></i>
-        </button>
-        <button type="button" id="qrClose" class="icon-top" aria-label="Close">
-          <i class="fas fa-times"></i>
-        </button>
+<!-- Modal del QR Scanner (usa hidden + glass) -->
+<div id="qrModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
+  position:fixed; inset:0; display:grid; place-items:center; z-index:1100;
+  background:rgba(0,0,0,.55);
+">
+  <div class="glass" style="
+    position:relative; width:min(96vw,520px); max-height:min(92vh,820px);
+    border-radius:16px; padding:12px; box-sizing:border-box; overflow:hidden;
+  ">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+      <strong style="font-size:var(--fs-sm); display:flex; align-items:center; gap:8px">
+        <i class="fas fa-qrcode"></i> Scan location QR code
+      </strong>
+      <div style="display:flex; gap:6px">
+        <button type="button" id="qrFlashlight" class="btn small" title="Toggle flashlight"><i class="fas fa-lightbulb"></i></button>
+        <button type="button" id="qrFlip" class="btn small" title="Flip camera"><i class="fas fa-sync-alt"></i></button>
+        <button type="button" id="qrClose" class="btn small" aria-label="Close"><i class="fas fa-times"></i></button>
       </div>
     </div>
 
-    <div class="scan-body">
-      <div class="viewport">
-        <video id="qrVideo" playsinline autoplay muted></video>
-        <div class="guide"></div>
-        <div id="qrTarget" class="scan-target"></div>
-        <div id="qrSpinner" class="spinner"></div>
-        <div id="qrSuccess" class="success-indicator">
-          <i class="fas fa-check"></i>
-        </div>
+    <div style="position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--glass-border); background:rgba(14,22,48,.55); aspect-ratio:3/2;">
+      <video id="qrVideo" playsinline autoplay muted style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+      <div id="qrSpinner" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; background:rgba(0,0,0,.25);">
+        <div class="tag">Initializing camera…</div>
       </div>
-      <div class="scan-tip">Align the QR code inside the frame</div>
-      <div id="qrResult" class="scan-result"></div>
+      <div id="qrSuccess" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; background:rgba(0,255,128,.12);"></div>
     </div>
+
+    <div class="muted" style="margin-top:8px">Align the QR code inside the frame</div>
+    <div id="qrResult" class="muted" style="margin-top:6px; display:none"></div>
   </div>
 </div>
 
+<style>
+  /* Adoptar tu sistema de visibilidad y modales */
+  #qrModal[hidden] { display:none !important; }
+  #qrModal { display:grid; }
+  .modal-open { overflow:hidden; }
 
+  /* Uploader: respeta variables y estética */
+  .h3 { font-size:var(--fs-lg); margin:0; }
+  .hidden { display:none !important; }
+</style>
+
+<!-- ========== SCRIPTS ========== -->
 
 <script>
 /* ========== Subida a Cloudinary con compresión (~100KB) ========== */
@@ -223,7 +234,6 @@
   const skeleton   = document.getElementById('thumbSkeleton');
 
   if (!enabled) {
-    // Si Cloudinary no está habilitado, el usuario solo verá el campo URL manual.
     if (btnUpload) btnUpload.disabled = true;
     return;
   }
@@ -239,9 +249,9 @@
     btnUpload.disabled = true;
 
     try{
-      const img = await loadImageFromFile(f); // con orientación EXIF
+      const img = await loadImageFromFile(f);
       const { blob, dataUrl } = await compressImage(img, 100 * 1024, 1920, 1920);
-      // Vista previa
+
       if (skeleton) skeleton.classList.add('hidden');
       if (thumbPrev){
         thumbPrev.src = dataUrl;
@@ -254,7 +264,7 @@
     }catch(err){
       console.error(err);
       status.textContent = `Cannot preview: ${err.message}`;
-      status.style.color = '#ef4444';
+      status.style.color = 'var(--err)';
       selectedFile = null;
       btnUpload.disabled = true;
     }
@@ -282,7 +292,6 @@
         credentials: 'same-origin'
       });
 
-      // Simulación de progreso (fetch nativo no da progreso de subida)
       let prog = 10;
       const sim = setInterval(()=>{ prog = Math.min(95, prog+5); bar.style.width = prog+'%'; }, 120);
 
@@ -296,12 +305,12 @@
 
       bar.style.width = '100%';
       status.textContent = '✓ Uploaded';
-      status.style.color = '#22c55e';
+      status.style.color = 'var(--ok)';
       outUrl.value = data.url || '';
     }catch(err){
       console.error(err);
       status.textContent = `Upload failed: ${err.message}`;
-      status.style.color = '#ef4444';
+      status.style.color = 'var(--err)';
     }finally{
       btnUpload.disabled = false;
     }
@@ -365,7 +374,6 @@
   const btnFlip = document.getElementById('qrFlip');
   const btnFlash = document.getElementById('qrFlashlight');
   const video = document.getElementById('qrVideo');
-  const target = document.getElementById('qrTarget');
   const spinner = document.getElementById('qrSpinner');
   const success = document.getElementById('qrSuccess');
   const result = document.getElementById('qrResult');
@@ -376,15 +384,15 @@
   let videoDevices=[], currentDeviceIdx=-1, devicesLoaded=false;
   let flashlightOn=false, lastDetections=[];
 
-  function openModal(){ document.body.classList.add('modal-open'); modal.classList.remove('hidden'); modal.setAttribute('aria-hidden','false'); }
-  function closeModal(){ document.body.classList.remove('modal-open'); modal.classList.add('hidden'); modal.setAttribute('aria-hidden','true'); }
+  function openModal(){ document.body.classList.add('modal-open'); modal.removeAttribute('hidden'); modal.setAttribute('aria-hidden','false'); }
+  function closeModal(){ document.body.classList.remove('modal-open'); modal.setAttribute('hidden',''); modal.setAttribute('aria-hidden','true'); }
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
   function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
   function cleanupAll(){
     cleanupLoop();
     if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-    flashlightOn=false; btnFlash.classList.remove('active');
-    video.srcObject=null; video.style.display='none'; target.style.display='none';
+    flashlightOn=false; btnFlash?.classList.remove('active');
+    video.srcObject=null; video.style.display='none';
     result.style.display='none'; success.style.display='none';
     usingBD=false; usingJsQR=false; lastDetections.length=0;
   }
@@ -414,15 +422,10 @@
     video.srcObject = stream;
     await video.play();
     showSpinner(false);
-    rememberActiveDevice();
-  }
-
-  function rememberActiveDevice(){
     try{
-      const track=stream?.getVideoTracks?.()[0];
-      const settings=track?.getSettings?.()||{};
-      const id=settings.deviceId || track?.getConstraints?.().deviceId?.exact;
-      if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
+      const track=stream.getVideoTracks()[0];
+      const id=track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
+      if (id) localStorage.setItem(CAM_CACHE_KEY, id);
     }catch{}
   }
 
@@ -443,7 +446,7 @@
       if (!caps.torch) return alert('Flashlight not supported on this camera');
       flashlightOn = !flashlightOn;
       await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
-      btnFlash.classList.toggle('active', flashlightOn);
+      btnFlash?.classList.toggle('active', flashlightOn);
     }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
   }
 
@@ -454,43 +457,18 @@
     return lastDetections[lastDetections.length-1];
   }
 
-  function parseLocationQR(qrText){
-    try{
-      let part = qrText.includes('/location/') ? qrText.split('/location/')[1] : qrText;
-      if (!part) return null;
-      const m = part.match(/^(?:.*?)(A(\d+))?(B(\d+))?(S(\d+))?(C(\d+))?/i);
-      if (!m) return null;
-      return { A:m[2]||null, B:m[4]||null, S:m[6]||null, C:m[8]||null, original:part };
-    }catch(e){ console.error('parseLocationQR',e); return null; }
-  }
-
-  function populateLocationFields(loc){
-    const ids=['A','B','S','C']; const done=[];
-    ids.forEach(k=>{
-      const el=document.getElementById(`input_${k}`);
-      if (el && loc[k]){ el.value=loc[k]; done.push(`${k}=${loc[k]}`); el.style.background='#e8f5e8'; setTimeout(()=>el.style.background='',1500); }
-    });
-    return done;
-  }
-
   function onDetected(raw){
     const v = validateDetection(raw);
     if (!v) return;
-    const loc = parseLocationQR(v);
-    if (loc){
-      result.textContent = `Location: ${loc.original}`;
-      result.style.display='block';
-      success.style.display='block'; setTimeout(()=>success.style.display='none',500);
-      try{ navigator.vibrate && navigator.vibrate([80,40,80]); }catch(_){}
 
-      setTimeout(()=>{
-        populateLocationFields(loc);
-        cleanupAll(); closeModal();
-      }, 600);
-    } else {
-      result.textContent = `QR: ${String(v).slice(0,80)}…`;
-      result.style.display='block';
-    }
+    result.textContent = `QR: ${String(v).slice(0,120)}`;
+    result.style.display='block';
+    success.style.display='block'; setTimeout(()=>success.style.display='none',500);
+    try{ navigator.vibrate && navigator.vibrate([60,40,60]); }catch{}
+
+    // Si tu QR de ubicación codifica A/B/S/C en la URL, aquí puedes parsearlo
+    // y rellenar campos. (Dejado sencillo para adoptar tu flujo actual)
+    setTimeout(()=>{ cleanupAll(); closeModal(); }, 600);
   }
 
   async function startBarcodeDetector(){
@@ -499,8 +477,6 @@
     if (!supported.includes('qr_code')) return false;
     detector = new window.BarcodeDetector({ formats:['qr_code'] });
     usingBD=true; usingJsQR=false;
-    document.getElementById('qrVideo').style.display='block';
-    document.getElementById('qrTarget').style.display='none';
     startBDLoop();
     return true;
   }
@@ -514,7 +490,7 @@
         if (frame%3===0 && detector){
           const codes = await detector.detect(video);
           if (codes?.length){
-            const qr = codes.find(c=>c.format==='qr_code') || codes[0];
+            const qr = codes[0];
             const val = (qr.rawValue||'').trim();
             if (val){ onDetected(val); return; }
           }
@@ -539,13 +515,11 @@
 
   function startJsQRLoop(){
     usingBD=false; usingJsQR=true;
-    document.getElementById('qrVideo').style.display='block';
-    document.getElementById('qrTarget').style.display='none';
     cleanupLoop();
 
     const canvas=document.createElement('canvas');
     const ctx=canvas.getContext('2d',{ willReadFrequently:true });
-    const ROI_INSET=0.10; // 10% márgenes
+    const ROI_INSET=0.10;
 
     let lastTS=0; const MIN_INTERVAL=80;
     const tick=(now)=>{
@@ -592,16 +566,16 @@
     }
   }
 
-  document.getElementById('btnScanLocation')?.addEventListener('click', startScan);
-  document.getElementById('qrFlip')?.addEventListener('click', flipCamera);
-  document.getElementById('qrFlashlight')?.addEventListener('click', toggleFlashlight);
-  document.getElementById('qrClose')?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
+  btnScan?.addEventListener('click', startScan);
+  btnFlip?.addEventListener('click', flipCamera);
+  btnFlash?.addEventListener('click', toggleFlashlight);
+  btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
   modal?.addEventListener('click', (e)=>{ if(e.target===modal){ cleanupAll(); closeModal(); }});
 })();
 </script>
 
 <script>
-/* ROI en vivo */
+/* ROI en vivo (usa inputs con clase .input) */
 (function(){
   const cost = document.getElementById('item_cost');
   const price = document.getElementById('item_price');
