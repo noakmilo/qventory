@@ -8,8 +8,6 @@ reportlab==4.2.2
 gunicorn==21.2.0
 requests==2.32.3
 beautifulsoup4==4.12.3
-requests==2.32.3
-beautifulsoup4==4.12.3
-urllib3==2.2.2
+urllib3==1.26.18
 python-dotenv==1.0.1
 cloudinary==1.32.0
