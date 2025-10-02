@@ -7,13 +7,13 @@
   <h2><i class="fas fa-edit"></i> Edit Item</h2>
 
   <form method="post" class="grid cols-3" id="editItemForm">
-    <!-- Título -->
+    <!-- Title -->
     <div style="grid-column:1/-1">
       <label class="label"><i class="fas fa-heading"></i> Title</label>
       <input class="input" type="text" name="title" value="{{ item.title }}" required>
     </div>
 
-    <!-- Uploader de imagen (estilos globales) -->
+    <!-- Uploader (usa el snippet y clases globales) -->
     <div class="uploader-card" style="grid-column:1/-1">
       <div class="uploader-head">
         <h3 class="h3"><i class="far fa-image"></i> Item Photo</h3>
@@ -43,7 +43,7 @@
         </div>
 
         <div class="uploader-meta">
-          <div class="rowy" style="display: none;">
+          <div class="rowy" style="display:none">
             <label class="inline"><i class="fas fa-link"></i> CDN URL</label>
             <input class="input" type="url" name="item_thumb" id="item_thumb"
                    value="{{ item.item_thumb or '' }}" placeholder="(auto-filled after upload)">
@@ -56,7 +56,7 @@
           <div class="muted" id="uploadStatus"></div>
 
           {% if not cloudinary_enabled %}
-          <div class="muted" style="color:var(--err)">Cloudinary is not configured.</div>
+            <div class="muted" style="color:var(--err)">Cloudinary is not configured.</div>
           {% endif %}
         </div>
       </div>
@@ -69,7 +69,7 @@
       </div>
     </div>
 
-    <!-- Campos adicionales -->
+    <!-- Campos -->
     <div>
       <label class="label"><i class="fas fa-truck"></i> Supplier</label>
       <input class="input" type="text" name="supplier" value="{{ item.supplier or '' }}">
@@ -137,38 +137,34 @@
     </div>
 
     <!-- Location -->
-    <div style="grid-column:1/-1; margin-top:8px">
-      <div class="card" style="margin:0">
-        <div class="items-header" style="margin:0; gap:8px">
-          <h3 class="h3" style="margin:0"><i class="fas fa-map-marker-alt"></i> Location</h3>
+    <div style="grid-column:1/-1">
+      <div class="card">
+        <div class="items-header">
+          <h3 class="h3"><i class="fas fa-map-marker-alt"></i> Location</h3>
           <button type="button" id="btnScanLocation" class="btn small" title="Scan location QR code">
             <i class="fas fa-qrcode"></i> Scan QR
           </button>
         </div>
 
-        <!-- Grid SIEMPRE abierta; campos condicionales dentro -->
-        <div class="grid cols-3" style="gap:10px; margin-top:8px">
+        <div class="grid cols-3">
           {% if settings.enable_A %}
           <div>
             <label class="label"><i class="fas fa-tag"></i> {{ settings.label_A }} (A)</label>
             <input class="input" type="text" name="A" id="input_A" value="{{ item.A or '' }}" placeholder="e.g., 1">
           </div>
           {% endif %}
-
           {% if settings.enable_B %}
           <div>
             <label class="label"><i class="fas fa-tag"></i> {{ settings.label_B }} (B)</label>
             <input class="input" type="text" name="B" id="input_B" value="{{ item.B or '' }}" placeholder="e.g., 1">
           </div>
           {% endif %}
-
           {% if settings.enable_S %}
           <div>
             <label class="label"><i class="fas fa-tag"></i> {{ settings.label_S }} (S)</label>
             <input class="input" type="text" name="S" id="input_S" value="{{ item.S or '' }}" placeholder="e.g., 1">
           </div>
           {% endif %}
-
           {% if settings.enable_C %}
           <div>
             <label class="label"><i class="fas fa-tag"></i> {{ settings.label_C }} (C)</label>
@@ -180,426 +176,410 @@
     </div>
 
     <!-- Acciones -->
-    <div style="grid-column:1/-1; margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
+    <div style="grid-column:1/-1; display:flex; gap:var(--space-2); flex-wrap:wrap">
       <button class="btn submitbtn" type="submit"><i class="fas fa-save"></i> Save</button>
       <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-times"></i> Cancel</a>
     </div>
   </form>
 </div>
 
-<!-- Modal del QR Scanner (usa hidden + glass) -->
-<div id="qrModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
-  position:fixed; inset:0; display:grid; place-items:center; z-index:1100;
-  background:rgba(0,0,0,.55);
-">
-  <div class="glass" style="
-    position:relative; width:min(96vw,520px); max-height:min(92vh,820px);
-    border-radius:16px; padding:12px; box-sizing:border-box; overflow:hidden;
-  ">
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
-      <strong style="font-size:var(--fs-sm); display:flex; align-items:center; gap:8px">
-        <i class="fas fa-qrcode"></i> Scan location QR code
-      </strong>
-      <div style="display:flex; gap:6px">
+<!-- Modal QR (usa hidden y glass + variables) -->
+<div id="qrModal" hidden aria-hidden="true" role="dialog" aria-modal="true" class="glass" style="position:fixed; inset:0; display:grid; place-items:center; z-index:1000; background:rgba(0,0,0,.55);">
+  <div class="card" style="margin:0; max-width:min(96vw,520px); width:100%;">
+    <div class="items-header">
+      <strong class="h3" style="display:flex; align-items:center; gap:8px;"><i class="fas fa-qrcode"></i> Scan location QR code</strong>
+      <div style="display:flex; gap:var(--space-2)">
         <button type="button" id="qrFlashlight" class="btn small" title="Toggle flashlight"><i class="fas fa-lightbulb"></i></button>
         <button type="button" id="qrFlip" class="btn small" title="Flip camera"><i class="fas fa-sync-alt"></i></button>
         <button type="button" id="qrClose" class="btn small" aria-label="Close"><i class="fas fa-times"></i></button>
       </div>
     </div>
 
-    <div style="position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--glass-border); background:rgba(14,22,48,.55); aspect-ratio:3/2;">
-      <video id="qrVideo" playsinline autoplay muted style="width:100%; height:100%; object-fit:cover; display:block;"></video>
-      <div id="qrSpinner" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; background:rgba(0,0,0,.25);">
-        <div class="tag">Initializing camera…</div>
+    <div class="card" style="margin:0">
+      <div style="position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--glass-border); background:var(--glass-bg); aspect-ratio:3/2;">
+        <video id="qrVideo" playsinline autoplay muted style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+        <div id="qrSpinner" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+          <div class="tag">Initializing camera…</div>
+        </div>
+        <div id="qrSuccess" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; background:rgba(0,255,128,.12);"></div>
       </div>
-      <div id="qrSuccess" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; pointer-events:none; background:rgba(0,255,128,.12);"></div>
+      <div class="muted" style="margin-top:var(--space-2)">Align the QR code inside the frame</div>
+      <div id="qrResult" class="muted" style="margin-top:var(--space-1); display:none"></div>
     </div>
-
-    <div class="muted" style="margin-top:8px">Align the QR code inside the frame</div>
-    <div id="qrResult" class="muted" style="margin-top:6px; display:none"></div>
   </div>
 </div>
 
 <style>
-  /* Adoptar tu sistema de visibilidad y modales */
-  #qrModal[hidden] { display: none !important; }
-  #qrModal { display: grid; }
-  .modal-open { overflow: hidden; }
+  /* Visibilidad/scroll modal coherente con tu sistema */
+  #qrModal[hidden]{ display:none !important; }
+  .modal-open{ overflow:hidden; }
 
-  /* Utilidades */
-  .h3 { font-size: var(--fs-lg); margin: 0; }
-  .hidden { display: none !important; }
+  /* Mini utilidades */
+  .h3{ font-size:var(--fs-lg); margin:0; }
+  .hidden{ display:none !important; }
+
+  /* Barra de progreso (no existe en tu global, la integramos con tu tema) */
+  .progress{
+    width:100%; height:8px; border-radius:999px;
+    border:1px solid var(--glass-border);
+    background:rgba(26,36,70,.55);
+    overflow:hidden;
+  }
+  .progress .bar{
+    height:100%;
+    background:var(--accent);
+    transition:width .25s ease;
+  }
 </style>
 
-<!-- ========== SCRIPTS ========== -->
+<!-- SCRIPTS -->
 
 <script>
-  /* ========== Subida a Cloudinary con compresión (~100KB) ========== */
-  (function () {
-    const enabled = {{ cloudinary_enabled|default(false)|tojson }};
-    const inputLib   = document.getElementById('fileLibrary');
-    const btnUpload  = document.getElementById('btnUpload');
-    const thumbPrev  = document.getElementById('thumbPreview');
-    const outUrl     = document.getElementById('item_thumb');
-    const barWrap    = document.getElementById('uploadProgress');
-    const bar        = document.getElementById('uploadBar');
-    const status     = document.getElementById('uploadStatus');
-    const skeleton   = document.getElementById('thumbSkeleton');
+/* Cloudinary upload con compresión (coherente con tu UI) */
+(function(){
+  const enabled   = {{ cloudinary_enabled|default(false)|tojson }};
+  const inputLib  = document.getElementById('fileLibrary');
+  const btnUpload = document.getElementById('btnUpload');
+  const thumbPrev = document.getElementById('thumbPreview');
+  const outUrl    = document.getElementById('item_thumb');
+  const barWrap   = document.getElementById('uploadProgress');
+  const bar       = document.getElementById('uploadBar');
+  const status    = document.getElementById('uploadStatus');
+  const skeleton  = document.getElementById('thumbSkeleton');
 
-    if (!enabled) {
-      if (btnUpload) btnUpload.disabled = true;
-      return;
-    }
+  if (!enabled){ btnUpload && (btnUpload.disabled = true); return; }
 
-    let selectedFile = null;
+  let selectedFile = null;
 
-    inputLib?.addEventListener('change', async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      if (!f) return;
-      status.textContent = '';
-      barWrap.classList.add('hidden');
-      bar.style.width = '0%';
+  inputLib?.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    status.textContent = '';
+    barWrap.classList.add('hidden');
+    bar.style.width = '0%';
+    btnUpload.disabled = true;
+
+    try{
+      const img = await loadImageFromFile(f);
+      const { blob, dataUrl } = await compressImage(img, 100*1024, 1920, 1920);
+
+      skeleton?.classList.add('hidden');
+      if (thumbPrev){ thumbPrev.src = dataUrl; thumbPrev.classList.remove('hidden'); }
+
+      selectedFile = new File([blob], (f.name || 'photo.jpeg').replace(/\.(heic|heif)$/i,'.jpg'), { type:'image/jpeg' });
+      btnUpload.disabled = false;
+      status.textContent = `Ready to upload (~${Math.round(blob.size/1024)} KB).`;
+      status.style.color = '';
+    }catch(err){
+      console.error(err);
+      status.textContent = `Cannot preview: ${err.message}`;
+      status.style.color = 'var(--err)';
+      selectedFile = null;
       btnUpload.disabled = true;
-
-      try{
-        const img = await loadImageFromFile(f);
-        const { blob, dataUrl } = await compressImage(img, 100 * 1024, 1920, 1920);
-
-        if (skeleton) skeleton.classList.add('hidden');
-        if (thumbPrev){
-          thumbPrev.src = dataUrl;
-          thumbPrev.classList.remove('hidden');
-        }
-        selectedFile = new File([blob], (f.name || 'photo.jpeg').replace(/\.(heic|heif)$/i,'.jpg'), { type: 'image/jpeg' });
-        btnUpload.disabled = false;
-        status.textContent = `Ready to upload (~${Math.round(blob.size/1024)} KB).`;
-        status.style.color = '';
-      }catch(err){
-        console.error(err);
-        status.textContent = `Cannot preview: ${err.message}`;
-        status.style.color = 'var(--err)';
-        selectedFile = null;
-        btnUpload.disabled = true;
-      }
-    });
-
-    btnUpload?.addEventListener('click', async ()=>{
-      if (!selectedFile){
-        status.textContent = 'Choose a photo first.';
-        status.style.color = '#eab308';
-        return;
-      }
-      btnUpload.disabled = true;
-      status.textContent = 'Uploading…';
-      status.style.color = '#aaa';
-      barWrap.classList.remove('hidden');
-      bar.style.width = '5%';
-
-      try{
-        const fd = new FormData();
-        fd.append('file', selectedFile, selectedFile.name);
-
-        const resp = await fetch('{{ url_for("main.api_upload_image") }}', {
-          method: 'POST',
-          body: fd,
-          credentials: 'same-origin'
-        });
-
-        let prog = 10;
-        const sim = setInterval(()=>{ prog = Math.min(95, prog+5); bar.style.width = prog+'%'; }, 120);
-
-        const data = await resp.json().catch(()=> ({}));
-        clearInterval(sim);
-
-        if (!resp.ok || !data.ok) {
-          const msg = (data && (data.error||data.message)) || `HTTP ${resp.status}`;
-          throw new Error(msg);
-        }
-
-        bar.style.width = '100%';
-        status.textContent = '✓ Uploaded';
-        status.style.color = 'var(--ok)';
-        outUrl.value = data.url || '';
-      }catch(err){
-        console.error(err);
-        status.textContent = `Upload failed: ${err.message}`;
-        status.style.color = 'var(--err)';
-      }finally{
-        btnUpload.disabled = false;
-      }
-    });
-
-    // ----- helpers -----
-    function loadImageFromFile(file){
-      return new Promise(async (resolve, reject) => {
-        if ('createImageBitmap' in window) {
-          try {
-            const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
-            const canvas = document.createElement('canvas');
-            canvas.width = bmp.width; canvas.height = bmp.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(bmp, 0, 0);
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('Unable to decode image'));
-            img.src = canvas.toDataURL('image/jpeg', 0.9);
-            return;
-          } catch(e){ /* fallback */ }
-        }
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Unable to decode image'));
-        try { img.src = URL.createObjectURL(file); } catch(e){ reject(e); }
-      });
     }
+  });
 
-    function compressImage(img, targetBytes=100*1024, maxW=1920, maxH=1920){
-      return new Promise((resolve)=>{
-        const canvas = document.createElement('canvas');
-        let w = img.width, h = img.height;
-        const ratio = Math.min(maxW / w, maxH / h, 1);
-        w = Math.round(w * ratio); h = Math.round(h * ratio);
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-
-        let q = 0.9, step = 0.08, dataUrl, binStrLen=Infinity;
-        for (let i=0;i<8;i++){
-          dataUrl = canvas.toDataURL('image/jpeg', q);
-          binStrLen = Math.floor((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
-          if (binStrLen <= targetBytes || q <= 0.4) break;
-          q -= step; step *= 0.75;
-        }
-        canvas.toBlob((blob)=>{
-          resolve({ blob, dataUrl });
-        }, 'image/jpeg', Math.max(q,0.4));
-      });
+  btnUpload?.addEventListener('click', async ()=>{
+    if (!selectedFile){
+      status.textContent = 'Choose a photo first.'; status.style.color = '#eab308'; return;
     }
-  })();
+    btnUpload.disabled = true;
+    status.textContent = 'Uploading…'; status.style.color = '#aaa';
+    barWrap.classList.remove('hidden'); bar.style.width = '5%';
+
+    try{
+      const fd = new FormData(); fd.append('file', selectedFile, selectedFile.name);
+      const resp = await fetch('{{ url_for("main.api_upload_image") }}', { method:'POST', body:fd, credentials:'same-origin' });
+
+      let prog = 10;
+      const sim = setInterval(()=>{ prog = Math.min(95, prog+5); bar.style.width = prog+'%'; }, 120);
+
+      const data = await resp.json().catch(()=> ({}));
+      clearInterval(sim);
+
+      if (!resp.ok || !data.ok){
+        const msg = (data && (data.error||data.message)) || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+
+      bar.style.width = '100%';
+      status.textContent = '✓ Uploaded'; status.style.color = 'var(--ok)';
+      outUrl.value = data.url || '';
+    }catch(err){
+      console.error(err);
+      status.textContent = `Upload failed: ${err.message}`;
+      status.style.color = 'var(--err)';
+    }finally{
+      btnUpload.disabled = false;
+    }
+  });
+
+  // Helpers
+  function loadImageFromFile(file){
+    return new Promise(async (resolve, reject)=>{
+      if ('createImageBitmap' in window){
+        try{
+          const bmp = await createImageBitmap(file, { imageOrientation:'from-image' });
+          const c = document.createElement('canvas'); c.width=bmp.width; c.height=bmp.height;
+          c.getContext('2d').drawImage(bmp,0,0);
+          const img = new Image();
+          img.onload = ()=>resolve(img);
+          img.onerror = ()=>reject(new Error('Unable to decode image'));
+          img.src = c.toDataURL('image/jpeg', .9);
+          return;
+        }catch(e){}
+      }
+      const img = new Image();
+      img.onload = ()=>resolve(img);
+      img.onerror = ()=>reject(new Error('Unable to decode image'));
+      try{ img.src = URL.createObjectURL(file); }catch(e){ reject(e); }
+    });
+  }
+
+  function compressImage(img, targetBytes=100*1024, maxW=1920, maxH=1920){
+    return new Promise((resolve)=>{
+      const c = document.createElement('canvas');
+      let w=img.width, h=img.height;
+      const r = Math.min(maxW/w, maxH/h, 1);
+      w = Math.round(w*r); h = Math.round(h*r);
+      c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+
+      let q=.9, step=.08, dataUrl, size=Infinity;
+      for (let i=0;i<8;i++){
+        dataUrl = c.toDataURL('image/jpeg', q);
+        size = Math.floor((dataUrl.length - dataUrl.indexOf(',') - 1) * 0.75);
+        if (size <= targetBytes || q <= .4) break;
+        q -= step; step *= .75;
+      }
+      c.toBlob((blob)=> resolve({ blob, dataUrl }), 'image/jpeg', Math.max(q,.4));
+    });
+  }
+})();
 </script>
 
 <script>
-  /* ===== QR Scanner inline (BarcodeDetector → jsQR fallback) ===== */
-  (function(){
-    const btnScan   = document.getElementById('btnScanLocation');
-    const modal     = document.getElementById('qrModal');
-    const btnClose  = document.getElementById('qrClose');
-    const btnFlip   = document.getElementById('qrFlip');
-    const btnFlash  = document.getElementById('qrFlashlight');
-    const video     = document.getElementById('qrVideo');
-    const spinner   = document.getElementById('qrSpinner');
-    const success   = document.getElementById('qrSuccess');
-    const result    = document.getElementById('qrResult');
+/* QR Scanner inline (BarcodeDetector → jsQR) */
+(function(){
+  const btnScan  = document.getElementById('btnScanLocation');
+  const modal    = document.getElementById('qrModal');
+  const btnClose = document.getElementById('qrClose');
+  const btnFlip  = document.getElementById('qrFlip');
+  const btnFlash = document.getElementById('qrFlashlight');
+  const video    = document.getElementById('qrVideo');
+  const spinner  = document.getElementById('qrSpinner');
+  const success  = document.getElementById('qrSuccess');
+  const result   = document.getElementById('qrResult');
 
-    const CAM_CACHE_KEY = 'qv_qr_cam_device_id';
-    let stream=null, rafId=null, detector=null;
-    let usingBD=false, usingJsQR=false, jsQRLoaded=false;
-    let videoDevices=[], currentDeviceIdx=-1, devicesLoaded=false;
-    let flashlightOn=false, lastDetections=[];
+  const CAM_CACHE_KEY='qv_qr_cam_device_id';
+  let stream=null, rafId=null, detector=null;
+  let usingBD=false, usingJsQR=false, jsQRLoaded=false;
+  let videoDevices=[], currentDeviceIdx=-1, devicesLoaded=false;
+  let flashlightOn=false, lastDetections=[];
 
-    function openModal(){ document.body.classList.add('modal-open'); modal.removeAttribute('hidden'); modal.setAttribute('aria-hidden','false'); }
-    function closeModal(){ document.body.classList.remove('modal-open'); modal.setAttribute('hidden',''); modal.setAttribute('aria-hidden','true'); }
-    function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
-    function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
-    function cleanupAll(){
-      cleanupLoop();
-      if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
-      flashlightOn=false; btnFlash?.classList.remove('active');
-      video.srcObject=null; video.style.display='none';
-      result.style.display='none'; success.style.display='none';
-      usingBD=false; usingJsQR=false; lastDetections.length=0;
-    }
-    function showError(err, where=''){ console.error('[QR]', where, err); alert((err?.name||'Error') + (err?.message?': '+err.message:'')); }
+  function openModal(){ document.body.classList.add('modal-open'); modal.removeAttribute('hidden'); modal.setAttribute('aria-hidden','false'); }
+  function closeModal(){ document.body.classList.remove('modal-open'); modal.setAttribute('hidden',''); modal.setAttribute('aria-hidden','true'); }
+  function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
+  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+  function cleanupAll(){
+    cleanupLoop();
+    if (stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+    flashlightOn=false; btnFlash?.classList.remove('active');
+    video.srcObject=null;
+    result.style.display='none'; success.style.display='none';
+    usingBD=false; usingJsQR=false; lastDetections.length=0;
+  }
+  function showError(err, where=''){ console.error('[QR]', where, err); alert((err?.name||'Error') + (err?.message?': '+err.message:'')); }
 
-    async function loadVideoDevices(){
-      if (devicesLoaded) return;
-      const devs = await navigator.mediaDevices.enumerateDevices();
-      videoDevices = devs.filter(d=>d.kind==='videoinput');
-      const prefers=['back','rear','environment'];
-      videoDevices.sort((a,b)=>{
-        const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
-        return (prefers.some(p=>lb.includes(p))?1:0) - (prefers.some(p=>la.includes(p))?1:0);
-      });
-      devicesLoaded=true;
-    }
+  async function loadVideoDevices(){
+    if (devicesLoaded) return;
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    videoDevices = devs.filter(d=>d.kind==='videoinput');
+    const prefers=['back','rear','environment'];
+    videoDevices.sort((a,b)=>{
+      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
+      return (prefers.some(p=>lb.includes(p))?1:0) - (prefers.some(p=>la.includes(p))?1:0);
+    });
+    devicesLoaded=true;
+  }
 
-    async function startWithDevice(deviceId){
-      cleanupLoop(); showSpinner(true);
-      const constraints = {
-        video: deviceId ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
-                        : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
-        audio:false
-      };
-      stream = await navigator.mediaDevices.getUserMedia(constraints);
-      video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
-      video.srcObject = stream;
-      await video.play();
-      showSpinner(false);
+  async function startWithDevice(deviceId){
+    cleanupLoop(); showSpinner(true);
+    const constraints = {
+      video: deviceId ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
+                      : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
+      audio:false
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
+    video.srcObject = stream;
+    await video.play();
+    showSpinner(false);
+    try{
+      const track = stream.getVideoTracks()[0];
+      const id = track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
+      if (id) localStorage.setItem(CAM_CACHE_KEY, id);
+    }catch{}
+  }
+
+  async function flipCamera(){
+    await loadVideoDevices();
+    if (!videoDevices.length) return;
+    currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
+    await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
+    if (usingBD) startBDLoop();
+    if (usingJsQR) startJsQRLoop();
+  }
+
+  async function toggleFlashlight(){
+    if (!stream) return;
+    try{
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.()||{};
+      if (!caps.torch) return alert('Flashlight not supported on this camera');
+      flashlightOn = !flashlightOn;
+      await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
+      btnFlash?.classList.toggle('active', flashlightOn);
+    }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
+  }
+
+  function validateDetection(val){
+    if (!val || val.length<3) return false;
+    lastDetections.push(val);
+    if (lastDetections.length>3) lastDetections.shift();
+    return lastDetections[lastDetections.length-1];
+  }
+
+  function onDetected(raw){
+    const v = validateDetection(raw);
+    if (!v) return;
+
+    result.textContent = `QR: ${String(v).slice(0,120)}`;
+    result.style.display='block';
+    success.style.display='block'; setTimeout(()=>success.style.display='none',500);
+    try{ navigator.vibrate && navigator.vibrate([60,40,60]); }catch{}
+
+    setTimeout(()=>{ cleanupAll(); closeModal(); }, 600);
+  }
+
+  async function startBarcodeDetector(){
+    let supported=[];
+    try{ supported = await window.BarcodeDetector.getSupportedFormats(); }catch{}
+    if (!supported.includes('qr_code')) return false;
+    detector = new window.BarcodeDetector({ formats:['qr_code'] });
+    usingBD=true; usingJsQR=false;
+    startBDLoop();
+    return true;
+  }
+
+  function startBDLoop(){
+    cleanupLoop();
+    let frame=0;
+    const tick = async ()=>{
       try{
-        const track = stream.getVideoTracks()[0];
-        const id = track?.getSettings?.().deviceId || track?.getConstraints?.().deviceId?.exact;
-        if (id) localStorage.setItem(CAM_CACHE_KEY, id);
-      }catch{}
-    }
-
-    async function flipCamera(){
-      await loadVideoDevices();
-      if (!videoDevices.length) return;
-      currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
-      await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
-      if (usingBD) startBDLoop();
-      if (usingJsQR) startJsQRLoop();
-    }
-
-    async function toggleFlashlight(){
-      if (!stream) return;
-      try{
-        const track = stream.getVideoTracks()[0];
-        const caps = track.getCapabilities?.()||{};
-        if (!caps.torch) return alert('Flashlight not supported on this camera');
-        flashlightOn = !flashlightOn;
-        await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
-        btnFlash?.classList.toggle('active', flashlightOn);
-      }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
-    }
-
-    function validateDetection(val){
-      if (!val || val.length<3) return false;
-      lastDetections.push(val);
-      if (lastDetections.length>3) lastDetections.shift();
-      return lastDetections[lastDetections.length-1];
-    }
-
-    function onDetected(raw){
-      const v = validateDetection(raw);
-      if (!v) return;
-
-      result.textContent = `QR: ${String(v).slice(0,120)}`;
-      result.style.display='block';
-      success.style.display='block'; setTimeout(()=>success.style.display='none',500);
-      try{ navigator.vibrate && navigator.vibrate([60,40,60]); }catch{}
-
-      setTimeout(()=>{ cleanupAll(); closeModal(); }, 600);
-    }
-
-    async function startBarcodeDetector(){
-      let supported=[];
-      try{ supported = await window.BarcodeDetector.getSupportedFormats(); }catch{}
-      if (!supported.includes('qr_code')) return false;
-      detector = new window.BarcodeDetector({ formats:['qr_code'] });
-      usingBD=true; usingJsQR=false;
-      startBDLoop();
-      return true;
-    }
-
-    function startBDLoop(){
-      cleanupLoop();
-      let frame=0;
-      const tick = async ()=>{
-        try{
-          frame++;
-          if (frame%3===0 && detector){
-            const codes = await detector.detect(video);
-            if (codes?.length){
-              const qr = codes[0];
-              const val = (qr.rawValue||'').trim();
-              if (val){ onDetected(val); return; }
-            }
-          }
-        }catch(_){}
-        rafId = requestAnimationFrame(tick);
-      };
-      rafId = requestAnimationFrame(tick);
-    }
-
-    function loadJsQR(){
-      if (jsQRLoaded) return Promise.resolve();
-      return new Promise((resolve,reject)=>{
-        const s=document.createElement('script');
-        s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
-        s.async=true;
-        s.onload=()=>{ jsQRLoaded=true; resolve(); };
-        s.onerror=()=>reject(new Error('Failed to load jsQR'));
-        document.head.appendChild(s);
-      });
-    }
-
-    function startJsQRLoop(){
-      usingBD=false; usingJsQR=true;
-      cleanupLoop();
-
-      const canvas=document.createElement('canvas');
-      const ctx=canvas.getContext('2d',{ willReadFrequently:true });
-      const ROI_INSET=0.10;
-
-      let lastTS=0; const MIN_INTERVAL=80;
-      const tick=(now)=>{
-        try{
-          if (!usingJsQR) return;
-          if (now-lastTS>=MIN_INTERVAL && video.videoWidth>0){
-            lastTS=now;
-            const vw=video.videoWidth, vh=video.videoHeight;
-            const rx=Math.floor(vw*ROI_INSET), ry=Math.floor(vh*ROI_INSET);
-            const rw=Math.floor(vw*(1-2*ROI_INSET)), rh=Math.floor(vh*(1-2*ROI_INSET));
-            canvas.width=rw; canvas.height=rh;
-            ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
-            const img=ctx.getImageData(0,0,rw,rh);
-            const qr=window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
-            const val=(qr?.data||'').trim();
+        frame++;
+        if (frame%3===0 && detector){
+          const codes = await detector.detect(video);
+          if (codes?.length){
+            const qr = codes[0];
+            const val = (qr.rawValue||'').trim();
             if (val){ onDetected(val); return; }
           }
-        }catch(_){}
-        rafId = requestAnimationFrame(tick);
-      };
+        }
+      }catch(_){}
       rafId = requestAnimationFrame(tick);
-    }
+    };
+    rafId = requestAnimationFrame(tick);
+  }
 
-    async function startScan(){
-      openModal(); result.style.display='none'; success.style.display='none';
+  function loadJsQR(){
+    if (jsQRLoaded) return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.async=true;
+      s.onload=()=>{ jsQRLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('Failed to load jsQR'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function startJsQRLoop(){
+    usingBD=false; usingJsQR=true;
+    cleanupLoop();
+
+    const canvas=document.createElement('canvas');
+    const ctx=canvas.getContext('2d',{ willReadFrequently:true });
+    const ROI_INSET=0.10;
+
+    let lastTS=0; const MIN_INTERVAL=80;
+    const tick=(now)=>{
       try{
-        const cached = localStorage.getItem(CAM_CACHE_KEY);
-        if (cached){ await startWithDevice(cached); }
-        else {
-          await loadVideoDevices();
-          if (videoDevices.length) currentDeviceIdx=0;
-          await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
+        if (!usingJsQR) return;
+        if (now-lastTS>=MIN_INTERVAL && video.videoWidth>0){
+          lastTS=now;
+          const vw=video.videoWidth, vh=video.videoHeight;
+          const rx=Math.floor(vw*ROI_INSET), ry=Math.floor(vh*ROI_INSET);
+          const rw=Math.floor(vw*(1-2*ROI_INSET)), rh=Math.floor(vh*(1-2*ROI_INSET));
+          canvas.width=rw; canvas.height=rh;
+          ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+          const img=ctx.getImageData(0,0,rw,rh);
+          const qr=window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
+          const val=(qr?.data||'').trim();
+          if (val){ onDetected(val); return; }
         }
+      }catch(_){}
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
 
-        if ('BarcodeDetector' in window){
-          const ok = await startBarcodeDetector();
-          if (ok) return;
-        }
-        await loadJsQR();
-        startJsQRLoop();
-      }catch(e){
-        showError(e,'startScan');
-        cleanupAll(); closeModal();
+  async function startScan(){
+    openModal(); result.style.display='none'; success.style.display='none';
+    try{
+      const cached = localStorage.getItem(CAM_CACHE_KEY);
+      if (cached){ await startWithDevice(cached); }
+      else {
+        await loadVideoDevices();
+        if (videoDevices.length) currentDeviceIdx=0;
+        await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
-    }
 
-    btnScan?.addEventListener('click', startScan);
-    btnFlip?.addEventListener('click', flipCamera);
-    btnFlash?.addEventListener('click', toggleFlashlight);
-    btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
-    modal?.addEventListener('click', (e)=>{ if(e.target===modal){ cleanupAll(); closeModal(); }});
-  })();
+      if ('BarcodeDetector' in window){
+        const ok = await startBarcodeDetector();
+        if (ok) return;
+      }
+      await loadJsQR();
+      startJsQRLoop();
+    }catch(e){
+      showError(e,'startScan');
+      cleanupAll(); closeModal();
+    }
+  }
+
+  btnScan?.addEventListener('click', startScan);
+  btnFlip?.addEventListener('click', flipCamera);
+  btnFlash?.addEventListener('click', toggleFlashlight);
+  btnClose?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
+  modal?.addEventListener('click', (e)=>{ if(e.target===modal){ cleanupAll(); closeModal(); }});
+})();
 </script>
 
 <script>
-  /* ROI en vivo (usa inputs con clase .input) */
-  (function(){
-    const cost  = document.getElementById('item_cost');
-    const price = document.getElementById('item_price');
-    const roi   = document.getElementById('roi_display');
-    function update(){
-      const c = parseFloat(cost?.value||'');
-      const p = parseFloat(price?.value||'');
-      if (!isFinite(c) || c<=0 || !isFinite(p)){ roi.value='—'; return; }
-      roi.value = Math.round(((p-c)/c)*100) + '%';
-    }
-    cost?.addEventListener('input', update);
-    price?.addEventListener('input', update);
-  })();
+/* ROI en vivo */
+(function(){
+  const cost  = document.getElementById('item_cost');
+  const price = document.getElementById('item_price');
+  const roi   = document.getElementById('roi_display');
+  function update(){
+    const c = parseFloat(cost?.value||'');
+    const p = parseFloat(price?.value||'');
+    if (!isFinite(c) || c<=0 || !isFinite(p)){ roi.value='—'; return; }
+    roi.value = Math.round(((p-c)/c)*100) + '%';
+  }
+  cost?.addEventListener('input', update);
+  price?.addEventListener('input', update);
+})();
 </script>
 
 {% endblock %}
