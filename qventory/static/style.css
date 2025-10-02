@@ -163,7 +163,7 @@ select{
 }
 i {color:#8ab4fd;}
 
-/* ===== TABLES (desktop/tablet) ===== */
+/* ===== TABLES ===== */
 .inventory-shell{ width:100% }
 .table-wrap{
   overflow-x:auto; overflow-y:visible;
@@ -336,15 +336,13 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .backup-btn i{ font-size:12px }
 
-/* ===== Filtros como barra (desktop) y colapsable (móvil) ===== */
-.filters-shell{ width:100%; margin-bottom:12px; }
+/* ===== Filtros: barra + colapsable (desktop y móvil) ===== */
+.filters-shell{ width:100%; margin-bottom:12px; transition:box-shadow .15s ease }
 .filters-bar{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   margin:0 0 8px 0;
 }
-.filters-toggle{ display:none }            /* escondido en desktop */
-.filters-toggle.visible-toggle{ display:inline-flex } /* visible en móvil (via JS) */
-
+.filters-toggle{ display:inline-flex; align-items:center; gap:6px } /* visible en desktop y móvil */
 .filters-content{ width:100% }
 .filters-grid{
   display:grid; gap:10px;
@@ -352,7 +350,19 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .filters-grid > div[style*="grid-column:1/-1"]{ grid-column:1/-1 !important }
 
-/* Desktop: filtros más compactos visualmente */
+/* Sticky bajo el header en desktop */
+@media (min-width:1025px){
+  .filters-shell{
+    position: sticky;
+    top: calc(56px + var(--safe-t));
+    z-index: 15;
+  }
+  .filters-shell.collapsed{
+    padding-bottom:10px;
+  }
+}
+
+/* Desktop: filtros más compactos */
 @media (min-width:1025px){
   .cardfilters{ padding:12px 14px }
   .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
@@ -366,9 +376,7 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
   .wrap{ padding:7px }
 
   /* Filtros colapsables */
-  .filters-grid{
-    grid-template-columns:1fr;
-  }
+  .filters-grid{ grid-template-columns:1fr; }
   .filters-content[hidden]{ display:none !important }
 
   .card{ padding:var(--space-2) }
@@ -434,11 +442,10 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
   .table-wrap *{ max-width:100%; word-wrap:break-word }
 }
 
-/* ====== Extra responsive del bloque integrado ====== */
+/* ====== Extra responsive ====== */
 @media (max-width: 900px) {
-  table thead th:nth-child(3), /* SKU */
-  table thead th:nth-child(5)  /* Pricing */
-  { width:1%; white-space:nowrap; }
+  table thead th:nth-child(3),
+  table thead th:nth-child(5){ width:1%; white-space:nowrap; }
 }
 @media (max-width: 768px) {
   .items-header { flex-direction:column; align-items:stretch }
@@ -464,16 +471,6 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
   .input, select{ padding:10px 12px }
   th,td{ padding:10px 12px }
 }
-
-/* Desktop: filtros como barra sticky bajo el header */
-@media (min-width:1025px){
-  .filters-shell{
-    position: sticky;
-    top: calc(56px + var(--safe-t)); /* altura aprox del header */
-    z-index: 15;
-  }
-}
-
 
 /* Reduce motion/transparency */
 @media (prefers-reduced-motion: reduce){

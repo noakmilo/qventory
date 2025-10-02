@@ -2,10 +2,10 @@
 {% block title %}Dashboard – Qventory{% endblock %}
 {% block content %}
 
-<div class="wrap">  {# ahora la .wrap ocupa 95% width (ver main.css) #}
+<div class="wrap">
 
-  <!-- ======== Filters (barra superior en desktop / colapsable en móvil) ======== -->
-  <section class="card cardfilters filters-shell">
+  <!-- ======== Filters (sticky + colapsable en desktop y móvil) ======== -->
+  <section class="card cardfilters filters-shell" id="filtersShell">
     <div class="filters-bar">
       <h2>Filters</h2>
       <button type="button" class="btn small filters-toggle" id="filtersToggle" aria-expanded="true" aria-controls="filtersContent">
@@ -177,7 +177,6 @@
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
               &nbsp;
-              <!-- Abrir QR en modal -->
               <a class="tag qr-link"
                  href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
                  data-caption="QR for {{ it.location_code }}">
@@ -286,36 +285,35 @@
 </div>
 
 <script>
-/* ===== Toggle filtros colapsables en móvil ===== */
+/* ===== Toggle filtros colapsables (desktop + móvil) con persistencia ===== */
 (function(){
   const btn = document.getElementById('filtersToggle');
   const content = document.getElementById('filtersContent');
-  const mq = window.matchMedia('(max-width: 720px)');
+  const shell = document.getElementById('filtersShell');
+  const KEY = 'qv_filters_collapsed';
 
-  function setByMedia(){
-    if (mq.matches){
-      // móvil: arranca expandido
-      content.hidden = false;
-      btn?.setAttribute('aria-expanded','true');
-      btn?.classList.add('visible-toggle');
-    } else {
-      // desktop: siempre visible + ocultar botón
-      content.hidden = false;
-      btn?.setAttribute('aria-expanded','true');
-      btn?.classList.remove('visible-toggle');
-    }
+  function setCollapsed(collapsed){
+    if (!content) return;
+    content.hidden = collapsed;
+    btn?.setAttribute('aria-expanded', String(!collapsed));
+    shell?.classList.toggle('collapsed', collapsed);
+    try{ localStorage.setItem(KEY, collapsed ? '1':'0'); }catch{}
   }
-  setByMedia();
-  mq.addEventListener?.('change', setByMedia);
+
+  function initState(){
+    let collapsed = false;
+    try{ collapsed = localStorage.getItem(KEY) === '1'; }catch{}
+    setCollapsed(collapsed);
+  }
 
   btn?.addEventListener('click', ()=>{
-    const isHidden = content.hasAttribute('hidden');
-    if (isHidden){ content.hidden = false; btn.setAttribute('aria-expanded','true'); }
-    else { content.hidden = true; btn.setAttribute('aria-expanded','false'); }
+    const collapsed = !content.hasAttribute('hidden') ? true : false;
+    setCollapsed(collapsed);
   });
+
+  initState();
 })();
 </script>
-
 
 <script>
 /* ========== SCRIPT SCANNER QR (robusto) ========== */
