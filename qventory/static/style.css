@@ -81,8 +81,8 @@ a{ color:var(--accent); text-decoration:none }
 .submitbtn{ color:#f5f5f5 }
 .settingsbtn{ font-size:var(--fs-xs); margin:2px; padding:6px 10px }
 
-/* Layout (95% width) */
-.wrap{ width:95%; max-width:1600px; margin:0 auto; padding:var(--space-3) }
+/* ===== Layout: 98% width ===== */
+.wrap{ width:98%; max-width:none; margin:0 auto; padding:var(--space-3) }
 .row{ display:flex; gap:var(--space-3); flex-wrap:wrap }
 
 /* Tarjetas */
@@ -97,10 +97,11 @@ a{ color:var(--accent); text-decoration:none }
 .card h2{ margin:0 0 var(--space-2) 0; font-size:var(--fs-lg) }
 h1{ font-size:var(--fs-xl); margin:0 0 var(--space-2) }
 
-/* Header */
+/* ===== Header (base.html) – evita amontonamiento ===== */
 header{
   position:sticky; top:0; z-index:20;
   display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
   padding:10px 14px;
   border-bottom:1px solid var(--glass-border);
   background:var(--glass-bg-strong);
@@ -109,18 +110,21 @@ header{
   padding-top:calc(10px + var(--safe-t));
   box-shadow:0 8px 18px var(--glass-shadow);
 }
-.brand{ display:flex; gap:8px; align-items:center }
+.brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto }
 .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent) }
-header nav{ display:flex; gap:6px; overflow:auto; -webkit-overflow-scrolling:touch }
-header nav .btn{ padding:7px 10px; font-size:var(--fs-xs); white-space:nowrap }
+header nav{
+  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  justify-content:flex-end; max-width:100%;
+}
+header nav .btn{ padding:7px 12px; font-size:var(--fs-xs); white-space:nowrap; border-radius:14px }
 
-/* Grid utilidades */
+/* ===== Grid utilidades ===== */
 .grid{ display:grid; gap:var(--space-2) }
 .grid.cols-1{ grid-template-columns:1fr }
 .grid.cols-2{ grid-template-columns:repeat(2,minmax(0,1fr)) }
 .grid.cols-3{ grid-template-columns:repeat(3,minmax(0,1fr)) }
 
-/* Formularios */
+/* ===== Formularios ===== */
 .label{ display:block; color:var(--sub); font-size:var(--fs-xs); margin:2px 0 6px }
 .input, select{
   width:100%; padding:10px 12px; border-radius:10px;
@@ -163,9 +167,33 @@ select{
 }
 i {color:#8ab4fd;}
 
-/* ===== TABLES ===== */
+/* ===== Filters (barra sticky + colapsable) ===== */
+.filters-shell{ width:100%; margin:0 auto 12px auto; transition:box-shadow .15s ease }
+.filters-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin:0 0 8px 0;
+}
+.filters-toggle{ display:inline-flex; align-items:center; gap:6px }
+.filters-content{ width:100% }
+.filters-grid{
+  display:grid; gap:10px;
+  grid-template-columns: repeat(6, minmax(0,1fr));
+}
+.filters-grid > div[style*="grid-column:1/-1"]{ grid-column:1/-1 !important }
+
+/* Sticky bajo el header en desktop */
+@media (min-width:1025px){
+  .filters-shell{ position:sticky; top:calc(56px + var(--safe-t)); z-index:15 }
+  .cardfilters{ padding:12px 14px }
+  .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
+  .cardfilters .btn{ min-height:38px; padding:8px 10px; font-size:12px }
+}
+
+/* ===== TABLES: liberadas y al 98% ===== */
 .inventory-shell{ width:100% }
 .table-wrap{
+  width:98%;
+  margin:0 auto;
   overflow-x:auto; overflow-y:visible;
   -webkit-overflow-scrolling:touch;
   border-radius:var(--radius);
@@ -336,37 +364,16 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
 }
 .backup-btn i{ font-size:12px }
 
-/* ===== Filtros: barra + colapsable ===== */
-.filters-shell{ width:100%; margin-bottom:12px; transition:box-shadow .15s ease }
-.filters-bar{
-  display:flex; align-items:center; justify-content:space-between; gap:10px;
-  margin:0 0 8px 0;
-}
-.filters-toggle{ display:inline-flex; align-items:center; gap:6px }
-.filters-content{ width:100% }
-.filters-grid{
-  display:grid; gap:10px;
-  grid-template-columns: repeat(6, minmax(0,1fr));
-}
-.filters-grid > div[style*="grid-column:1/-1"]{ grid-column:1/-1 !important }
-
-/* Sticky en desktop */
-@media (min-width:1025px){
-  .filters-shell{
-    position: sticky;
-    top: calc(56px + var(--safe-t));
-    z-index: 15;
-  }
-  .cardfilters{ padding:12px 14px }
-  .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
-  .cardfilters .btn{ min-height:38px; padding:8px 10px; font-size:12px }
-}
-
 /* ================
    VISTA MÓVIL
    ================ */
 @media (max-width:720px){
-  .wrap{ padding:7px }
+  .wrap{ width:98%; padding:7px }
+
+  /* Header: que no se amontone */
+  header{ align-items:flex-start }
+  header nav{ justify-content:flex-start; gap:6px }
+  header nav .btn{ padding:6px 10px; font-size:12px; border-radius:12px }
 
   /* Filtros colapsables */
   .filters-grid{ grid-template-columns:1fr; }
@@ -389,26 +396,22 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
     font-size:12px !important;
   }
 
-  /* --- Tabla móvil optimizada (scroll real y headers sin ruptura) --- */
+  /* --- Tabla móvil optimizada (liberada + sin solapes) --- */
   .table-wrap{ 
-    overflow-x:auto;
-    padding:0; 
-    margin:0 -4px;
+    width:98%; margin:0 auto;
+    overflow-x:auto; padding:0; 
   }
-  /* fuerza ancho mínimo para que haya scroll horizontal y no se apilen */
-  .table-wrap table{ min-width: 1100px; table-layout:fixed; margin:0 }
-
+  .table-wrap table{ min-width: 980px; table-layout:fixed; margin:0 } /* ancho mínimo sensato */
   th{
     padding:8px 6px 6px 6px;
     font-size:10px; font-weight:600; line-height:1.2;
     color:var(--sub); text-transform:uppercase; letter-spacing:0.3px;
     white-space:nowrap; hyphens:none;
   }
-  td{ padding:8px 6px; font-size:11px; line-height:1.3; vertical-align:top; white-space:nowrap }
-  /* el título sí puede envolver para aprovechar espacio */
-  td:nth-child(2){ white-space:normal; word-break:break-word; overflow-wrap:break-word }
+  td{ padding:8px 6px; font-size:11px; line-height:1.35; vertical-align:top; white-space:nowrap }
+  td:nth-child(2){ white-space:normal; word-break:break-word; overflow-wrap:break-word } /* Título puede envolver */
 
-  /* estilos de columnas numéricas/monospace */
+  /* columnas numéricas en mono */
   td:nth-child(3), /* SKU */
   td:nth-child(5), /* Cost */
   td:nth-child(6), /* Price */
@@ -429,7 +432,7 @@ label i{ margin-right: 8px; width: 16px; color: #666 }
   table thead th:nth-child(3),
   table thead th:nth-child(5),
   table thead th:nth-child(6),
-  table thead th:nth-child(7){ width:1%; }
+  table thead th:nth-child(7){ width:1%; white-space:nowrap; }
 }
 @media (max-width: 768px) {
   .items-header { flex-direction:column; align-items:stretch }
