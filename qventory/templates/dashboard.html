@@ -287,10 +287,11 @@
   const btn = document.getElementById('filtersToggle');
   const content = document.getElementById('filtersContent');
   const shell = document.getElementById('filtersShell');
+  if(!btn || !content) return; // <- evita errores si no existen
   const KEY = 'qv_filters_collapsed';
   function setCollapsed(collapsed){
     content.hidden = collapsed;
-    btn?.setAttribute('aria-expanded', String(!collapsed));
+    btn.setAttribute('aria-expanded', String(!collapsed));
     shell?.classList.toggle('collapsed', collapsed);
     try{ localStorage.setItem(KEY, collapsed ? '1':'0'); }catch{}
   }
@@ -299,28 +300,29 @@
     try{ collapsed = localStorage.getItem(KEY) === '1'; }catch{}
     setCollapsed(collapsed);
   }
-  btn?.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
+  btn.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
   initState();
 })();
+
 </script>
 
 <script>
 /* ====== Modal de imagen ampliada ====== */
 (function(){
-  const modal = document.getElementById('imgModal');
-  const imgEl = document.getElementById('imgModalImg');
+  const modal  = document.getElementById('imgModal');
+  const imgEl  = document.getElementById('imgModalImg');
   const closeBtn = document.getElementById('imgClose');
 
   function openImg(url, alt){
     if(!url) return;
     document.body.classList.add('modal-open');
-    modal.classList.remove('hidden');
+    modal.removeAttribute('hidden');
     modal.setAttribute('aria-hidden','false');
     imgEl.src = url;
     imgEl.alt = alt || '';
   }
   function closeImg(){
-    modal.classList.add('hidden');
+    modal.setAttribute('hidden', '');
     modal.setAttribute('aria-hidden','true');
     document.body.classList.remove('modal-open');
     imgEl.src = '';
@@ -339,8 +341,9 @@
   // Cerrar tocando fuera (clic en backdrop)
   modal?.addEventListener('click', (e)=>{ if (e.target === modal) closeImg(); });
   // Esc para cerrar
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeImg(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeImg(); });
 })();
+
 </script>
 
 <script>
