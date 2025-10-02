@@ -11,6 +11,47 @@
       <input class="input" type="text" name="title" value="{{ item.title }}" required>
     </div>
 
+    <!-- Miniatura + Proveedor -->
+    <div>
+      <label><i class="fas fa-image"></i> Thumbnail URL (Cloudinary)</label>
+      <input class="input" type="url" name="item_thumb" id="item_thumb" value="{{ item.item_thumb or '' }}" placeholder="https://res.cloudinary.com/...">
+      <div class="thumb-preview" id="thumbPreview">
+        {% if item.item_thumb %}
+          <img src="{{ item.item_thumb }}" alt="thumbnail" />
+        {% else %}
+          <span class="thumb-placeholder">No image</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div>
+      <label><i class="fas fa-truck"></i> Supplier</label>
+      <input class="input" type="text" name="supplier" value="{{ item.supplier or '' }}" placeholder="e.g., Goodwill / Target / Wholesale ABC">
+    </div>
+
+    <!-- Precios -->
+    <div>
+      <label><i class="fas fa-dollar-sign"></i> Cost</label>
+      <input class="input" type="number" step="0.01" min="0" name="item_cost" value="{{ '%.2f'|format(item.item_cost) if item.item_cost is not none else '' }}" placeholder="0.00">
+    </div>
+    <div>
+      <label><i class="fas fa-tags"></i> Price</label>
+      <input class="input" type="number" step="0.01" min="0" name="item_price" value="{{ '%.2f'|format(item.item_price) if item.item_price is not none else '' }}" placeholder="0.00">
+    </div>
+    <div>
+      <label><i class="fas fa-percentage"></i> ROI (auto)</label>
+      {% set has_price = item.item_price is not none %}
+      {% set has_cost = item.item_cost is not none and item.item_cost > 0 %}
+      {% set roi = ( (item.item_price - item.item_cost) / item.item_cost * 100 ) if (has_price and has_cost) else None %}
+      <input class="input" type="text" value="{{ (roi|round(0)|string + '%') if roi is not none else '—' }}" disabled>
+    </div>
+
+    <!-- Fecha de publicación -->
+    <div>
+      <label><i class="far fa-calendar-alt"></i> Listing Date</label>
+      <input class="input" type="date" name="listing_date" value="{{ item.listing_date.strftime('%Y-%m-%d') if item.listing_date else '' }}">
+    </div>
+
     <!-- Listing principal -->
     <div style="grid-column:1/-1">
       <label><i class="fas fa-link"></i> Listing Link (optional)</label>
@@ -52,7 +93,7 @@
       <input class="input" type="url" name="depop_url" value="{{ item.depop_url or '' }}">
     </div>
 
-    <!-- Sección separada: Location -->
+    <!-- Sección: Location -->
     <div style="grid-column:1/-1; margin-top:16px">
       <div class="card" style="margin:0">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px">
@@ -135,7 +176,15 @@
 </div>
 
 <style>
-  /* Modal y estilos del escáner (mismos del Add Item para consistencia) */
+  /* Vista previa de miniatura */
+  .thumb-preview{
+    margin-top:6px; width:100%; max-width:220px; aspect-ratio:1/1; border:1px solid #e5e7eb;
+    border-radius:10px; overflow:hidden; display:grid; place-items:center; background:#f8f9fa;
+  }
+  .thumb-preview img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb-placeholder{ font-size:12px; color:#888; padding:10px; }
+
+  /* Modal y estilos del escáner */
   body.modal-open{ overflow:hidden; touch-action:none; }
   .scan-modal.hidden{ display:none; }
   .scan-modal{
@@ -153,11 +202,7 @@
   }
   .scan-actions .icon-top{
     border:none; background:transparent; color:#fff; font-size:18px; margin-left:6px; opacity:.85; cursor:pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
+    display:flex; align-items:center; justify-content:center; width:30px; height:30px;
   }
   .scan-actions .icon-top:hover{ opacity:1; }
   .scan-actions .icon-top.active{ opacity:1; color:#ffd700; }
@@ -211,21 +256,27 @@
     border:3px solid rgba(255,255,255,.3); border-top-color:#fff; animation:spin .9s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  
-  /* Estilos para iconos en formulario */
-  label i {
-    margin-right: 8px;
-    width: 16px;
-    color: #666;
-  }
-  
-  .btn i {
-    margin-right: 5px;
-  }
+
+  /* Iconos en etiquetas */
+  label i { margin-right: 8px; width: 16px; color: #666; }
+  .btn i { margin-right: 5px; }
 </style>
 
 <script>
-/* ===== QR Scanner inline (BarcodeDetector → jsQR fallback) ===== */
+/* ===== Miniatura: vista previa reactiva ===== */
+(function(){
+  const input = document.getElementById('item_thumb');
+  const box   = document.getElementById('thumbPreview');
+  function renderPreview(url){
+    if (!box) return;
+    box.innerHTML = '';
+    if (!url){ const sp = document.createElement('span'); sp.className='thumb-placeholder'; sp.textContent='No image'; box.appendChild(sp); return; }
+    const img = document.createElement('img'); img.alt='thumbnail'; img.src=url; box.appendChild(img);
+  }
+  input && input.addEventListener('input', (e)=>renderPreview(e.target.value.trim()));
+})();
+
+/* ===== QR Scanner (BarcodeDetector → jsQR fallback) ===== */
 (function(){
   const btnScan = document.getElementById('btnScanLocation');
   const modal = document.getElementById('qrModal');
@@ -256,7 +307,7 @@
     result.style.display='none'; success.style.display='none';
     usingBD=false; usingJsQR=false; lastDetections.length=0;
   }
-  function showError(err, where=''){ console.error('[QR]', where, err); alert((err?.name||'Error') + (err?.message?': '+err.message:'')); }
+  function showError(err){ console.error('[QR]', err); alert(err?.message || 'Camera error'); }
 
   async function loadVideoDevices(){
     if (devicesLoaded) return;
@@ -265,7 +316,9 @@
     const prefers=['back','rear','environment'];
     videoDevices.sort((a,b)=>{
       const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
-      return (prefers.some(p=>lb.includes(p))?1:0) - (prefers.some(p=>la.includes(p))?1:0);
+      const as = prefers.some(p=>la.includes(p)) ? 1:0;
+      const bs = prefers.some(p=>lb.includes(p)) ? 1:0;
+      return bs - as;
     });
     devicesLoaded=true;
   }
@@ -282,16 +335,6 @@
     video.srcObject = stream;
     await video.play();
     showSpinner(false);
-    rememberActiveDevice();
-  }
-
-  function rememberActiveDevice(){
-    try{
-      const track=stream?.getVideoTracks?.()[0];
-      const settings=track?.getSettings?.()||{};
-      const id=settings.deviceId || track?.getConstraints?.().deviceId?.exact;
-      if (id){ localStorage.setItem(CAM_CACHE_KEY, id); }
-    }catch{}
   }
 
   async function flipCamera(){
@@ -312,78 +355,62 @@
       flashlightOn = !flashlightOn;
       await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
       btnFlash.classList.toggle('active', flashlightOn);
-    }catch(e){ console.warn(e); alert('Unable to control flashlight'); }
-  }
-
-  function validateDetection(val){
-    if (!val || val.length<3) return false;
-    lastDetections.push(val);
-    if (lastDetections.length>3) lastDetections.shift();
-    return lastDetections[lastDetections.length-1];
+    }catch{ alert('Unable to control flashlight'); }
   }
 
   function parseLocationQR(qrText){
     try{
       let part = qrText.includes('/location/') ? qrText.split('/location/')[1] : qrText;
       if (!part) return null;
-      const m = part.match(/^(?:.*?)(A(\d+))?(B(\d+))?(S(\d+))?(C(\d+))?/i);
+      const m = part.match(/^(?:.*?)(A(\w+))?(B(\w+))?(S(\w+))?(C(\w+))?/i);
       if (!m) return null;
       return { A:m[2]||null, B:m[4]||null, S:m[6]||null, C:m[8]||null, original:part };
-    }catch(e){ console.error('parseLocationQR',e); return null; }
+    }catch(e){ return null; }
   }
 
   function populateLocationFields(loc){
-    const ids=['A','B','S','C']; const done=[];
-    ids.forEach(k=>{
+    ['A','B','S','C'].forEach(k=>{
       const el=document.getElementById(`input_${k}`);
-      if (el && loc[k]){ el.value=loc[k]; done.push(`${k}=${loc[k]}`); el.style.background='#e8f5e8'; setTimeout(()=>el.style.background='',1500); }
+      if (el && loc[k]){ el.value=loc[k]; el.style.background='#e8f5e8'; setTimeout(()=>el.style.background='',1200); }
     });
-    return done;
   }
 
-  function onDetected(raw){
-    const v = validateDetection(raw);
-    if (!v) return;
-    const loc = parseLocationQR(v);
+  function onDetected(val){
+    const loc = parseLocationQR(val);
     if (loc){
       result.textContent = `Location: ${loc.original}`;
       result.style.display='block';
-      success.style.display='block'; setTimeout(()=>success.style.display='none',500);
-      try{ navigator.vibrate && navigator.vibrate([80,40,80]); }catch(_){}
-
-      setTimeout(()=>{
-        const filled = populateLocationFields(loc);
-        cleanupAll(); closeModal();
-      }, 600);
+      success.style.display='block'; setTimeout(()=>success.style.display='none',480);
+      try{ navigator.vibrate && navigator.vibrate([60,40,60]); }catch(_){}
+      setTimeout(()=>{ populateLocationFields(loc); cleanupAll(); closeModal(); }, 560);
     } else {
-      result.textContent = `QR: ${String(v).slice(0,80)}…`;
+      result.textContent = `QR: ${String(val).slice(0,80)}…`;
       result.style.display='block';
     }
   }
 
   async function startBarcodeDetector(){
-    let supported=[];
-    try{ supported = await window.BarcodeDetector.getSupportedFormats(); }catch{}
-    if (!supported.includes('qr_code')) return false;
-    detector = new window.BarcodeDetector({ formats:['qr_code'] });
-    usingBD=true; usingJsQR=false;
-    video.style.display='block'; target.style.display='none';
-    startBDLoop();
-    return true;
+    if (!('BarcodeDetector' in window)) return false;
+    try{
+      detector = new window.BarcodeDetector({ formats:['qr_code'] });
+      usingBD=true; usingJsQR=false;
+      video.style.display='block';
+      startBDLoop();
+      return true;
+    }catch{ return false; }
   }
 
   function startBDLoop(){
     cleanupLoop();
     let frame=0;
     const tick = async ()=>{
+      frame++;
       try{
-        frame++;
         if (frame%3===0 && detector){
           const codes = await detector.detect(video);
           if (codes?.length){
-            const qr = codes.find(c=>c.format==='qr_code') || codes[0];
-            const val = (qr.rawValue||'').trim();
-            if (val){ onDetected(val); return; }
+            const v = (codes[0].rawValue||'').trim();
+            if (v){ onDetected(v); return; }
           }
         }
       }catch(_){}
@@ -406,14 +433,13 @@
 
   function startJsQRLoop(){
     usingBD=false; usingJsQR=true;
-    video.style.display='block'; target.style.display='none';
     cleanupLoop();
 
     const canvas=document.createElement('canvas');
     const ctx=canvas.getContext('2d',{ willReadFrequently:true });
-    const ROI_INSET=0.10; // 10% márgenes
-
+    const ROI_INSET=0.10;
     let lastTS=0; const MIN_INTERVAL=80;
+
     const tick=(now)=>{
       try{
         if (!usingJsQR) return;
@@ -426,8 +452,8 @@
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
           const img=ctx.getImageData(0,0,rw,rh);
           const qr=window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
-          const val=(qr?.data||'').trim();
-          if (val){ onDetected(val); return; }
+          const v=(qr?.data||'').trim();
+          if (v){ onDetected(v); return; }
         }
       }catch(_){}
       rafId = requestAnimationFrame(tick);
@@ -436,24 +462,25 @@
   }
 
   async function startScan(){
-    openModal(); result.style.display='none'; success.style.display='none';
+    // Open first to avoid autoplay restrictions
+    document.body.classList.add('modal-open');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden','false');
+    result.style.display='none'; success.style.display='none';
+
     try{
       const cached = localStorage.getItem(CAM_CACHE_KEY);
       if (cached){ await startWithDevice(cached); }
-      else {
+      else{
         await loadVideoDevices();
         if (videoDevices.length) currentDeviceIdx=0;
         await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
       }
 
-      if ('BarcodeDetector' in window){
-        const ok = await startBarcodeDetector();
-        if (ok) return;
-      }
-      await loadJsQR();
-      startJsQRLoop();
+      const ok = await startBarcodeDetector();
+      if (!ok){ await loadJsQR(); startJsQRLoop(); }
     }catch(e){
-      showError(e,'startScan');
+      showError(e);
       cleanupAll(); closeModal();
     }
   }
