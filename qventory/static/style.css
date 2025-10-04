@@ -241,17 +241,41 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
 .btn.small{ padding:4px 8px; font-size:12px }
 
 /* ===== Items header + backup ===== */
-.items-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:12px }
+.items-header{ 
+  display:flex; 
+  align-items:center; 
+  justify-content:space-between; 
+  margin-bottom:16px; 
+  flex-wrap:wrap; 
+  gap:12px 
+}
 .items-header h2{ margin:0 }
-.backup-actions{ display:flex; gap:8px; flex-shrink:0 }
+.backup-actions{ 
+  display:flex; 
+  gap:8px; 
+  flex-shrink:0 
+}
 .backup-btn{
-  padding:6px 12px !important; font-size:13px !important;
-  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
-  background:#f8f9fa; border:1px solid #ddd; color:#495057; transition:all .2s ease;
+  padding:6px 12px !important; 
+  font-size:13px !important;
+  display:inline-flex; 
+  align-items:center; 
+  gap:6px; 
+  white-space:nowrap;
+  background:#495057;   /* Fondo oscuro */
+  border:1px solid #343a40; 
+  color:#f8f9fa;        /* Texto claro */
+  transition:all .2s ease;
   border-radius:10px;
 }
-.backup-btn:hover{ background:#e9ecef; border-color:#adb5bd; transform:translateY(-1px); box-shadow:0 2px 4px rgba(0,0,0,0.1) }
+.backup-btn:hover{ 
+  background:#343a40;   /* Más oscuro al hover */
+  border-color:#212529; 
+  transform:translateY(-1px); 
+  box-shadow:0 2px 4px rgba(0,0,0,0.25) 
+}
 .backup-btn i{ font-size:12px }
+
 
 /* ================
    MÓVIL
