@@ -296,6 +296,19 @@ tbody tr:hover td{
   box-shadow:0 2px 8px rgba(138,180,255,0.2);
 }
 
+/* Botón eliminar - destacado en rojo */
+.table-wrap form[action*="delete"] .btn.settingsbtn{
+  background:rgba(185,28,28,0.15);
+  border-color:rgba(185,28,28,0.3);
+  color:#ef4444;
+}
+.table-wrap form[action*="delete"] .btn.settingsbtn:hover{
+  background:rgba(185,28,28,0.25);
+  border-color:#dc2626;
+  color:#fca5a5;
+  box-shadow:0 2px 8px rgba(185,28,28,0.3);
+}
+
 /* Badges - Más legibles */
 .tag{
   display:inline-flex;
@@ -486,7 +499,8 @@ tbody tr:hover td{
   td:nth-child(3){ /* SKU */
     font-family:ui-monospace,'SF Mono',Consolas,monospace;
     font-size:10px;
-    min-width:100px;
+    min-width:90px;
+    padding-right:6px;
   }
 
   td:nth-child(4){ /* Supplier */
@@ -506,8 +520,9 @@ tbody tr:hover td{
   }
 
   td:nth-child(8){ /* Location */
-    min-width:100px;
-    max-width:140px;
+    min-width:95px;
+    max-width:130px;
+    padding-right:6px;
   }
 
   /* Thumbnail móvil */
@@ -540,6 +555,17 @@ tbody tr:hover td{
     min-height:30px;
     /* Mejor feedback táctil */
     -webkit-tap-highlight-color:rgba(138,180,255,0.1);
+  }
+
+  /* Botón eliminar móvil - más visible */
+  .table-wrap form[action*="delete"] .btn.settingsbtn{
+    background:rgba(185,28,28,0.2);
+    border-color:rgba(185,28,28,0.4);
+    color:#f87171;
+  }
+  .table-wrap form[action*="delete"] .btn.settingsbtn:active{
+    background:rgba(185,28,28,0.3);
+    border-color:#dc2626;
   }
 
   /* Tags móvil - más compactos */
