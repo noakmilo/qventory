@@ -59,6 +59,18 @@ def create_app():
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
 
+    # Register error handlers
+    @app.errorhandler(404)
+    def not_found_error(error):
+        from flask import render_template
+        return render_template('404.html'), 404
+
+    @app.errorhandler(500)
+    def internal_error(error):
+        from flask import render_template
+        db.session.rollback()
+        return render_template('404.html'), 500
+
     with app.app_context():
         print("DB URI ->", app.config.get("SQLALCHEMY_DATABASE_URI"), flush=True)
         db.create_all()

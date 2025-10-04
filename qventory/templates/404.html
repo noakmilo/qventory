@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}404 Not Found – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card error-card">
+    <div class="error-content">
+      <div class="error-icon">
+        <i class="fas fa-box-open"></i>
+      </div>
+      <h1 class="error-code">404</h1>
+      <h2 class="error-title">Page Not Found</h2>
+      <p class="error-message">The page you're looking for doesn't exist or has been moved.</p>
+
+      <div class="error-actions">
+        <a href="{{ url_for('main.dashboard') }}" class="btn submitbtn">
+          <i class="fas fa-home"></i> Go to Dashboard
+        </a>
+        <a href="javascript:history.back()" class="btn">
+          <i class="fas fa-arrow-left"></i> Go Back
+        </a>
+      </div>
+
+      <div class="error-help">
+        <p>Need help? Check these:</p>
+        <ul>
+          <li><a href="{{ url_for('main.dashboard') }}">Dashboard</a></li>
+          <li><a href="{{ url_for('main.new_item') }}">Add Item</a></li>
+          <li><a href="{{ url_for('main.settings') }}">Settings</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
