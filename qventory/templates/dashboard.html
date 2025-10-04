@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Dashboard – Qventory{% endblock %}
 {% block content %}
+<!-- Después de la etiqueta de apertura de content -->
+<div data-username="{{ current_user.username }}" style="display:none"></div>
 <div class="row">
 
   <!-- Filtros -->
@@ -131,72 +133,20 @@
             <th></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="itemsTableBody">
           {% for it in items %}
-          {% set has_price = it.item_price is not none %}
-          {% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
-          {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
-          <tr>
-            <td>
-              {% if it.item_thumb %}
-                <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
-                  <img src="{{ it.item_thumb }}" alt="{{ it.title }}" class="thumb-img">
-                  <span class="thumb-zoom"><i class="fas fa-search"></i></span>
-                </button>
-              {% else %}
-                <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
-              {% endif %}
-            </td>
-            <td>{{ it.title }}</td>
-            <td><span class="tag itsku">{{ it.sku }}</span></td>
-
-            <td class="mobile-hide">{% if it.supplier %}<span class="tag">{{ it.supplier }}</span>{% else %}—{% endif %}</td>
-            <td class="mobile-hide">{% if it.item_cost %}<span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>{% else %}—{% endif %}</td>
-            <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
-            <td class="mobile-hide">{% if has_price and has_cost %}<span class="tag">ROI {{ roi|round(0) }}%</span>{% else %}—{% endif %}</td>
-
-            <!-- Location con QR -->
-            <td>
-              {% if it.location_code %}
-              <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
-              &nbsp;
-              <a class="tag qr-link"
-                 href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-                 data-caption="QR for {{ it.location_code }}">
-                <i class="fas fa-qrcode"></i> QR
-              </a>
-              {% else %}—{% endif %}
-            </td>
-
-            <td class="mobile-hide">
-              <div class="platform-badges">
-                {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
-                {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank">eBay</a>{% endif %}
-                {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
-                {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
-                {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
-                {% if it.poshmark_url %}<a class="tag" href="{{ it.poshmark_url }}" target="_blank">Poshmark</a>{% endif %}
-                {% if it.depop_url %}<a class="tag" href="{{ it.depop_url }}" target="_blank">Depop</a>{% endif %}
-              </div>
-            </td>
-
-            <td>
-              {% if current_user.is_authenticated %}
-              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
-              <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>
-              </form>
-              <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
-              </form>
-              {% else %}
-              <span class="tag">Login to edit</span>
-              {% endif %}
-            </td>
-          </tr>
+          {% include "_item_row.html" with context %}
           {% endfor %}
         </tbody>
       </table>
+
+      <!-- Spinner para carga de más items -->
+      <div id="loadingSpinner" style="display:none;text-align:center;padding:20px;color:#888;">
+        <i class="fas fa-spinner fa-spin"></i> Loading more items...
+      </div>
+
+      <!-- Marcador para detectar cuando se llega al final -->
+      <div id="scrollSentinel" style="height:1px;"></div>
     </div>
   </div>
 </div>
@@ -812,6 +762,96 @@
       handleClose();
     }
   });
+})();
+</script>
+
+<script>
+/* ===== Infinite Scroll para Dashboard ===== */
+(function(){
+  const tbody = document.getElementById('itemsTableBody');
+  const spinner = document.getElementById('loadingSpinner');
+  const sentinel = document.getElementById('scrollSentinel');
+
+  if (!tbody || !sentinel) return;
+
+  let offset = {{ items|length }};  // Número de items ya cargados
+  const totalItems = {{ total_items }};
+  let loading = false;
+  let hasMore = offset < totalItems;
+
+  // Obtener filtros actuales de la URL
+  function getCurrentFilters() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      q: params.get('q') || '',
+      A: params.get('A') || '',
+      B: params.get('B') || '',
+      S: params.get('S') || '',
+      C: params.get('C') || '',
+      platform: params.get('platform') || ''
+    };
+  }
+
+  async function loadMoreItems() {
+    if (loading || !hasMore) return;
+
+    loading = true;
+    spinner.style.display = 'block';
+
+    try {
+      const filters = getCurrentFilters();
+      const url = new URL('/api/load-more-items', window.location.origin);
+      url.searchParams.set('offset', offset);
+      url.searchParams.set('limit', 20);
+
+      // Agregar filtros a la petición
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value) url.searchParams.set(key, value);
+      });
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.ok && data.items && data.items.length > 0) {
+        // Insertar las nuevas filas en el tbody
+        data.items.forEach(itemHtml => {
+          tbody.insertAdjacentHTML('beforeend', itemHtml);
+        });
+
+        offset += data.items.length;
+        hasMore = data.has_more;
+
+        // Si no hay más items, ocultar el sentinel
+        if (!hasMore) {
+          sentinel.style.display = 'none';
+        }
+      } else {
+        hasMore = false;
+        sentinel.style.display = 'none';
+      }
+    } catch (error) {
+      console.error('Error loading more items:', error);
+      hasMore = false;
+    } finally {
+      loading = false;
+      spinner.style.display = 'none';
+    }
+  }
+
+  // Usar Intersection Observer para detectar cuando el usuario llega al final
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && hasMore && !loading) {
+        loadMoreItems();
+      }
+    });
+  }, {
+    root: null,
+    rootMargin: '200px',  // Empezar a cargar 200px antes de llegar al final
+    threshold: 0
+  });
+
+  observer.observe(sentinel);
 })();
 </script>
 

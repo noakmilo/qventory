@@ -73,7 +73,6 @@ def landing():
 @login_required
 def dashboard():
     s = get_or_create_settings(current_user)
-    total_items = Item.query.filter_by(user_id=current_user.id).count()
 
     q = (request.args.get("q") or "").strip()
     fA = (request.args.get("A") or "").strip()
@@ -82,20 +81,20 @@ def dashboard():
     fC = (request.args.get("C") or "").strip()
     fPlatform = (request.args.get("platform") or "").strip()
 
-    items = Item.query.filter_by(user_id=current_user.id)
+    items_query = Item.query.filter_by(user_id=current_user.id)
 
     if q:
         like = f"%{q}%"
-        items = items.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
+        items_query = items_query.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
 
     if s.enable_A and fA:
-        items = items.filter(Item.A == fA)
+        items_query = items_query.filter(Item.A == fA)
     if s.enable_B and fB:
-        items = items.filter(Item.B == fB)
+        items_query = items_query.filter(Item.B == fB)
     if s.enable_S and fS:
-        items = items.filter(Item.S == fS)
+        items_query = items_query.filter(Item.S == fS)
     if s.enable_C and fC:
-        items = items.filter(Item.C == fC)
+        items_query = items_query.filter(Item.C == fC)
 
     if fPlatform:
         col = {
@@ -104,9 +103,13 @@ def dashboard():
             "poshmark": Item.poshmark_url, "depop": Item.depop_url
         }.get(fPlatform)
         if col is not None:
-            items = items.filter(col.isnot(None))
+            items_query = items_query.filter(col.isnot(None))
 
-    items = items.order_by(Item.created_at.desc()).all()
+    items_query = items_query.order_by(Item.created_at.desc())
+    total_items = items_query.count()
+
+    # Solo cargar los primeros 20 items
+    items = items_query.limit(20).all()
 
     def distinct(col):
         return [
@@ -141,6 +144,65 @@ def dashboard():
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
+
+
+# ---------------------- API: Load more items (infinite scroll) ----------------------
+
+@main_bp.route("/api/load-more-items")
+@login_required
+def api_load_more_items():
+    s = get_or_create_settings(current_user)
+
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 20))
+
+    q = (request.args.get("q") or "").strip()
+    fA = (request.args.get("A") or "").strip()
+    fB = (request.args.get("B") or "").strip()
+    fS = (request.args.get("S") or "").strip()
+    fC = (request.args.get("C") or "").strip()
+    fPlatform = (request.args.get("platform") or "").strip()
+
+    items_query = Item.query.filter_by(user_id=current_user.id)
+
+    if q:
+        like = f"%{q}%"
+        items_query = items_query.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
+
+    if s.enable_A and fA:
+        items_query = items_query.filter(Item.A == fA)
+    if s.enable_B and fB:
+        items_query = items_query.filter(Item.B == fB)
+    if s.enable_S and fS:
+        items_query = items_query.filter(Item.S == fS)
+    if s.enable_C and fC:
+        items_query = items_query.filter(Item.C == fC)
+
+    if fPlatform:
+        col = {
+            "web": Item.web_url, "ebay": Item.ebay_url, "amazon": Item.amazon_url,
+            "mercari": Item.mercari_url, "vinted": Item.vinted_url,
+            "poshmark": Item.poshmark_url, "depop": Item.depop_url
+        }.get(fPlatform)
+        if col is not None:
+            items_query = items_query.filter(col.isnot(None))
+
+    items = items_query.order_by(Item.created_at.desc()).offset(offset).limit(limit).all()
+
+    # Renderizar solo las filas de items
+    from flask import render_template_string
+
+    items_html = []
+    for it in items:
+        # Generar HTML para cada item (usando el mismo formato del dashboard)
+        item_html = render_template("_item_row.html", item=it, settings=s)
+        items_html.append(item_html)
+
+    return jsonify({
+        "ok": True,
+        "items": items_html,
+        "has_more": len(items) == limit
+    })
 
 
 # ---------------------- CSV Export/Import (protegido) ----------------------
