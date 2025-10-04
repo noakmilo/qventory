@@ -4,14 +4,14 @@
 <div class="row">
 
   <!-- Filtros -->
-  <div class="card cardfilters filters-shell" style="flex:1 1 100%;min-width:280px">
+  <div id="filtersShell" class="card cardfilters filters-shell" style="flex:1 1 100%;min-width:280px">
     <div class="filters-bar">
       <h2>Filters</h2>
-      <button class="btn filters-toggle" type="button" onclick="document.querySelector('.filters-content').toggleAttribute('hidden')">
+      <button id="filtersToggle" class="btn filters-toggle" type="button" aria-expanded="true">
         <i class="fas fa-filter"></i> Toggle
       </button>
     </div>
-    <div class="filters-content">
+    <div id="filtersContent" class="filters-content">
       <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="filters-grid">
         <div style="grid-column:1/-1">
           <div class="input-with-button">
@@ -201,7 +201,7 @@
   </div>
 </div>
 
-<!-- ===== Modal QR Consistente ===== -->
+<!-- ===== Modal QR para Locations ===== -->
 <div id="qrModal" class="qr-modal hidden" aria-hidden="true" aria-label="QR code">
   <div class="qr-sheet">
     <div class="qr-header">
@@ -224,6 +224,58 @@
   </div>
 </div>
 
+<!-- ===== Modal de Imagen Ampliada ===== -->
+<div id="imgModal" class="qr-modal hidden" hidden aria-hidden="true" aria-label="Image viewer">
+  <div class="qr-sheet">
+    <div class="qr-header">
+      <strong><i class="fas fa-image"></i> Image</strong>
+      <div class="qr-actions">
+        <button type="button" id="imgClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport">
+        <img id="imgModalImg" alt="" style="max-height:70vh">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal Scanner QR ===== -->
+<div id="scanQRModal" class="qr-modal hidden" hidden aria-hidden="true" aria-label="QR Scanner">
+  <div class="qr-sheet" style="max-width:480px">
+    <div class="qr-header">
+      <strong><i class="fas fa-qrcode"></i> Scan QR Code</strong>
+      <div class="qr-actions">
+        <button type="button" id="scanQRFlip" class="qr-icon" title="Flip camera" aria-label="Flip camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button type="button" id="scanQRFlashlight" class="qr-icon" title="Toggle flashlight" aria-label="Toggle flashlight">
+          <i class="fas fa-lightbulb"></i>
+        </button>
+        <button type="button" id="scanQRClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport" style="position:relative;background:#000">
+        <video id="scanQRVideo" style="width:100%;height:100%;object-fit:cover;display:none" playsinline autoplay muted></video>
+        <div id="scanQRSpinner" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#fff;font-size:24px">
+          <i class="fas fa-spinner fa-spin"></i>
+        </div>
+        <div id="scanQRSuccess" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,200,100,0.3);color:#fff;font-size:48px;pointer-events:none">
+          <i class="fas fa-check-circle"></i>
+        </div>
+      </div>
+      <div id="scanQRResult" class="qr-tip" style="display:none;color:#4ade80"></div>
+      <div class="qr-tip">Position QR code within camera view</div>
+    </div>
+  </div>
+</div>
+
 <style>
   body.modal-open{ overflow:hidden; touch-action:none; }
   .qr-modal.hidden{ display:none; }
@@ -231,60 +283,13 @@
   .qr-sheet{ width:min(380px,92vw); background:#0f1115; color:#fff; border-radius:14px; overflow:hidden; border:1px solid #222; box-shadow:0 20px 60px rgba(0,0,0,.5); }
   .qr-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#141821; border-bottom:1px solid #222; }
   .qr-actions{ display:flex; align-items:center; gap:6px; }
-  .qr-icon{ border:none; background:transparent; color:#fff; font-size:18px; cursor:pointer; opacity:.9; text-decoration:none; display:flex; align-items:center; justify-content:center; width:30px; height:30px; }
+  .qr-icon{ border:none; background:transparent; color:#fff; font-size:18px; cursor:pointer; opacity:.9; text-decoration:none; display:flex; align-items:center; justify-content:center; width:30px; height:30px; transition:opacity .2s; }
   .qr-icon:hover{ opacity:1; }
+  .qr-icon.active{ color:#4ade80; opacity:1; }
   .qr-body{ padding:12px; display:flex; flex-direction:column; gap:10px; align-items:center; }
   .qr-viewport{ width:100%; aspect-ratio:1/1; background:#fff; border-radius:10px; overflow:hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
   #qrImage{ width:100%; height:100%; object-fit:contain; display:block; }
   .qr-tip{ text-align:center; font-size:12px; opacity:.8; }
-</style>
-
-<script>
-(function(){
-  const qrModal   = document.getElementById('qrModal');
-  const qrClose   = document.getElementById('qrClose');
-  const qrImage   = document.getElementById('qrImage');
-  const qrOpenNew = document.getElementById('qrOpenNew');
-  const qrCaption = document.getElementById('qrCaption');
-  const qrTitle   = document.getElementById('qrTitle');
-
-  function openQrModal(url, caption){
-    document.body.classList.add('modal-open');
-    qrModal.classList.remove('hidden');
-    qrModal.setAttribute('aria-hidden','false');
-    qrImage.src = '';
-    qrImage.src = url;
-    qrOpenNew.href = url;
-    qrCaption.textContent = caption || '';
-    qrTitle.textContent = caption || 'QR';
-  }
-  function closeQrModal(){
-    document.body.classList.remove('modal-open');
-    qrModal.classList.add('hidden');
-    qrModal.setAttribute('aria-hidden','true');
-    qrImage.src = '';
-  }
-
-  document.body.addEventListener('click', (e) => {
-    const a = e.target.closest('a.qr-link');
-    if (!a) return;
-    e.preventDefault();
-    const url = a.getAttribute('href');
-    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
-    openQrModal(url, caption);
-  });
-
-  qrClose?.addEventListener('click', closeQrModal);
-  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
-})();
-</script>
-
-<style>
-  /* ===== Visibilidad de modales (cerrados por defecto) ===== */
-  #imgModal[hidden], #scanQRModal[hidden] { display: none !important; }
-  #imgModal, #scanQRModal { display: grid; }
-  .modal-open { overflow: hidden; }
 
   /* ===== Miniaturas con overlay de lupa ===== */
   .thumb-wrap{
@@ -321,31 +326,78 @@
 <!-- ======================= SCRIPTS ======================= -->
 
 <script>
-/* Toggle filtros con persistencia (solo si existen IDs) */
+/* ===== Toggle filtros con persistencia ===== */
 (function(){
   const btn = document.getElementById('filtersToggle');
   const content = document.getElementById('filtersContent');
   const shell = document.getElementById('filtersShell');
   if(!btn || !content) return;
+  
   const KEY = 'qv_filters_collapsed';
+  
   function setCollapsed(collapsed){
     content.hidden = collapsed;
     btn.setAttribute('aria-expanded', String(!collapsed));
     shell?.classList.toggle('collapsed', collapsed);
     try{ localStorage.setItem(KEY, collapsed ? '1':'0'); }catch{}
   }
+  
   function initState(){
     let collapsed = false;
     try{ collapsed = localStorage.getItem(KEY) === '1'; }catch{}
     setCollapsed(collapsed);
   }
+  
   btn.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
   initState();
 })();
 </script>
 
 <script>
-/* ====== Modal de imagen ampliada ====== */
+/* ===== Modal QR para Locations ===== */
+(function(){
+  const qrModal   = document.getElementById('qrModal');
+  const qrClose   = document.getElementById('qrClose');
+  const qrImage   = document.getElementById('qrImage');
+  const qrOpenNew = document.getElementById('qrOpenNew');
+  const qrCaption = document.getElementById('qrCaption');
+  const qrTitle   = document.getElementById('qrTitle');
+
+  function openQrModal(url, caption){
+    document.body.classList.add('modal-open');
+    qrModal.classList.remove('hidden');
+    qrModal.setAttribute('aria-hidden','false');
+    qrImage.src = '';
+    qrImage.src = url;
+    qrOpenNew.href = url;
+    qrCaption.textContent = caption || '';
+    qrTitle.textContent = caption || 'QR';
+  }
+  
+  function closeQrModal(){
+    document.body.classList.remove('modal-open');
+    qrModal.classList.add('hidden');
+    qrModal.setAttribute('aria-hidden','true');
+    qrImage.src = '';
+  }
+
+  document.body.addEventListener('click', (e) => {
+    const a = e.target.closest('a.qr-link');
+    if (!a) return;
+    e.preventDefault();
+    const url = a.getAttribute('href');
+    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
+    openQrModal(url, caption);
+  });
+
+  qrClose?.addEventListener('click', closeQrModal);
+  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
+})();
+</script>
+
+<script>
+/* ===== Modal de imagen ampliada ===== */
 (function(){
   const modal  = document.getElementById('imgModal');
   const imgEl  = document.getElementById('imgModalImg');
@@ -355,18 +407,20 @@
     if(!url) return;
     document.body.classList.add('modal-open');
     modal.removeAttribute('hidden');
+    modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden','false');
     imgEl.src = url;
     imgEl.alt = alt || '';
   }
+  
   function closeImg(){
     modal.setAttribute('hidden', '');
+    modal.classList.add('hidden');
     modal.setAttribute('aria-hidden','true');
     document.body.classList.remove('modal-open');
     imgEl.src = '';
   }
 
-  // Delegación: funciona para todos los .thumb-wrap
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('.thumb-wrap');
     if(!btn) return;
@@ -376,15 +430,13 @@
   });
 
   closeBtn?.addEventListener('click', closeImg);
-  // Cerrar tocando fuera (clic en backdrop)
   modal?.addEventListener('click', (e)=>{ if (e.target === modal) closeImg(); });
-  // Esc para cerrar
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.hasAttribute('hidden')) closeImg(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeImg(); });
 })();
 </script>
 
 <script>
-/* ========== SCRIPT SCANNER QR (robusto, iOS + Android feedback) ========== */
+/* ===== SCRIPT SCANNER QR (Optimizado iOS + Android) ===== */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
   const modal = document.getElementById('scanQRModal');
@@ -404,10 +456,12 @@
   let usingBD = false, usingJsQR = false, jsQRLoaded = false;
   let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
   let flashlightOn = false;
+  let isScanning = false;
 
-  // === Beep cross-plataforma ===
+  // === Audio beep cross-platform ===
   let beepAudio = null;
   let beepReady = false;
+  
   function ensureBeep() {
     if (beepReady) return;
     try {
@@ -431,24 +485,46 @@
   function openModal(){
     document.body.classList.add('modal-open');
     modal.removeAttribute('hidden');
+    modal.classList.remove('hidden');
     modal.setAttribute('aria-hidden','false');
   }
+  
   function closeModal(){
     document.body.classList.remove('modal-open');
     modal.setAttribute('hidden','');
+    modal.classList.add('hidden');
     modal.setAttribute('aria-hidden','true');
   }
+  
   function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
-  function showSuccess(){ success.style.display='block'; setTimeout(()=>success.style.display='none', 450); }
-  function cleanupLoop(){ if (rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+  function showSuccess(){ success.style.display='flex'; setTimeout(()=>success.style.display='none', 450); }
+  
+  function cleanupLoop(){ 
+    if (rafId){ 
+      cancelAnimationFrame(rafId); 
+      rafId=null; 
+    }
+    isScanning = false;
+  }
+  
   function cleanupAll(){
     cleanupLoop();
-    if (stream){ try{ stream.getTracks().forEach(t=>t.stop()); }catch{}; stream=null; }
-    flashlightOn=false; btnFlash.classList.remove('active');
-    video.srcObject=null; video.style.display='none';
-    usingBD=false; usingJsQR=false;
+    if (stream){ 
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch{}; 
+      stream=null; 
+    }
+    flashlightOn=false; 
+    btnFlash.classList.remove('active');
+    video.srcObject=null; 
+    video.style.display='none';
+    usingBD=false; 
+    usingJsQR=false;
   }
-  function showError(msg){ console.error('[QR]', msg); alert(msg); }
+  
+  function showError(msg){ 
+    console.error('[QR]', msg); 
+    alert(msg); 
+  }
 
   async function loadVideoDevices(){
     if (devicesLoaded) return;
@@ -467,23 +543,36 @@
   async function startWithDevice(deviceId){
     cleanupLoop();
     showSpinner(true);
+    
     const constraints = {
-      video: deviceId ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
-                      : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
+      video: deviceId 
+        ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
+        : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
       audio: false
     };
+    
     stream = await navigator.mediaDevices.getUserMedia(constraints);
-    video.setAttribute('playsinline',''); video.setAttribute('autoplay',''); video.setAttribute('muted','');
+    video.setAttribute('playsinline',''); 
+    video.setAttribute('autoplay',''); 
+    video.setAttribute('muted','');
     video.srcObject = stream;
+    
     await video.play();
+    
     if (video.readyState < 2){
       await new Promise(res=>{
         const t = setTimeout(res, 250);
         video.onloadedmetadata = ()=>{ clearTimeout(t); res(); };
       });
     }
+    
     showSpinner(false);
     video.style.display='block';
+    
+    // Guardar preferencia de cámara
+    if (deviceId) {
+      try{ localStorage.setItem(CAM_CACHE_KEY, deviceId); }catch{}
+    }
   }
 
   async function flipCamera(){
@@ -518,19 +607,27 @@
   }
 
   function onDetected(raw){
+    if (isScanning) return; // Prevenir detecciones múltiples
+    isScanning = true;
+    
     const v = extractSku(raw);
-    if (!v) return;
+    if (!v) {
+      isScanning = false;
+      return;
+    }
+    
     result.textContent = `Detected: ${v.slice(0,120)}`;
     result.style.display='block';
     showSuccess();
 
     try{
-      if (navigator.vibrate) navigator.vibrate(80); // Android (iOS no soporta)
+      if (navigator.vibrate) navigator.vibrate(80);
       if (beepReady && beepAudio) beepAudio.play().catch(()=>{});
     }catch{}
 
     setTimeout(()=>{
-      cleanupAll(); closeModal();
+      cleanupAll(); 
+      closeModal();
       inputQ.value = v;
       form?.submit();
     }, 500);
@@ -543,22 +640,29 @@
     }catch{
       try{ detector = new window.BarcodeDetector(); }catch{ return false; }
     }
-    usingBD = true; usingJsQR = false;
+    usingBD = true; 
+    usingJsQR = false;
     startBDLoop();
     return true;
   }
 
   function startBDLoop(){
     cleanupLoop();
+    isScanning = false;
     let frame = 0;
+    
     const tick = async ()=>{
+      if (!usingBD) return;
       frame++;
       try{
         if (frame%2===0 && detector && video.readyState >= 2){
           const codes = await detector.detect(video);
           if (codes && codes.length){
             const val = (codes[0].rawValue || '').trim();
-            if (val){ onDetected(val); return; }
+            if (val){ 
+              onDetected(val); 
+              return; 
+            }
           }
         }
       }catch(e){}
@@ -580,42 +684,61 @@
   }
 
   function startJsQRLoop(){
-    usingBD=false; usingJsQR=true;
+    usingBD=false; 
+    usingJsQR=true;
     cleanupLoop();
+    isScanning = false;
 
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const ROI_INSET = 0.08;
 
     let lastTS = 0;
-    const MIN_INTERVAL = 80;
+    const MIN_INTERVAL = 100; // Optimizado: 100ms entre escaneos
 
     const tick = (now)=>{
+      if (!usingJsQR) return;
+      
       try{
-        if (!usingJsQR) return;
-        if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0){
+        if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0 && video.readyState >= 2){
+          lastTS = now;
+          
           const vw = video.videoWidth, vh = video.videoHeight;
           const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
           const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
-          canvas.width = rw; canvas.height = rh;
+          
+          canvas.width = rw; 
+          canvas.height = rh;
           ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+          
           const img = ctx.getImageData(0, 0, rw, rh);
           const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
           const val = (qr?.data || '').trim();
-          if (val){ onDetected(val); return; }
+          
+          if (val){ 
+            onDetected(val); 
+            return; 
+          }
         }
-      }catch{}
+      }catch(e){
+        console.error('[jsQR]', e);
+      }
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
   }
 
   async function startScan(){
-    ensureBeep(); // <- autoriza audio en iOS al tocar el botón
-    openModal(); result.style.display='none'; success.style.display='none';
+    ensureBeep(); // Autoriza audio en iOS
+    openModal(); 
+    result.style.display='none'; 
+    success.style.display='none';
+    isScanning = false;
+    
     try{
       const cachedId = localStorage.getItem(CAM_CACHE_KEY) || null;
       await loadVideoDevices();
+      
       if (videoDevices.length){
         if (cachedId){
           const idx = videoDevices.findIndex(d=>d.deviceId===cachedId);
@@ -624,6 +747,7 @@
           currentDeviceIdx = 0;
         }
       }
+      
       await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
 
       const bdOK = await tryBarcodeDetector();
@@ -633,28 +757,39 @@
           startJsQRLoop();
         }catch(e){
           showError('No QR engine available (BarcodeDetector unsupported and jsQR blocked).');
-          cleanupAll(); closeModal();
+          cleanupAll(); 
+          closeModal();
         }
       }
     }catch(e){
-      showError(e?.message || 'Camera error');
-      cleanupAll(); closeModal();
+      showError(e?.message || 'Camera access denied or not available');
+      cleanupAll(); 
+      closeModal();
     }
   }
 
-  btnScan?.addEventListener('click', startScan);
-  document.getElementById('scanQRFlip')?.addEventListener('click', async ()=>{ await flipCamera(); });
-  document.getElementById('scanQRFlashlight')?.addEventListener('click', async ()=>{ await toggleFlashlight(); });
-  document.getElementById('scanQRClose')?.addEventListener('click', ()=>{ cleanupAll(); closeModal(); });
+  function handleClose(){
+    cleanupAll(); 
+    closeModal();
+  }
 
+  // Event listeners
+  btnScan?.addEventListener('click', startScan);
+  btnFlip?.addEventListener('click', flipCamera);
+  btnFlash?.addEventListener('click', toggleFlashlight);
+  btnClose?.addEventListener('click', handleClose);
+  
   // Cerrar tocando fuera del contenido
-  document.getElementById('scanQRModal')?.addEventListener('click', (e)=>{
-    if (e.target===document.getElementById('scanQRModal')){
-      cleanupAll(); closeModal();
+  modal?.addEventListener('click', (e)=>{
+    if (e.target === modal){
+      handleClose();
     }
   });
-
-</script>
-
-
-{% endblock %}
+  
+  // Cerrar con tecla Escape
+  window.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')){
+      handleClose();
+    }
+  });
+})();
