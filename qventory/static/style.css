@@ -354,10 +354,107 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
   th,td{ padding:10px 12px }
 }
 
+/* ===== FOOTER ===== */
+.footer{
+  margin-top:60px;
+  padding:32px 14px calc(32px + var(--safe-b)) 14px;
+  border-top:1px solid var(--glass-border);
+  background:var(--glass-bg);
+  backdrop-filter:blur(calc(var(--blur)*.6));
+  -webkit-backdrop-filter:blur(calc(var(--blur)*.6));
+}
+.footer-content{
+  max-width:1200px;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:20px;
+  text-align:center;
+}
+.footer-brand{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+}
+.footer-logo{
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  opacity:0.9;
+}
+.footer-tagline{
+  font-size:var(--fs-sm);
+  color:var(--sub);
+  opacity:0.8;
+}
+.footer-links{
+  display:flex;
+  gap:16px;
+  align-items:center;
+}
+.footer-links a{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:40px;
+  height:40px;
+  border-radius:10px;
+  border:1px solid var(--glass-border);
+  background:var(--glass-bg-strong);
+  color:var(--sub);
+  font-size:18px;
+  transition:all .2s ease;
+}
+.footer-links a:hover{
+  color:var(--accent);
+  border-color:var(--accent);
+  background:rgba(138,180,255,.08);
+  transform:translateY(-2px);
+}
+.footer-meta{
+  font-size:var(--fs-xs);
+  color:var(--sub);
+  opacity:0.7;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+.footer-divider{
+  opacity:0.5;
+}
+
+/* Footer responsive */
+@media (max-width:720px){
+  .footer{
+    margin-top:40px;
+    padding:24px 8px calc(24px + var(--safe-b)) 8px;
+  }
+  .footer-content{
+    gap:16px;
+  }
+  .footer-logo{
+    width:28px;
+    height:28px;
+  }
+  .footer-links a{
+    width:36px;
+    height:36px;
+    font-size:16px;
+  }
+  .footer-meta{
+    font-size:10px;
+    gap:6px;
+  }
+}
+
 /* === Accesibilidad === */
 @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important } }
 @media (prefers-reduced-transparency: reduce){
-  .glass, .card, header, .table-wrap, .btn, .icon-btn, .fab, .tag, .input, select{
+  .glass, .card, header, .table-wrap, .btn, .icon-btn, .fab, .tag, .input, select, .footer{
     backdrop-filter:none !important; -webkit-backdrop-filter:none !important; background:#111834 !important; box-shadow:var(--elev)
   }
 }

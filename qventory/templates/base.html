@@ -59,8 +59,26 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </div>
-  <footer>
-    Built with love by Kmilo — no tracking, no fuss.
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <img src="{{ url_for('static', filename='icons/icon-32.png') }}" alt="Qventory" class="footer-logo">
+        <span class="footer-tagline">Inventory power for hustlers.</span>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/kmilonoa" target="_blank" rel="noopener" title="GitHub">
+          <i class="fab fa-github"></i>
+        </a>
+        <a href="mailto:hello@qventory.com" title="Contact">
+          <i class="fas fa-envelope"></i>
+        </a>
+      </div>
+      <div class="footer-meta">
+        <span>Built with love by Kmilo</span>
+        <span class="footer-divider">•</span>
+        <span>No tracking, no fuss</span>
+      </div>
+    </div>
   </footer>
   <script>
     if ('serviceWorker' in navigator) {
