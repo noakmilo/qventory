@@ -208,31 +208,139 @@ i {color:#8ab4fd;}
   overflow-x:auto; overflow-y:visible; -webkit-overflow-scrolling:touch;
   border-radius:var(--radius);
   border:1px solid var(--glass-border);
-  padding-right:8px;
   background:var(--glass-bg);
   backdrop-filter:blur(calc(var(--blur)*.5));
   -webkit-backdrop-filter:blur(calc(var(--blur)*.5));
   box-shadow:0 10px 22px var(--glass-shadow);
+  position:relative;
 }
-.table-wrap table, .table-wrap th, .table-wrap td{ overflow:visible; background:transparent }
-.table-wrap .btn.settingsbtn{ position:relative; z-index:1; white-space:nowrap }
-.table-wrap td:nth-child(1){ word-break:break-word }
-.table-wrap td:last-child{ white-space:nowrap }
-table{ width:100%; border-collapse:collapse }
-th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left; font-size:var(--fs-sm) }
+.table-wrap table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  overflow:visible;
+  background:transparent;
+}
+.table-wrap th, .table-wrap td{
+  overflow:visible;
+  background:transparent;
+}
 
-/* Badges */
+/* Table Headers - Más prominentes y sticky */
+th{
+  position:sticky;
+  top:0;
+  z-index:10;
+  padding:12px 14px;
+  border-bottom:2px solid var(--border);
+  text-align:left;
+  font-size:11px;
+  font-weight:600;
+  color:var(--sub);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+  white-space:nowrap;
+  background:var(--card);
+  backdrop-filter:blur(var(--blur));
+  -webkit-backdrop-filter:blur(var(--blur));
+}
+
+/* Table Cells - Mejor espaciado y legibilidad */
+td{
+  padding:14px;
+  border-bottom:1px solid rgba(45,58,90,0.3);
+  text-align:left;
+  font-size:var(--fs-sm);
+  vertical-align:middle;
+  transition:background-color .15s ease;
+}
+
+/* Hover en filas - Feedback visual */
+tbody tr{
+  transition:all .15s ease;
+  cursor:default;
+}
+tbody tr:hover{
+  background:rgba(138,180,255,0.04);
+}
+tbody tr:hover td{
+  border-bottom-color:rgba(138,180,255,0.15);
+}
+
+/* Primera columna (imagen) - centrada */
+.table-wrap td:nth-child(1){
+  text-align:center;
+  padding:10px;
+}
+
+/* Última columna (acciones) - compacta */
+.table-wrap td:last-child{
+  white-space:nowrap;
+  padding:10px;
+  text-align:center;
+}
+
+/* Botones de acción - Más accesibles */
+.table-wrap .btn.settingsbtn{
+  position:relative;
+  z-index:1;
+  white-space:nowrap;
+  padding:8px 10px;
+  min-height:34px;
+  margin:0 3px;
+  font-size:13px;
+  transition:all .2s ease;
+}
+.table-wrap .btn.settingsbtn:hover{
+  transform:translateY(-1px);
+  box-shadow:0 2px 8px rgba(138,180,255,0.2);
+}
+
+/* Badges - Más legibles */
 .tag{
-  display:inline-block; padding:4px 8px; border-radius:999px;
-  border:1px solid var(--glass-border); font-size:var(--fs-xs); color:var(--sub);
-  background:rgba(26,36,70,.55);
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:5px 10px;
+  border-radius:8px;
+  border:1px solid var(--glass-border);
+  font-size:var(--fs-xs);
+  color:var(--text);
+  background:rgba(26,36,70,.7);
   backdrop-filter:blur(calc(var(--blur)*.4));
   -webkit-backdrop-filter:blur(calc(var(--blur)*.4));
+  font-weight:500;
+  white-space:nowrap;
 }
-.itsku{ font-size:10px }
+.tag i{
+  font-size:10px;
+  opacity:0.8;
+}
+.itsku{
+  font-family:ui-monospace,'SF Mono',Consolas,monospace;
+  font-size:11px;
+  background:rgba(138,180,255,.08);
+  border-color:rgba(138,180,255,.2);
+  color:var(--accent);
+}
 
-/* Platform badges */
-.platform-badges{ display:flex; flex-wrap:wrap; gap:6px }
+/* Platform badges - Grid mejorado */
+.platform-badges{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+}
+.platform-badges .tag{
+  font-size:10px;
+  padding:4px 8px;
+  transition:all .15s ease;
+}
+.platform-badges .tag:hover{
+  background:rgba(138,180,255,.12);
+  border-color:var(--accent);
+  transform:translateY(-1px);
+}
 
 /* =========================
    Uploader & Scanner (sin cambios clave)
@@ -283,7 +391,7 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
 
 
 /* ================
-   MÓVIL
+   MÓVIL - Optimizado para touch
    ================ */
 @media (max-width:720px){
   .wrap{ width:98%; padding:7px }
@@ -298,34 +406,156 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
   /* Export/Import menos intrusivos */
   .backup-btn{ background:var(--glass-bg-strong); color:var(--text); border-color:var(--glass-border); padding:6px 10px !important; font-size:12px !important }
 
-  /* Tabla: sin solapes, con scroll-x si hace falta */
-  .table-wrap{ width:98%; margin:0 auto; overflow-x:auto; padding:0 }
-  .table-wrap table{ min-width: 1000px; table-layout:fixed }
-  th{
-    padding:8px 6px 6px 6px;
-    font-size:10px; font-weight:600; line-height:1.2;
-    color:var(--sub); text-transform:uppercase; letter-spacing:.3px;
-    white-space:nowrap; hyphens:none;
+  /* Tabla móvil: scroll horizontal suave + touch optimizado */
+  .table-wrap{
+    width:100%;
+    margin:0 auto;
+    overflow-x:auto;
+    overflow-y:visible;
+    padding:0;
+    border-radius:12px;
+    /* Mejora el scroll en móvil */
+    -webkit-overflow-scrolling:touch;
+    scroll-behavior:smooth;
+    /* Indicador visual de scroll */
+    scrollbar-width:thin;
+    scrollbar-color:rgba(138,180,255,0.3) transparent;
   }
-  td{
-    padding:8px 6px; font-size:12px; line-height:1.35; vertical-align:top;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  .table-wrap::-webkit-scrollbar{
+    height:6px;
   }
-  td:nth-child(2), /* Title */
-  td:nth-child(4)  /* Supplier (cuando se muestre) */
-  { white-space:normal; word-break:break-word; overflow-wrap:break-word }
+  .table-wrap::-webkit-scrollbar-track{
+    background:transparent;
+  }
+  .table-wrap::-webkit-scrollbar-thumb{
+    background:rgba(138,180,255,0.3);
+    border-radius:3px;
+  }
 
-  td:nth-child(3), /* SKU */
+  .table-wrap table{
+    min-width:1000px;
+    table-layout:fixed;
+  }
+
+  /* Headers móvil - más compactos pero legibles */
+  th{
+    position:sticky;
+    top:0;
+    padding:10px 8px;
+    font-size:10px;
+    font-weight:600;
+    line-height:1.2;
+    color:var(--sub);
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    white-space:nowrap;
+    background:var(--card);
+    border-bottom:2px solid var(--border);
+    z-index:10;
+  }
+
+  /* Celdas móvil - mejor spacing para touch */
+  td{
+    padding:12px 8px;
+    font-size:12px;
+    line-height:1.4;
+    vertical-align:middle;
+  }
+
+  /* Columnas específicas */
+  td:nth-child(1){ /* Imagen */
+    padding:8px;
+    text-align:center;
+  }
+
+  td:nth-child(2){ /* Title */
+    white-space:normal;
+    word-break:break-word;
+    overflow-wrap:break-word;
+    min-width:180px;
+    max-width:220px;
+  }
+
+  td:nth-child(3){ /* SKU */
+    font-family:ui-monospace,'SF Mono',Consolas,monospace;
+    font-size:10px;
+    min-width:100px;
+  }
+
+  td:nth-child(4){ /* Supplier */
+    white-space:normal;
+    word-break:break-word;
+    min-width:100px;
+  }
+
   td:nth-child(5), /* Cost */
   td:nth-child(6), /* Price */
-  td:nth-child(7)  /* ROI */
-  { font-family:ui-monospace,'SF Mono',Consolas,monospace; font-size:11px }
+  td:nth-child(7){ /* ROI */
+    font-family:ui-monospace,'SF Mono',Consolas,monospace;
+    font-size:11px;
+    text-align:right;
+    min-width:80px;
+  }
 
-  .table-wrap td img{ width:20px; height:20px; border-radius:4px; object-fit:cover; border-style: dotted; }
-  .table-wrap td:last-child{ text-align:center }
+  td:nth-child(8){ /* Location */
+    min-width:120px;
+  }
+
+  /* Thumbnail móvil */
+  .table-wrap td img,
+  .thumb-wrap{
+    width:32px !important;
+    height:32px !important;
+    border-radius:6px;
+    object-fit:cover;
+  }
+
+  /* Botones de acción móvil - touch-friendly */
+  .table-wrap td:last-child{
+    text-align:center;
+    padding:8px;
+    min-width:120px;
+  }
+
   .table-wrap .btn.settingsbtn{
-    width:24px; height:26px; padding:0; margin:0 2px;
-    display:inline-flex; align-items:center; justify-content:center; font-size:12px; border-radius:6px; min-height:26px;
+    width:32px;
+    height:32px;
+    padding:0;
+    margin:0 2px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    border-radius:8px;
+    min-height:32px;
+    /* Mejor feedback táctil */
+    -webkit-tap-highlight-color:rgba(138,180,255,0.1);
+  }
+
+  /* Tags móvil - más compactos */
+  .tag{
+    padding:4px 7px;
+    font-size:10px;
+    border-radius:6px;
+  }
+
+  .itsku{
+    font-size:9px;
+    padding:3px 6px;
+  }
+
+  /* Platform badges móvil */
+  .platform-badges{
+    gap:4px;
+  }
+  .platform-badges .tag{
+    font-size:9px;
+    padding:3px 6px;
+  }
+
+  /* Hover feedback en móvil (para landscape/tablets) */
+  tbody tr:active{
+    background:rgba(138,180,255,0.06);
   }
 }
 
@@ -340,18 +570,79 @@ th,td{ padding:9px 10px; border-bottom:1px solid var(--border); text-align:left;
   .mobile-hide { display: table-cell !important; }
 }
 
-/* ===== Tablets ===== */
+/* ===== Tablets - Optimizado ===== */
 @media (min-width:721px) and (max-width:1024px){
   .grid.cols-3{ grid-template-columns:repeat(2,minmax(0,1fr)) }
-  th,td{ padding:8px 10px; font-size:11px }
-  .table-wrap .btn.settingsbtn{ padding:4px 8px; font-size:11px }
+
+  /* Headers tablet */
+  th{
+    padding:11px 12px;
+    font-size:10px;
+  }
+
+  /* Celdas tablet */
+  td{
+    padding:12px;
+    font-size:12px;
+  }
+
+  /* Botones tablet - touch-friendly */
+  .table-wrap .btn.settingsbtn{
+    padding:7px 9px;
+    font-size:12px;
+    min-height:36px;
+  }
+
+  /* Thumbnails tablet */
+  .thumb-wrap{
+    width:36px !important;
+    height:36px !important;
+  }
+
+  /* Tags tablet */
+  .tag{
+    padding:5px 9px;
+    font-size:11px;
+  }
+
+  /* Hover en tablets */
+  tbody tr:hover{
+    background:rgba(138,180,255,0.05);
+  }
 }
 
 /* ===== Desktop ajustes ===== */
 @media (min-width:1025px){
   .card{ padding:16px 18px }
   .input, select{ padding:10px 12px }
-  th,td{ padding:10px 12px }
+
+  /* Tabla desktop - máxima legibilidad */
+  th{
+    padding:14px 16px;
+    font-size:11px;
+  }
+
+  td{
+    padding:16px;
+    font-size:14px;
+  }
+
+  /* Thumbnails desktop */
+  .thumb-wrap{
+    width:40px !important;
+    height:40px !important;
+  }
+
+  /* Better spacing en desktop */
+  .platform-badges{
+    gap:8px;
+  }
+
+  /* Highlight más sutil en desktop */
+  tbody tr:hover{
+    background:rgba(138,180,255,0.05);
+    box-shadow:inset 0 0 0 1px rgba(138,180,255,0.08);
+  }
 }
 
 /* ===== FOOTER ===== */
