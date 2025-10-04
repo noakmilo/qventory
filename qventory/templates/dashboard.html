@@ -22,6 +22,7 @@
           </div>
         </div>
 
+        {# Filtros dinámicos #}
         {% if settings.enable_A %}
         <div>
           <label>{{ settings.label_A }}</label>
@@ -138,7 +139,6 @@
           <tr>
             <td>
               {% if it.item_thumb %}
-                <!-- Imagen con overlay de lupa y apertura de modal -->
                 <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
                   <img src="{{ it.item_thumb }}" alt="{{ it.title }}" class="thumb-img">
                   <span class="thumb-zoom"><i class="fas fa-search"></i></span>
@@ -150,35 +150,12 @@
             <td>{{ it.title }}</td>
             <td><span class="tag itsku">{{ it.sku }}</span></td>
 
-            <!-- Supplier -->
-            <td class="mobile-hide">
-              {% if it.supplier %}
-                <span class="tag">{{ it.supplier }}</span>
-              {% else %}—{% endif %}
-            </td>
+            <td class="mobile-hide">{% if it.supplier %}<span class="tag">{{ it.supplier }}</span>{% else %}—{% endif %}</td>
+            <td class="mobile-hide">{% if it.item_cost %}<span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>{% else %}—{% endif %}</td>
+            <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
+            <td class="mobile-hide">{% if has_price and has_cost %}<span class="tag">ROI {{ roi|round(0) }}%</span>{% else %}—{% endif %}</td>
 
-            <!-- Cost -->
-            <td class="mobile-hide">
-              {% if it.item_cost %}
-                <span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
-              {% else %}—{% endif %}
-            </td>
-
-            <!-- Price -->
-            <td>
-              {% if it.item_price %}
-                <span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>
-              {% else %}—{% endif %}
-            </td>
-
-            <!-- ROI -->
-            <td class="mobile-hide">
-              {% if has_price and has_cost %}
-                <span class="tag">ROI {{ roi|round(0) }}%</span>
-              {% else %}—{% endif %}
-            </td>
-
-            <!-- Location -->
+            <!-- Location con QR -->
             <td>
               {% if it.location_code %}
               <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
@@ -186,14 +163,11 @@
               <a class="tag qr-link"
                  href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
                  data-caption="QR for {{ it.location_code }}">
-                <i class="fas fa-qrcode"></i>
+                <i class="fas fa-qrcode"></i> QR
               </a>
-              {% else %}
-              —
-              {% endif %}
+              {% else %}—{% endif %}
             </td>
 
-            <!-- Listings -->
             <td class="mobile-hide">
               <div class="platform-badges">
                 {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
@@ -206,21 +180,14 @@
               </div>
             </td>
 
-            <!-- Acciones -->
             <td>
               {% if current_user.is_authenticated %}
-              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}">
-                <i class="fas fa-edit"></i>
-              </a>
+              <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
               <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-                <button class="btn settingsbtn" type="submit" title="Print label">
-                  <i class="fas fa-print"></i>
-                </button>
+                <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>
               </form>
               <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-                <button class="btn settingsbtn" type="submit">
-                  <i class="fas fa-trash-alt"></i>
-                </button>
+                <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
               </form>
               {% else %}
               <span class="tag">Login to edit</span>
@@ -234,68 +201,84 @@
   </div>
 </div>
 
-<!-- ===== Modal de imagen ampliada ===== -->
-<div id="imgModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
-  position:fixed; inset:0; display:grid; place-items:center; z-index:1000;
-  background:rgba(0,0,0,.55);
-">
-  <div class="glass" style="
-    position:relative; max-width:min(92vw,1000px); max-height:min(88vh,1000px);
-    border-radius:16px; padding:10px; box-sizing:border-box;
-  ">
-    <button id="imgClose" class="btn small" aria-label="Close" style="position:absolute; top:8px; right:8px;">
-      <i class="fas fa-times"></i>
-    </button>
-    <img id="imgModalImg" src="" alt="" style="
-      display:block; width:100%; height:auto; max-height:80vh; object-fit:contain; border-radius:10px;
-    ">
+<!-- ===== Modal QR Consistente ===== -->
+<div id="qrModal" class="qr-modal hidden" aria-hidden="true" aria-label="QR code">
+  <div class="qr-sheet">
+    <div class="qr-header">
+      <strong id="qrTitle"><i class="fas fa-qrcode"></i> QR</strong>
+      <div class="qr-actions">
+        <a id="qrOpenNew" class="qr-icon" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <button type="button" id="qrClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport">
+        <img id="qrImage" alt="QR code">
+      </div>
+      <div id="qrCaption" class="qr-tip"></div>
+    </div>
   </div>
 </div>
 
-<!-- ===== Modal ESCÁNER QR ===== -->
-<div id="scanQRModal" hidden aria-hidden="true" role="dialog" aria-modal="true" style="
-  position:fixed; inset:0; display:grid; place-items:center; z-index:1100;
-  background:rgba(0,0,0,.55);
-">
-  <div class="glass" style="
-    position:relative; width:min(96vw,520px); max-height:min(92vh,820px);
-    border-radius:16px; padding:12px; box-sizing:border-box; overflow:hidden;
-  ">
-    <!-- Header -->
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
-      <h3 style="margin:0; font-size:16px; display:flex; align-items:center; gap:8px">
-        <i class="fas fa-qrcode"></i> Scan QR
-      </h3>
-      <div style="display:flex; gap:6px">
-        <button id="scanQRFlashlight" class="btn small" type="button" title="Flashlight"><i class="fas fa-bolt"></i></button>
-        <button id="scanQRFlip" class="btn small" type="button" title="Flip camera"><i class="fas fa-sync-alt"></i></button>
-        <button id="scanQRClose" class="btn small" type="button" aria-label="Close"><i class="fas fa-times"></i></button>
-      </div>
-    </div>
+<style>
+  body.modal-open{ overflow:hidden; touch-action:none; }
+  .qr-modal.hidden{ display:none; }
+  .qr-modal{ position:fixed; inset:0; z-index:9999; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.6); }
+  .qr-sheet{ width:min(380px,92vw); background:#0f1115; color:#fff; border-radius:14px; overflow:hidden; border:1px solid #222; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .qr-header{ display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#141821; border-bottom:1px solid #222; }
+  .qr-actions{ display:flex; align-items:center; gap:6px; }
+  .qr-icon{ border:none; background:transparent; color:#fff; font-size:18px; cursor:pointer; opacity:.9; text-decoration:none; display:flex; align-items:center; justify-content:center; width:30px; height:30px; }
+  .qr-icon:hover{ opacity:1; }
+  .qr-body{ padding:12px; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .qr-viewport{ width:100%; aspect-ratio:1/1; background:#fff; border-radius:10px; overflow:hidden; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); }
+  #qrImage{ width:100%; height:100%; object-fit:contain; display:block; }
+  .qr-tip{ text-align:center; font-size:12px; opacity:.8; }
+</style>
 
-    <!-- Viewport -->
-    <div style="position:relative; border-radius:12px; overflow:hidden; border:1px solid var(--glass-border); background:rgba(14,22,48,.55); aspect-ratio: 3/2;">
-      <video id="scanQRVideo" playsinline muted autoplay style="width:100%; height:100%; object-fit:cover; display:block;"></video>
+<script>
+(function(){
+  const qrModal   = document.getElementById('qrModal');
+  const qrClose   = document.getElementById('qrClose');
+  const qrImage   = document.getElementById('qrImage');
+  const qrOpenNew = document.getElementById('qrOpenNew');
+  const qrCaption = document.getElementById('qrCaption');
+  const qrTitle   = document.getElementById('qrTitle');
 
-      <!-- Spinner -->
-      <div id="scanQRSpinner" style="
-        position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-        font-size:13px; background:rgba(0,0,0,.25);
-      ">
-        <div class="tag">Initializing camera…</div>
-      </div>
+  function openQrModal(url, caption){
+    document.body.classList.add('modal-open');
+    qrModal.classList.remove('hidden');
+    qrModal.setAttribute('aria-hidden','false');
+    qrImage.src = '';
+    qrImage.src = url;
+    qrOpenNew.href = url;
+    qrCaption.textContent = caption || '';
+    qrTitle.textContent = caption || 'QR';
+  }
+  function closeQrModal(){
+    document.body.classList.remove('modal-open');
+    qrModal.classList.add('hidden');
+    qrModal.setAttribute('aria-hidden','true');
+    qrImage.src = '';
+  }
 
-      <!-- Success flash -->
-      <div id="scanQRSuccess" style="
-        position:absolute; inset:0; display:none; align-items:center; justify-content:center;
-        pointer-events:none; background:rgba(0,255,128,.12);
-      "></div>
-    </div>
+  document.body.addEventListener('click', (e) => {
+    const a = e.target.closest('a.qr-link');
+    if (!a) return;
+    e.preventDefault();
+    const url = a.getAttribute('href');
+    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
+    openQrModal(url, caption);
+  });
 
-    <!-- Result -->
-    <div id="scanQRResult" class="muted" style="margin-top:8px; display:none"></div>
-  </div>
-</div>
+  qrClose?.addEventListener('click', closeQrModal);
+  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && !qrModal.classList.contains('hidden')) closeQrModal(); });
+})();
+</script>
 
 <style>
   /* ===== Visibilidad de modales (cerrados por defecto) ===== */
@@ -671,45 +654,6 @@
     }
   });
 
-  // ===== Modal QR desde enlaces de ubicación (QR PNG) =====
-  const qrModal   = document.getElementById('qrModal');
-  const qrClose   = document.getElementById('qrClose');
-  const qrImage   = document.getElementById('qrImage');
-  const qrOpenNew = document.getElementById('qrOpenNew');
-  const qrCaption = document.getElementById('qrCaption');
-  const qrTitle   = document.getElementById('qrTitle');
-
-  function openQrModal(url, caption){
-    if(!qrModal) return;
-    document.body.classList.add('modal-open');
-    qrModal.classList.remove('hidden');
-    qrModal.setAttribute('aria-hidden','false');
-    qrImage.src = '';
-    setTimeout(()=>{ qrImage.src = url; }, 0);
-    if(qrOpenNew) qrOpenNew.href = url;
-    if(qrCaption) qrCaption.textContent = caption || '';
-    if(qrTitle)   qrTitle.textContent   = caption || 'QR';
-  }
-  function closeQrModal(){
-    if(!qrModal) return;
-    document.body.classList.remove('modal-open');
-    qrModal.classList.add('hidden');
-    qrModal.setAttribute('aria-hidden','true');
-    qrImage.src = '';
-  }
-  document.body.addEventListener('click', (e) => {
-    const a = e.target.closest('a.qr-link');
-    if (!a) return;
-    e.preventDefault();
-    const url = a.getAttribute('href');
-    const caption = a.getAttribute('data-caption') || a.textContent || 'QR';
-    openQrModal(url, caption);
-  });
-  qrClose?.addEventListener('click', closeQrModal);
-  qrModal?.addEventListener('click', (e)=>{ if (e.target === qrModal) closeQrModal(); });
-  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && qrModal && !qrModal.classList.contains('hidden')) closeQrModal(); });
-
-})();
 </script>
 
 
