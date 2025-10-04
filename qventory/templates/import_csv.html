@@ -2,61 +2,61 @@
 {% block title %}Import CSV – Qventory{% endblock %}
 {% block content %}
 <div class="row">
-  <div class="card" style="flex:1 1 100%;max-width:600px;margin:0 auto">
-    <h2>Import Items from CSV</h2>
-    <p>Upload a CSV file to import items into your inventory. The CSV should contain columns for item data.</p>
-    
-    <form method="post" enctype="multipart/form-data" class="grid cols-1">
-      <div>
-        <label for="csv_file">Select CSV File</label>
-        <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
-        <small>Only .csv files are accepted</small>
+  <div class="card import-card">
+    <h1>Import Items from CSV</h1>
+    <p class="import-intro">Upload a CSV file to import items into your inventory. The CSV should contain columns for item data.</p>
+
+    <form method="post" enctype="multipart/form-data" class="import-form">
+      <div class="form-group">
+        <label class="label" for="csv_file">Select CSV File</label>
+        <input type="file" class="input" id="csv_file" name="csv_file" accept=".csv" required>
+        <small class="form-hint">Only .csv files are accepted</small>
       </div>
-      
-      <div>
-        <label for="import_mode">Import Mode</label>
+
+      <div class="form-group">
+        <label class="label" for="import_mode">Import Mode</label>
         <select name="import_mode" id="import_mode">
           <option value="add">Add/Update - Keep existing items, add new ones, update existing SKUs</option>
           <option value="replace">Replace - Delete items not in CSV, add new ones from CSV</option>
         </select>
-        <small>
-          <strong>Add/Update:</strong> Existing items with matching SKUs will be updated with new data. New items will be added.<br>
-          <strong>Replace:</strong> All existing items not found in the CSV will be deleted. Use with caution!
-        </small>
+        <div class="import-mode-info">
+          <p><strong>Add/Update:</strong> Existing items with matching SKUs will be updated with new data. New items will be added.</p>
+          <p><strong>Replace:</strong> All existing items not found in the CSV will be deleted. Use with caution!</p>
+        </div>
       </div>
-      
-      <div>
+
+      <div class="form-actions">
         <button type="submit" class="btn submitbtn">Import CSV</button>
         <a href="{{ url_for('main.dashboard') }}" class="btn">Cancel</a>
       </div>
     </form>
-    
-    <hr style="margin:24px 0">
-    
-    <div>
-      <h3>CSV Format Requirements</h3>
-      <ul>
+
+    <hr class="divider">
+
+    <div class="docs-section">
+      <h2>CSV Format Requirements</h2>
+      <ul class="requirements-list">
         <li><strong>Required columns:</strong> <code>sku</code>, <code>title</code></li>
-        <li><strong>Optional columns:</strong> 
-          <code>listing_link</code>, 
+        <li><strong>Optional columns:</strong>
+          <code>listing_link</code>,
           <code>web_url</code>, <code>ebay_url</code>, <code>amazon_url</code>, <code>mercari_url</code>, <code>vinted_url</code>, <code>poshmark_url</code>, <code>depop_url</code>,
           <code>A</code>, <code>B</code>, <code>S</code>, <code>C</code>, <code>location_code</code>,
           <code>item_thumb</code> (Cloudinary URL), <code>supplier</code>, <code>item_cost</code>, <code>item_price</code>, <code>listing_date</code>,
           <code>created_at</code>
         </li>
-        <li><strong>Date format:</strong> <code>listing_date</code> y <code>created_at</code> aceptan <code>YYYY-MM-DD</code> (o <code>YYYY-MM-DD HH:MM:SS</code> para <code>created_at</code>)</li>
+        <li><strong>Date format:</strong> <code>listing_date</code> and <code>created_at</code> accept <code>YYYY-MM-DD</code> (or <code>YYYY-MM-DD HH:MM:SS</code> for <code>created_at</code>)</li>
         <li><strong>Numbers:</strong> use a dot for decimals (e.g., <code>12.99</code>)</li>
         <li><strong>Encoding:</strong> UTF-8 recommended</li>
         <li><strong>Tip:</strong> You can <a href="{{ url_for('main.export_csv') }}">export your current data</a> to get an exact template</li>
       </ul>
-      
-      <p><strong>Example CSV format:</strong></p>
-      <pre style="background:#3c3b3b;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto">sku,title,listing_link,web_url,ebay_url,amazon_url,mercari_url,vinted_url,poshmark_url,depop_url,A,B,S,C,location_code,item_thumb,supplier,item_cost,item_price,listing_date,created_at
+
+      <h3>Example CSV format</h3>
+      <pre class="code-example">sku,title,listing_link,web_url,ebay_url,amazon_url,mercari_url,vinted_url,poshmark_url,depop_url,A,B,S,C,location_code,item_thumb,supplier,item_cost,item_price,listing_date,created_at
 QV001,Sample Item,,https://yourstore.com/item-1,https://www.ebay.com/itm/123,,,,,,A1,B2,,C3,A1-B2-C3,https://res.cloudinary.com/yourcloud/image/upload/v123/thumb.jpg,Goodwill,5.50,19.99,2025-09-14,2025-09-15 10:23:11
 QV002,Another Item,,,,,,,,A2,B1,,,A2-B1,,,Wholesale ABC,0,12.00,2025-09-20,</pre>
-      
-      <p><strong>Notes:</strong></p>
-      <ul>
+
+      <h3>Notes</h3>
+      <ul class="notes-list">
         <li>Empty cells are allowed for optional fields.</li>
         <li><code>item_cost</code> and <code>item_price</code> are numeric; leave blank if unknown.</li>
         <li><code>item_thumb</code> is typically a Cloudinary image URL but any reachable image URL works.</li>
@@ -66,32 +66,4 @@ QV002,Another Item,,,,,,,,A2,B1,,,A2-B1,,,Wholesale ABC,0,12.00,2025-09-20,</pre
     </div>
   </div>
 </div>
-
-<style>
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-small {
-  color: #4b4949;
-  font-size: 12px;
-  display: block;
-  margin-top: 4px;
-}
-
-ul {
-  margin: 8px 0;
-  padding-left: 20px;
-}
-
-li {
-  margin-bottom: 4px;
-}
-
-hr {
-  border: none;
-  border-top: 1px solid #ddd;
-}
-</style>
 {% endblock %}
