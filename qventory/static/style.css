@@ -1127,6 +1127,48 @@ tbody tr:hover td{
 }
 .cookie-actions{
   flex-shrink:0;
+  display:flex;
+  gap:var(--space-2);
+}
+.cookie-reject{
+  background:transparent;
+  border-color:var(--border);
+  color:var(--sub);
+}
+.cookie-reject:hover{
+  background:rgba(156,163,175,0.1);
+  border-color:var(--sub);
+}
+
+/* Cookie rejected message */
+.cookie-rejected-msg{
+  position:fixed;
+  bottom:var(--space-4);
+  right:var(--space-4);
+  background:var(--card);
+  border:1px solid var(--glass-border);
+  border-radius:12px;
+  padding:var(--space-3);
+  box-shadow:0 8px 20px rgba(0,0,0,0.3);
+  z-index:9999;
+  max-width:400px;
+  animation:slideInRight .3s ease;
+}
+.cookie-rejected-msg p{
+  margin:0;
+  font-size:var(--fs-sm);
+  color:var(--text);
+  line-height:1.5;
+}
+@keyframes slideInRight{
+  from{
+    transform:translateX(100%);
+    opacity:0;
+  }
+  to{
+    transform:translateX(0);
+    opacity:1;
+  }
 }
 
 /* Cookie consent mobile */
@@ -1137,9 +1179,16 @@ tbody tr:hover td{
   }
   .cookie-actions{
     width:100%;
+    flex-direction:column;
   }
   .cookie-actions .btn{
     width:100%;
+  }
+  .cookie-rejected-msg{
+    left:var(--space-3);
+    right:var(--space-3);
+    bottom:var(--space-3);
+    max-width:none;
   }
 }
 
