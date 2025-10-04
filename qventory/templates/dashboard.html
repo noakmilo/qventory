@@ -135,7 +135,7 @@
         </thead>
         <tbody id="itemsTableBody">
           {% for it in items %}
-          {% include "_item_row.html" with context %}
+            {% include "_item_row.html" %}
           {% endfor %}
         </tbody>
       </table>
@@ -152,7 +152,7 @@
 </div>
 
 <!-- ===== Modal QR para Locations ===== -->
-<div id="qrModal" class="qr-modal hidden" aria-hidden="true" aria-label="QR code">
+<div id="qrModal" class="qr-modal hidden" role="dialog" aria-hidden="true" aria-labelledby="qrTitle">
   <div class="qr-sheet">
     <div class="qr-header">
       <strong id="qrTitle"><i class="fas fa-qrcode"></i> QR</strong>
@@ -175,7 +175,7 @@
 </div>
 
 <!-- ===== Modal de Imagen Ampliada ===== -->
-<div id="imgModal" class="qr-modal hidden" hidden aria-hidden="true" aria-label="Image viewer">
+<div id="imgModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="Image viewer">
   <div class="qr-sheet" style="max-width:90vw;width:auto">
     <div class="qr-header">
       <strong><i class="fas fa-image"></i> Image</strong>
@@ -194,7 +194,7 @@
 </div>
 
 <!-- ===== Modal Scanner QR ===== -->
-<div id="scanQRModal" class="qr-modal hidden" hidden aria-hidden="true" aria-label="QR Scanner">
+<div id="scanQRModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="QR Scanner">
   <div class="qr-sheet" style="max-width:480px">
     <div class="qr-header">
       <strong><i class="fas fa-qrcode"></i> Scan QR Code</strong>
@@ -318,7 +318,7 @@
     setCollapsed(collapsed);
   }
   
-  btn.addEventListener('click', ()=> setCollapsed(!content.hasAttribute('hidden')));
+  btn.addEventListener('click', ()=> setCollapsed(content.hidden !== true));
   initState();
 })();
 </script>
