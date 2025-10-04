@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Admin Login – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card" style="max-width:400px;margin:0 auto;width:98%;">
+    <h1>Admin Access</h1>
+    <p style="color:var(--sub);margin-bottom:var(--space-4);">Enter admin password to access the backoffice</p>
+
+    <form method="post" class="grid cols-1">
+      <div>
+        <label class="label" for="password">Admin Password</label>
+        <input type="password" class="input" id="password" name="password" required autofocus>
+      </div>
+
+      <div>
+        <button type="submit" class="btn submitbtn block">Login as Admin</button>
+      </div>
+    </form>
+
+    <div style="margin-top:var(--space-4);text-align:center;">
+      <a href="{{ url_for('main.dashboard') }}" style="color:var(--sub);font-size:var(--fs-sm);">← Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

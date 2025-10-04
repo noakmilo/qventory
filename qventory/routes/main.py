@@ -995,3 +995,133 @@ def print_item(item_id):
             as_attachment=True,
             download_name=f"label_{it.sku}.pdf",
         )
+
+
+# ==================== ADMIN BACKOFFICE ====================
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+def check_admin_auth():
+    """Check if admin is authenticated via session"""
+    return request.cookies.get("admin_auth") == "authenticated"
+
+def require_admin():
+    """Decorator to require admin authentication"""
+    if not check_admin_auth():
+        return redirect(url_for('main.admin_login'))
+    return None
+
+
+@main_bp.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    """Admin login page"""
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if password == ADMIN_PASSWORD:
+            resp = make_response(redirect(url_for('main.admin_dashboard')))
+            resp.set_cookie('admin_auth', 'authenticated', max_age=3600*24)  # 24 hours
+            flash("Admin authentication successful", "ok")
+            return resp
+        else:
+            flash("Invalid admin password", "error")
+
+    return render_template("admin_login.html")
+
+
+@main_bp.route("/admin/logout")
+def admin_logout():
+    """Admin logout"""
+    resp = make_response(redirect(url_for('main.admin_login')))
+    resp.set_cookie('admin_auth', '', expires=0)
+    flash("Logged out from admin", "ok")
+    return resp
+
+
+@main_bp.route("/admin/dashboard")
+def admin_dashboard():
+    """Admin dashboard - view all users and their inventory stats"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    # Get all users with item count
+    users = User.query.all()
+    user_stats = []
+
+    for user in users:
+        item_count = Item.query.filter_by(user_id=user.id).count()
+        user_stats.append({
+            'user': user,
+            'item_count': item_count,
+            'has_inventory': item_count > 0
+        })
+
+    # Sort by item count descending
+    user_stats.sort(key=lambda x: x['item_count'], reverse=True)
+
+    return render_template("admin_dashboard.html", user_stats=user_stats)
+
+
+@main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
+def admin_delete_user(user_id):
+    """Delete a user and all their items"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    user = User.query.get_or_404(user_id)
+    username = user.username
+
+    # Delete all items belonging to this user
+    Item.query.filter_by(user_id=user_id).delete()
+
+    # Delete user settings
+    Setting.query.filter_by(user_id=user_id).delete()
+
+    # Delete the user
+    db.session.delete(user)
+    db.session.commit()
+
+    flash(f"User '{username}' and all their data deleted successfully", "ok")
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/user/create", methods=["GET", "POST"])
+def admin_create_user():
+    """Create a new user from admin panel"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        if not username or not email or not password:
+            flash("All fields are required", "error")
+            return render_template("admin_create_user.html")
+
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists", "error")
+            return render_template("admin_create_user.html")
+
+        if User.query.filter_by(email=email).first():
+            flash("Email already exists", "error")
+            return render_template("admin_create_user.html")
+
+        # Create new user
+        from werkzeug.security import generate_password_hash
+        new_user = User(
+            username=username,
+            email=email,
+            password_hash=generate_password_hash(password)
+        )
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash(f"User '{username}' created successfully", "ok")
+        return redirect(url_for('main.admin_dashboard'))
+
+    return render_template("admin_create_user.html")

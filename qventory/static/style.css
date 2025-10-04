@@ -828,6 +828,61 @@ tbody tr:hover td{
   }
 }
 
+/* ===== Admin Backoffice ===== */
+.admin-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:var(--space-3);
+  flex-wrap:wrap;
+}
+.admin-actions{
+  display:flex;
+  gap:var(--space-2);
+  flex-wrap:wrap;
+}
+.admin-stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:var(--space-3);
+  margin:var(--space-4) 0;
+}
+.stat-card{
+  padding:var(--space-4);
+  background:rgba(26,36,70,.4);
+  border-radius:12px;
+  border:1px solid var(--glass-border);
+  text-align:center;
+}
+.stat-value{
+  font-size:clamp(28px,4vw,36px);
+  font-weight:600;
+  color:var(--accent);
+  margin-bottom:var(--space-1);
+}
+.stat-label{
+  font-size:var(--fs-sm);
+  color:var(--sub);
+  text-transform:uppercase;
+  letter-spacing:0.5px;
+}
+
+/* Admin mobile */
+@media (max-width:720px){
+  .admin-header{
+    flex-direction:column;
+  }
+  .admin-actions{
+    width:100%;
+  }
+  .admin-actions .btn{
+    flex:1;
+  }
+  .admin-stats{
+    grid-template-columns:1fr;
+  }
+}
+
 /* ===== FOOTER ===== */
 .footer{
   margin-top:60px;
