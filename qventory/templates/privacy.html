@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card privacy-card">
+    <h1>Privacy Policy</h1>
+    <p class="privacy-updated">Last Updated: January 2025</p>
+
+    <div class="privacy-content">
+      <section class="privacy-section">
+        <h2>Introduction</h2>
+        <p>Qventory ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and safeguard your information when you use our inventory management service.</p>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Information We Collect</h2>
+        <h3>Account Information</h3>
+        <ul>
+          <li><strong>Email Address:</strong> Used for account authentication and communication</li>
+          <li><strong>Username:</strong> Your unique identifier on the platform</li>
+          <li><strong>Password:</strong> Securely hashed and never stored in plain text</li>
+        </ul>
+
+        <h3>Inventory Data</h3>
+        <ul>
+          <li><strong>Item Information:</strong> Titles, SKUs, descriptions, and prices you add to your inventory</li>
+          <li><strong>Images:</strong> Product thumbnails uploaded via Cloudinary (third-party service)</li>
+          <li><strong>Marketplace Links:</strong> URLs to eBay, Poshmark, Mercari, Depop, Amazon, Vinted, and other platforms you provide</li>
+          <li><strong>Location Data:</strong> Warehouse/storage location codes you assign to items</li>
+        </ul>
+
+        <h3>Usage Data</h3>
+        <ul>
+          <li><strong>Session Information:</strong> Login times and session duration</li>
+          <li><strong>Browser Data:</strong> IP address, browser type, and device information</li>
+        </ul>
+      </section>
+
+      <section class="privacy-section">
+        <h2>What We DON'T Collect</h2>
+        <div class="privacy-highlight">
+          <p><strong>We DO NOT store:</strong></p>
+          <ul>
+            <li>API keys or access tokens from eBay, Poshmark, Mercari, Depop, or any marketplace</li>
+            <li>Payment information or credit card details</li>
+            <li>Social security numbers or government IDs</li>
+            <li>Sensitive personal information beyond what's necessary for account creation</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="privacy-section">
+        <h2>How We Use Your Information</h2>
+        <ul>
+          <li><strong>Service Delivery:</strong> To provide inventory management features</li>
+          <li><strong>Account Management:</strong> To authenticate and maintain your account</li>
+          <li><strong>Communication:</strong> To send important service updates (optional)</li>
+          <li><strong>Improvements:</strong> To enhance and optimize our platform</li>
+        </ul>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Third-Party Services</h2>
+
+        <h3>eBay API Compliance</h3>
+        <p>When you use eBay listing links, we may fetch public listing information via eBay's Browse API. We comply with eBay's API Terms of Use and do not store your eBay credentials or access tokens.</p>
+
+        <h3>Cloudinary</h3>
+        <p>Product images are stored on Cloudinary's infrastructure. Please refer to <a href="https://cloudinary.com/privacy" target="_blank" rel="noopener">Cloudinary's Privacy Policy</a>.</p>
+
+        <h3>Marketplace Links</h3>
+        <p>We store URLs to your listings on eBay, Poshmark, Mercari, Depop, Amazon, Vinted, and other platforms. These are simple hyperlinks and do not grant us access to your marketplace accounts.</p>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Cookies and Tracking</h2>
+        <p>We use essential cookies to:</p>
+        <ul>
+          <li><strong>Authentication:</strong> Keep you logged in during your session</li>
+          <li><strong>Preferences:</strong> Remember your settings (e.g., collapsed filters)</li>
+          <li><strong>Admin Access:</strong> Maintain admin authentication (if applicable)</li>
+        </ul>
+        <p>We do NOT use tracking cookies, analytics, or advertising cookies. You can manage cookie preferences in your browser settings.</p>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Data Security</h2>
+        <ul>
+          <li><strong>Encryption:</strong> All data transmitted between your browser and our servers is encrypted via HTTPS</li>
+          <li><strong>Password Hashing:</strong> Passwords are hashed using industry-standard algorithms (bcrypt)</li>
+          <li><strong>Access Control:</strong> Only you can access your inventory data</li>
+          <li><strong>Database Security:</strong> Our database is secured and regularly backed up</li>
+        </ul>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Data Retention and Deletion</h2>
+        <ul>
+          <li><strong>Account Data:</strong> Retained until you delete your account</li>
+          <li><strong>Item Data:</strong> Retained until you delete individual items or your account</li>
+          <li><strong>Deletion Rights:</strong> You can delete your account and all associated data at any time</li>
+        </ul>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Your Rights</h2>
+        <p>You have the right to:</p>
+        <ul>
+          <li>Access your personal information</li>
+          <li>Correct inaccurate data</li>
+          <li>Delete your account and all associated data</li>
+          <li>Export your inventory data (CSV format)</li>
+          <li>Opt-out of non-essential communications</li>
+        </ul>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Children's Privacy</h2>
+        <p>Qventory is not intended for users under 13 years of age. We do not knowingly collect information from children under 13.</p>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Changes to This Policy</h2>
+        <p>We may update this Privacy Policy from time to time. Changes will be posted on this page with an updated "Last Updated" date. Continued use of the service after changes constitutes acceptance of the updated policy.</p>
+      </section>
+
+      <section class="privacy-section">
+        <h2>Contact Us</h2>
+        <p>If you have questions about this Privacy Policy, please contact us at:</p>
+        <p><strong>Email:</strong> <a href="mailto:hello@qventory.com">hello@qventory.com</a></p>
+      </section>
+
+      <div class="privacy-footer">
+        <p><strong>Summary:</strong> We collect only what's necessary to provide our inventory management service. We never store marketplace API keys, passwords (except your Qventory password, which is hashed), or sensitive financial information. Your data is yours, and you can delete it anytime.</p>
+      </div>
+    </div>
+
+    <div style="margin-top:var(--space-5);text-align:center;">
+      <a href="{{ url_for('main.dashboard') }}" class="btn">← Back to Dashboard</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

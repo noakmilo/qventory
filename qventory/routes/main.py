@@ -1012,6 +1012,12 @@ def require_admin():
     return None
 
 
+@main_bp.route("/admin")
+def admin_redirect():
+    """Redirect /admin to /admin/login"""
+    return redirect(url_for('main.admin_login'))
+
+
 @main_bp.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     """Admin login page"""
@@ -1125,3 +1131,11 @@ def admin_create_user():
         return redirect(url_for('main.admin_dashboard'))
 
     return render_template("admin_create_user.html")
+
+
+# ==================== PRIVACY POLICY ====================
+
+@main_bp.route("/privacy")
+def privacy_policy():
+    """Privacy policy page - compliant with eBay, Poshmark, Mercari, Depop APIs"""
+    return render_template("privacy.html")

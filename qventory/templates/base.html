@@ -76,16 +76,70 @@
       <div class="footer-meta">
         <span>Built with love by Kmilo</span>
         <span class="footer-divider">•</span>
+        <a href="{{ url_for('main.privacy_policy') }}" style="color:var(--sub);text-decoration:none;">Privacy Policy</a>
+        <span class="footer-divider">•</span>
         <span>No tracking, no fuss</span>
       </div>
     </div>
   </footer>
+  <!-- Cookie Consent Banner -->
+  <div id="cookieConsent" class="cookie-consent hidden" role="dialog" aria-labelledby="cookieTitle" aria-describedby="cookieDesc">
+    <div class="cookie-content">
+      <div class="cookie-text">
+        <h3 id="cookieTitle">🍪 Cookie Notice</h3>
+        <p id="cookieDesc">We use essential cookies to keep you logged in and remember your preferences. We do NOT use tracking, analytics, or advertising cookies. <a href="{{ url_for('main.privacy_policy') }}" style="color:var(--accent);">Learn more</a></p>
+      </div>
+      <div class="cookie-actions">
+        <button id="acceptCookies" class="btn submitbtn">Accept</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(console.error);
       });
     }
+  </script>
+
+  <script>
+    // Cookie Consent
+    (function(){
+      const banner = document.getElementById('cookieConsent');
+      const acceptBtn = document.getElementById('acceptCookies');
+      const CONSENT_KEY = 'qv_cookie_consent';
+
+      function showBanner(){
+        banner.classList.remove('hidden');
+        banner.setAttribute('aria-hidden', 'false');
+      }
+
+      function hideBanner(){
+        banner.classList.add('hidden');
+        banner.setAttribute('aria-hidden', 'true');
+      }
+
+      function checkConsent(){
+        try{
+          const consent = localStorage.getItem(CONSENT_KEY);
+          if(!consent){
+            setTimeout(showBanner, 1000); // Show after 1 second
+          }
+        }catch(e){
+          showBanner();
+        }
+      }
+
+      acceptBtn?.addEventListener('click', ()=>{
+        try{
+          localStorage.setItem(CONSENT_KEY, 'accepted');
+        }catch(e){}
+        hideBanner();
+      });
+
+      checkConsent();
+    })();
   </script>
 
 </body>

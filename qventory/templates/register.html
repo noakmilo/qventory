@@ -21,8 +21,17 @@
       <label>Confirm Password</label>
       <input class="input" type="password" name="password2" minlength="6" required>
     </div>
+
+    <div class="privacy-acceptance">
+      <label class="checkbox-label">
+        <input type="checkbox" name="accept_privacy" required>
+        <span>I have read and accept the <a href="{{ url_for('main.privacy_policy') }}" target="_blank" rel="noopener">Privacy Policy</a></span>
+      </label>
+      <p class="privacy-note">By creating an account, you agree to our privacy practices. We do not store API keys, marketplace passwords, or sensitive financial information.</p>
+    </div>
+
     <div>
-      <button class="btn" type="submit">Create account</button>
+      <button class="btn submitbtn" type="submit">Create account</button>
       <a class="btn" href="{{ url_for('auth.login') }}">Sign in</a>
     </div>
   </form>
