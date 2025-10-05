@@ -325,7 +325,7 @@ def _parse_external_row_to_qventory(row, user_id):
         return None
 
     # Generar SKU automático usando el helper de Qventory
-    sku = generate_sku(user_id)
+    sku = generate_sku()
 
     # Mapear campos
     cost = ffloat('Cost') or ffloat('cost')
