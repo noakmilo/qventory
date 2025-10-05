@@ -1360,9 +1360,9 @@ const ModalAIResearch = (function() {
 
         if (data.ok && data.items.length > 0) {
           autocompleteList.innerHTML = data.items.map(item => `
-            <div class="autocomplete-item" onclick="ModalAIResearch.selectItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', '${(item.supplier || '').replace(/'/g, "\\'")}')">
-              <strong>${item.title}</strong>
-              <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier : ''}</small>
+            <div class="autocomplete-item ai-autocomplete-item" data-item-id="${item.id}" data-item-title="${item.title.replace(/"/g, '&quot;')}">
+              <strong>${item.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>
+              <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier.replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''}</small>
             </div>
           `).join('');
           autocompleteList.classList.add('show');
@@ -1378,6 +1378,16 @@ const ModalAIResearch = (function() {
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#aiItemTitle') && !e.target.closest('#aiAutocompleteList')) {
         autocompleteList?.classList.remove('show');
+      }
+    });
+
+    // Delegated event for autocomplete item clicks
+    document.addEventListener('click', (e) => {
+      const item = e.target.closest('.ai-autocomplete-item');
+      if (item) {
+        const itemId = parseInt(item.getAttribute('data-item-id'));
+        const itemTitle = item.getAttribute('data-item-title');
+        selectItem(itemId, itemTitle);
       }
     });
   }
@@ -1410,7 +1420,7 @@ const ModalAIResearch = (function() {
     modal.setAttribute('aria-hidden', 'true');
   }
 
-  function selectItem(itemId, title, supplier) {
+  function selectItem(itemId, title) {
     currentItemId = itemId;
     document.getElementById('aiItemTitle').value = title;
     document.getElementById('aiAutocompleteList').classList.remove('show');
