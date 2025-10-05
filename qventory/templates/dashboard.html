@@ -193,6 +193,25 @@
   </div>
 </div>
 
+<!-- ===== Modal Profit Calculator ===== -->
+<div id="profitCalcModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="Profit Calculator">
+  <div class="qr-sheet" style="max-width:560px;max-height:90vh;overflow-y:auto">
+    <div class="qr-header">
+      <strong><i class="fas fa-calculator"></i> Profit Calculator</strong>
+      <div class="qr-actions">
+        <button type="button" id="profitCalcClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body" style="padding:16px;align-items:stretch">
+      <div id="profitModalContent" style="width:100%">
+        <!-- Content injected by JavaScript -->
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== Modal Scanner QR ===== -->
 <div id="scanQRModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="QR Scanner">
   <div class="qr-sheet" style="max-width:480px">
@@ -853,6 +872,322 @@
 
   observer.observe(sentinel);
 })();
+</script>
+
+<script>
+/* ===== Modal Profit Calculator ===== */
+const ModalProfitCalc = (function() {
+  'use strict';
+
+  // eBay fee structures
+  const standardFees = {
+    "Electronics": 12.9, "Clothing, Shoes & Accessories": 13.25, "Toys & Hobbies": 12.9,
+    "Collectibles": 12.9, "Books, Movies & Music": 14.95, "Video Games & Consoles": 12.9,
+    "Home & Garden": 12.9, "Tools & Equipment": 12.9, "Sports": 12.9,
+    "Health & Beauty": 12.9, "Business & Industrial": 12.9, "Pet Supplies": 12.9
+  };
+
+  const storeFees = {
+    "Electronics": 11.7, "Clothing, Shoes & Accessories": 11.5, "Toys & Hobbies": 11.5,
+    "Collectibles": 11.5, "Books, Movies & Music": 12.0, "Video Games & Consoles": 11.5,
+    "Home & Garden": 11.5, "Tools & Equipment": 11.5, "Sports": 11.5,
+    "Health & Beauty": 11.5, "Business & Industrial": 11.5, "Pet Supplies": 11.5
+  };
+
+  const depopPaymentFeeRate = 3.3, depopPaymentFixedFee = 0.45, depopBoostFeeRate = 8;
+
+  let modal, closeBtn, contentDiv;
+  let elements = {};
+
+  function init() {
+    modal = document.getElementById('profitCalcModal');
+    closeBtn = document.getElementById('profitCalcClose');
+    contentDiv = document.getElementById('profitModalContent');
+
+    // Event delegation for calculator buttons
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.profit-calc-btn');
+      if (btn) {
+        const itemData = {
+          id: btn.getAttribute('data-item-id'),
+          title: btn.getAttribute('data-item-title'),
+          cost: btn.getAttribute('data-item-cost'),
+          price: btn.getAttribute('data-item-price')
+        };
+        openModal(itemData);
+      }
+    });
+
+    closeBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal(); });
+  }
+
+  function openModal(itemData) {
+    renderContent(itemData);
+    document.body.classList.add('modal-open');
+    modal.removeAttribute('hidden');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeModal() {
+    document.body.classList.remove('modal-open');
+    modal.setAttribute('hidden', '');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    saveToCache();
+  }
+
+  function renderContent(itemData) {
+    const cached = loadFromCache();
+    contentDiv.innerHTML = `
+      <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Marketplace</label>
+      <select id="modalMarketplace" class="modal-input" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+        <option value="ebay">eBay</option>
+        <option value="depop">Depop</option>
+      </select>
+
+      <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Item Name</label>
+      <input type="text" id="modalItemName" class="modal-input" readonly value="${itemData.title}" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+
+      <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Purchase Price ($)</label>
+      <input type="number" id="modalBuyPrice" class="modal-input" step="0.01" value="${itemData.cost || ''}" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+
+      <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Estimated Resale Price ($)</label>
+      <input type="number" id="modalResalePrice" class="modal-input" step="0.01" value="${itemData.price || ''}" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+
+      <label id="modalFeesLabel" style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Marketplace Fees (%)</label>
+      <input type="number" id="modalFees" class="modal-input" readonly value="15" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+
+      <div id="modalEbaySection" style="display:block">
+        <div style="display:flex;align-items:center;margin-top:0.8rem">
+          <input type="checkbox" id="modalHasStore" style="margin-right:0.5rem;width:auto">
+          <label for="modalHasStore" style="font-size:var(--fs-sm)">I have an eBay Store</label>
+        </div>
+        <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">eBay Category</label>
+        <select id="modalEbayCategory" class="modal-input" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)"></select>
+        <div style="display:flex;align-items:center;margin-top:0.8rem">
+          <input type="checkbox" id="modalTopRated" style="margin-right:0.5rem;width:auto">
+          <label for="modalTopRated" style="font-size:var(--fs-sm)">Top Rated Seller</label>
+        </div>
+        <div style="display:flex;align-items:center;margin-top:0.8rem">
+          <input type="checkbox" id="modalFixedFee" style="margin-right:0.5rem;width:auto">
+          <label for="modalFixedFee" style="font-size:var(--fs-sm)">Include $0.30 fixed fee</label>
+        </div>
+      </div>
+
+      <div id="modalDepopSection" style="display:none">
+        <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Depop Category</label>
+        <select id="modalDepopCategory" class="modal-input" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+          <option value="Women's Clothing">Women's Clothing</option>
+          <option value="Men's Clothing">Men's Clothing</option>
+          <option value="Vintage">Vintage</option>
+          <option value="Streetwear">Streetwear</option>
+          <option value="Sneakers">Sneakers</option>
+          <option value="Accessories">Accessories</option>
+          <option value="Jewelry">Jewelry</option>
+          <option value="Beauty">Beauty</option>
+          <option value="Home & Living">Home & Living</option>
+          <option value="Art & Collectibles">Art & Collectibles</option>
+          <option value="Other">Other</option>
+        </select>
+        <div style="display:flex;align-items:center;margin-top:0.8rem">
+          <input type="checkbox" id="modalDepopBoost" style="margin-right:0.5rem;width:auto">
+          <label for="modalDepopBoost" style="font-size:var(--fs-sm)">Use Boosted Listing (+8%)</label>
+        </div>
+        <div style="display:flex;align-items:center;margin-top:0.8rem">
+          <input type="checkbox" id="modalDepopShipping" style="margin-right:0.5rem;width:auto">
+          <label for="modalDepopShipping" style="font-size:var(--fs-sm)">Shipping included in item price</label>
+        </div>
+      </div>
+
+      <label style="display:block;margin-top:0.8rem;font-size:var(--fs-sm);color:var(--sub)">Shipping Cost ($)</label>
+      <input type="number" id="modalShipping" class="modal-input" value="0" step="0.01" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text)">
+
+      <button class="btn submitbtn" onclick="ModalProfitCalc.calculate()" style="width:100%;margin-top:1.2rem">
+        <i class="fas fa-calculator"></i> Calculate Profit
+      </button>
+
+      <div id="modalResult" style="display:none;margin-top:1rem;padding:1rem;background:var(--muted);border-radius:var(--radius);font-size:var(--fs-sm);white-space:pre-wrap"></div>
+    `;
+
+    initElements();
+    updateCategoryOptions();
+    if (cached) applyCache(cached);
+    updateFees();
+  }
+
+  function initElements() {
+    elements = {
+      marketplace: document.getElementById('modalMarketplace'),
+      buyPrice: document.getElementById('modalBuyPrice'),
+      resalePrice: document.getElementById('modalResalePrice'),
+      fees: document.getElementById('modalFees'),
+      feesLabel: document.getElementById('modalFeesLabel'),
+      shipping: document.getElementById('modalShipping'),
+      hasStore: document.getElementById('modalHasStore'),
+      ebayCategory: document.getElementById('modalEbayCategory'),
+      topRated: document.getElementById('modalTopRated'),
+      fixedFee: document.getElementById('modalFixedFee'),
+      ebaySection: document.getElementById('modalEbaySection'),
+      depopCategory: document.getElementById('modalDepopCategory'),
+      depopBoost: document.getElementById('modalDepopBoost'),
+      depopShipping: document.getElementById('modalDepopShipping'),
+      depopSection: document.getElementById('modalDepopSection'),
+      result: document.getElementById('modalResult')
+    };
+
+    elements.marketplace.addEventListener('change', switchMarketplace);
+    elements.hasStore.addEventListener('change', () => { updateCategoryOptions(); });
+    elements.ebayCategory.addEventListener('change', updateFees);
+    elements.topRated.addEventListener('change', updateFees);
+    elements.depopBoost.addEventListener('change', updateDepopFees);
+  }
+
+  function switchMarketplace() {
+    const marketplace = elements.marketplace.value;
+    elements.ebaySection.style.display = marketplace === 'ebay' ? 'block' : 'none';
+    elements.depopSection.style.display = marketplace === 'depop' ? 'block' : 'none';
+    elements.feesLabel.textContent = marketplace === 'ebay' ? 'eBay + PayPal Fees (%)' : 'Depop Fees (%)';
+    updateFees();
+  }
+
+  function updateCategoryOptions() {
+    const hasStore = elements.hasStore.checked;
+    const fees = hasStore ? storeFees : standardFees;
+    const current = elements.ebayCategory.value;
+
+    elements.ebayCategory.innerHTML = '<option value="">Select a category</option>';
+    for (let category in fees) {
+      const option = document.createElement('option');
+      option.value = category;
+      option.textContent = category;
+      elements.ebayCategory.appendChild(option);
+    }
+
+    if (current && fees[current]) elements.ebayCategory.value = current;
+    updateFees();
+  }
+
+  function updateDepopFees() {
+    const includeBoost = elements.depopBoost.checked;
+    const totalFee = includeBoost ? depopPaymentFeeRate + depopBoostFeeRate : depopPaymentFeeRate;
+    elements.fees.value = totalFee.toFixed(2);
+  }
+
+  function updateFees() {
+    const marketplace = elements.marketplace.value;
+    if (marketplace === 'ebay') {
+      const hasStore = elements.hasStore.checked;
+      const selectedCategory = elements.ebayCategory.value;
+      const topRated = elements.topRated.checked;
+      let fee = hasStore ? storeFees[selectedCategory] : standardFees[selectedCategory];
+      if (fee && topRated) fee *= 0.90;
+      elements.fees.value = fee ? fee.toFixed(2) : '15';
+    } else {
+      updateDepopFees();
+    }
+  }
+
+  function calculate() {
+    const marketplace = elements.marketplace.value;
+    const buyPrice = parseFloat(elements.buyPrice.value) || 0;
+    const resalePrice = parseFloat(elements.resalePrice.value) || 0;
+    const shippingCost = parseFloat(elements.shipping.value) || 0;
+
+    if (!buyPrice || !resalePrice) {
+      elements.result.innerHTML = '<p style="color:var(--err)">Please fill in Purchase Price and Resale Price.</p>';
+      elements.result.style.display = 'block';
+      return;
+    }
+
+    let totalFees, feeDetails, net, profit, totalCost, breakeven;
+
+    if (marketplace === 'ebay') {
+      const feePercent = parseFloat(elements.fees.value) || 0;
+      const includeFixedFee = elements.fixedFee.checked;
+      const variableFees = resalePrice * (feePercent / 100);
+      const fixedFee = includeFixedFee ? 0.30 : 0;
+      totalFees = variableFees + fixedFee;
+      feeDetails = `eBay + PayPal Fees (${feePercent}% + $${fixedFee.toFixed(2)})`;
+      net = resalePrice - totalFees - shippingCost;
+      totalCost = buyPrice + shippingCost + totalFees;
+      breakeven = ((buyPrice + shippingCost + fixedFee) / (1 - (feePercent / 100))).toFixed(2);
+    } else {
+      const useBoost = elements.depopBoost.checked;
+      const includeShippingInPrice = elements.depopShipping.checked;
+      const feeBasis = includeShippingInPrice ? resalePrice : resalePrice + shippingCost;
+      const paymentProcessingFee = (feeBasis * (depopPaymentFeeRate / 100)) + depopPaymentFixedFee;
+      const boostFee = useBoost ? (resalePrice * (depopBoostFeeRate / 100)) : 0;
+      totalFees = paymentProcessingFee + boostFee;
+      feeDetails = `Depop Fees (${depopPaymentFeeRate}% + $${depopPaymentFixedFee.toFixed(2)}${useBoost ? ` + Boost ${depopBoostFeeRate}%` : ''})`;
+      net = resalePrice - totalFees - (includeShippingInPrice ? 0 : shippingCost);
+      totalCost = buyPrice + (includeShippingInPrice ? 0 : shippingCost) + totalFees;
+      breakeven = ((buyPrice + (includeShippingInPrice ? 0 : shippingCost) + depopPaymentFixedFee) / (1 - (depopPaymentFeeRate / 100))).toFixed(2);
+    }
+
+    profit = net - buyPrice;
+    const taxRate = 0.0875;
+    const buyerPays = resalePrice * (1 + taxRate);
+    const roi = ((profit / buyPrice) * 100).toFixed(2);
+    const markup = (((resalePrice - buyPrice) / buyPrice) * 100).toFixed(2);
+    const earningsPerDollar = (profit / buyPrice).toFixed(2);
+
+    const output = `
+💰 Profit: $${profit.toFixed(2)}
+🔄 ROI: ${roi}%
+📊 Markup: ${markup}%
+📦 Net Sale: $${net.toFixed(2)}
+💼 Total Cost: $${totalCost.toFixed(2)}
+💸 ${feeDetails}: $${totalFees.toFixed(2)}
+🚚 Shipping: $${marketplace === 'depop' && elements.depopShipping.checked ? 'Included' : shippingCost.toFixed(2)}
+🧾 Buyer Pays (w/ tax): $${buyerPays.toFixed(2)}
+🧮 Break-even: $${breakeven}
+💡 Earnings per $1: $${earningsPerDollar}
+`.trim();
+
+    elements.result.innerHTML = `<pre>${output}</pre>`;
+    elements.result.style.display = 'block';
+  }
+
+  function saveToCache() {
+    if (!elements.marketplace) return;
+    const data = {
+      marketplace: elements.marketplace.value,
+      shipping: elements.shipping.value,
+      hasStore: elements.hasStore.checked,
+      topRated: elements.topRated.checked,
+      fixedFee: elements.fixedFee.checked,
+      ebayCategory: elements.ebayCategory.value,
+      depopCategory: elements.depopCategory.value,
+      depopBoost: elements.depopBoost.checked,
+      depopShipping: elements.depopShipping.checked
+    };
+    try { localStorage.setItem('qventoryModalProfitCalc', JSON.stringify(data)); } catch {}
+  }
+
+  function loadFromCache() {
+    try { return JSON.parse(localStorage.getItem('qventoryModalProfitCalc')); } catch { return null; }
+  }
+
+  function applyCache(data) {
+    elements.marketplace.value = data.marketplace || 'ebay';
+    elements.shipping.value = data.shipping || '0';
+    elements.hasStore.checked = data.hasStore || false;
+    elements.topRated.checked = data.topRated || false;
+    elements.fixedFee.checked = data.fixedFee || false;
+    elements.depopBoost.checked = data.depopBoost || false;
+    elements.depopShipping.checked = data.depopShipping || false;
+    if (data.ebayCategory) elements.ebayCategory.value = data.ebayCategory;
+    if (data.depopCategory) elements.depopCategory.value = data.depopCategory;
+    switchMarketplace();
+  }
+
+  return { init, calculate };
+})();
+
+document.addEventListener('DOMContentLoaded', ModalProfitCalc.init);
 </script>
 
 {% endblock %}

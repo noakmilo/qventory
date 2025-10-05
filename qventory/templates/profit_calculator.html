@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Profit Calculator – Qventory{% endblock %}
+{% block content %}
+
+<div class="row">
+  <div class="card" style="flex:1 1 100%;max-width:640px;margin:0 auto">
+    <h1 style="text-align:center;margin-bottom:1.2rem;">
+      <i class="fas fa-calculator" style="color:var(--accent)"></i> Profit Calculator
+    </h1>
+
+    <div id="profitCalcContainer">
+      <!-- Marketplace Selector -->
+      <label for="marketplace">Marketplace</label>
+      <select id="marketplace" class="input">
+        <option value="ebay">eBay</option>
+        <option value="depop">Depop</option>
+      </select>
+
+      <!-- Item Name with Autocomplete -->
+      <label for="itemName">Item Name</label>
+      <div style="position:relative">
+        <input type="text" id="itemName" class="input" placeholder="e.g. Vintage Denim Jacket" autocomplete="off">
+        <div id="autocompleteList" class="autocomplete-list"></div>
+      </div>
+
+      <!-- Purchase Price -->
+      <label for="buyPrice">Purchase Price ($)</label>
+      <input type="number" id="buyPrice" class="input" placeholder="e.g. 25" step="0.01">
+
+      <!-- Resale Price -->
+      <label for="resalePrice">Estimated Resale Price ($)</label>
+      <input type="number" id="resalePrice" class="input" placeholder="e.g. 59.99" step="0.01">
+
+      <!-- Marketplace Fees (always visible) -->
+      <label for="fees" id="feesLabel">Marketplace Fees (%)</label>
+      <input type="number" id="fees" class="input" value="15" readonly>
+
+      <!-- eBay Specific Fields -->
+      <div id="ebay-section" class="marketplace-section active">
+        <div class="checkbox-container">
+          <input type="checkbox" id="hasStore">
+          <label for="hasStore">I have an eBay Store</label>
+        </div>
+
+        <label for="ebayCategory">eBay Category</label>
+        <select id="ebayCategory" class="input"></select>
+
+        <div class="checkbox-container">
+          <input type="checkbox" id="topRated">
+          <label for="topRated">Top Rated Seller</label>
+        </div>
+
+        <div class="checkbox-container">
+          <input type="checkbox" id="fixedFee">
+          <label for="fixedFee">Include $0.30 fixed fee</label>
+        </div>
+      </div>
+
+      <!-- Depop Specific Fields -->
+      <div id="depop-section" class="marketplace-section">
+        <label for="depopCategory">Depop Category</label>
+        <select id="depopCategory" class="input">
+          <option value="Women's Clothing">Women's Clothing</option>
+          <option value="Men's Clothing">Men's Clothing</option>
+          <option value="Vintage">Vintage</option>
+          <option value="Streetwear">Streetwear</option>
+          <option value="Sneakers">Sneakers</option>
+          <option value="Accessories">Accessories</option>
+          <option value="Jewelry">Jewelry</option>
+          <option value="Beauty">Beauty</option>
+          <option value="Home & Living">Home & Living</option>
+          <option value="Art & Collectibles">Art & Collectibles</option>
+          <option value="Other">Other</option>
+        </select>
+
+        <div class="checkbox-container">
+          <input type="checkbox" id="depopBoost">
+          <label for="depopBoost">Use Boosted Listing (+8%)</label>
+        </div>
+
+        <div class="checkbox-container">
+          <input type="checkbox" id="depopShipping">
+          <label for="depopShipping">Shipping included in item price</label>
+        </div>
+      </div>
+
+      <!-- Shipping Cost -->
+      <label for="shipping">Shipping Cost ($)</label>
+      <input type="number" id="shipping" class="input" value="0" placeholder="e.g. 8.50" step="0.01">
+
+      <!-- Calculate Button -->
+      <button class="btn submitbtn block" onclick="ProfitCalc.calculate()" style="margin-top:1.2rem">
+        <i class="fas fa-calculator"></i> Calculate Profit
+      </button>
+
+      <!-- Result Display -->
+      <div id="result" class="result-box" style="display:none"></div>
+
+      <!-- History Toggle -->
+      <button class="btn block" onclick="ProfitCalc.toggleHistory()" style="margin-top:1rem;background:var(--muted)">
+        <i class="fas fa-history"></i> Show/Hide History
+      </button>
+
+      <!-- History Display -->
+      <div id="history" class="history-box" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .marketplace-section { display: none; margin-top: 1rem; }
+  .marketplace-section.active { display: block; }
+
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-top: 0.8rem;
+    font-size: var(--fs-sm);
+  }
+  .checkbox-container input[type="checkbox"] {
+    margin-right: 0.5rem;
+    width: auto;
+  }
+
+  .result-box, .history-box {
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+    font-size: var(--fs-sm);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .result-box button {
+    margin-top: 0.7rem;
+    width: 100%;
+  }
+
+  .history-entry {
+    background: var(--card);
+    margin-bottom: 0.5rem;
+    padding: 0.8rem;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+  }
+
+  .history-entry strong {
+    display: block;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+  }
+
+  .history-entry small {
+    display: block;
+    color: var(--sub);
+    font-size: var(--fs-xs);
+    margin-bottom: 0.5rem;
+  }
+
+  .history-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 5px;
+    margin-bottom: 0.5rem;
+  }
+
+  .history-actions button {
+    padding: 0.4rem 0.8rem;
+    font-size: var(--fs-xs);
+    border-radius: 8px;
+  }
+
+  /* Autocomplete styles */
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 8px 20px var(--glass-shadow);
+  }
+
+  .autocomplete-list.show {
+    display: block;
+  }
+
+  .autocomplete-item {
+    padding: 0.7rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--glass-border);
+    transition: background 0.15s;
+  }
+
+  .autocomplete-item:last-child {
+    border-bottom: none;
+  }
+
+  .autocomplete-item:hover {
+    background: var(--muted);
+  }
+
+  .autocomplete-item strong {
+    display: block;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+  }
+
+  .autocomplete-item small {
+    display: block;
+    color: var(--sub);
+    font-size: var(--fs-xs);
+  }
+
+  label {
+    display: block;
+    margin-top: 1rem;
+    font-size: var(--fs-sm);
+    color: var(--sub);
+    margin-bottom: 0.3rem;
+  }
+
+  .input {
+    width: 100%;
+    padding: 0.7rem;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: var(--muted);
+    color: var(--text);
+    font-size: var(--fs-base);
+  }
+
+  .input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
+
+<script src="{{ url_for('static', filename='profit-calc.js') }}"></script>
+
+{% endblock %}

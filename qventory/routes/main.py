@@ -1139,3 +1139,40 @@ def admin_create_user():
 def privacy_policy():
     """Privacy policy page - compliant with eBay, Poshmark, Mercari, Depop APIs"""
     return render_template("privacy.html")
+
+
+# ==================== PROFIT CALCULATOR ====================
+
+@main_bp.route("/profit-calculator")
+@login_required
+def profit_calculator():
+    """Standalone profit calculator page"""
+    return render_template("profit_calculator.html")
+
+
+@main_bp.route("/api/autocomplete-items")
+@login_required
+def api_autocomplete_items():
+    """Autocomplete items by title for profit calculator"""
+    q = (request.args.get("q") or "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"ok": True, "items": []})
+
+    like = f"%{q}%"
+    items = Item.query.filter_by(user_id=current_user.id)\
+        .filter(Item.title.ilike(like))\
+        .order_by(Item.created_at.desc())\
+        .limit(10).all()
+
+    results = []
+    for it in items:
+        results.append({
+            "id": it.id,
+            "title": it.title,
+            "sku": it.sku,
+            "cost": float(it.item_cost) if it.item_cost is not None else None,
+            "price": float(it.item_price) if it.item_price is not None else None,
+            "supplier": it.supplier
+        })
+
+    return jsonify({"ok": True, "items": results})
