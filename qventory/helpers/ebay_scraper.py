@@ -92,18 +92,15 @@ def scrape_url_with_browseai(target_url):
                 print(f"⏳ Waiting for Browse.AI... ({elapsed}s elapsed)", flush=True)
 
             if status == "successful":
-                # Get captured HTML (this robot captures HTML Code)
+                # Get captured HTML (Browse.AI returns it as "HTML")
                 captured_texts = status_data.get("result", {}).get("capturedTexts", {})
-                html_content = captured_texts.get("HTML Code", "")
+                html_content = captured_texts.get("HTML", "")
 
                 if html_content:
                     print(f"✓ Browse.AI returned HTML ({len(html_content)} chars)", flush=True)
-                    # Debug: Log first 500 chars of HTML to see structure
-                    print(f"🔍 HTML preview: {html_content[:500]}...", flush=True)
                     return html_content
                 else:
                     print(f"✗ No HTML in capturedTexts. Available keys: {list(captured_texts.keys())}", flush=True)
-                    print(f"🔍 Full response: {status_data}", flush=True)
 
                 return None
 
