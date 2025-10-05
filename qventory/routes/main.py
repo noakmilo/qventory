@@ -1405,16 +1405,10 @@ def api_ai_research():
         print("✗ No item title provided", file=sys.stderr)
         return jsonify({"ok": False, "error": "Item title is required"}), 400
 
-    # Get market settings from user settings or defaults
-    try:
-        settings = get_or_create_settings(current_user.id)
-        market_region = data.get("market_region") or "US"
-        currency = data.get("currency") or settings.currency or "USD"
-        print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
-    except Exception as e:
-        print(f"✗ Settings error: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
-        return jsonify({"ok": False, "error": f"Settings error: {str(e)}"}), 500
+    # Get market settings from user input or defaults
+    market_region = data.get("market_region") or "US"
+    currency = data.get("currency") or "USD"
+    print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
     # Build the prompt
     system_prompt = """You are an expert e-commerce pricing analyst specializing in eBay market intelligence.
