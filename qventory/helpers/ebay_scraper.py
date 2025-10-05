@@ -92,14 +92,18 @@ def scrape_url_with_browseai(target_url):
                 print(f"⏳ Waiting for Browse.AI... ({elapsed}s elapsed)", flush=True)
 
             if status == "successful":
-                # Get captured lists (Browse.AI structured data)
-                captured_lists = status_data.get("result", {}).get("capturedLists", {})
+                # Get captured HTML (this robot captures HTML Code)
+                captured_texts = status_data.get("result", {}).get("capturedTexts", {})
+                html_content = captured_texts.get("HTML Code", "")
 
-                # The robot captures data in a list - get the first list
-                for list_name, list_data in captured_lists.items():
-                    if isinstance(list_data, list) and len(list_data) > 0:
-                        print(f"✓ Browse.AI returned {len(list_data)} items", flush=True)
-                        return list_data
+                if html_content:
+                    print(f"✓ Browse.AI returned HTML ({len(html_content)} chars)", flush=True)
+                    # Debug: Log first 500 chars of HTML to see structure
+                    print(f"🔍 HTML preview: {html_content[:500]}...", flush=True)
+                    return html_content
+                else:
+                    print(f"✗ No HTML in capturedTexts. Available keys: {list(captured_texts.keys())}", flush=True)
+                    print(f"🔍 Full response: {status_data}", flush=True)
 
                 return None
 
@@ -134,24 +138,54 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
     try:
         url = create_ebay_sold_url(item_title)
 
-        # Try Browse.AI to get structured data
-        browse_data = scrape_url_with_browseai(url)
+        # Try Browse.AI to get HTML
+        html_content = scrape_url_with_browseai(url)
 
-        if browse_data:
-            # Browse.AI returns structured data with fields like:
-            # Position, Title, image, sale price, Link
+        if html_content:
+            # Parse HTML with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
             listings = []
 
-            for item_data in browse_data[:max_results * 2]:
+            # Find all eBay listing items
+            items = soup.find_all('li', class_='s-item')
+            print(f"🔍 Found {len(items)} <li class='s-item'> elements", flush=True)
+
+            if not items:
+                items = soup.find_all('div', class_='s-item')
+                print(f"🔍 Found {len(items)} <div class='s-item'> elements instead", flush=True)
+
+            # Debug: Show all unique classes in the HTML
+            all_classes = set()
+            for tag in soup.find_all(True):
+                if tag.get('class'):
+                    all_classes.update(tag.get('class'))
+            print(f"🔍 Sample classes in HTML: {list(all_classes)[:20]}", flush=True)
+
+            for item in items[:max_results * 2]:
                 try:
-                    # Extract fields from Browse.AI structured data
-                    title = item_data.get("Title", "").strip()
-                    price_str = item_data.get("sale price", "").strip()
-                    link = item_data.get("Link", "").strip()
+                    # Extract title
+                    title_elem = (
+                        item.find('div', class_='s-item__title') or
+                        item.find('h3', class_='s-item__title') or
+                        item.find('span', class_='s-item__title')
+                    )
+
+                    if not title_elem:
+                        continue
+
+                    title = title_elem.get_text(strip=True)
 
                     # Skip invalid entries
                     if not title or title.lower() in ['shop on ebay', 'new listing', '']:
                         continue
+
+                    # Extract price
+                    price_elem = item.find('span', class_='s-item__price')
+
+                    if not price_elem:
+                        continue
+
+                    price_str = price_elem.get_text(strip=True)
 
                     # Clean price (e.g., "$14.50" -> 14.50)
                     price_clean = re.sub(r'[,$]', '', price_str)
@@ -162,6 +196,14 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                         price = float(price_clean)
                     except ValueError:
                         continue
+
+                    # Extract link
+                    link_elem = item.find('a', class_='s-item__link')
+
+                    if not link_elem:
+                        continue
+
+                    link = link_elem.get('href', '')
 
                     # Calculate similarity
                     similarity = calculate_title_similarity(item_title.lower(), title.lower())
@@ -174,10 +216,13 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                     })
 
                 except Exception as e:
+                    print(f"⚠️  Skipped item due to: {e}", flush=True)
                     continue
 
             # Sort by similarity
             listings.sort(key=lambda x: x['similarity'], reverse=True)
+
+            print(f"✓ Successfully parsed {len(listings)} listings from HTML", flush=True)
 
             return {
                 'success': True,
