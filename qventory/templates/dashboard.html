@@ -1330,8 +1330,7 @@ const ModalAIResearch = (function() {
       if (btn) {
         const itemData = {
           id: btn.getAttribute('data-item-id'),
-          title: btn.getAttribute('data-item-title'),
-          notes: btn.getAttribute('data-item-notes') || ''
+          title: btn.getAttribute('data-item-title')
         };
         openModal(itemData);
       }
@@ -1396,7 +1395,8 @@ const ModalAIResearch = (function() {
     if (itemData) {
       currentItemId = itemData.id;
       document.getElementById('aiItemTitle').value = itemData.title;
-      document.getElementById('aiNotes').value = itemData.notes || '';
+      // Notes will be fetched from backend based on item_id
+      document.getElementById('aiNotes').value = '';
     } else {
       currentItemId = null;
       document.getElementById('aiItemTitle').value = '';

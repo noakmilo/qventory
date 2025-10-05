@@ -1385,8 +1385,11 @@ def api_ai_research():
                 return jsonify({"ok": False, "error": "Item not found"}), 404
 
             item_title = item.title
-            condition = item.notes or "Used"
-            notes = item.notes or ""
+            # Use supplier info as notes if available
+            condition = "Used"
+            notes = f"Supplier: {item.supplier}" if item.supplier else ""
+            if item.item_cost:
+                notes += f" | Cost: ${item.item_cost}"
             print(f"✓ Item found: {item_title}", file=sys.stderr)
         except Exception as e:
             print(f"✗ Database error: {e}", file=sys.stderr)
