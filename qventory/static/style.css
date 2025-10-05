@@ -143,8 +143,8 @@ header nav .btn{
     justify-content: center !important;
     gap: 2px !important;
     padding: 8px 10px !important;
-    min-width: 48px !important;
-    min-height: 48px !important;
+    min-width: 42px !important;
+    min-height: 42px !important;
     font-size: 0 !important;
   }
 
