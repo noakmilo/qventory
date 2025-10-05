@@ -33,18 +33,19 @@ def create_ebay_sold_url(item_title):
 
 def scrape_url_with_browseai(target_url):
     """
-    Scrape any URL using Browse.AI's Extract Structured Data API
-    No robot needed - dynamic scraping
+    Scrape URL using Browse.AI robot that captures HTML
+    Then parse HTML to extract eBay listings
 
     Args:
         target_url: The URL to scrape
 
     Returns:
-        Extracted data or None
+        HTML content or None
     """
     api_key = os.environ.get("BROWSEAI_API_KEY")
+    robot_id = os.environ.get("BROWSEAI_ROBOT_ID")
 
-    if not api_key:
+    if not api_key or not robot_id:
         return None
 
     headers = {
@@ -52,42 +53,56 @@ def scrape_url_with_browseai(target_url):
         "Content-Type": "application/json"
     }
 
-    # Use Browse.AI's extract endpoint (no robot needed)
-    extract_url = "https://api.browse.ai/v2/extract"
+    # Start robot task
+    start_url = f"https://api.browse.ai/v2/robots/{robot_id}/tasks"
 
     payload = {
-        "url": target_url,
-        "extract": {
-            "list": {
-                "selector": "li.s-item",
-                "fields": {
-                    "title": {
-                        "selector": ".s-item__title",
-                        "type": "text"
-                    },
-                    "price": {
-                        "selector": ".s-item__price",
-                        "type": "text"
-                    },
-                    "link": {
-                        "selector": "a.s-item__link",
-                        "type": "attribute",
-                        "attribute": "href"
-                    }
-                }
-            }
+        "inputParameters": {
+            "originUrl": target_url
         }
     }
 
     try:
-        response = requests.post(extract_url, json=payload, headers=headers, timeout=30)
+        # Start task
+        response = requests.post(start_url, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
 
         result = response.json()
-        return result.get("result", {}).get("list", [])
+        task_id = result.get("result", {}).get("id")
+
+        if not task_id:
+            return None
+
+        # Poll for results (Browse.AI processes async)
+        max_attempts = 30  # 30 seconds max wait
+        for attempt in range(max_attempts):
+            time.sleep(2)  # Wait 2 seconds between polls
+
+            status_url = f"https://api.browse.ai/v2/robots/{robot_id}/tasks/{task_id}"
+            status_response = requests.get(status_url, headers=headers, timeout=10)
+            status_response.raise_for_status()
+
+            status_data = status_response.json()
+            status = status_data.get("result", {}).get("status")
+
+            if status == "successful":
+                # Get the captured HTML
+                captured_texts = status_data.get("result", {}).get("capturedTexts", {})
+                html_content = captured_texts.get("HTML Code", "")
+
+                if html_content:
+                    return html_content
+
+                return None
+
+            elif status in ["failed", "cancelled"]:
+                return None
+
+        # Timeout
+        return None
 
     except Exception as e:
-        print(f"Browse.AI extract error: {e}")
+        print(f"Browse.AI error: {e}")
         return None
 
 
@@ -109,22 +124,52 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
     try:
         url = create_ebay_sold_url(item_title)
 
-        # Try Browse.AI dynamic extraction
-        browse_data = scrape_url_with_browseai(url)
+        # Try Browse.AI to get HTML
+        html_content = scrape_url_with_browseai(url)
 
-        if browse_data:
-            # Extract data from Browse.AI result
+        if html_content:
+            # Parse HTML with BeautifulSoup
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Extract data from eBay listing items
             listings = []
 
-            for item_data in browse_data[:max_results * 2]:
+            # Try multiple selectors for eBay listings
+            items = soup.find_all('li', class_='s-item')
+
+            if not items:
+                items = soup.find_all('div', class_='s-item')
+
+            for item in items[:max_results * 2]:
                 try:
-                    title = item_data.get("title", "").strip()
-                    price_str = item_data.get("price", "0").strip()
-                    link = item_data.get("link", "").strip()
+                    # Extract title - try multiple selectors
+                    title_elem = (
+                        item.find('div', class_='s-item__title') or
+                        item.find('h3', class_='s-item__title') or
+                        item.find(class_='s-card__title') or
+                        item.select_one('.s-item__title')
+                    )
+
+                    if not title_elem:
+                        continue
+
+                    title = title_elem.get_text(strip=True)
 
                     # Skip invalid entries
                     if not title or title.lower() in ['shop on ebay', 'new listing', '']:
                         continue
+
+                    # Extract price - try multiple selectors
+                    price_elem = (
+                        item.find('span', class_='s-item__price') or
+                        item.find(class_='s-card__price') or
+                        item.select_one('.s-item__price')
+                    )
+
+                    if not price_elem:
+                        continue
+
+                    price_str = price_elem.get_text(strip=True)
 
                     # Clean price
                     price_clean = re.sub(r'[,$]', '', price_str)
@@ -136,6 +181,19 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                     except ValueError:
                         continue
 
+                    # Extract link - try multiple selectors
+                    link_elem = (
+                        item.find('a', class_='s-item__link') or
+                        item.find('a', class_='su-link') or
+                        item.find('a')
+                    )
+
+                    if not link_elem:
+                        continue
+
+                    link = link_elem.get('href', '')
+
+                    # Calculate similarity
                     similarity = calculate_title_similarity(item_title.lower(), title.lower())
 
                     listings.append({
@@ -145,7 +203,7 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                         'similarity': similarity
                     })
 
-                except Exception:
+                except Exception as e:
                     continue
 
             # Sort by similarity

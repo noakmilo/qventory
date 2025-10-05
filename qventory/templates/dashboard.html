@@ -1425,6 +1425,32 @@ const ModalAIResearch = (function() {
     document.getElementById('aiAutocompleteList').classList.remove('show');
   }
 
+  function addLog(message, type = 'info') {
+    const resultContent = document.getElementById('aiResultContent');
+    const timestamp = new Date().toLocaleTimeString();
+    const colors = {
+      info: '#60a5fa',
+      success: '#34d399',
+      error: '#f87171',
+      warning: '#fbbf24'
+    };
+
+    const logEntry = document.createElement('div');
+    logEntry.style.cssText = `
+      padding: 8px 12px;
+      margin-bottom: 6px;
+      background: #1a1d24;
+      border-left: 3px solid ${colors[type]};
+      border-radius: 4px;
+      font-size: 12px;
+      color: #e8e8e8;
+      font-family: 'Courier New', monospace;
+    `;
+    logEntry.innerHTML = `<span style="color: #9ca3af">[${timestamp}]</span> ${message}`;
+    resultContent.appendChild(logEntry);
+    resultContent.scrollTop = resultContent.scrollHeight;
+  }
+
   async function analyze() {
     const itemTitle = document.getElementById('aiItemTitle').value.trim();
     const condition = document.getElementById('aiCondition').value.trim();
@@ -1449,14 +1475,18 @@ const ModalAIResearch = (function() {
     analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
     resultBox.style.display = 'block';
     resultContent.innerHTML = '';
-    typingIndicator.style.display = 'flex';
+    typingIndicator.style.display = 'none'; // Hide typing indicator for logs
+
+    addLog('🚀 Starting AI Market Research...', 'info');
+    addLog(`📦 Item: "${itemTitle}"`, 'info');
+    addLog('🔗 Building eBay sold listings URL...', 'info');
 
     try {
       const payload = currentItemId
         ? { item_id: currentItemId }
         : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
 
-      console.log('Sending request to /api/ai-research with payload:', payload);
+      addLog('📡 Sending request to Browse.AI...', 'info');
 
       const response = await fetch('/api/ai-research', {
         method: 'POST',
@@ -1465,33 +1495,41 @@ const ModalAIResearch = (function() {
         body: JSON.stringify(payload)
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      addLog(`✓ Server responded with status: ${response.status}`, response.ok ? 'success' : 'error');
 
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Non-JSON response received:', text.substring(0, 500));
+        addLog('❌ Server returned non-JSON response', 'error');
         throw new Error(`Server returned non-JSON response (${response.status}). Check console for details.`);
       }
 
       const data = await response.json();
-      console.log('Response data:', data);
 
-      // Hide typing indicator
-      typingIndicator.style.display = 'none';
+      // Log scraping results
+      if (data.scraped_count !== undefined) {
+        addLog(`🕷️  Scraped ${data.scraped_count} eBay sold listings`, 'success');
+      }
 
       if (data.ok) {
-        // Render HTML directly (AI returns formatted HTML)
-        resultContent.innerHTML = data.result;
+        addLog('🤖 Sending data to OpenAI for analysis...', 'info');
+        addLog('✅ Analysis complete!', 'success');
+
+        // Clear logs and show result
+        setTimeout(() => {
+          resultContent.innerHTML = '';
+          resultContent.innerHTML = data.result;
+        }, 1000);
       } else {
-        resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
+        addLog(`❌ Error: ${data.error}`, 'error');
+        resultContent.innerHTML = `<div style="color:var(--error);margin-top:20px"><strong>Error:</strong> ${data.error}</div>`;
       }
     } catch (err) {
       console.error('Full error:', err);
-      typingIndicator.style.display = 'none';
-      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}<br><small>Check browser console for details</small></div>`;
+      addLog(`❌ Request failed: ${err.message}`, 'error');
+      resultContent.innerHTML += `<div style="color:var(--error);margin-top:20px"><strong>Error:</strong> ${err.message}<br><small>Check browser console for details</small></div>`;
     } finally {
       analyzeBtn.classList.remove('loading');
       analyzeBtn.style.opacity = '1';

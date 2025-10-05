@@ -1506,7 +1506,8 @@ CRITICAL RULES:
         return jsonify({
             "ok": True,
             "result": result,
-            "item_title": item_title
+            "item_title": item_title,
+            "scraped_count": scraped_data.get('count', 0)
         })
 
     except Exception as e:
