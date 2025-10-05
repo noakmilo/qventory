@@ -74,17 +74,22 @@ def scrape_url_with_browseai(target_url):
         if not task_id:
             return None
 
-        # Poll for results (Browse.AI processes async)
-        max_attempts = 60  # 60 seconds max wait (Browse.AI can take longer)
+        # Poll for results (Browse.AI can take 60-90 seconds)
+        max_attempts = 90  # 90 attempts = 3 minutes max
         for attempt in range(max_attempts):
             time.sleep(2)  # Wait 2 seconds between polls
 
             status_url = f"https://api.browse.ai/v2/robots/{robot_id}/tasks/{task_id}"
-            status_response = requests.get(status_url, headers=headers, timeout=10)
+            status_response = requests.get(status_url, headers=headers, timeout=15)
             status_response.raise_for_status()
 
             status_data = status_response.json()
             status = status_data.get("result", {}).get("status")
+
+            # Log progress every 5 attempts (10 seconds)
+            if attempt % 5 == 0:
+                elapsed = attempt * 2
+                print(f"⏳ Waiting for Browse.AI... ({elapsed}s elapsed)", flush=True)
 
             if status == "successful":
                 # Get captured lists (Browse.AI structured data)
@@ -93,14 +98,17 @@ def scrape_url_with_browseai(target_url):
                 # The robot captures data in a list - get the first list
                 for list_name, list_data in captured_lists.items():
                     if isinstance(list_data, list) and len(list_data) > 0:
+                        print(f"✓ Browse.AI returned {len(list_data)} items", flush=True)
                         return list_data
 
                 return None
 
             elif status in ["failed", "cancelled"]:
+                print(f"✗ Browse.AI task {status}", flush=True)
                 return None
 
         # Timeout
+        print("✗ Browse.AI timed out after 3 minutes", flush=True)
         return None
 
     except Exception as e:
