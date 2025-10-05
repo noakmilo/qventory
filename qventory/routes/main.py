@@ -1411,58 +1411,53 @@ def api_ai_research():
     print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
     # Build the prompt
-    system_prompt = """You are an eBay pricing expert. Return ONLY raw HTML code (no markdown, no explanation, no code blocks)."""
+    system_prompt = """You are an eBay pricing analyst. You MUST respond with ONLY pure HTML code.
+NO explanations, NO markdown, NO code blocks - just raw HTML starting with <div."""
 
-    user_prompt = f"""Item: {item_title}
+    # URL encode the title for eBay search
+    import urllib.parse
+    ebay_search_url = f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(item_title)}&LH_Sold=1&LH_Complete=1"
+
+    user_prompt = f"""Provide eBay pricing estimate for: {item_title}
 Condition: {condition}
 Market: {market_region}
 
-Search eBay sold listings (last 7-14 days). Find 3-5 comparable sales.
+Based on typical eBay sold prices for similar items, provide pricing guidance.
 
-YOUR RESPONSE MUST START WITH: <div style="font-family:system-ui
-
-Return ONLY this HTML structure (fill with real data):
+RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
 
 <div style="font-family:system-ui;line-height:1.5;color:#e8e8e8;font-size:13px">
   <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📊 Market Overview</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-      <div><span style="color:#60a5fa">●</span> Median: ${currency}XX</div>
-      <div><span style="color:#60a5fa">●</span> Range: $XX-XX</div>
-      <div><span style="color:#60a5fa">●</span> Sales: X</div>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📊 Market Estimate</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><span style="color:#60a5fa">●</span> Typical Range: ${currency}XX-XX</div>
+      <div><span style="color:#60a5fa">●</span> Average: ${currency}XX</div>
     </div>
   </div>
 
   <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">💰 Your Pricing</div>
-    <div style="margin-bottom:6px"><strong style="color:#34d399">List at:</strong> ${currency}XX.XX • <strong style="color:#fbbf24">Floor:</strong> ${currency}XX.XX</div>
-    <div style="color:#9ca3af;font-size:11px">BIN + Best Offer • Auto-decline below $XX • Free shipping</div>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">💰 Recommended Pricing</div>
+    <div style="margin-bottom:4px"><strong style="color:#34d399">List Price:</strong> ${currency}XX.XX</div>
+    <div style="margin-bottom:6px"><strong style="color:#fbbf24">Minimum Accept:</strong> ${currency}XX.XX</div>
+    <div style="color:#9ca3af;font-size:11px">💡 Strategy: BIN + Best Offer, Auto-decline <$XX, Free/Calc shipping</div>
   </div>
 
   <div style="background:#1a1d24;padding:10px;border-radius:6px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📦 Recent Sales</div>
-    <table style="width:100%;font-size:11px;border-collapse:collapse">
-      <tr style="color:#9ca3af;border-bottom:1px solid #374151">
-        <th style="text-align:left;padding:3px;font-weight:normal">Date</th>
-        <th style="text-align:right;padding:3px;font-weight:normal">Price</th>
-        <th style="text-align:center;padding:3px;font-weight:normal">Link</th>
-      </tr>
-      <tr style="border-bottom:1px solid #2d3748">
-        <td style="padding:3px">Jan XX</td>
-        <td style="text-align:right;padding:3px">${currency}XX.XX</td>
-        <td style="text-align:center;padding:3px"><a href="REAL_EBAY_URL" target="_blank" style="color:#60a5fa;text-decoration:none">↗</a></td>
-      </tr>
-    </table>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📝 Notes</div>
+    <div style="font-size:11px;color:#9ca3af;line-height:1.4">[Brief 1-2 sentence rationale for pricing based on condition, rarity, demand]</div>
+    <div style="margin-top:6px;padding:6px;background:#0f1115;border-radius:4px;font-size:10px;color:#6b7280">
+      💡 Tip: <a href="{ebay_search_url}" target="_blank" style="color:#60a5fa;text-decoration:none">Search sold listings on eBay ↗</a> to verify current market
+    </div>
   </div>
 </div>
 
 CRITICAL RULES:
-1. Your ENTIRE response must be ONLY the HTML above (starting with <div)
-2. NO markdown code blocks (no ```)
-3. NO explanatory text before/after HTML
-4. Include REAL eBay listing URLs in the links
-5. Max 100 words total
-6. If no data found: still return HTML with "No recent sales" message"""
+1. Start response IMMEDIATELY with <div (no text before)
+2. NO markdown code fences (```)
+3. NO explanations or text outside HTML
+4. Keep total under 80 words
+5. Use realistic price estimates based on item type
+6. The search link is pre-filled - keep it as-is"""
 
     print("Building prompts...", file=sys.stderr)
     print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)
