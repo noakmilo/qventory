@@ -1,69 +1,504 @@
 {% extends "base.html" %}
-{% block title %}Import CSV – Qventory{% endblock %}
+{% block title %}Import Inventory – Qventory{% endblock %}
 {% block content %}
-<div class="row">
-  <div class="card import-card">
-    <h1>Import Items from CSV</h1>
-    <p class="import-intro">Upload a CSV file to import items into your inventory. The CSV should contain columns for item data.</p>
 
-    <form method="post" enctype="multipart/form-data" class="import-form">
-      <div class="form-group">
-        <label class="label" for="csv_file">Select CSV File</label>
-        <input type="file" class="input" id="csv_file" name="csv_file" accept=".csv" required>
-        <small class="form-hint">Only .csv files are accepted</small>
+<div class="card" style="max-width:1200px; margin:20px auto;">
+  <h1><i class="fas fa-file-import"></i> Import Your Inventory</h1>
+  <p style="color:var(--sub); font-size:15px; margin-bottom:24px;">
+    Bring your items into Qventory from a spreadsheet. We support Qventory format and popular platforms like Flipwise.
+  </p>
+
+  {# ===== UPLOAD SECTION ===== #}
+  <form method="post" enctype="multipart/form-data" class="import-form">
+
+    <div class="form-section">
+      <div class="section-header" style="border:none; padding:0 0 12px 0;">
+        <h3><i class="fas fa-upload"></i> Step 1: Choose Your File</h3>
       </div>
-
-      <div class="form-group">
-        <label class="label" for="import_mode">Import Mode</label>
-        <select name="import_mode" id="import_mode">
-          <option value="add">Add/Update - Keep existing items, add new ones, update existing SKUs</option>
-          <option value="replace">Replace - Delete items not in CSV, add new ones from CSV</option>
-        </select>
-        <div class="import-mode-info">
-          <p><strong>Add/Update:</strong> Existing items with matching SKUs will be updated with new data. New items will be added.</p>
-          <p><strong>Replace:</strong> All existing items not found in the CSV will be deleted. Use with caution!</p>
+      <div class="section-content" style="padding:0;">
+        <div class="upload-zone">
+          <label for="csv_file" class="file-upload-label">
+            <div class="upload-icon">
+              <i class="fas fa-cloud-upload-alt"></i>
+            </div>
+            <div class="upload-text">
+              <strong>Click to select a CSV file</strong>
+              <span>or drag and drop here</span>
+            </div>
+          </label>
+          <input type="file" class="input" id="csv_file" name="csv_file" accept=".csv" required style="display:none;">
+          <div id="file-name" class="file-name-display"></div>
         </div>
       </div>
-
-      <div class="form-actions">
-        <button type="submit" class="btn submitbtn">Import CSV</button>
-        <a href="{{ url_for('main.dashboard') }}" class="btn">Cancel</a>
-      </div>
-    </form>
-
-    <hr class="divider">
-
-    <div class="docs-section">
-      <h2>CSV Format Requirements</h2>
-      <ul class="requirements-list">
-        <li><strong>Required columns:</strong> <code>sku</code>, <code>title</code></li>
-        <li><strong>Optional columns:</strong>
-          <code>listing_link</code>,
-          <code>web_url</code>, <code>ebay_url</code>, <code>amazon_url</code>, <code>mercari_url</code>, <code>vinted_url</code>, <code>poshmark_url</code>, <code>depop_url</code>,
-          <code>A</code>, <code>B</code>, <code>S</code>, <code>C</code>, <code>location_code</code>,
-          <code>item_thumb</code> (Cloudinary URL), <code>supplier</code>, <code>item_cost</code>, <code>item_price</code>, <code>listing_date</code>,
-          <code>created_at</code>
-        </li>
-        <li><strong>Date format:</strong> <code>listing_date</code> and <code>created_at</code> accept <code>YYYY-MM-DD</code> (or <code>YYYY-MM-DD HH:MM:SS</code> for <code>created_at</code>)</li>
-        <li><strong>Numbers:</strong> use a dot for decimals (e.g., <code>12.99</code>)</li>
-        <li><strong>Encoding:</strong> UTF-8 recommended</li>
-        <li><strong>Tip:</strong> You can <a href="{{ url_for('main.export_csv') }}">export your current data</a> to get an exact template</li>
-      </ul>
-
-      <h3>Example CSV format</h3>
-      <pre class="code-example">sku,title,listing_link,web_url,ebay_url,amazon_url,mercari_url,vinted_url,poshmark_url,depop_url,A,B,S,C,location_code,item_thumb,supplier,item_cost,item_price,listing_date,created_at
-QV001,Sample Item,,https://yourstore.com/item-1,https://www.ebay.com/itm/123,,,,,,A1,B2,,C3,A1-B2-C3,https://res.cloudinary.com/yourcloud/image/upload/v123/thumb.jpg,Goodwill,5.50,19.99,2025-09-14,2025-09-15 10:23:11
-QV002,Another Item,,,,,,,,A2,B1,,,A2-B1,,,Wholesale ABC,0,12.00,2025-09-20,</pre>
-
-      <h3>Notes</h3>
-      <ul class="notes-list">
-        <li>Empty cells are allowed for optional fields.</li>
-        <li><code>item_cost</code> and <code>item_price</code> are numeric; leave blank if unknown.</li>
-        <li><code>item_thumb</code> is typically a Cloudinary image URL but any reachable image URL works.</li>
-        <li><code>location_code</code> can be provided directly (e.g., <code>A1-B2</code>) or derived from A/B/S/C by the app in other flows.</li>
-        <li>If <code>created_at</code> is omitted, the system sets it automatically.</li>
-      </ul>
     </div>
+
+    <div class="form-section" style="margin-top:24px;">
+      <div class="section-header" style="border:none; padding:0 0 12px 0;">
+        <h3><i class="fas fa-cog"></i> Step 2: Import Options</h3>
+      </div>
+      <div class="section-content" style="padding:0;">
+        <div class="import-modes">
+          <label class="mode-option">
+            <input type="radio" name="import_mode" value="add" checked>
+            <div class="mode-card">
+              <div class="mode-icon"><i class="fas fa-plus-circle"></i></div>
+              <div class="mode-info">
+                <strong>Add & Update</strong>
+                <p>Keep existing items. Add new ones and update duplicates.</p>
+              </div>
+            </div>
+          </label>
+
+          <label class="mode-option">
+            <input type="radio" name="import_mode" value="replace">
+            <div class="mode-card mode-warning">
+              <div class="mode-icon"><i class="fas fa-sync-alt"></i></div>
+              <div class="mode-info">
+                <strong>Replace All</strong>
+                <p>⚠️ Delete items not in the CSV. Use with caution!</p>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions" style="margin-top:32px;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-file-import"></i> Import Items
+      </button>
+      <a href="{{ url_for('main.dashboard') }}" class="btn">
+        <i class="fas fa-times"></i> Cancel
+      </a>
+    </div>
+  </form>
+
+  <hr style="margin:40px 0; border:none; border-top:1px solid var(--glass-border); opacity:0.5;">
+
+  {# ===== HELP SECTION ===== #}
+  <div class="help-section">
+    <h2><i class="fas fa-question-circle"></i> What format do I need?</h2>
+
+    <div class="format-cards">
+      <div class="format-card">
+        <div class="format-badge qventory">
+          <i class="fas fa-check-circle"></i> Qventory Format
+        </div>
+        <p>Export your current inventory to get the perfect template:</p>
+        <a href="{{ url_for('main.export_csv') }}" class="btn ghost" style="margin-top:8px;">
+          <i class="fas fa-download"></i> Download Template
+        </a>
+      </div>
+
+      <div class="format-card">
+        <div class="format-badge external">
+          <i class="fas fa-exchange-alt"></i> Other Platforms
+        </div>
+        <p>We automatically detect and adapt formats from:</p>
+        <ul class="platform-list">
+          <li><i class="fas fa-check"></i> Flipwise</li>
+          <li><i class="fas fa-check"></i> eBay exports</li>
+          <li><i class="fas fa-plus"></i> More coming soon</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <i class="fas fa-lightbulb"></i>
+      <div>
+        <strong>Smart Import Features:</strong>
+        <ul style="margin:8px 0 0; padding-left:20px;">
+          <li>Automatically generates SKUs for external files</li>
+          <li>Detects and skips duplicate titles</li>
+          <li>Sets today's date as listing date for imports</li>
+          <li>Preserves your existing location settings</li>
+        </ul>
+      </div>
+    </div>
+
+    <details class="faq-details">
+      <summary><i class="fas fa-info-circle"></i> Need help with CSV format?</summary>
+      <div class="details-content">
+        <h4>Qventory CSV Requirements:</h4>
+        <div class="requirements-grid">
+          <div>
+            <strong>Required:</strong>
+            <ul>
+              <li><code>sku</code> - Unique product code</li>
+              <li><code>title</code> - Item name</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Optional (common):</strong>
+            <ul>
+              <li><code>item_cost</code> - Purchase price</li>
+              <li><code>item_price</code> - Selling price</li>
+              <li><code>supplier</code> - Where you got it</li>
+              <li><code>listing_date</code> - When listed (YYYY-MM-DD)</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Locations:</strong>
+            <ul>
+              <li><code>A</code> - Aisle</li>
+              <li><code>B</code> - Bay</li>
+              <li><code>S</code> - Shelf</li>
+              <li><code>C</code> - Container</li>
+            </ul>
+          </div>
+          <div>
+            <strong>Marketplace Links:</strong>
+            <ul>
+              <li><code>ebay_url</code></li>
+              <li><code>amazon_url</code></li>
+              <li><code>mercari_url</code></li>
+              <li><code>vinted_url</code></li>
+              <li>+ more</li>
+            </ul>
+          </div>
+        </div>
+
+        <h4 style="margin-top:20px;">Example:</h4>
+        <pre class="csv-example">sku,title,item_cost,item_price,supplier,A,B
+QV001,Nike Air Max,45.00,89.99,Outlet Store,1,3
+QV002,Vintage Camera,12.50,35.00,Thrift Shop,2,1</pre>
+      </div>
+    </details>
   </div>
 </div>
+
+<style>
+  /* Upload Zone */
+  .upload-zone {
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--radius);
+    padding: 32px;
+    text-align: center;
+    background: var(--glass-bg);
+    transition: all 0.3s ease;
+  }
+
+  .upload-zone:hover {
+    border-color: var(--accent);
+    background: rgba(96, 165, 250, 0.05);
+  }
+
+  .file-upload-label {
+    cursor: pointer;
+    display: block;
+  }
+
+  .upload-icon {
+    font-size: 48px;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  .upload-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .upload-text strong {
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  .upload-text span {
+    font-size: 14px;
+    color: var(--sub);
+  }
+
+  .file-name-display {
+    margin-top: 12px;
+    padding: 8px 16px;
+    background: var(--glass-bg-strong);
+    border-radius: 6px;
+    color: var(--accent);
+    font-size: 14px;
+    display: none;
+  }
+
+  .file-name-display.show {
+    display: block;
+  }
+
+  /* Import Modes */
+  .import-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .mode-option {
+    cursor: pointer;
+    display: block;
+  }
+
+  .mode-option input[type="radio"] {
+    display: none;
+  }
+
+  .mode-card {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    border: 2px solid var(--glass-border);
+    border-radius: var(--radius);
+    background: var(--glass-bg);
+    transition: all 0.3s ease;
+  }
+
+  .mode-option input[type="radio"]:checked + .mode-card {
+    border-color: var(--accent);
+    background: rgba(96, 165, 250, 0.1);
+  }
+
+  .mode-card:hover {
+    border-color: var(--accent);
+  }
+
+  .mode-card.mode-warning {
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .mode-option input[type="radio"]:checked + .mode-card.mode-warning {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .mode-icon {
+    font-size: 28px;
+    color: var(--accent);
+  }
+
+  .mode-warning .mode-icon {
+    color: #ef4444;
+  }
+
+  .mode-info strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 16px;
+  }
+
+  .mode-info p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--sub);
+    line-height: 1.4;
+  }
+
+  /* Format Cards */
+  .format-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+  }
+
+  .format-card {
+    padding: 24px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    background: var(--glass-bg);
+  }
+
+  .format-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+
+  .format-badge.qventory {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .format-badge.external {
+    background: rgba(96, 165, 250, 0.15);
+    color: var(--accent);
+  }
+
+  .platform-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+  }
+
+  .platform-list li {
+    padding: 6px 0;
+    color: var(--sub);
+  }
+
+  .platform-list i {
+    color: var(--accent);
+    margin-right: 8px;
+  }
+
+  /* Info Box */
+  .info-box {
+    display: flex;
+    gap: 16px;
+    padding: 20px;
+    background: rgba(96, 165, 250, 0.1);
+    border-left: 4px solid var(--accent);
+    border-radius: var(--radius);
+    margin: 24px 0;
+  }
+
+  .info-box > i {
+    font-size: 24px;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .info-box ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    line-height: 1.6;
+  }
+
+  /* FAQ Details */
+  .faq-details {
+    margin-top: 24px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .faq-details summary {
+    padding: 16px 20px;
+    background: var(--glass-bg);
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.2s ease;
+  }
+
+  .faq-details summary:hover {
+    background: var(--glass-bg-strong);
+  }
+
+  .faq-details summary i {
+    color: var(--accent);
+  }
+
+  .details-content {
+    padding: 20px;
+    background: var(--panel);
+  }
+
+  .requirements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-top: 16px;
+  }
+
+  .requirements-grid ul {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+  }
+
+  .requirements-grid li {
+    padding: 4px 0;
+    font-size: 14px;
+    color: var(--sub);
+  }
+
+  .requirements-grid code {
+    background: var(--glass-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .csv-example {
+    background: #0a0e14;
+    padding: 16px;
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #22c55e;
+    border: 1px solid var(--glass-border);
+  }
+
+  /* Mobile */
+  @media (max-width: 720px) {
+    .format-cards,
+    .import-modes,
+    .requirements-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .upload-zone {
+      padding: 24px 16px;
+    }
+
+    .mode-card {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .mode-icon {
+      font-size: 32px;
+    }
+  }
+</style>
+
+<script>
+  // File input handler
+  const fileInput = document.getElementById('csv_file');
+  const fileNameDisplay = document.getElementById('file-name');
+  const uploadZone = document.querySelector('.upload-zone');
+
+  fileInput.addEventListener('change', function(e) {
+    const fileName = e.target.files[0]?.name;
+    if (fileName) {
+      fileNameDisplay.textContent = `📄 ${fileName}`;
+      fileNameDisplay.classList.add('show');
+      uploadZone.style.borderColor = 'var(--accent)';
+    }
+  });
+
+  // Drag and drop
+  uploadZone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    uploadZone.style.borderColor = 'var(--accent)';
+    uploadZone.style.background = 'rgba(96, 165, 250, 0.1)';
+  });
+
+  uploadZone.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    uploadZone.style.borderColor = '';
+    uploadZone.style.background = '';
+  });
+
+  uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    uploadZone.style.borderColor = '';
+    uploadZone.style.background = '';
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0 && files[0].name.endsWith('.csv')) {
+      fileInput.files = files;
+      fileNameDisplay.textContent = `📄 ${files[0].name}`;
+      fileNameDisplay.classList.add('show');
+      uploadZone.style.borderColor = 'var(--accent)';
+    }
+  });
+</script>
+
 {% endblock %}
