@@ -33,19 +33,20 @@ def create_ebay_sold_url(item_title):
 
 def scrape_url_with_browseai(target_url):
     """
-    Scrape URL using Browse.AI robot that captures HTML
-    Then parse HTML to extract eBay listings
+    Scrape URL using Browse.AI robot
+    Returns structured data from capturedLists
 
     Args:
         target_url: The URL to scrape
 
     Returns:
-        HTML content or None
+        List of captured items or None
     """
     api_key = os.environ.get("BROWSEAI_API_KEY")
-    robot_id = os.environ.get("BROWSEAI_ROBOT_ID")
+    # Use the specific robot that extracts eBay listings
+    robot_id = os.environ.get("BROWSEAI_ROBOT_ID", "0199b598-b94f-7b53-bd37-bec82a6d78e9")
 
-    if not api_key or not robot_id:
+    if not api_key:
         return None
 
     headers = {
@@ -74,7 +75,7 @@ def scrape_url_with_browseai(target_url):
             return None
 
         # Poll for results (Browse.AI processes async)
-        max_attempts = 30  # 30 seconds max wait
+        max_attempts = 60  # 60 seconds max wait (Browse.AI can take longer)
         for attempt in range(max_attempts):
             time.sleep(2)  # Wait 2 seconds between polls
 
@@ -86,12 +87,13 @@ def scrape_url_with_browseai(target_url):
             status = status_data.get("result", {}).get("status")
 
             if status == "successful":
-                # Get the captured HTML
-                captured_texts = status_data.get("result", {}).get("capturedTexts", {})
-                html_content = captured_texts.get("HTML Code", "")
+                # Get captured lists (Browse.AI structured data)
+                captured_lists = status_data.get("result", {}).get("capturedLists", {})
 
-                if html_content:
-                    return html_content
+                # The robot captures data in a list - get the first list
+                for list_name, list_data in captured_lists.items():
+                    if isinstance(list_data, list) and len(list_data) > 0:
+                        return list_data
 
                 return None
 
@@ -124,54 +126,26 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
     try:
         url = create_ebay_sold_url(item_title)
 
-        # Try Browse.AI to get HTML
-        html_content = scrape_url_with_browseai(url)
+        # Try Browse.AI to get structured data
+        browse_data = scrape_url_with_browseai(url)
 
-        if html_content:
-            # Parse HTML with BeautifulSoup
-            soup = BeautifulSoup(html_content, 'html.parser')
-
-            # Extract data from eBay listing items
+        if browse_data:
+            # Browse.AI returns structured data with fields like:
+            # Position, Title, image, sale price, Link
             listings = []
 
-            # Try multiple selectors for eBay listings
-            items = soup.find_all('li', class_='s-item')
-
-            if not items:
-                items = soup.find_all('div', class_='s-item')
-
-            for item in items[:max_results * 2]:
+            for item_data in browse_data[:max_results * 2]:
                 try:
-                    # Extract title - try multiple selectors
-                    title_elem = (
-                        item.find('div', class_='s-item__title') or
-                        item.find('h3', class_='s-item__title') or
-                        item.find(class_='s-card__title') or
-                        item.select_one('.s-item__title')
-                    )
-
-                    if not title_elem:
-                        continue
-
-                    title = title_elem.get_text(strip=True)
+                    # Extract fields from Browse.AI structured data
+                    title = item_data.get("Title", "").strip()
+                    price_str = item_data.get("sale price", "").strip()
+                    link = item_data.get("Link", "").strip()
 
                     # Skip invalid entries
                     if not title or title.lower() in ['shop on ebay', 'new listing', '']:
                         continue
 
-                    # Extract price - try multiple selectors
-                    price_elem = (
-                        item.find('span', class_='s-item__price') or
-                        item.find(class_='s-card__price') or
-                        item.select_one('.s-item__price')
-                    )
-
-                    if not price_elem:
-                        continue
-
-                    price_str = price_elem.get_text(strip=True)
-
-                    # Clean price
+                    # Clean price (e.g., "$14.50" -> 14.50)
                     price_clean = re.sub(r'[,$]', '', price_str)
                     if ' to ' in price_clean:
                         price_clean = price_clean.split(' to ')[0].strip()
@@ -180,18 +154,6 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                         price = float(price_clean)
                     except ValueError:
                         continue
-
-                    # Extract link - try multiple selectors
-                    link_elem = (
-                        item.find('a', class_='s-item__link') or
-                        item.find('a', class_='su-link') or
-                        item.find('a')
-                    )
-
-                    if not link_elem:
-                        continue
-
-                    link = link_elem.get('href', '')
 
                     # Calculate similarity
                     similarity = calculate_title_similarity(item_title.lower(), title.lower())
