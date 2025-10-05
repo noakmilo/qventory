@@ -1323,7 +1323,7 @@ def api_ai_research():
     AI-powered eBay market research using OpenAI API
     Expects JSON: {item_id: int} or {title: str, condition: str, notes: str}
     """
-    import openai
+    from openai import OpenAI
 
     # Get OpenAI API key from environment
     openai_api_key = os.environ.get("OPENAI_API_KEY")
@@ -1333,7 +1333,7 @@ def api_ai_research():
             "error": "OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file."
         }), 500
 
-    openai.api_key = openai_api_key
+    client = OpenAI(api_key=openai_api_key)
 
     data = request.get_json() or {}
 
@@ -1456,16 +1456,15 @@ Final instruction:
 Return the written summary and recommendation first, followed by the JSON object exactly in the format above."""
 
     try:
-        # Call OpenAI API with streaming
-        response = openai.ChatCompletion.create(
+        # Call OpenAI API
+        response = client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.3,
-            max_tokens=2000,
-            stream=False
+            max_tokens=2000
         )
 
         result = response.choices[0].message.content
