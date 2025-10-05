@@ -134,6 +134,45 @@ header nav .btn{
   .brand .tag, .brand .badge { display:none !important }
   header nav .btn{ padding:6px 7px; min-height:28px; font-size:8px }
   .brand a{ font-size:16px}
+
+  /* Navegación: solo iconos en móvil con grid de apps */
+  header nav .nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 10px;
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  header nav .nav-btn i {
+    font-size: 20px;
+    margin: 0;
+  }
+
+  header nav .nav-btn .nav-text {
+    display: none;
+  }
+}
+
+/* Desktop: icono + texto */
+@media (min-width:721px){
+  header nav .nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+  }
+
+  header nav .nav-btn i {
+    font-size: 14px;
+  }
+
+  header nav .nav-btn .nav-text {
+    display: inline;
+  }
 }
 
 /* ===== Grid utilidades ===== */
