@@ -1411,59 +1411,58 @@ def api_ai_research():
     print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
     # Build the prompt
-    system_prompt = """You are an eBay pricing expert. Analyze sold listings and provide brief, actionable recommendations in clean HTML format."""
+    system_prompt = """You are an eBay pricing expert. Return ONLY raw HTML code (no markdown, no explanation, no code blocks)."""
 
-    user_prompt = f"""Analyze eBay pricing for: {item_title}
+    user_prompt = f"""Item: {item_title}
 Condition: {condition}
-Market: {market_region} | Currency: {currency}
+Market: {market_region}
 
-Search sold listings (7-14 days). Focus on identical/similar items.
+Search eBay sold listings (last 7-14 days). Find 3-5 comparable sales.
 
-Return ONLY valid HTML (no markdown, no code blocks) using this structure:
+YOUR RESPONSE MUST START WITH: <div style="font-family:system-ui
 
-<div style="font-family:system-ui;line-height:1.6;color:#e8e8e8">
-  <div style="background:#1a1d24;padding:12px;border-radius:8px;margin-bottom:12px">
-    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">📊 Market Data</h3>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
-      <div><strong style="color:#60a5fa">Median:</strong> ${currency} XX</div>
-      <div><strong style="color:#60a5fa">Range:</strong> $XX-XX</div>
-      <div><strong style="color:#60a5fa">Sales:</strong> X found</div>
+Return ONLY this HTML structure (fill with real data):
+
+<div style="font-family:system-ui;line-height:1.5;color:#e8e8e8;font-size:13px">
+  <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📊 Market Overview</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div><span style="color:#60a5fa">●</span> Median: ${currency}XX</div>
+      <div><span style="color:#60a5fa">●</span> Range: $XX-XX</div>
+      <div><span style="color:#60a5fa">●</span> Sales: X</div>
     </div>
   </div>
 
-  <div style="background:#1a1d24;padding:12px;border-radius:8px;margin-bottom:12px">
-    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">💰 Recommendation</h3>
-    <table style="width:100%;font-size:13px;border-collapse:collapse">
-      <tr><td style="padding:4px 0"><strong style="color:#34d399">List Price:</strong></td><td>${currency} XX.XX</td></tr>
-      <tr><td style="padding:4px 0"><strong style="color:#fbbf24">Floor Price:</strong></td><td>${currency} XX.XX</td></tr>
-    </table>
-    <p style="margin:8px 0 0 0;font-size:12px;color:#9ca3af">Strategy: [BIN + Best Offer | Auto-decline below $XX | Shipping advice]</p>
+  <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">💰 Your Pricing</div>
+    <div style="margin-bottom:6px"><strong style="color:#34d399">List at:</strong> ${currency}XX.XX • <strong style="color:#fbbf24">Floor:</strong> ${currency}XX.XX</div>
+    <div style="color:#9ca3af;font-size:11px">BIN + Best Offer • Auto-decline below $XX • Free shipping</div>
   </div>
 
-  <div style="background:#1a1d24;padding:12px;border-radius:8px">
-    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">📦 Recent Sales</h3>
-    <table style="width:100%;font-size:12px;border-collapse:collapse">
-      <tr style="border-bottom:1px solid #374151">
-        <th style="text-align:left;padding:4px;color:#9ca3af">Date</th>
-        <th style="text-align:right;padding:4px;color:#9ca3af">Total</th>
-        <th style="text-align:left;padding:4px;color:#9ca3af">Type</th>
+  <div style="background:#1a1d24;padding:10px;border-radius:6px">
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📦 Recent Sales</div>
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <tr style="color:#9ca3af;border-bottom:1px solid #374151">
+        <th style="text-align:left;padding:3px;font-weight:normal">Date</th>
+        <th style="text-align:right;padding:3px;font-weight:normal">Price</th>
+        <th style="text-align:center;padding:3px;font-weight:normal">Link</th>
       </tr>
       <tr style="border-bottom:1px solid #2d3748">
-        <td style="padding:4px">Jan XX</td>
-        <td style="text-align:right;padding:4px">$XX.XX</td>
-        <td style="padding:4px;font-size:11px;color:#9ca3af">BIN</td>
+        <td style="padding:3px">Jan XX</td>
+        <td style="text-align:right;padding:3px">${currency}XX.XX</td>
+        <td style="text-align:center;padding:3px"><a href="REAL_EBAY_URL" target="_blank" style="color:#60a5fa;text-decoration:none">↗</a></td>
       </tr>
-      <!-- Add 2-4 more rows -->
     </table>
   </div>
 </div>
 
-RULES:
-- Max 150 words total
-- Return ONLY the HTML (no ```html or markdown)
-- Use inline styles (dark theme: bg #1a1d24, text #e8e8e8)
-- If no data: provide educated estimate and mark as speculative
-- Be concise and actionable"""
+CRITICAL RULES:
+1. Your ENTIRE response must be ONLY the HTML above (starting with <div)
+2. NO markdown code blocks (no ```)
+3. NO explanatory text before/after HTML
+4. Include REAL eBay listing URLs in the links
+5. Max 100 words total
+6. If no data found: still return HTML with "No recent sales" message"""
 
     print("Building prompts...", file=sys.stderr)
     print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)
@@ -1484,6 +1483,18 @@ RULES:
         print("✓ OpenAI API call successful", file=sys.stderr)
         result = response.choices[0].message.content
         print(f"Result length: {len(result)} chars", file=sys.stderr)
+
+        # Clean up the response - remove markdown code blocks if present
+        result = result.strip()
+        if result.startswith("```html"):
+            result = result[7:]  # Remove ```html
+        if result.startswith("```"):
+            result = result[3:]  # Remove ```
+        if result.endswith("```"):
+            result = result[:-3]  # Remove trailing ```
+        result = result.strip()
+
+        print(f"Cleaned result (first 200 chars): {result[:200]}", file=sys.stderr)
         print("=" * 80, file=sys.stderr)
 
         return jsonify({
