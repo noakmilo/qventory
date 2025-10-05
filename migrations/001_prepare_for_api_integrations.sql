@@ -237,7 +237,7 @@ ALTER TABLE items ADD COLUMN category VARCHAR(255);
 ALTER TABLE items ADD COLUMN tags TEXT;  -- JSON array
 ALTER TABLE items ADD COLUMN purchased_at DATE;
 ALTER TABLE items ADD COLUMN notes TEXT;
-ALTER TABLE items ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE items ADD COLUMN updated_at DATETIME;
 
 -- Create indices for new columns
 CREATE INDEX IF NOT EXISTS idx_items_upc ON items(upc);
