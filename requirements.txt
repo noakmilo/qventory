@@ -13,5 +13,3 @@ python-dotenv==1.0.1
 cloudinary==1.32.0
 openai==1.58.1
 cryptography==43.0.3
-selenium==4.27.1
-webdriver-manager==4.0.2

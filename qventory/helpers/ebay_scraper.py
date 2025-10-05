@@ -1,17 +1,14 @@
 """
 eBay Sold Listings Scraper
-Scrapes real sold items from eBay using Selenium to bypass anti-bot protection
+Uses Browse.AI to scrape eBay sold listings
+Browse.AI handles all anti-bot protection automatically
+Sign up: https://www.browse.ai
 """
 import urllib.parse
 import re
+import os
 import time
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+import requests
 from bs4 import BeautifulSoup
 
 
@@ -34,51 +31,69 @@ def create_ebay_sold_url(item_title):
     return url
 
 
-def get_selenium_driver():
+def scrape_url_with_browseai(target_url):
     """
-    Create and configure a Selenium WebDriver with anti-detection settings
+    Scrape any URL using Browse.AI's Extract Structured Data API
+    No robot needed - dynamic scraping
+
+    Args:
+        target_url: The URL to scrape
 
     Returns:
-        WebDriver instance
+        Extracted data or None
     """
-    chrome_options = Options()
+    api_key = os.environ.get("BROWSEAI_API_KEY")
 
-    # Headless mode
-    chrome_options.add_argument('--headless=new')
-    chrome_options.add_argument('--no-sandbox')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--disable-gpu')
+    if not api_key:
+        return None
 
-    # Anti-detection measures
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option('useAutomationExtension', False)
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
-    # Realistic window size
-    chrome_options.add_argument('--window-size=1920,1080')
+    # Use Browse.AI's extract endpoint (no robot needed)
+    extract_url = "https://api.browse.ai/v2/extract"
 
-    # User agent
-    chrome_options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    payload = {
+        "url": target_url,
+        "extract": {
+            "list": {
+                "selector": "li.s-item",
+                "fields": {
+                    "title": {
+                        "selector": ".s-item__title",
+                        "type": "text"
+                    },
+                    "price": {
+                        "selector": ".s-item__price",
+                        "type": "text"
+                    },
+                    "link": {
+                        "selector": "a.s-item__link",
+                        "type": "attribute",
+                        "attribute": "href"
+                    }
+                }
+            }
+        }
+    }
 
-    # Create driver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    try:
+        response = requests.post(extract_url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
 
-    # Additional anti-detection
-    driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
-        'source': '''
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined
-            })
-        '''
-    })
+        result = response.json()
+        return result.get("result", {}).get("list", [])
 
-    return driver
+    except Exception as e:
+        print(f"Browse.AI extract error: {e}")
+        return None
 
 
 def scrape_ebay_sold_listings(item_title, max_results=10):
     """
-    Scrape eBay sold listings for an item using Selenium
+    Scrape eBay sold listings using Browse.AI
 
     Args:
         item_title: The item title to search for
@@ -91,34 +106,67 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             - items: list of dicts with title, price, link
             - error: str (if failed)
     """
-    driver = None
-
     try:
         url = create_ebay_sold_url(item_title)
 
-        # Create Selenium driver
-        driver = get_selenium_driver()
+        # Try Browse.AI dynamic extraction
+        browse_data = scrape_url_with_browseai(url)
 
-        # Navigate to eBay
-        driver.get(url)
+        if browse_data:
+            # Extract data from Browse.AI result
+            listings = []
 
-        # Wait for listings to load
-        time.sleep(2)  # Initial wait for page load
+            for item_data in browse_data[:max_results * 2]:
+                try:
+                    title = item_data.get("title", "").strip()
+                    price_str = item_data.get("price", "0").strip()
+                    link = item_data.get("link", "").strip()
 
-        # Wait for search results
-        try:
-            WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "s-item"))
-            )
-        except:
-            # If timeout, still try to parse what we have
-            pass
+                    # Skip invalid entries
+                    if not title or title.lower() in ['shop on ebay', 'new listing', '']:
+                        continue
 
-        # Additional wait for dynamic content
-        time.sleep(1)
+                    # Clean price
+                    price_clean = re.sub(r'[,$]', '', price_str)
+                    if ' to ' in price_clean:
+                        price_clean = price_clean.split(' to ')[0].strip()
 
-        # Get page source and parse with BeautifulSoup
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+                    try:
+                        price = float(price_clean)
+                    except ValueError:
+                        continue
+
+                    similarity = calculate_title_similarity(item_title.lower(), title.lower())
+
+                    listings.append({
+                        'title': title,
+                        'price': price,
+                        'link': link,
+                        'similarity': similarity
+                    })
+
+                except Exception:
+                    continue
+
+            # Sort by similarity
+            listings.sort(key=lambda x: x['similarity'], reverse=True)
+
+            return {
+                'success': True,
+                'url': url,
+                'items': listings[:max_results],
+                'count': len(listings[:max_results])
+            }
+
+        # Fallback: Direct request (will likely fail on eBay)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+
+        # Parse HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
 
         # Find all listing items
         listings = []
@@ -197,6 +245,22 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             'count': len(listings)
         }
 
+    except requests.Timeout:
+        return {
+            'success': False,
+            'url': url if 'url' in locals() else '',
+            'error': 'Request timed out',
+            'items': [],
+            'count': 0
+        }
+    except requests.RequestException as e:
+        return {
+            'success': False,
+            'url': url if 'url' in locals() else '',
+            'error': f'Request failed: {str(e)}',
+            'items': [],
+            'count': 0
+        }
     except Exception as e:
         return {
             'success': False,
@@ -205,14 +269,6 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             'items': [],
             'count': 0
         }
-
-    finally:
-        # Always close the driver
-        if driver:
-            try:
-                driver.quit()
-            except:
-                pass
 
 
 def calculate_title_similarity(title1, title2):
