@@ -198,35 +198,39 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             soup = BeautifulSoup(html_content, 'html.parser')
             listings = []
 
-            # Find all eBay listing items
-            items = soup.find_all('li', class_='s-item')
-            print(f"🔍 Found {len(items)} <li class='s-item'> elements", flush=True)
+            # PASO 4: Buscar elementos con las clases correctas de Browse.AI
+            # Browse.AI devuelve: s-card__title, s-card__price, su-link
 
-            if not items:
-                items = soup.find_all('div', class_='s-item')
-                print(f"🔍 Found {len(items)} <div class='s-item'> elements instead", flush=True)
+            # Buscar todos los títulos
+            title_divs = soup.find_all('div', class_='s-card__title')
+            print(f"🔍 Found {len(title_divs)} listings with s-card__title", flush=True)
 
-            # PASO 4: Extraer datos de cada listing
-            for item in items[:max_results * 2]:
+            # Procesar cada listing
+            for idx, title_div in enumerate(title_divs[:max_results * 2]):
                 try:
-                    # Extract title
-                    title_elem = (
-                        item.find('div', class_='s-item__title') or
-                        item.find('h3', class_='s-item__title') or
-                        item.find('span', class_='s-item__title')
-                    )
+                    # Extract title (está dentro de un span.su-styled-text)
+                    title_span = title_div.find('span', class_='su-styled-text')
 
-                    if not title_elem:
+                    if not title_span:
                         continue
 
-                    title = title_elem.get_text(strip=True)
+                    title = title_span.get_text(strip=True)
 
                     # Skip invalid entries
-                    if not title or title.lower() in ['shop on ebay', 'new listing', '']:
+                    if not title or title.lower() in ['shop on ebay', 'new listing', '', 'opens in a new window or tab']:
                         continue
 
-                    # Extract price
-                    price_elem = item.find('span', class_='s-item__price')
+                    # Extract price - buscar el contenedor padre y luego s-card__price
+                    # Subir al contenedor padre del listing
+                    parent = title_div.parent
+                    while parent and parent.name != 'li':
+                        parent = parent.parent
+
+                    if not parent:
+                        continue
+
+                    # Buscar precio dentro del parent
+                    price_elem = parent.find('span', class_='s-card__price')
 
                     if not price_elem:
                         continue
@@ -243,8 +247,8 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                     except ValueError:
                         continue
 
-                    # Extract link
-                    link_elem = item.find('a', class_='s-item__link')
+                    # Extract link - buscar su-link dentro del parent
+                    link_elem = parent.find('a', class_='su-link')
 
                     if not link_elem:
                         continue
