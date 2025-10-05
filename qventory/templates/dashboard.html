@@ -1532,7 +1532,37 @@ const ModalAIResearch = (function() {
 
         // Hide progress and show result
         hideProgress();
-        resultContent.innerHTML = data.result;
+
+        // Build the final HTML with AI result + examples
+        let finalHTML = data.result;
+
+        // Add example listings for transparency
+        if (data.examples && data.examples.length > 0) {
+          finalHTML += `
+            <div style="margin-top:16px;padding:12px;background:#0f1115;border-radius:6px;border-left:3px solid #60a5fa">
+              <div style="color:#9ca3af;font-size:12px;margin-bottom:8px;font-weight:600">🔍 Real Examples Analyzed</div>
+              <div style="font-size:11px;color:#e8e8e8">
+          `;
+
+          data.examples.forEach((item, idx) => {
+            finalHTML += `
+              <div style="margin-bottom:${idx < data.examples.length - 1 ? '10px' : '0'};padding-bottom:${idx < data.examples.length - 1 ? '10px' : '0'};border-bottom:${idx < data.examples.length - 1 ? '1px solid #1a1d24' : 'none'}">
+                <div style="color:#60a5fa;margin-bottom:3px">${idx + 1}. ${item.title}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#34d399;font-weight:600">$${item.price.toFixed(2)}</span>
+                  <a href="${item.link}" target="_blank" style="color:#9ca3af;text-decoration:none;font-size:10px;hover:color:#60a5fa">View ↗</a>
+                </div>
+              </div>
+            `;
+          });
+
+          finalHTML += `
+              </div>
+            </div>
+          `;
+        }
+
+        resultContent.innerHTML = finalHTML;
       } else {
         updateProgress('❌ Error occurred', 100);
         hideProgress();

@@ -1432,30 +1432,44 @@ Market: {market_region}
 REAL SOLD LISTINGS DATA:
 {real_market_data}
 
-Based on this REAL market data above, provide accurate pricing guidance.
+Based on this REAL market data above, provide:
+1. Accurate pricing strategy
+2. Title optimization tips based on what's actually selling
+3. Market insights from the real data
 
 RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
 
 <div style="font-family:system-ui;line-height:1.5;color:#e8e8e8;font-size:13px">
   <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📊 Market Estimate</div>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📊 Market Analysis</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><span style="color:#60a5fa">●</span> Typical Range: ${currency}XX-XX</div>
+      <div><span style="color:#60a5fa">●</span> Price Range: ${currency}XX-XX</div>
       <div><span style="color:#60a5fa">●</span> Average: ${currency}XX</div>
     </div>
   </div>
 
   <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">💰 Recommended Pricing</div>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">💰 Pricing Strategy</div>
     <div style="margin-bottom:4px"><strong style="color:#34d399">List Price:</strong> ${currency}XX.XX</div>
-    <div style="margin-bottom:6px"><strong style="color:#fbbf24">Minimum Accept:</strong> ${currency}XX.XX</div>
-    <div style="color:#9ca3af;font-size:11px">💡 Strategy: BIN + Best Offer, Auto-decline <$XX, Free/Calc shipping</div>
+    <div style="margin-bottom:4px"><strong style="color:#fbbf24">Minimum Accept:</strong> ${currency}XX.XX</div>
+    <div style="margin-bottom:6px"><strong style="color:#f87171">Auto-Decline:</strong> Below ${currency}XX</div>
+    <div style="color:#9ca3af;font-size:11px">💡 Format: BIN + Best Offer | Shipping: [Free/Calculated based on trends]</div>
+  </div>
+
+  <div style="background:#1a1d24;padding:10px;border-radius:6px;margin-bottom:10px">
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">✨ Title Optimization</div>
+    <div style="font-size:11px;color:#e8e8e8;line-height:1.6">
+      <div style="margin-bottom:4px"><strong style="color:#34d399">Keywords found in sold listings:</strong></div>
+      <div style="color:#9ca3af">• [Analyze real titles and list common keywords/patterns]</div>
+      <div style="margin-top:6px"><strong style="color:#fbbf24">Suggested title format:</strong></div>
+      <div style="color:#9ca3af">[Brand] [Model] [Key Specs] [Condition] - [Unique Features]</div>
+    </div>
   </div>
 
   <div style="background:#1a1d24;padding:10px;border-radius:6px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📝 Analysis</div>
-    <div style="font-size:11px;color:#9ca3af;line-height:1.4">[Brief analysis: Calculate average from sold data above, note price range, suggest strategy based on REAL prices]</div>
-    <div style="margin-top:6px;padding:6px;background:#0f1115;border-radius:4px;font-size:10px;color:#6b7280">
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📝 Market Insights</div>
+    <div style="font-size:11px;color:#9ca3af;line-height:1.5">[2-3 sentences analyzing the market: what's selling, at what prices, and why. Include specific observations from the real data.]</div>
+    <div style="margin-top:8px;padding:6px;background:#0f1115;border-radius:4px;font-size:10px;color:#6b7280">
       ✅ Based on {len(scraped_data.get('items', []))} real sold listings | <a href="{ebay_search_url}" target="_blank" style="color:#60a5fa;text-decoration:none">View on eBay ↗</a>
     </div>
   </div>
@@ -1503,11 +1517,21 @@ CRITICAL RULES:
         print(f"Cleaned result (first 200 chars): {result[:200]}", file=sys.stderr)
         print("=" * 80, file=sys.stderr)
 
+        # Get top 3 examples for transparency
+        example_listings = []
+        for item in scraped_data.get('items', [])[:3]:
+            example_listings.append({
+                'title': item['title'],
+                'price': item['price'],
+                'link': item['link']
+            })
+
         return jsonify({
             "ok": True,
             "result": result,
             "item_title": item_title,
-            "scraped_count": scraped_data.get('count', 0)
+            "scraped_count": scraped_data.get('count', 0),
+            "examples": example_listings
         })
 
     except Exception as e:
