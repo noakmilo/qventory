@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Qventory — QR-powered Inventory for Resellers & Small Warehouses{% endblock %}
+{% block title %}Qventory — Smart Inventory Management for Resellers{% endblock %}
 {% block content %}
 
 {# ===== Canonical & SEO ===== #}
 {% set canonical = request.url_root.rstrip('/') %}
 <link rel="canonical" href="{{ canonical }}/">
 
-<meta name="description" content="Qventory helps resellers track inventory with in-browser QR scanning (flashlight & flip), flexible A/B/S/C locations, 40×30 mm labels, and marketplace links (eBay, Amazon, Mercari, Vinted, Poshmark, Depop).">
-<meta name="keywords" content="inventory, qr scanner, qr labels 40x30, warehouse locations, aisle bay shelf bin, ebay inventory, mercari, depop, poshmark, vinted, small warehouse, stock control">
+<meta name="description" content="Qventory: Smart inventory for resellers with QR scanning, AI pricing, profit calculator, CSV import/export, eBay integration, Cloudinary image hosting, and multi-marketplace tracking. Mobile-first, dark mode, privacy-focused.">
+<meta name="keywords" content="inventory management, reseller tools, qr scanner, profit calculator, ai pricing, ebay import, csv import, warehouse locations, marketplace tracking, depop, poshmark, mercari, vinted">
 
 {# ===== Open Graph ===== #}
-<meta property="og:title" content="Qventory — QR-powered Inventory for Resellers & Small Warehouses">
-<meta property="og:description" content="Scan a code. See what's inside. In-browser QR scanner with flashlight & flip. Flexible A/B/S/C locations. Batch labels 40×30 mm.">
+<meta property="og:title" content="Qventory — Smart Inventory Management for Resellers">
+<meta property="og:description" content="QR scanning • AI market research • Profit calculator • CSV import • Multi-marketplace tracking">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== Twitter Card ===== #}
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Qventory — QR-powered Inventory">
-<meta name="twitter:description" content="Add/Edit with QR scan. eBay URL import. 40×30 mm labels. A/B/S/C locations.">
+<meta name="twitter:title" content="Qventory — Smart Inventory for Resellers">
+<meta name="twitter:description" content="QR scanning • AI pricing • Profit calculator • CSV import • Multi-marketplace">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== JSON-LD: SoftwareApplication ===== #}
@@ -30,143 +30,205 @@
   "name": "Qventory",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "QR-powered inventory management with in-browser scanning (BarcodeDetector + jsQR fallback), flashlight/flip, flexible A/B/S/C locations, 40×30 mm labels, eBay URL import, and multi-marketplace links.",
+  "description": "Smart inventory management for resellers with QR scanning, AI market research, profit calculator, CSV import/export, image hosting, and multi-marketplace tracking.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
 }
 </script>
 
 {# ===== HERO ===== #}
 <section class="card" style="margin:20px; padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent);">
-  <h1 style="font-size:34px; margin:0 0 10px;">Scan. Find. Ship. <span style="color:var(--accent)">Qventory</span> keeps you fast.</h1>
+  <h1 style="font-size:34px; margin:0 0 10px;">Smart Inventory. <span style="color:var(--accent)">Smarter Pricing.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
-    Organize with flexible <strong>A/B/S/C</strong> locations and <strong>QR labels</strong>. 
-    Scan locations <em>inside Add/Edit</em> with our in-browser QR scanner (flashlight & camera flip).
-    Import from <strong>eBay URL</strong> to auto-fill titles, and keep <strong>marketplace links</strong> at hand.
+    Track inventory with <strong>QR labels</strong>, get <strong>AI pricing insights</strong>, calculate profits instantly,
+    and import from <strong>eBay or CSV</strong>. Built for resellers who want to scale smart.
   </p>
 
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
-    <a class="btn" href="{{ url_for('auth.register') }}">Get Started — Free</a>
-    <a class="btn" href="{{ url_for('auth.login') }}">Sign in</a>
+    <a class="btn" href="{{ url_for('auth.register') }}">Start Free</a>
+    <a class="btn" href="{{ url_for('auth.login') }}">Sign In</a>
   </div>
 
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; color:var(--sub); font-size:13px;">
-    <span class="tag">In-browser QR scanner</span>
-    <span class="tag">Flashlight & Flip</span>
-    <span class="tag">A/B/S/C Locations</span>
-    <span class="tag">40×30 mm Labels</span>
-    <span class="tag">eBay URL Import</span>
-    <span class="tag">Multi-Marketplace Links</span>
-    <span class="tag">Mobile-friendly</span>
-    <span class="tag">Privacy-first</span>
+    <span class="tag">AI Market Research</span>
+    <span class="tag">Profit Calculator</span>
+    <span class="tag">QR Scanner</span>
+    <span class="tag">CSV Import/Export</span>
+    <span class="tag">Image Hosting</span>
+    <span class="tag">eBay Integration</span>
+    <span class="tag">Multi-Marketplace</span>
+    <span class="tag">Mobile PWA</span>
   </div>
 </section>
 
 {# ===== VALUE ===== #}
 <section class="row" style="margin:20px;">
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>Why Qventory</h2>
+    <h2>🎯 Why Qventory</h2>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
-      <li><strong>Fast & accurate:</strong> scan a location and see everything inside instantly.</li>
-      <li><strong>Flexible hierarchy:</strong> enable only what you use (A/B/S/C).</li>
-      <li><strong>Sell everywhere:</strong> store links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop.</li>
-      <li><strong>Zero friction:</strong> Add/Edit forms include the QR scanner modal.</li>
-      <li><strong>Dark, mobile-first:</strong> built for picking, packing & shipping.</li>
+      <li><strong>Price smarter:</strong> AI-powered eBay market research gives you data-driven pricing</li>
+      <li><strong>Know your margins:</strong> Built-in profit calculator for eBay & Depop</li>
+      <li><strong>Import anywhere:</strong> CSV uploads from Flipwise, eBay, or any platform</li>
+      <li><strong>Track everything:</strong> Multi-marketplace links + flexible A/B/S/C locations</li>
+      <li><strong>Ship faster:</strong> QR scanning + item photos for quick picking</li>
     </ul>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>How it Works</h2>
+    <h2>⚡ How it Works</h2>
     <ol style="margin:0; padding-left:18px; line-height:1.6;">
-      <li><strong>Create locations:</strong> Aisle/Bay/Shelf/Container, your way.</li>
-      <li><strong>Print labels:</strong> batch PDF at <strong>40×30 mm</strong>, QR + code/text side-by-side.</li>
-      <li><strong>Add items faster:</strong> paste an <em>eBay URL</em> to auto-fill the title.</li>
-      <li><strong>Scan & go:</strong> open a location page and pull items in seconds.</li>
+      <li><strong>Import:</strong> Upload CSV or paste eBay URLs to auto-fill items</li>
+      <li><strong>Organize:</strong> Set locations, upload photos, add marketplace links</li>
+      <li><strong>Analyze:</strong> Get AI pricing insights & calculate profit margins</li>
+      <li><strong>Ship:</strong> Scan QR codes to find items instantly</li>
     </ol>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>Made for Growth</h2>
-    <p style="margin:0 0 8px;">Start simple, scale later:</p>
+    <h2>📈 Built for Scale</h2>
+    <p style="margin:0 0 8px;">From bedroom to warehouse:</p>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
-      <li>From a single shelf to a full garage or warehouse.</li>
-      <li>Fast filters by location and sales channel.</li>
-      <li>Clean exports (CSV/PDF) coming soon.</li>
+      <li>Batch import hundreds of items via CSV</li>
+      <li>AI analyzes market trends for competitive pricing</li>
+      <li>Fast filters by location, supplier, platform</li>
+      <li>Export data anytime (CSV)</li>
     </ul>
   </div>
 </section>
 
 {# ===== FEATURE GRID ===== #}
 <section class="card" style="margin:20px;">
-  <h2 style="margin-top:0;">Features that matter</h2>
+  <h2 style="margin-top:0;">🚀 Powerful Features</h2>
   <div class="grid cols-3">
     <div>
-      <h3 style="margin:0 0 6px;">In-Browser QR Scanner</h3>
-      <p class="tag">BarcodeDetector + jsQR fallback</p>
-      <p>Works on modern browsers. Includes <strong>Flashlight</strong> (when supported) and <strong>Camera Flip</strong>. Integrated in Add/Edit forms to populate A/B/S/C automatically.</p>
+      <h3 style="margin:0 0 6px;">🤖 AI Market Research</h3>
+      <p class="tag">Powered by OpenAI</p>
+      <p>Get instant eBay pricing estimates with market data, suggested list/floor prices, and competitive strategy recommendations.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">Flexible A/B/S/C</h3>
-      <p class="tag">Enable only what you use</p>
-      <p>Keep codes clean like <code>A1B3S2C1</code>. Disable levels you don’t need anytime in Settings.</p>
+      <h3 style="margin:0 0 6px;">💰 Profit Calculator</h3>
+      <p class="tag">eBay & Depop</p>
+      <p>Calculate fees, shipping costs, and net profit before listing. Supports store subscriptions, top-rated seller discounts, and more.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">Batch Labels 40×30 mm</h3>
-      <p class="tag">QR + text side-by-side</p>
-      <p>Print compact, scannable labels that show the code clearly next to the QR for fast visual picking.</p>
+      <h3 style="margin:0 0 6px;">📤 CSV Import/Export</h3>
+      <p class="tag">Universal compatibility</p>
+      <p>Import from Flipwise, eBay, or any platform. Auto-detects format, generates SKUs, and skips duplicates. Export anytime.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">eBay URL Import</h3>
-      <p class="tag">Auto-fill title</p>
-      <p>Paste an eBay item link and we’ll fetch the title to speed up data entry. Save time, avoid typos.</p>
+      <h3 style="margin:0 0 6px;">📷 Image Hosting</h3>
+      <p class="tag">Cloudinary integration</p>
+      <p>Upload product photos with drag & drop. Auto-optimized thumbnails for fast mobile browsing. Secure cloud storage.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">Marketplace Links</h3>
-      <p class="tag">eBay, Amazon, Mercari & more</p>
-      <p>Jump straight from Qventory to your live listings. One click from stock to shipped.</p>
+      <h3 style="margin:0 0 6px;">🏷️ QR Scanner</h3>
+      <p class="tag">In-browser + flashlight</p>
+      <p>Scan locations with your phone camera. Works in Add/Edit forms. Flashlight & camera flip support for any lighting.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">Mobile-Friendly UI</h3>
-      <p class="tag">Dark & minimal</p>
-      <p>Optimized for phones and small screens. Perfect for garages, storage units, or warehouse aisles.</p>
+      <h3 style="margin:0 0 6px;">🔗 eBay Integration</h3>
+      <p class="tag">Auto-fill titles</p>
+      <p>Paste any eBay listing URL and we'll fetch the title automatically. Save time, avoid typos.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">📍 Flexible Locations</h3>
+      <p class="tag">A/B/S/C hierarchy</p>
+      <p>Customize Aisle/Bay/Shelf/Container to fit your space. Enable only what you need. Generate QR labels at 40×30 mm.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">🛒 Multi-Marketplace</h3>
+      <p class="tag">7 platforms supported</p>
+      <p>Track listings on eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your own website. One-click access to all.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">📱 Mobile PWA</h3>
+      <p class="tag">Install as app</p>
+      <p>Add to home screen on iOS/Android. Works offline, full-screen, fast as a native app. Dark mode optimized.</p>
     </div>
   </div>
 </section>
 
-{# ===== NEW: APP / PWA CARD ===== #}
-<section class="card" style="margin:20px; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">
-  <h2 style="margin-top:0;">Do you have an app?</h2>
-  <p style="color:var(--sub); margin-bottom:10px;">Yes — Qventory works as a <strong>Progressive Web App (PWA)</strong>. Install it from your browser and use it like a native app:</p>
-  <div style="display:flex; flex-direction:column; gap:8px; font-size:15px; line-height:1.6;">
-    <div>➜ <strong>On Chrome (Android/Desktop):</strong> Menu ⋮ ⟶ <em>Add to Home screen</em> ⟶ Install.</div>
-    <div>➝ <strong>On Safari (iPhone/iPad):</strong> Share ⬆️ ⟶ <em>Add to Home Screen</em> ⟶ Done.</div>
-    <div>⟶ Launch Qventory directly from your home screen, full screen, no browser chrome.</div>
+{# ===== AI PRICING CARD ===== #}
+<section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(96,165,250,0.05), rgba(52,211,153,0.05));">
+  <h2 style="margin-top:0;">🧠 AI-Powered Pricing Intelligence</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Stop guessing. Start winning. Our AI analyzes eBay market data to give you:</p>
+  <div class="grid cols-2" style="gap:12px;">
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#60a5fa">📊 Market Overview</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Median prices, typical ranges, and recent sales volume</p>
+    </div>
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#34d399">💵 Smart Pricing</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Recommended list price, floor price, and best offer strategy</p>
+    </div>
+  </div>
+  <p style="margin-top:12px;font-size:13px;color:var(--sub)">
+    💡 <strong>Pro tip:</strong> Click the AI Research button on any item to get instant pricing insights based on current market conditions.
+  </p>
+</section>
+
+{# ===== CSV IMPORT CARD ===== #}
+<section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(251,191,36,0.05), rgba(239,68,68,0.05));">
+  <h2 style="margin-top:0;">📥 Smart CSV Import</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Migrate from any platform in seconds:</p>
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <div style="display:flex;align-items:start;gap:10px;">
+      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <div>
+        <strong>Auto-detection:</strong> Recognizes Qventory, Flipwise, and custom formats
+      </div>
+    </div>
+    <div style="display:flex;align-items:start;gap:10px;">
+      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <div>
+        <strong>Smart mapping:</strong> Auto-generates SKUs, detects duplicates, preserves data
+      </div>
+    </div>
+    <div style="display:flex;align-items:start;gap:10px;">
+      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <div>
+        <strong>Flexible modes:</strong> Add new items or replace entire inventory
+      </div>
+    </div>
   </div>
 </section>
 
 {# ===== CTA ===== #}
-<section class="card" style="margin:20px; text-align:center;">
-  <h2>Ready to organize your inventory?</h2>
-  <p style="color:var(--sub); max-width:720px; margin:8px auto 16px;">Create a free account, generate your first 40×30 mm labels, and start scanning in minutes.</p>
-  <a class="btn" href="{{ url_for('auth.register') }}">Create Free Account</a>
+<section class="card" style="margin:20px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">
+  <h2>Ready to Scale Your Reselling Business?</h2>
+  <p style="color:var(--sub); max-width:720px; margin:8px auto 16px;">
+    Join resellers using Qventory to track inventory, optimize pricing, and ship faster.
+    Free forever. No credit card required.
+  </p>
+  <a class="btn submitbtn" href="{{ url_for('auth.register') }}" style="font-size:16px;padding:12px 24px;">
+    Create Free Account →
+  </a>
 </section>
 
 {# ===== FAQ ===== #}
 <section class="card" style="margin:20px;">
-  <h2>FAQ</h2>
+  <h2>❓ Frequently Asked Questions</h2>
   <div class="grid cols-2">
     <div>
-      <h3>Do I need special printers?</h3>
-      <p>No. Any home or office printer works for the PDF label sheets (40×30 mm layout).</p>
+      <h3>Is AI pricing accurate?</h3>
+      <p>Our AI analyzes eBay market trends to provide data-driven estimates. Always verify with the "Search sold listings" link provided in reports.</p>
     </div>
     <div>
-      <h3>Can I change the hierarchy?</h3>
-      <p>Yes. Enable/disable Aisle, Bay, Shelf, Container in Settings at any time.</p>
+      <h3>Can I import from other platforms?</h3>
+      <p>Yes! Upload CSV files from Flipwise, eBay exports, or any custom format. Qventory auto-detects and maps fields intelligently.</p>
     </div>
     <div>
-      <h3>Does the QR scanner work on phones?</h3>
-      <p>Yes. Modern mobile browsers are supported. Flashlight control depends on device/browser capabilities.</p>
+      <h3>How does image hosting work?</h3>
+      <p>Drag & drop photos directly in the item form. Images are uploaded to Cloudinary with automatic optimization and secure CDN delivery.</p>
     </div>
     <div>
       <h3>Which marketplaces are supported?</h3>
-      <p>Save links for eBay, Amazon, Mercari, Vinted, Poshmark, and Depop. eBay URL import auto-fills titles.</p>
+      <p>Track links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your website. Profit calculator supports eBay & Depop fees.</p>
+    </div>
+    <div>
+      <h3>Does it work on mobile?</h3>
+      <p>Yes! Install as a PWA (Progressive Web App) on iOS or Android. Full QR scanning, dark mode, and optimized for phones.</p>
+    </div>
+    <div>
+      <h3>Is my data private?</h3>
+      <p>Absolutely. Your inventory is yours. We don't sell data. Images are securely hosted on Cloudinary. Export anytime via CSV.</p>
     </div>
   </div>
 </section>
@@ -179,28 +241,33 @@
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "Do I need special printers?",
-      "acceptedAnswer": { "@type": "Answer", "text": "No. Any home or office printer works for the PDF label sheets (40×30 mm layout)." }
+      "name": "Is AI pricing accurate?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Our AI analyzes eBay market trends to provide data-driven estimates. Always verify with the 'Search sold listings' link provided in reports." }
     },
     {
       "@type": "Question",
-      "name": "Can I change the hierarchy?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Enable or disable Aisle, Bay, Shelf, Container in Settings at any time." }
+      "name": "Can I import from other platforms?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes! Upload CSV files from Flipwise, eBay exports, or any custom format. Qventory auto-detects and maps fields intelligently." }
     },
     {
       "@type": "Question",
-      "name": "Does the QR scanner work on phones?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Modern mobile browsers are supported. Flashlight control depends on device/browser capabilities." }
+      "name": "How does image hosting work?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Drag and drop photos directly in the item form. Images are uploaded to Cloudinary with automatic optimization and secure CDN delivery." }
     },
     {
       "@type": "Question",
       "name": "Which marketplaces are supported?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Save links for eBay, Amazon, Mercari, Vinted, Poshmark, and Depop. eBay URL import auto-fills titles." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Track links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your website. Profit calculator supports eBay and Depop fees." }
     },
     {
       "@type": "Question",
-      "name": "Do you have an app?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Qventory is a Progressive Web App (PWA). Install it from Chrome (Menu ⟶ Add to Home screen ⟶ Install) or Safari (Share ⟶ Add to Home Screen ⟶ Done). It runs full screen like a native app." }
+      "name": "Does it work on mobile?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes! Install as a PWA (Progressive Web App) on iOS or Android. Full QR scanning, dark mode, and optimized for phones." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is my data private?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Absolutely. Your inventory is yours. We don't sell data. Images are securely hosted on Cloudinary. Export anytime via CSV." }
     }
   ]
 }
