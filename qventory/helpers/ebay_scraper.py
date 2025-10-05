@@ -1,12 +1,18 @@
 """
 eBay Sold Listings Scraper
-Scrapes real sold items from eBay to provide actual market data
+Scrapes real sold items from eBay using Selenium to bypass anti-bot protection
 """
 import urllib.parse
-import requests
-from bs4 import BeautifulSoup
 import re
 import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
 
 def create_ebay_sold_url(item_title):
@@ -28,9 +34,51 @@ def create_ebay_sold_url(item_title):
     return url
 
 
+def get_selenium_driver():
+    """
+    Create and configure a Selenium WebDriver with anti-detection settings
+
+    Returns:
+        WebDriver instance
+    """
+    chrome_options = Options()
+
+    # Headless mode
+    chrome_options.add_argument('--headless=new')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
+
+    # Anti-detection measures
+    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+
+    # Realistic window size
+    chrome_options.add_argument('--window-size=1920,1080')
+
+    # User agent
+    chrome_options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+
+    # Create driver
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+
+    # Additional anti-detection
+    driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+        'source': '''
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            })
+        '''
+    })
+
+    return driver
+
+
 def scrape_ebay_sold_listings(item_title, max_results=10):
     """
-    Scrape eBay sold listings for an item
+    Scrape eBay sold listings for an item using Selenium
 
     Args:
         item_title: The item title to search for
@@ -43,39 +91,46 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             - items: list of dicts with title, price, link
             - error: str (if failed)
     """
+    driver = None
+
     try:
         url = create_ebay_sold_url(item_title)
 
-        # Set headers to mimic a browser
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
-        }
+        # Create Selenium driver
+        driver = get_selenium_driver()
 
-        # Make request with timeout
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        # Navigate to eBay
+        driver.get(url)
 
-        # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Wait for listings to load
+        time.sleep(2)  # Initial wait for page load
+
+        # Wait for search results
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "s-item"))
+            )
+        except:
+            # If timeout, still try to parse what we have
+            pass
+
+        # Additional wait for dynamic content
+        time.sleep(1)
+
+        # Get page source and parse with BeautifulSoup
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
 
         # Find all listing items
-        # eBay uses different selectors, try multiple approaches
         listings = []
 
         # Try modern eBay layout (s-item class)
-        items = soup.find_all('div', class_='s-item__info')
+        items = soup.find_all('li', class_='s-item')
 
         if not items:
             # Try alternative selector
-            items = soup.find_all('li', class_='s-item')
+            items = soup.find_all('div', class_='s-item__info')
 
-        for item in items[:max_results]:
+        for item in items[:max_results * 2]:  # Get more to filter later
             try:
                 # Extract title
                 title_elem = item.find('div', class_='s-item__title') or item.find('h3', class_='s-item__title')
@@ -85,7 +140,7 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                 title = title_elem.get_text(strip=True)
 
                 # Skip "Shop on eBay" promotional items
-                if title.lower() in ['shop on ebay', 'new listing']:
+                if title.lower() in ['shop on ebay', 'new listing', '']:
                     continue
 
                 # Extract price
@@ -142,27 +197,22 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             'count': len(listings)
         }
 
-    except requests.Timeout:
-        return {
-            'success': False,
-            'url': url if 'url' in locals() else '',
-            'error': 'Request timed out',
-            'items': []
-        }
-    except requests.RequestException as e:
-        return {
-            'success': False,
-            'url': url if 'url' in locals() else '',
-            'error': f'Request failed: {str(e)}',
-            'items': []
-        }
     except Exception as e:
         return {
             'success': False,
             'url': url if 'url' in locals() else '',
             'error': f'Scraping failed: {str(e)}',
-            'items': []
+            'items': [],
+            'count': 0
         }
+
+    finally:
+        # Always close the driver
+        if driver:
+            try:
+                driver.quit()
+            except:
+                pass
 
 
 def calculate_title_similarity(title1, title2):
