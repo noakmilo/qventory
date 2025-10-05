@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}AI Research – Qventory{% endblock %}
+{% block content %}
+
+<div class="row">
+  <div class="card" style="flex:1 1 100%;max-width:800px;margin:0 auto">
+    <h1 style="text-align:center;margin-bottom:1.2rem;">
+      <i class="fas fa-brain" style="color:var(--accent)"></i> AI Market Research
+    </h1>
+
+    <div id="aiResearchContainer">
+      <!-- Item Name with Autocomplete -->
+      <label for="itemTitle">Item Title</label>
+      <div style="position:relative">
+        <input type="text" id="itemTitle" class="input" placeholder="e.g. Sony PlayStation 5 Console" autocomplete="off">
+        <div id="autocompleteList" class="autocomplete-list"></div>
+      </div>
+
+      <!-- Condition -->
+      <label for="condition">Condition</label>
+      <input type="text" id="condition" class="input" placeholder="e.g. Used - Fully working" value="Used">
+
+      <!-- Notes -->
+      <label for="notes">Relevant Notes (Optional)</label>
+      <textarea id="notes" class="input" placeholder="e.g. Includes controller, original box, upgraded 1TB SSD" rows="3"></textarea>
+
+      <!-- Market Region -->
+      <label for="marketRegion">Market Region</label>
+      <select id="marketRegion" class="input">
+        <option value="US">United States</option>
+        <option value="UK">United Kingdom</option>
+        <option value="CA">Canada</option>
+        <option value="AU">Australia</option>
+        <option value="DE">Germany</option>
+      </select>
+
+      <!-- Currency -->
+      <label for="currency">Currency</label>
+      <select id="currency" class="input">
+        <option value="USD">USD ($)</option>
+        <option value="GBP">GBP (£)</option>
+        <option value="CAD">CAD ($)</option>
+        <option value="AUD">AUD ($)</option>
+        <option value="EUR">EUR (€)</option>
+      </select>
+
+      <!-- Research Button -->
+      <button class="btn submitbtn block" onclick="AIResearch.analyze()" style="margin-top:1.2rem" id="analyzeBtn">
+        <i class="fas fa-brain"></i> Analyze Market
+      </button>
+
+      <!-- Result Display with Typing Animation -->
+      <div id="result" class="result-box" style="display:none">
+        <div class="typing-indicator" style="display:none">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <div id="resultContent"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    margin-top: 0.8rem;
+    font-size: var(--fs-sm);
+  }
+  .checkbox-container input[type="checkbox"] {
+    margin-right: 0.5rem;
+    width: auto;
+  }
+
+  .result-box {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--muted);
+    border-radius: var(--radius);
+    font-size: var(--fs-sm);
+    line-height: 1.6;
+  }
+
+  #resultContent {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Typing indicator animation */
+  .typing-indicator {
+    display: flex;
+    gap: 6px;
+    padding: 1rem 0;
+    align-items: center;
+  }
+
+  .typing-indicator span {
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: typing-bounce 1.4s infinite ease-in-out;
+  }
+
+  .typing-indicator span:nth-child(1) {
+    animation-delay: -0.32s;
+  }
+
+  .typing-indicator span:nth-child(2) {
+    animation-delay: -0.16s;
+  }
+
+  @keyframes typing-bounce {
+    0%, 80%, 100% {
+      transform: scale(0);
+      opacity: 0.5;
+    }
+    40% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Typewriter effect */
+  @keyframes typewriter {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+
+  .typewriter-text {
+    overflow: hidden;
+    white-space: pre-wrap;
+    animation: typewriter 0.05s steps(1) forwards;
+  }
+
+  /* Autocomplete styles */
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    margin-top: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 8px 20px var(--glass-shadow);
+  }
+
+  .autocomplete-list.show {
+    display: block;
+  }
+
+  .autocomplete-item {
+    padding: 0.7rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--glass-border);
+    transition: background 0.15s;
+  }
+
+  .autocomplete-item:last-child {
+    border-bottom: none;
+  }
+
+  .autocomplete-item:hover {
+    background: var(--muted);
+  }
+
+  .autocomplete-item strong {
+    display: block;
+    color: var(--text);
+    margin-bottom: 0.2rem;
+  }
+
+  .autocomplete-item small {
+    display: block;
+    color: var(--sub);
+    font-size: var(--fs-xs);
+  }
+
+  label {
+    display: block;
+    margin-top: 1rem;
+    font-size: var(--fs-sm);
+    color: var(--sub);
+    margin-bottom: 0.3rem;
+  }
+
+  .input {
+    width: 100%;
+    padding: 0.7rem;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: var(--muted);
+    color: var(--text);
+    font-size: var(--fs-base);
+  }
+
+  textarea.input {
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Loading state for button */
+  .btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+</style>
+
+<script>
+const AIResearch = {
+  currentItemId: null,
+  typingSpeed: 15, // ms per character
+
+  init() {
+    // Autocomplete functionality
+    const itemTitle = document.getElementById('itemTitle');
+    const autocompleteList = document.getElementById('autocompleteList');
+
+    itemTitle.addEventListener('input', async (e) => {
+      const query = e.target.value.trim();
+      if (query.length < 2) {
+        autocompleteList.classList.remove('show');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+
+        if (data.ok && data.items.length > 0) {
+          autocompleteList.innerHTML = data.items.map(item => `
+            <div class="autocomplete-item" onclick="AIResearch.selectItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', '${(item.supplier || '').replace(/'/g, "\\'")}')">
+              <strong>${item.title}</strong>
+              <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier : ''}</small>
+            </div>
+          `).join('');
+          autocompleteList.classList.add('show');
+        } else {
+          autocompleteList.classList.remove('show');
+        }
+      } catch (err) {
+        console.error('Autocomplete error:', err);
+      }
+    });
+
+    // Close autocomplete on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#itemTitle') && !e.target.closest('#autocompleteList')) {
+        autocompleteList.classList.remove('show');
+      }
+    });
+  },
+
+  selectItem(itemId, title, supplier) {
+    this.currentItemId = itemId;
+    document.getElementById('itemTitle').value = title;
+    document.getElementById('autocompleteList').classList.remove('show');
+  },
+
+  async analyze() {
+    const itemTitle = document.getElementById('itemTitle').value.trim();
+    const condition = document.getElementById('condition').value.trim();
+    const notes = document.getElementById('notes').value.trim();
+    const marketRegion = document.getElementById('marketRegion').value;
+    const currency = document.getElementById('currency').value;
+
+    if (!itemTitle) {
+      alert('Please enter an item title');
+      return;
+    }
+
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const resultBox = document.getElementById('result');
+    const resultContent = document.getElementById('resultContent');
+    const typingIndicator = resultBox.querySelector('.typing-indicator');
+
+    // Show loading state
+    analyzeBtn.classList.add('loading');
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+    resultBox.style.display = 'block';
+    resultContent.innerHTML = '';
+    typingIndicator.style.display = 'flex';
+
+    try {
+      const payload = this.currentItemId
+        ? { item_id: this.currentItemId }
+        : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
+
+      const response = await fetch('/api/ai-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      // Hide typing indicator
+      typingIndicator.style.display = 'none';
+
+      if (data.ok) {
+        // Typewriter effect
+        this.typewriterEffect(resultContent, data.result);
+      } else {
+        resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
+      }
+    } catch (err) {
+      typingIndicator.style.display = 'none';
+      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}</div>`;
+    } finally {
+      analyzeBtn.classList.remove('loading');
+      analyzeBtn.innerHTML = '<i class="fas fa-brain"></i> Analyze Market';
+    }
+  },
+
+  typewriterEffect(element, text) {
+    let index = 0;
+    element.innerHTML = '';
+
+    const type = () => {
+      if (index < text.length) {
+        element.textContent += text.charAt(index);
+        index++;
+        setTimeout(type, this.typingSpeed);
+      }
+    };
+
+    type();
+  }
+};
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  AIResearch.init();
+});
+</script>
+
+{% endblock %}

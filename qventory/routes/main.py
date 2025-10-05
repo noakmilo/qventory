@@ -1306,3 +1306,178 @@ def api_autocomplete_items():
         })
 
     return jsonify({"ok": True, "items": results})
+
+
+# ==================== AI Research ====================
+@main_bp.route("/ai-research")
+@login_required
+def ai_research():
+    """AI Research standalone page"""
+    return render_template("ai_research.html")
+
+
+@main_bp.route("/api/ai-research", methods=["POST"])
+@login_required
+def api_ai_research():
+    """
+    AI-powered eBay market research using OpenAI API
+    Expects JSON: {item_id: int} or {title: str, condition: str, notes: str}
+    """
+    import openai
+
+    # Get OpenAI API key from environment
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_api_key:
+        return jsonify({
+            "ok": False,
+            "error": "OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file."
+        }), 500
+
+    openai.api_key = openai_api_key
+
+    data = request.get_json() or {}
+
+    # Get item data either from item_id or direct input
+    item_id = data.get("item_id")
+    if item_id:
+        item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+        if not item:
+            return jsonify({"ok": False, "error": "Item not found"}), 404
+
+        item_title = item.title
+        condition = item.notes or "Used"
+        notes = item.notes or ""
+    else:
+        item_title = data.get("title", "").strip()
+        condition = data.get("condition", "Used")
+        notes = data.get("notes", "")
+
+    if not item_title:
+        return jsonify({"ok": False, "error": "Item title is required"}), 400
+
+    # Get market settings from user settings or defaults
+    settings = get_or_create_settings(current_user.id)
+    market_region = data.get("market_region") or "US"
+    currency = data.get("currency") or settings.currency or "USD"
+
+    # Build the prompt
+    system_prompt = """You are an expert e-commerce pricing analyst specializing in eBay market intelligence.
+Your task is to:
+
+1. Search for sold items on eBay in the last 7 days related to the given product title.
+2. Clean out irrelevant listings (lots, for parts/not working, accessories only, vague or mismatched titles).
+3. Normalize prices including shipping when possible.
+4. Summarize findings and provide a competitive pricing recommendation for the user's listing.
+
+Be concise, factual, and analytical.
+If too few comparable sales exist, expand the window to the last 14 days and state that clearly."""
+
+    user_prompt = f"""Item title: {item_title}
+Condition: {condition}
+Relevant notes: {notes}
+Market region: {market_region}
+Currency: {currency}
+
+Search and Filtering Guidelines:
+- Search for "Sold items" on eBay within the last 7 days in {market_region}.
+- Focus on identical or equivalent models/variants.
+- Exclude:
+  - Lots or multi-unit bundles
+  - "For parts", "not working", or accessory-only listings
+  - Misleading titles or unrelated items
+- Adjust for major spec differences (RAM, storage, edition) and note how you normalized the price.
+- Compute total buyer price = item price + shipping.
+- Distinguish between Auction and Buy It Now formats.
+- Remove clear outliers from the range.
+
+Output Format:
+
+1. Brief summary (max 6 lines)
+   - Range of sold prices (p25–p75 and full range), median, and valid sample count
+   - Key differences influencing price (condition, specs, accessories)
+   - Mention any seasonality or trend if relevant (e.g. Q4, collectibles)
+
+2. Competitive pricing recommendation
+   - Suggested Buy It Now price
+   - Floor (minimum acceptable) price
+   - Recommended pricing strategy: BIN vs Auction, shipping policy, coupon suggestion
+   - 2–3 short rationale bullets based on comparables and market context
+
+3. JSON structured data
+```json
+{{
+  "query": "{item_title}",
+  "window_days": 7,
+  "market": "{market_region}",
+  "currency": "{currency}",
+  "stats": {{
+    "count": 0,
+    "median": 0,
+    "mean": 0,
+    "p25": 0,
+    "p75": 0,
+    "min": 0,
+    "max": 0
+  }},
+  "pricing_recommendation": {{
+    "list_price_bin": 0,
+    "floor_price": 0,
+    "strategy": ["BIN + Best Offer", "Auto-decline below {currency} X", "Free shipping if under 2lb"],
+    "rationale": [
+      "Median aligned with …",
+      "Condition/spec differences …",
+      "Active competition …"
+    ]
+  }},
+  "comparables": [
+    {{
+      "title": "…",
+      "sold_price": 0,
+      "shipping_price": 0,
+      "total_price": 0,
+      "date_sold": "YYYY-MM-DD",
+      "condition": "…",
+      "format": "Auction|BIN",
+      "link": "https://…",
+      "notes": "Adjustment for specs/condition…"
+    }}
+  ],
+  "exclusions": ["Reasons for excluding outliers or bundles…"],
+  "limitations": "If <5 valid comparables, extend to 14 days and/or nearby specs."
+}}
+```
+
+Output Rules:
+- Keep the written summary under 180 words.
+- List 3–6 valid comparables with sale dates.
+- Clearly state if data is limited or skewed by outliers.
+
+Final instruction:
+Return the written summary and recommendation first, followed by the JSON object exactly in the format above."""
+
+    try:
+        # Call OpenAI API with streaming
+        response = openai.ChatCompletion.create(
+            model="gpt-4-turbo-preview",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+            stream=False
+        )
+
+        result = response.choices[0].message.content
+
+        return jsonify({
+            "ok": True,
+            "result": result,
+            "item_title": item_title
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"OpenAI API error: {str(e)}"
+        }), 500

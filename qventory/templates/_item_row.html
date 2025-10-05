@@ -49,6 +49,13 @@
 
   <td>
     {% if current_user.is_authenticated %}
+    <button class="btn settingsbtn ai-research-btn"
+            data-item-id="{{ it.id }}"
+            data-item-title="{{ it.title }}"
+            data-item-notes="{{ it.notes if it.notes else '' }}"
+            title="AI Market Research">
+      <i class="fas fa-brain"></i>
+    </button>
     <button class="btn settingsbtn profit-calc-btn"
             data-item-id="{{ it.id }}"
             data-item-title="{{ it.title }}"

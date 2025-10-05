@@ -107,6 +107,9 @@
     <div class="items-header">
       <h2>Items ({{ total_items }})</h2>
       <div class="backup-actions">
+        <button class="btn backup-btn" onclick="openAIResearchModal()" title="AI Market Research">
+          <i class="fas fa-brain"></i> AI Research
+        </button>
         <a class="btn backup-btn" href="{{ url_for('main.export_csv') }}" title="Export all items to CSV">
           <i class="fas fa-download"></i> Export
         </a>
@@ -207,6 +210,73 @@
     <div class="qr-body" style="padding:16px;align-items:stretch">
       <div id="profitModalContent" style="width:100%">
         <!-- Content injected by JavaScript -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Modal AI Research ===== -->
+<div id="aiResearchModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="AI Market Research">
+  <div class="qr-sheet" style="max-width:800px;max-height:90vh;overflow-y:auto">
+    <div class="qr-header">
+      <strong><i class="fas fa-brain"></i> AI Market Research</strong>
+      <div class="qr-actions">
+        <button type="button" id="aiResearchClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body" style="padding:16px;align-items:stretch">
+      <div id="aiResearchModalContent" style="width:100%">
+        <!-- Item Title with Autocomplete -->
+        <label for="aiItemTitle" style="display:block;margin-top:0;font-size:var(--fs-sm);color:var(--sub);margin-bottom:0.3rem">Item Title</label>
+        <div style="position:relative">
+          <input type="text" id="aiItemTitle" class="input" placeholder="e.g. Sony PlayStation 5 Console" autocomplete="off" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text);font-size:var(--fs-base)">
+          <div id="aiAutocompleteList" class="autocomplete-list"></div>
+        </div>
+
+        <!-- Condition -->
+        <label for="aiCondition" style="display:block;margin-top:1rem;font-size:var(--fs-sm);color:var(--sub);margin-bottom:0.3rem">Condition</label>
+        <input type="text" id="aiCondition" class="input" placeholder="e.g. Used - Fully working" value="Used" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text);font-size:var(--fs-base)">
+
+        <!-- Notes -->
+        <label for="aiNotes" style="display:block;margin-top:1rem;font-size:var(--fs-sm);color:var(--sub);margin-bottom:0.3rem">Relevant Notes (Optional)</label>
+        <textarea id="aiNotes" class="input" placeholder="e.g. Includes controller, original box" rows="3" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text);font-size:var(--fs-base);resize:vertical;font-family:inherit"></textarea>
+
+        <!-- Market Region -->
+        <label for="aiMarketRegion" style="display:block;margin-top:1rem;font-size:var(--fs-sm);color:var(--sub);margin-bottom:0.3rem">Market Region</label>
+        <select id="aiMarketRegion" class="input" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text);font-size:var(--fs-base)">
+          <option value="US">United States</option>
+          <option value="UK">United Kingdom</option>
+          <option value="CA">Canada</option>
+          <option value="AU">Australia</option>
+          <option value="DE">Germany</option>
+        </select>
+
+        <!-- Currency -->
+        <label for="aiCurrency" style="display:block;margin-top:1rem;font-size:var(--fs-sm);color:var(--sub);margin-bottom:0.3rem">Currency</label>
+        <select id="aiCurrency" class="input" style="width:100%;padding:0.7rem;border-radius:10px;border:1px solid var(--glass-border);background:var(--muted);color:var(--text);font-size:var(--fs-base)">
+          <option value="USD">USD ($)</option>
+          <option value="GBP">GBP (£)</option>
+          <option value="CAD">CAD ($)</option>
+          <option value="AUD">AUD ($)</option>
+          <option value="EUR">EUR (€)</option>
+        </select>
+
+        <!-- Analyze Button -->
+        <button class="btn submitbtn block" onclick="analyzeAIResearch()" style="margin-top:1.2rem;width:100%" id="aiAnalyzeBtn">
+          <i class="fas fa-brain"></i> Analyze Market
+        </button>
+
+        <!-- Result Display with Typing Animation -->
+        <div id="aiResult" class="ai-result-box" style="display:none">
+          <div class="typing-indicator" style="display:none">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div id="aiResultContent"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1188,6 +1258,252 @@ const ModalProfitCalc = (function() {
 })();
 
 document.addEventListener('DOMContentLoaded', ModalProfitCalc.init);
+</script>
+
+<style>
+/* ===== AI Research Modal Styles ===== */
+.ai-result-box {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: var(--muted);
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+#aiResultContent {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Typing indicator animation */
+.typing-indicator {
+  display: flex;
+  gap: 6px;
+  padding: 1rem 0;
+  align-items: center;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+</style>
+
+<script>
+/* ===== AI Research Modal ===== */
+const ModalAIResearch = (function() {
+  'use strict';
+
+  let modal, closeBtn, currentItemId = null;
+  const typingSpeed = 15; // ms per character
+
+  function init() {
+    modal = document.getElementById('aiResearchModal');
+    closeBtn = document.getElementById('aiResearchClose');
+
+    // Event delegation for AI research buttons in item rows
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.ai-research-btn');
+      if (btn) {
+        const itemData = {
+          id: btn.getAttribute('data-item-id'),
+          title: btn.getAttribute('data-item-title'),
+          notes: btn.getAttribute('data-item-notes') || ''
+        };
+        openModal(itemData);
+      }
+    });
+
+    closeBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    // Autocomplete functionality
+    const itemTitle = document.getElementById('aiItemTitle');
+    const autocompleteList = document.getElementById('aiAutocompleteList');
+
+    itemTitle?.addEventListener('input', async (e) => {
+      const query = e.target.value.trim();
+      if (query.length < 2) {
+        autocompleteList.classList.remove('show');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+
+        if (data.ok && data.items.length > 0) {
+          autocompleteList.innerHTML = data.items.map(item => `
+            <div class="autocomplete-item" onclick="ModalAIResearch.selectItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', '${(item.supplier || '').replace(/'/g, "\\'")}')">
+              <strong>${item.title}</strong>
+              <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier : ''}</small>
+            </div>
+          `).join('');
+          autocompleteList.classList.add('show');
+        } else {
+          autocompleteList.classList.remove('show');
+        }
+      } catch (err) {
+        console.error('Autocomplete error:', err);
+      }
+    });
+
+    // Close autocomplete on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#aiItemTitle') && !e.target.closest('#aiAutocompleteList')) {
+        autocompleteList?.classList.remove('show');
+      }
+    });
+  }
+
+  function openModal(itemData = null) {
+    if (itemData) {
+      currentItemId = itemData.id;
+      document.getElementById('aiItemTitle').value = itemData.title;
+      document.getElementById('aiNotes').value = itemData.notes || '';
+    } else {
+      currentItemId = null;
+      document.getElementById('aiItemTitle').value = '';
+      document.getElementById('aiNotes').value = '';
+    }
+
+    // Reset result
+    document.getElementById('aiResult').style.display = 'none';
+    document.getElementById('aiResultContent').innerHTML = '';
+
+    document.body.classList.add('modal-open');
+    modal.removeAttribute('hidden');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeModal() {
+    document.body.classList.remove('modal-open');
+    modal.setAttribute('hidden', '');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function selectItem(itemId, title, supplier) {
+    currentItemId = itemId;
+    document.getElementById('aiItemTitle').value = title;
+    document.getElementById('aiAutocompleteList').classList.remove('show');
+  }
+
+  async function analyze() {
+    const itemTitle = document.getElementById('aiItemTitle').value.trim();
+    const condition = document.getElementById('aiCondition').value.trim();
+    const notes = document.getElementById('aiNotes').value.trim();
+    const marketRegion = document.getElementById('aiMarketRegion').value;
+    const currency = document.getElementById('aiCurrency').value;
+
+    if (!itemTitle) {
+      alert('Please enter an item title');
+      return;
+    }
+
+    const analyzeBtn = document.getElementById('aiAnalyzeBtn');
+    const resultBox = document.getElementById('aiResult');
+    const resultContent = document.getElementById('aiResultContent');
+    const typingIndicator = resultBox.querySelector('.typing-indicator');
+
+    // Show loading state
+    analyzeBtn.classList.add('loading');
+    analyzeBtn.style.opacity = '0.6';
+    analyzeBtn.style.pointerEvents = 'none';
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+    resultBox.style.display = 'block';
+    resultContent.innerHTML = '';
+    typingIndicator.style.display = 'flex';
+
+    try {
+      const payload = currentItemId
+        ? { item_id: currentItemId }
+        : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
+
+      const response = await fetch('/api/ai-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      // Hide typing indicator
+      typingIndicator.style.display = 'none';
+
+      if (data.ok) {
+        // Typewriter effect
+        typewriterEffect(resultContent, data.result);
+      } else {
+        resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
+      }
+    } catch (err) {
+      typingIndicator.style.display = 'none';
+      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}</div>`;
+    } finally {
+      analyzeBtn.classList.remove('loading');
+      analyzeBtn.style.opacity = '1';
+      analyzeBtn.style.pointerEvents = 'auto';
+      analyzeBtn.innerHTML = '<i class="fas fa-brain"></i> Analyze Market';
+    }
+  }
+
+  function typewriterEffect(element, text) {
+    let index = 0;
+    element.innerHTML = '';
+
+    const type = () => {
+      if (index < text.length) {
+        element.textContent += text.charAt(index);
+        index++;
+        setTimeout(type, typingSpeed);
+      }
+    };
+
+    type();
+  }
+
+  return { init, openModal, selectItem, analyze };
+})();
+
+// Global function for modal opening from header button
+function openAIResearchModal() {
+  ModalAIResearch.openModal();
+}
+
+// Global function for analyze button
+function analyzeAIResearch() {
+  ModalAIResearch.analyze();
+}
+
+document.addEventListener('DOMContentLoaded', ModalAIResearch.init);
 </script>
 
 {% endblock %}
