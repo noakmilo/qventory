@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>{% block title %}Qventory – Inventory QR{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- Favicon -->
@@ -127,6 +127,44 @@
         navigator.serviceWorker.register('/sw.js').catch(console.error);
       });
     }
+  </script>
+
+  <script>
+    // iOS PWA Pull-to-Refresh Support
+    (function(){
+      // Detectar si está en modo standalone (PWA instalada)
+      const isIOSPWA = window.navigator.standalone === true;
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+      if (isIOS && isIOSPWA) {
+        let startY = 0;
+        let isPulling = false;
+
+        document.addEventListener('touchstart', (e) => {
+          if (window.pageYOffset === 0) {
+            startY = e.touches[0].pageY;
+            isPulling = true;
+          }
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+          if (!isPulling) return;
+          const currentY = e.touches[0].pageY;
+          const pullDistance = currentY - startY;
+
+          // Si el usuario desliza hacia abajo más de 80px
+          if (pullDistance > 80 && window.pageYOffset === 0) {
+            isPulling = false;
+            // Recargar la página
+            window.location.reload();
+          }
+        }, { passive: true });
+
+        document.addEventListener('touchend', () => {
+          isPulling = false;
+        }, { passive: true });
+      }
+    })();
   </script>
 
   <script>
