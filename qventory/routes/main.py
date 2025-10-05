@@ -1410,19 +1410,29 @@ def api_ai_research():
     currency = data.get("currency") or "USD"
     print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
-    # Build the prompt
+    # STEP 1: Scrape real eBay sold listings
+    print("📡 Scraping eBay sold listings...", file=sys.stderr)
+    from qventory.helpers.ebay_scraper import scrape_ebay_sold_listings, format_listings_for_ai
+
+    scraped_data = scrape_ebay_sold_listings(item_title, max_results=10)
+    print(f"✓ Scraped {scraped_data.get('count', 0)} listings", file=sys.stderr)
+
+    # Format scraped data for AI
+    real_market_data = format_listings_for_ai(scraped_data)
+    ebay_search_url = scraped_data.get('url', '')
+
+    # Build the prompt with REAL data
     system_prompt = """You are an eBay pricing analyst. You MUST respond with ONLY pure HTML code.
 NO explanations, NO markdown, NO code blocks - just raw HTML starting with <div."""
 
-    # URL encode the title for eBay search
-    import urllib.parse
-    ebay_search_url = f"https://www.ebay.com/sch/i.html?_nkw={urllib.parse.quote_plus(item_title)}&LH_Sold=1&LH_Complete=1"
-
-    user_prompt = f"""Provide eBay pricing estimate for: {item_title}
+    user_prompt = f"""Analyze REAL eBay sold listings data for: {item_title}
 Condition: {condition}
 Market: {market_region}
 
-Based on typical eBay sold prices for similar items, provide pricing guidance.
+REAL SOLD LISTINGS DATA:
+{real_market_data}
+
+Based on this REAL market data above, provide accurate pricing guidance.
 
 RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
 
@@ -1443,21 +1453,22 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
   </div>
 
   <div style="background:#1a1d24;padding:10px;border-radius:6px">
-    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📝 Notes</div>
-    <div style="font-size:11px;color:#9ca3af;line-height:1.4">[Brief 1-2 sentence rationale for pricing based on condition, rarity, demand]</div>
+    <div style="color:#9ca3af;font-size:12px;margin-bottom:6px">📝 Analysis</div>
+    <div style="font-size:11px;color:#9ca3af;line-height:1.4">[Brief analysis: Calculate average from sold data above, note price range, suggest strategy based on REAL prices]</div>
     <div style="margin-top:6px;padding:6px;background:#0f1115;border-radius:4px;font-size:10px;color:#6b7280">
-      💡 Tip: <a href="{ebay_search_url}" target="_blank" style="color:#60a5fa;text-decoration:none">Search sold listings on eBay ↗</a> to verify current market
+      ✅ Based on {len(scraped_data.get('items', []))} real sold listings | <a href="{ebay_search_url}" target="_blank" style="color:#60a5fa;text-decoration:none">View on eBay ↗</a>
     </div>
   </div>
 </div>
 
 CRITICAL RULES:
-1. Start response IMMEDIATELY with <div (no text before)
-2. NO markdown code fences (```)
-3. NO explanations or text outside HTML
-4. Keep total under 80 words
-5. Use realistic price estimates based on item type
-6. The search link is pre-filled - keep it as-is"""
+1. Calculate actual average/range from the REAL sold prices above
+2. Start response IMMEDIATELY with <div (no text before)
+3. NO markdown code fences (```)
+4. NO explanations or text outside HTML
+5. Keep total under 80 words
+6. Use ONLY the real prices from the data - don't invent numbers
+7. The search link is pre-filled - keep it as-is"""
 
     print("Building prompts...", file=sys.stderr)
     print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)
