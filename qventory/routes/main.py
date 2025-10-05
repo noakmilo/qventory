@@ -1411,66 +1411,59 @@ def api_ai_research():
     print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
     # Build the prompt
-    system_prompt = """You are an expert e-commerce pricing analyst specializing in eBay market intelligence.
-Analyze sold items on eBay and provide clear, actionable pricing recommendations in a human-friendly format.
-Be concise, direct, and professional. Use tables for data presentation."""
+    system_prompt = """You are an eBay pricing expert. Analyze sold listings and provide brief, actionable recommendations in clean HTML format."""
 
-    user_prompt = f"""Analyze this item for eBay pricing:
+    user_prompt = f"""Analyze eBay pricing for: {item_title}
+Condition: {condition}
+Market: {market_region} | Currency: {currency}
 
-**Item:** {item_title}
-**Condition:** {condition}
-**Notes:** {notes}
-**Market:** {market_region}
-**Currency:** {currency}
+Search sold listings (7-14 days). Focus on identical/similar items.
 
-Search eBay sold listings (last 7 days, expand to 14 if needed). Focus on identical/similar items. Exclude lots, parts/not working, and irrelevant listings.
+Return ONLY valid HTML (no markdown, no code blocks) using this structure:
 
-**Output Format (use this EXACT structure):**
+<div style="font-family:system-ui;line-height:1.6;color:#e8e8e8">
+  <div style="background:#1a1d24;padding:12px;border-radius:8px;margin-bottom:12px">
+    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">📊 Market Data</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+      <div><strong style="color:#60a5fa">Median:</strong> ${currency} XX</div>
+      <div><strong style="color:#60a5fa">Range:</strong> $XX-XX</div>
+      <div><strong style="color:#60a5fa">Sales:</strong> X found</div>
+    </div>
+  </div>
 
-## 📊 Market Analysis
+  <div style="background:#1a1d24;padding:12px;border-radius:8px;margin-bottom:12px">
+    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">💰 Recommendation</h3>
+    <table style="width:100%;font-size:13px;border-collapse:collapse">
+      <tr><td style="padding:4px 0"><strong style="color:#34d399">List Price:</strong></td><td>${currency} XX.XX</td></tr>
+      <tr><td style="padding:4px 0"><strong style="color:#fbbf24">Floor Price:</strong></td><td>${currency} XX.XX</td></tr>
+    </table>
+    <p style="margin:8px 0 0 0;font-size:12px;color:#9ca3af">Strategy: [BIN + Best Offer | Auto-decline below $XX | Shipping advice]</p>
+  </div>
 
-**Search Period:** [7 or 14] days
-**Valid Sales Found:** [count]
+  <div style="background:#1a1d24;padding:12px;border-radius:8px">
+    <h3 style="margin:0 0 8px 0;font-size:14px;color:#9ca3af">📦 Recent Sales</h3>
+    <table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr style="border-bottom:1px solid #374151">
+        <th style="text-align:left;padding:4px;color:#9ca3af">Date</th>
+        <th style="text-align:right;padding:4px;color:#9ca3af">Total</th>
+        <th style="text-align:left;padding:4px;color:#9ca3af">Type</th>
+      </tr>
+      <tr style="border-bottom:1px solid #2d3748">
+        <td style="padding:4px">Jan XX</td>
+        <td style="text-align:right;padding:4px">$XX.XX</td>
+        <td style="padding:4px;font-size:11px;color:#9ca3af">BIN</td>
+      </tr>
+      <!-- Add 2-4 more rows -->
+    </table>
+  </div>
+</div>
 
-| Metric | Price ({currency}) |
-|--------|----------|
-| Median | $XX.XX |
-| Average | $XX.XX |
-| Range | $XX - $XX |
-
-## 💰 Pricing Recommendation
-
-| Item | Price ({currency}) |
-|------|----------|
-| **List Price (BIN)** | $XX.XX |
-| **Floor Price** | $XX.XX |
-
-**Strategy:**
-• [Strategy point 1, e.g., "BIN + Best Offer enabled"]
-• [Strategy point 2, e.g., "Auto-decline offers below $XX"]
-• [Shipping recommendation]
-
-**Why this pricing:**
-• [Rationale based on comparables]
-• [Market context or condition adjustment]
-• [Competition or demand insight]
-
-## 📦 Recent Comparables
-
-| Date | Price | Shipping | Total | Format | Notes |
-|------|-------|----------|-------|--------|-------|
-| Jan 15 | $XX.XX | $X.XX | $XX.XX | BIN | [condition/spec notes] |
-| Jan 14 | $XX.XX | Free | $XX.XX | Auction | [condition/spec notes] |
-| Jan 12 | $XX.XX | $X.XX | $XX.XX | BIN | [condition/spec notes] |
-
----
-
-**IMPORTANT:**
-- Keep response under 300 words
-- Use markdown tables
-- Be direct and actionable
-- NO JSON output
-- If no data found, give educated estimate based on similar items and clearly state it's speculative"""
+RULES:
+- Max 150 words total
+- Return ONLY the HTML (no ```html or markdown)
+- Use inline styles (dark theme: bg #1a1d24, text #e8e8e8)
+- If no data: provide educated estimate and mark as speculative
+- Be concise and actionable"""
 
     print("Building prompts...", file=sys.stderr)
     print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)

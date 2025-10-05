@@ -1264,16 +1264,15 @@ document.addEventListener('DOMContentLoaded', ModalProfitCalc.init);
 /* ===== AI Research Modal Styles ===== */
 .ai-result-box {
   margin-top: 1.5rem;
-  padding: 1.5rem;
-  background: var(--muted);
+  padding: 0;
+  background: transparent;
   border-radius: var(--radius);
   font-size: var(--fs-sm);
   line-height: 1.6;
 }
 
 #aiResultContent {
-  white-space: pre-wrap;
-  word-break: break-word;
+  /* HTML content with inline styles */
 }
 
 /* Typing indicator animation */
@@ -1484,8 +1483,8 @@ const ModalAIResearch = (function() {
       typingIndicator.style.display = 'none';
 
       if (data.ok) {
-        // Typewriter effect
-        typewriterEffect(resultContent, data.result);
+        // Render HTML directly (AI returns formatted HTML)
+        resultContent.innerHTML = data.result;
       } else {
         resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
       }
