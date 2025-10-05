@@ -1323,42 +1323,95 @@ def api_ai_research():
     AI-powered eBay market research using OpenAI API
     Expects JSON: {item_id: int} or {title: str, condition: str, notes: str}
     """
-    from openai import OpenAI
+    import sys
+    import traceback
+
+    print("=" * 80, file=sys.stderr)
+    print("AI RESEARCH API CALLED", file=sys.stderr)
+    print("=" * 80, file=sys.stderr)
+
+    try:
+        from openai import OpenAI
+        print("✓ OpenAI imported successfully", file=sys.stderr)
+    except Exception as e:
+        print(f"✗ Failed to import OpenAI: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({
+            "ok": False,
+            "error": f"Failed to import OpenAI library: {str(e)}"
+        }), 500
 
     # Get OpenAI API key from environment
     openai_api_key = os.environ.get("OPENAI_API_KEY")
+    print(f"API Key present: {bool(openai_api_key)}", file=sys.stderr)
     if not openai_api_key:
+        print("✗ No OpenAI API key found", file=sys.stderr)
         return jsonify({
             "ok": False,
             "error": "OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file."
         }), 500
 
-    client = OpenAI(api_key=openai_api_key)
+    try:
+        client = OpenAI(api_key=openai_api_key)
+        print("✓ OpenAI client created", file=sys.stderr)
+    except Exception as e:
+        print(f"✗ Failed to create OpenAI client: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({
+            "ok": False,
+            "error": f"Failed to initialize OpenAI client: {str(e)}"
+        }), 500
 
-    data = request.get_json() or {}
+    try:
+        data = request.get_json() or {}
+        print(f"Request data: {data}", file=sys.stderr)
+    except Exception as e:
+        print(f"✗ Failed to parse JSON: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({
+            "ok": False,
+            "error": f"Invalid JSON in request: {str(e)}"
+        }), 400
 
     # Get item data either from item_id or direct input
     item_id = data.get("item_id")
-    if item_id:
-        item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
-        if not item:
-            return jsonify({"ok": False, "error": "Item not found"}), 404
+    print(f"Item ID: {item_id}", file=sys.stderr)
 
-        item_title = item.title
-        condition = item.notes or "Used"
-        notes = item.notes or ""
+    if item_id:
+        try:
+            item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+            if not item:
+                print(f"✗ Item {item_id} not found", file=sys.stderr)
+                return jsonify({"ok": False, "error": "Item not found"}), 404
+
+            item_title = item.title
+            condition = item.notes or "Used"
+            notes = item.notes or ""
+            print(f"✓ Item found: {item_title}", file=sys.stderr)
+        except Exception as e:
+            print(f"✗ Database error: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            return jsonify({"ok": False, "error": f"Database error: {str(e)}"}), 500
     else:
         item_title = data.get("title", "").strip()
         condition = data.get("condition", "Used")
         notes = data.get("notes", "")
+        print(f"✓ Direct input: {item_title}", file=sys.stderr)
 
     if not item_title:
+        print("✗ No item title provided", file=sys.stderr)
         return jsonify({"ok": False, "error": "Item title is required"}), 400
 
     # Get market settings from user settings or defaults
-    settings = get_or_create_settings(current_user.id)
-    market_region = data.get("market_region") or "US"
-    currency = data.get("currency") or settings.currency or "USD"
+    try:
+        settings = get_or_create_settings(current_user.id)
+        market_region = data.get("market_region") or "US"
+        currency = data.get("currency") or settings.currency or "USD"
+        print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
+    except Exception as e:
+        print(f"✗ Settings error: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return jsonify({"ok": False, "error": f"Settings error: {str(e)}"}), 500
 
     # Build the prompt
     system_prompt = """You are an expert e-commerce pricing analyst specializing in eBay market intelligence.
@@ -1455,8 +1508,12 @@ Output Rules:
 Final instruction:
 Return the written summary and recommendation first, followed by the JSON object exactly in the format above."""
 
+    print("Building prompts...", file=sys.stderr)
+    print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)
+    print(f"User prompt length: {len(user_prompt)} chars", file=sys.stderr)
+
     try:
-        # Call OpenAI API
+        print("Calling OpenAI API...", file=sys.stderr)
         response = client.chat.completions.create(
             model="gpt-4-turbo-preview",
             messages=[
@@ -1467,7 +1524,10 @@ Return the written summary and recommendation first, followed by the JSON object
             max_tokens=2000
         )
 
+        print("✓ OpenAI API call successful", file=sys.stderr)
         result = response.choices[0].message.content
+        print(f"Result length: {len(result)} chars", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
 
         return jsonify({
             "ok": True,
@@ -1476,6 +1536,9 @@ Return the written summary and recommendation first, followed by the JSON object
         })
 
     except Exception as e:
+        print(f"✗ OpenAI API error: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
         return jsonify({
             "ok": False,
             "error": f"OpenAI API error: {str(e)}"

@@ -1457,6 +1457,8 @@ const ModalAIResearch = (function() {
         ? { item_id: currentItemId }
         : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
 
+      console.log('Sending request to /api/ai-research with payload:', payload);
+
       const response = await fetch('/api/ai-research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1464,7 +1466,19 @@ const ModalAIResearch = (function() {
         body: JSON.stringify(payload)
       });
 
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response received:', text.substring(0, 500));
+        throw new Error(`Server returned non-JSON response (${response.status}). Check console for details.`);
+      }
+
       const data = await response.json();
+      console.log('Response data:', data);
 
       // Hide typing indicator
       typingIndicator.style.display = 'none';
@@ -1476,8 +1490,9 @@ const ModalAIResearch = (function() {
         resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
       }
     } catch (err) {
+      console.error('Full error:', err);
       typingIndicator.style.display = 'none';
-      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}</div>`;
+      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}<br><small>Check browser console for details</small></div>`;
     } finally {
       analyzeBtn.classList.remove('loading');
       analyzeBtn.style.opacity = '1';
