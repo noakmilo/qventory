@@ -8,7 +8,9 @@ import urllib.parse
 import re
 import os
 import time
+import json
 import requests
+from datetime import datetime
 from bs4 import BeautifulSoup
 
 
@@ -31,23 +33,61 @@ def create_ebay_sold_url(item_title):
     return url
 
 
+def save_html_to_json(html_content, item_title, task_id):
+    """
+    Save HTML content to JSON file on server
+
+    Args:
+        html_content: HTML string from Browse.AI
+        item_title: Search term used
+        task_id: Browse.AI task ID
+
+    Returns:
+        Path to saved JSON file
+    """
+    # Create data directory if it doesn't exist
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'browseai_cache')
+    os.makedirs(data_dir, exist_ok=True)
+
+    # Create filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_title = re.sub(r'[^\w\s-]', '', item_title).strip().replace(' ', '_')[:50]
+    filename = f"{safe_title}_{timestamp}_{task_id[:8]}.json"
+    filepath = os.path.join(data_dir, filename)
+
+    # Prepare data
+    data = {
+        'task_id': task_id,
+        'item_title': item_title,
+        'timestamp': timestamp,
+        'html_content': html_content,
+        'html_length': len(html_content)
+    }
+
+    # Save to JSON
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    print(f"✓ Saved HTML to {filepath}", flush=True)
+    return filepath
+
+
 def scrape_url_with_browseai(target_url):
     """
     Scrape URL using Browse.AI robot
-    Returns structured data from capturedLists
+    Returns HTML content and task_id
 
     Args:
         target_url: The URL to scrape
 
     Returns:
-        List of captured items or None
+        Tuple of (html_content, task_id) or (None, None)
     """
     api_key = os.environ.get("BROWSEAI_API_KEY")
-    # Use the specific robot that extracts eBay listings
     robot_id = os.environ.get("BROWSEAI_ROBOT_ID", "0199b598-b94f-7b53-bd37-bec82a6d78e9")
 
     if not api_key:
-        return None
+        return None, None
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -72,7 +112,9 @@ def scrape_url_with_browseai(target_url):
         task_id = result.get("result", {}).get("id")
 
         if not task_id:
-            return None
+            return None, None
+
+        print(f"✓ Browse.AI task started: {task_id}", flush=True)
 
         # Poll for results (Browse.AI can take 60-90 seconds)
         max_attempts = 90  # 90 attempts = 3 minutes max
@@ -98,28 +140,34 @@ def scrape_url_with_browseai(target_url):
 
                 if html_content:
                     print(f"✓ Browse.AI returned HTML ({len(html_content)} chars)", flush=True)
-                    return html_content
+                    return html_content, task_id
                 else:
                     print(f"✗ No HTML in capturedTexts. Available keys: {list(captured_texts.keys())}", flush=True)
 
-                return None
+                return None, None
 
             elif status in ["failed", "cancelled"]:
                 print(f"✗ Browse.AI task {status}", flush=True)
-                return None
+                return None, None
 
         # Timeout
         print("✗ Browse.AI timed out after 3 minutes", flush=True)
-        return None
+        return None, None
 
     except Exception as e:
         print(f"Browse.AI error: {e}")
-        return None
+        return None, None
 
 
 def scrape_ebay_sold_listings(item_title, max_results=10):
     """
     Scrape eBay sold listings using Browse.AI
+
+    FLUJO:
+    1. Llamar Browse.AI para obtener HTML
+    2. Guardar HTML en JSON
+    3. Parsear JSON para extraer listings
+    4. Devolver datos estructurados para OpenAI
 
     Args:
         item_title: The item title to search for
@@ -130,15 +178,22 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
             - success: bool
             - url: str (eBay search URL)
             - items: list of dicts with title, price, link
-            - error: str (if failed)
+            - count: int (number of items found)
+            - json_path: str (path to saved JSON file)
     """
     try:
+        # PASO 1: Crear URL y llamar Browse.AI
         url = create_ebay_sold_url(item_title)
+        print(f"📡 Calling Browse.AI for: {item_title}", flush=True)
 
-        # Try Browse.AI to get HTML
-        html_content = scrape_url_with_browseai(url)
+        html_content, task_id = scrape_url_with_browseai(url)
 
-        if html_content:
+        if html_content and task_id:
+            # PASO 2: Guardar HTML en JSON
+            json_path = save_html_to_json(html_content, item_title, task_id)
+
+            # PASO 3: Parsear HTML con BeautifulSoup
+            print(f"🔍 Parsing HTML to extract listings...", flush=True)
             # Parse HTML with BeautifulSoup
             soup = BeautifulSoup(html_content, 'html.parser')
             listings = []
@@ -151,13 +206,7 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                 items = soup.find_all('div', class_='s-item')
                 print(f"🔍 Found {len(items)} <div class='s-item'> elements instead", flush=True)
 
-            # Debug: Show all unique classes in the HTML
-            all_classes = set()
-            for tag in soup.find_all(True):
-                if tag.get('class'):
-                    all_classes.update(tag.get('class'))
-            print(f"🔍 Sample classes in HTML: {list(all_classes)[:20]}", flush=True)
-
+            # PASO 4: Extraer datos de cada listing
             for item in items[:max_results * 2]:
                 try:
                     # Extract title
@@ -216,16 +265,18 @@ def scrape_ebay_sold_listings(item_title, max_results=10):
                     print(f"⚠️  Skipped item due to: {e}", flush=True)
                     continue
 
-            # Sort by similarity
+            # PASO 5: Ordenar por similitud y devolver resultados
             listings.sort(key=lambda x: x['similarity'], reverse=True)
 
-            print(f"✓ Successfully parsed {len(listings)} listings from HTML", flush=True)
+            print(f"✅ Successfully parsed {len(listings)} listings", flush=True)
 
             return {
                 'success': True,
                 'url': url,
                 'items': listings[:max_results],
-                'count': len(listings[:max_results])
+                'count': len(listings[:max_results]),
+                'json_path': json_path,
+                'task_id': task_id
             }
 
         # Fallback: Direct request (will likely fail on eBay)
