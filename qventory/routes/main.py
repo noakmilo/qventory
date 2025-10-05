@@ -267,6 +267,159 @@ def export_csv():
     )
 
 
+# ===== CSV Import Helpers =====
+
+def _detect_csv_format(fieldnames):
+    """
+    Detecta el formato del CSV:
+    - 'qventory': formato nativo de Qventory (tiene 'sku' y 'title')
+    - 'flipwise': formato de Flipwise/otras plataformas (tiene 'Product', 'Cost', 'List price', etc.)
+    - 'unknown': formato desconocido
+    """
+    fieldnames_lower = [f.lower().strip() for f in fieldnames]
+
+    # Formato Qventory: debe tener 'sku' y 'title'
+    if 'sku' in fieldnames_lower and 'title' in fieldnames_lower:
+        return 'qventory'
+
+    # Formato Flipwise/similar: tiene 'Product' o 'product' y otros campos característicos
+    if 'product' in fieldnames_lower:
+        return 'flipwise'
+
+    return 'unknown'
+
+
+def _parse_external_row_to_qventory(row, user_id):
+    """
+    Convierte una fila de CSV externo (Flipwise, etc.) al formato de Qventory.
+
+    Mapeo de campos:
+    - Product -> title
+    - Cost -> item_cost
+    - List price -> item_price
+    - Purchased at -> supplier
+    - eBay Item ID -> ebay_url (si existe)
+    - Genera SKU automáticamente
+    - Usa fecha actual como listing_date
+    - Ignora location (usuario lo define después)
+    """
+    # Helpers
+    def fstr(key):
+        val = row.get(key, '')
+        if isinstance(val, str):
+            return val.strip() or None
+        return str(val).strip() if val else None
+
+    def ffloat(key):
+        val = fstr(key)
+        if not val:
+            return None
+        try:
+            return float(val.replace(',', ''))
+        except:
+            return None
+
+    # Extraer datos del CSV externo
+    title = fstr('Product') or fstr('product') or fstr('Title') or fstr('title')
+    if not title:
+        return None
+
+    # Generar SKU automático usando el helper de Qventory
+    sku = generate_sku(user_id)
+
+    # Mapear campos
+    cost = ffloat('Cost') or ffloat('cost')
+    price = ffloat('List price') or ffloat('list price') or ffloat('List Price')
+    supplier = fstr('Purchased at') or fstr('purchased at')
+
+    # eBay Item ID -> construir URL de eBay
+    ebay_item_id = fstr('eBay Item ID') or fstr('ebay item id')
+    ebay_url = f"https://www.ebay.com/itm/{ebay_item_id}" if ebay_item_id else None
+
+    # Usar fecha actual como listing_date (ignoramos las fechas del CSV externo)
+    listing_date = date.today()
+
+    return {
+        'sku': sku,
+        'title': title,
+        'item_cost': cost,
+        'item_price': price,
+        'supplier': supplier,
+        'ebay_url': ebay_url,
+        'listing_date': listing_date,
+        # Campos que se ignoran (usuario los define después)
+        'A': None,
+        'B': None,
+        'S': None,
+        'C': None,
+        'location_code': None,
+        'listing_link': None,
+        'web_url': None,
+        'amazon_url': None,
+        'mercari_url': None,
+        'vinted_url': None,
+        'poshmark_url': None,
+        'depop_url': None,
+        'item_thumb': None
+    }
+
+
+def _parse_qventory_row(row):
+    """Parse una fila del formato nativo de Qventory"""
+    def fstr(k):
+        return (row.get(k) or '').strip() or None
+
+    def ffloat(k):
+        v = (row.get(k) or '').strip()
+        try:
+            return float(v) if v != '' else None
+        except:
+            return None
+
+    def fdate(k):
+        v = (row.get(k) or '').strip()
+        if not v:
+            return None
+        for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+            try:
+                dt = datetime.strptime(v, fmt)
+                return dt.date() if fmt == "%Y-%m-%d" else dt
+            except:
+                pass
+        return None
+
+    sku = fstr('sku')
+    title = fstr('title')
+
+    if not sku or not title:
+        return None
+
+    ld = fdate('listing_date')
+
+    return {
+        'sku': sku,
+        'title': title,
+        'listing_link': fstr('listing_link'),
+        'web_url': fstr('web_url'),
+        'ebay_url': fstr('ebay_url'),
+        'amazon_url': fstr('amazon_url'),
+        'mercari_url': fstr('mercari_url'),
+        'vinted_url': fstr('vinted_url'),
+        'poshmark_url': fstr('poshmark_url'),
+        'depop_url': fstr('depop_url'),
+        'A': fstr('A'),
+        'B': fstr('B'),
+        'S': fstr('S'),
+        'C': fstr('C'),
+        'location_code': fstr('location_code'),
+        'item_thumb': fstr('item_thumb'),
+        'supplier': fstr('supplier'),
+        'item_cost': ffloat('item_cost'),
+        'item_price': ffloat('item_price'),
+        'listing_date': ld if isinstance(ld, date) else None
+    }
+
+
 @main_bp.route("/import/csv", methods=["GET", "POST"])
 @login_required
 def import_csv():
@@ -288,99 +441,70 @@ def import_csv():
         csv_content = file.read().decode('utf-8')
         csv_reader = csv.DictReader(io.StringIO(csv_content))
 
-        if not all(header in csv_reader.fieldnames for header in ['sku', 'title']):
-            flash("CSV must contain at least 'sku' and 'title' columns.", "error")
+        # Detectar formato del CSV
+        csv_format = _detect_csv_format(csv_reader.fieldnames)
+
+        if csv_format == 'unknown':
+            flash("CSV format not recognized. Please use Qventory format or supported external formats (Flipwise).", "error")
             return redirect(url_for('main.import_csv'))
 
         imported_count = 0
         updated_count = 0
         skipped_count = 0
+        duplicate_count = 0
+
+        # Set para detectar duplicados por título
+        seen_titles = set()
+        existing_titles = {item.title.lower().strip() for item in Item.query.filter_by(user_id=current_user.id).all()}
 
         for row in csv_reader:
-            sku = (row.get('sku') or '').strip()
-            title = (row.get('title') or '').strip()
-            if not sku or not title:
+            # Parsear según el formato detectado
+            if csv_format == 'qventory':
+                parsed_data = _parse_qventory_row(row)
+            elif csv_format == 'flipwise':
+                parsed_data = _parse_external_row_to_qventory(row, current_user.id)
+            else:
                 skipped_count += 1
                 continue
 
-            # parse helpers
-            def fstr(k): return (row.get(k) or '').strip() or None
-            def ffloat(k):
-                v = (row.get(k) or '').strip()
-                try:
-                    return float(v) if v != '' else None
-                except:
-                    return None
-            def fdate(k):
-                v = (row.get(k) or '').strip()
-                if not v:
-                    return None
-                for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
-                    try:
-                        dt = datetime.strptime(v, fmt)
-                        return dt.date() if fmt == "%Y-%m-%d" else dt
-                    except:
-                        pass
-                return None
+            if not parsed_data:
+                skipped_count += 1
+                continue
 
+            # Detectar duplicados exactos por título
+            title_normalized = parsed_data['title'].lower().strip()
+
+            # Si el título ya existe en la BD o en este mismo CSV, saltar
+            if title_normalized in existing_titles or title_normalized in seen_titles:
+                duplicate_count += 1
+                continue
+
+            seen_titles.add(title_normalized)
+
+            sku = parsed_data['sku']
             existing_item = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
 
             if existing_item and mode == 'add':
-                it = existing_item
-                it.title = title
-                it.listing_link = fstr('listing_link')
-                it.web_url = fstr('web_url')
-                it.ebay_url = fstr('ebay_url')
-                it.amazon_url = fstr('amazon_url')
-                it.mercari_url = fstr('mercari_url')
-                it.vinted_url = fstr('vinted_url')
-                it.poshmark_url = fstr('poshmark_url')
-                it.depop_url = fstr('depop_url')
-                it.A = fstr('A')
-                it.B = fstr('B')
-                it.S = fstr('S')
-                it.C = fstr('C')
-                it.location_code = fstr('location_code')
-                # nuevos
-                it.item_thumb = fstr('item_thumb')
-                it.supplier = fstr('supplier')
-                it.item_cost = ffloat('item_cost')
-                it.item_price = ffloat('item_price')
-                ld = fdate('listing_date')
-                it.listing_date = ld if isinstance(ld, date) else None
+                # Actualizar item existente
+                for key, value in parsed_data.items():
+                    if key != 'sku':  # No actualizar el SKU
+                        setattr(existing_item, key, value)
                 updated_count += 1
 
             elif not existing_item:
-                ld = fdate('listing_date')
-                new_item = Item(
-                    user_id=current_user.id,
-                    sku=sku,
-                    title=title,
-                    listing_link=fstr('listing_link'),
-                    web_url=fstr('web_url'),
-                    ebay_url=fstr('ebay_url'),
-                    amazon_url=fstr('amazon_url'),
-                    mercari_url=fstr('mercari_url'),
-                    vinted_url=fstr('vinted_url'),
-                    poshmark_url=fstr('poshmark_url'),
-                    depop_url=fstr('depop_url'),
-                    A=fstr('A'),
-                    B=fstr('B'),
-                    S=fstr('S'),
-                    C=fstr('C'),
-                    location_code=fstr('location_code'),
-                    # nuevos
-                    item_thumb=fstr('item_thumb'),
-                    supplier=fstr('supplier'),
-                    item_cost=ffloat('item_cost'),
-                    item_price=ffloat('item_price'),
-                    listing_date=ld if isinstance(ld, date) else None
-                )
+                # Crear nuevo item
+                new_item = Item(user_id=current_user.id, **parsed_data)
                 db.session.add(new_item)
                 imported_count += 1
+                # Agregar a existing_titles para prevenir duplicados en el mismo CSV
+                existing_titles.add(title_normalized)
 
         if mode == 'replace':
-            csv_skus = {(r.get('sku') or '').strip() for r in csv.DictReader(io.StringIO(csv_content)) if (r.get('sku') or '').strip()}
+            # En modo replace, eliminar items que no están en el CSV
+            csv_skus = {parsed_data['sku'] for parsed_data in
+                       [_parse_qventory_row(r) if csv_format == 'qventory' else _parse_external_row_to_qventory(r, current_user.id)
+                        for r in csv.DictReader(io.StringIO(csv_content))]
+                       if parsed_data}
             items_to_delete = Item.query.filter_by(user_id=current_user.id).filter(~Item.sku.in_(csv_skus)).all()
             for item in items_to_delete:
                 db.session.delete(item)
@@ -388,9 +512,15 @@ def import_csv():
         db.session.commit()
 
         messages = []
-        if imported_count > 0: messages.append(f"{imported_count} items imported")
-        if updated_count > 0: messages.append(f"{updated_count} items updated")
-        if skipped_count > 0: messages.append(f"{skipped_count} rows skipped")
+        messages.append(f"Format detected: {csv_format.upper()}")
+        if imported_count > 0:
+            messages.append(f"{imported_count} items imported")
+        if updated_count > 0:
+            messages.append(f"{updated_count} items updated")
+        if duplicate_count > 0:
+            messages.append(f"{duplicate_count} duplicates skipped")
+        if skipped_count > 0:
+            messages.append(f"{skipped_count} rows skipped")
 
         flash(f"Import completed: {', '.join(messages)}.", "ok")
 
