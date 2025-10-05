@@ -95,7 +95,14 @@ a{ color:var(--accent); text-decoration:none }
 .settingsbtn{ font-size:var(--fs-xs); margin:2px; padding:6px 10px }
 
 /* ===== Layout (98%) ===== */
-.wrap{ width:98%; max-width:none; margin:0 auto; padding:var(--space-3) }
+.wrap{
+  width:98%;
+  max-width:none;
+  margin:0 auto;
+  padding:var(--space-3);
+  /* Compensar altura del header sticky en móvil */
+  padding-top:calc(var(--space-3) + 70px);
+}
 .row{ display:flex; gap:var(--space-3); flex-wrap:wrap }
 
 /* Tarjetas */
@@ -114,18 +121,21 @@ h1{ font-size:var(--fs-xl); margin:0 0 var(--space-2) }
 header{
   position:sticky;
   top:0;
-  top:env(safe-area-inset-top, 0); /* iOS notch safe area */
   z-index:20;
   display:flex; align-items:center; justify-content:space-between;
   gap:10px;
   padding:10px 14px;
   padding-top:calc(10px + env(safe-area-inset-top, 0px));
   border-bottom:1px solid var(--glass-border);
-  background:var(--glass-bg-strong);
+  /* Background más sólido para evitar transparencia en notch */
+  background:linear-gradient(to bottom, var(--bg) 0%, var(--bg) env(safe-area-inset-top, 0px), var(--glass-bg-strong) env(safe-area-inset-top, 0px));
   backdrop-filter:blur(calc(var(--blur)*.8));
   -webkit-backdrop-filter:blur(calc(var(--blur)*.8));
   box-shadow:0 8px 18px var(--glass-shadow);
   width:100%;
+  /* Asegurar que cubra el área del notch */
+  margin-top:calc(-1 * env(safe-area-inset-top, 0px));
+  padding-top:calc(10px + env(safe-area-inset-top, 0px));
 }
 .brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto; min-width:0 }
 .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent) }
