@@ -348,17 +348,17 @@
 
   .uploader-body{
     display:grid;
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 120px 1fr;
     gap:12px;
   }
   @media (max-width: 720px){
-    .uploader-body{ grid-template-columns: 1fr }
+    .uploader-body{ grid-template-columns: 120px 1fr }
   }
 
   .thumb-wrap{
     position:relative;
-    width:100%;
-    aspect-ratio:1/1;
+    width:120px;
+    height:120px;
     border-radius:12px;
     overflow:hidden;
     background:#0c0e12;
@@ -368,10 +368,17 @@
     justify-content:center;
   }
   .thumb-skeleton{
-    display:flex; flex-direction:column; align-items:center; gap:8px;
-    color:#8892a6; font-size:12px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    color:#8892a6;
+    font-size:11px;
+    width:100%;
+    height:100%;
   }
-  .thumb-skeleton i{ font-size:36px; opacity:.9 }
+  .thumb-skeleton i{ font-size:48px; opacity:.6 }
   .thumb-img{ width:100%; height:100%; object-fit:cover; display:block }
   .hidden{ display:none !important }
 
