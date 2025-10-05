@@ -1412,98 +1412,65 @@ def api_ai_research():
 
     # Build the prompt
     system_prompt = """You are an expert e-commerce pricing analyst specializing in eBay market intelligence.
-Your task is to:
+Analyze sold items on eBay and provide clear, actionable pricing recommendations in a human-friendly format.
+Be concise, direct, and professional. Use tables for data presentation."""
 
-1. Search for sold items on eBay in the last 7 days related to the given product title.
-2. Clean out irrelevant listings (lots, for parts/not working, accessories only, vague or mismatched titles).
-3. Normalize prices including shipping when possible.
-4. Summarize findings and provide a competitive pricing recommendation for the user's listing.
+    user_prompt = f"""Analyze this item for eBay pricing:
 
-Be concise, factual, and analytical.
-If too few comparable sales exist, expand the window to the last 14 days and state that clearly."""
+**Item:** {item_title}
+**Condition:** {condition}
+**Notes:** {notes}
+**Market:** {market_region}
+**Currency:** {currency}
 
-    user_prompt = f"""Item title: {item_title}
-Condition: {condition}
-Relevant notes: {notes}
-Market region: {market_region}
-Currency: {currency}
+Search eBay sold listings (last 7 days, expand to 14 if needed). Focus on identical/similar items. Exclude lots, parts/not working, and irrelevant listings.
 
-Search and Filtering Guidelines:
-- Search for "Sold items" on eBay within the last 7 days in {market_region}.
-- Focus on identical or equivalent models/variants.
-- Exclude:
-  - Lots or multi-unit bundles
-  - "For parts", "not working", or accessory-only listings
-  - Misleading titles or unrelated items
-- Adjust for major spec differences (RAM, storage, edition) and note how you normalized the price.
-- Compute total buyer price = item price + shipping.
-- Distinguish between Auction and Buy It Now formats.
-- Remove clear outliers from the range.
+**Output Format (use this EXACT structure):**
 
-Output Format:
+## 📊 Market Analysis
 
-1. Brief summary (max 6 lines)
-   - Range of sold prices (p25–p75 and full range), median, and valid sample count
-   - Key differences influencing price (condition, specs, accessories)
-   - Mention any seasonality or trend if relevant (e.g. Q4, collectibles)
+**Search Period:** [7 or 14] days
+**Valid Sales Found:** [count]
 
-2. Competitive pricing recommendation
-   - Suggested Buy It Now price
-   - Floor (minimum acceptable) price
-   - Recommended pricing strategy: BIN vs Auction, shipping policy, coupon suggestion
-   - 2–3 short rationale bullets based on comparables and market context
+| Metric | Price ({currency}) |
+|--------|----------|
+| Median | $XX.XX |
+| Average | $XX.XX |
+| Range | $XX - $XX |
 
-3. JSON structured data
-```json
-{{
-  "query": "{item_title}",
-  "window_days": 7,
-  "market": "{market_region}",
-  "currency": "{currency}",
-  "stats": {{
-    "count": 0,
-    "median": 0,
-    "mean": 0,
-    "p25": 0,
-    "p75": 0,
-    "min": 0,
-    "max": 0
-  }},
-  "pricing_recommendation": {{
-    "list_price_bin": 0,
-    "floor_price": 0,
-    "strategy": ["BIN + Best Offer", "Auto-decline below {currency} X", "Free shipping if under 2lb"],
-    "rationale": [
-      "Median aligned with …",
-      "Condition/spec differences …",
-      "Active competition …"
-    ]
-  }},
-  "comparables": [
-    {{
-      "title": "…",
-      "sold_price": 0,
-      "shipping_price": 0,
-      "total_price": 0,
-      "date_sold": "YYYY-MM-DD",
-      "condition": "…",
-      "format": "Auction|BIN",
-      "link": "https://…",
-      "notes": "Adjustment for specs/condition…"
-    }}
-  ],
-  "exclusions": ["Reasons for excluding outliers or bundles…"],
-  "limitations": "If <5 valid comparables, extend to 14 days and/or nearby specs."
-}}
-```
+## 💰 Pricing Recommendation
 
-Output Rules:
-- Keep the written summary under 180 words.
-- List 3–6 valid comparables with sale dates.
-- Clearly state if data is limited or skewed by outliers.
+| Item | Price ({currency}) |
+|------|----------|
+| **List Price (BIN)** | $XX.XX |
+| **Floor Price** | $XX.XX |
 
-Final instruction:
-Return the written summary and recommendation first, followed by the JSON object exactly in the format above."""
+**Strategy:**
+• [Strategy point 1, e.g., "BIN + Best Offer enabled"]
+• [Strategy point 2, e.g., "Auto-decline offers below $XX"]
+• [Shipping recommendation]
+
+**Why this pricing:**
+• [Rationale based on comparables]
+• [Market context or condition adjustment]
+• [Competition or demand insight]
+
+## 📦 Recent Comparables
+
+| Date | Price | Shipping | Total | Format | Notes |
+|------|-------|----------|-------|--------|-------|
+| Jan 15 | $XX.XX | $X.XX | $XX.XX | BIN | [condition/spec notes] |
+| Jan 14 | $XX.XX | Free | $XX.XX | Auction | [condition/spec notes] |
+| Jan 12 | $XX.XX | $X.XX | $XX.XX | BIN | [condition/spec notes] |
+
+---
+
+**IMPORTANT:**
+- Keep response under 300 words
+- Use markdown tables
+- Be direct and actionable
+- NO JSON output
+- If no data found, give educated estimate based on similar items and clearly state it's speculative"""
 
     print("Building prompts...", file=sys.stderr)
     print(f"System prompt length: {len(system_prompt)} chars", file=sys.stderr)
