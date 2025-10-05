@@ -1479,12 +1479,16 @@ const ModalAIResearch = (function() {
         ? { item_id: currentItemId }
         : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
 
+      console.log('[AI Research] Starting analysis with payload:', payload);
+
       updateProgress('🔗 Building eBay search URL...', 10);
 
       await new Promise(resolve => setTimeout(resolve, 300));
       updateProgress('📡 Connecting to Browse.AI...', 15);
 
       const startTime = Date.now();
+      console.log('[AI Research] Sending request to /api/ai-research...');
+
       const response = await fetch('/api/ai-research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1492,20 +1496,32 @@ const ModalAIResearch = (function() {
         body: JSON.stringify(payload)
       });
 
-      // Simulate progress during long request
+      console.log(`[AI Research] Response received (${response.status}) after ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+
+      // Simulate progress during long request with detailed feedback
       const simulateProgress = setInterval(() => {
         const elapsed = (Date.now() - startTime) / 1000;
         const estimatedTotal = 90; // 90 seconds estimate
         const percent = Math.min(85, 15 + (elapsed / estimatedTotal) * 70);
 
-        if (elapsed < 30) {
-          updateProgress('🕷️  Browse.AI scraping eBay...', Math.floor(percent));
-        } else if (elapsed < 60) {
-          updateProgress('⏳ Extracting sold listings...', Math.floor(percent));
+        if (elapsed < 8) {
+          updateProgress('🚀 Launching Browse.AI robot...', Math.floor(percent));
+        } else if (elapsed < 18) {
+          updateProgress('🌐 Connecting to eBay servers...', Math.floor(percent));
+        } else if (elapsed < 30) {
+          updateProgress('🕷️  Browse.AI bypassing anti-bot protection...', Math.floor(percent));
+        } else if (elapsed < 42) {
+          updateProgress('📡 Scraping sold listings from eBay...', Math.floor(percent));
+        } else if (elapsed < 54) {
+          updateProgress('⏳ Extracting prices and titles...', Math.floor(percent));
+        } else if (elapsed < 66) {
+          updateProgress(`🔍 Processing HTML data (${Math.floor(elapsed)}s)...`, Math.floor(percent));
+        } else if (elapsed < 78) {
+          updateProgress('💾 Saving to cache...', Math.floor(percent));
         } else {
-          updateProgress('🔍 Finalizing data extraction...', Math.floor(percent));
+          updateProgress(`⚡ Finalizing (${Math.floor(elapsed)}s elapsed)...`, Math.floor(percent));
         }
-      }, 2000);
+      }, 1500);
 
       // Check if response is JSON
       const contentType = response.headers.get('content-type');
@@ -1519,16 +1535,28 @@ const ModalAIResearch = (function() {
       }
 
       const data = await response.json();
+      console.log('[AI Research] Data received:', {
+        success: data.ok,
+        scraped_count: data.scraped_count,
+        examples_count: data.examples?.length || 0
+      });
 
       if (data.ok) {
-        updateProgress(`✓ Found ${data.scraped_count || 0} sold listings`, 90);
-        await new Promise(resolve => setTimeout(resolve, 300));
+        updateProgress(`✅ Scraped ${data.scraped_count || 0} sold listings`, 88);
+        console.log(`[AI Research] Successfully scraped ${data.scraped_count} listings`);
+        await new Promise(resolve => setTimeout(resolve, 400));
 
-        updateProgress('🤖 Analyzing with OpenAI...', 95);
+        updateProgress('📊 Preparing market data for AI...', 91);
+        await new Promise(resolve => setTimeout(resolve, 400));
+
+        updateProgress('🤖 Analyzing with OpenAI GPT-4...', 94);
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        updateProgress('✨ Generating pricing strategy...', 97);
         await new Promise(resolve => setTimeout(resolve, 500));
 
         updateProgress('✅ Analysis complete!', 100);
-        await new Promise(resolve => setTimeout(resolve, 800));
+        await new Promise(resolve => setTimeout(resolve, 600));
 
         // Hide progress and show result
         hideProgress();
