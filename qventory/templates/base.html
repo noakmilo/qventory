@@ -130,39 +130,64 @@
   </script>
 
   <script>
-    // iOS PWA Pull-to-Refresh Support
+    // iOS PWA Pull-to-Refresh Support (Mejorado)
     (function(){
-      // Detectar si está en modo standalone (PWA instalada)
       const isIOSPWA = window.navigator.standalone === true;
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-      if (isIOS && isIOSPWA) {
+      if (isIOS) {
         let startY = 0;
+        let currentY = 0;
         let isPulling = false;
+        let canPull = false;
+
+        // Detectar si estamos en el tope de la página
+        function isAtTop() {
+          return window.pageYOffset === 0 || window.scrollY === 0 || document.documentElement.scrollTop === 0;
+        }
 
         document.addEventListener('touchstart', (e) => {
-          if (window.pageYOffset === 0) {
-            startY = e.touches[0].pageY;
-            isPulling = true;
+          if (isAtTop()) {
+            startY = e.touches[0].clientY;
+            canPull = true;
+          } else {
+            canPull = false;
           }
         }, { passive: true });
 
         document.addEventListener('touchmove', (e) => {
-          if (!isPulling) return;
-          const currentY = e.touches[0].pageY;
+          if (!canPull) return;
+
+          currentY = e.touches[0].clientY;
           const pullDistance = currentY - startY;
 
-          // Si el usuario desliza hacia abajo más de 80px
-          if (pullDistance > 80 && window.pageYOffset === 0) {
+          // Solo activar si sigue en el tope Y está jalando hacia abajo
+          if (isAtTop() && pullDistance > 0) {
+            isPulling = true;
+
+            // Si jala más de 100px, recargar
+            if (pullDistance > 100) {
+              isPulling = false;
+              canPull = false;
+
+              // Agregar pequeño delay visual
+              setTimeout(() => {
+                window.location.reload();
+              }, 150);
+            }
+          } else {
             isPulling = false;
-            // Recargar la página
-            window.location.reload();
           }
         }, { passive: true });
 
         document.addEventListener('touchend', () => {
           isPulling = false;
+          canPull = false;
+          startY = 0;
         }, { passive: true });
+
+        // Debug en consola (opcional, puedes quitar esto)
+        console.log('Pull-to-refresh habilitado para iOS PWA');
       }
     })();
   </script>
