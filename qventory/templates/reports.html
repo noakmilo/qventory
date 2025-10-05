@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}AI Research Reports - Qventory{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:1200px;margin:40px auto;padding:0 20px">
+  <div style="margin-bottom:30px">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+      <i class="fas fa-sparkles"></i> AI Research Reports
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px">
+      Reports expire after 24 hours
+    </p>
+  </div>
+
+  {% if reports %}
+    <div style="display:grid;gap:16px">
+      {% for report in reports %}
+      <div class="report-card" data-report-id="{{ report.id }}"
+           style="background:var(--surface);border-radius:12px;padding:20px;border:1px solid var(--border);
+                  {% if not report.viewed %}border-left:4px solid #60a5fa{% endif %}">
+
+        <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px">
+          <div style="flex:1">
+            <h3 style="color:var(--text);font-size:16px;margin-bottom:6px">
+              {{ report.item_title }}
+            </h3>
+            <div style="font-size:12px;color:var(--text-secondary)">
+              <i class="far fa-clock"></i> {{ report.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+            </div>
+          </div>
+
+          <div>
+            {% if report.status == 'completed' %}
+              <span style="background:#10b981;color:#fff;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600">
+                ✓ Complete
+              </span>
+            {% elif report.status == 'processing' %}
+              <span style="background:#f59e0b;color:#fff;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600">
+                <i class="fas fa-spinner fa-spin"></i> Processing
+              </span>
+            {% else %}
+              <span style="background:#ef4444;color:#fff;padding:4px 12px;border-radius:12px;font-size:11px;font-weight:600">
+                ✗ Failed
+              </span>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if report.scraped_count > 0 %}
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px">
+          📊 Analyzed {{ report.scraped_count }} sold listings
+        </div>
+        {% endif %}
+
+        {% if report.status == 'completed' %}
+          <button class="btn btn-primary" onclick="viewReport({{ report.id }})"
+                  style="width:100%;margin-top:8px">
+            <i class="fas fa-eye"></i> View Report
+          </button>
+        {% elif report.status == 'failed' %}
+          <div style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px;margin-top:8px">
+            <div style="color:#dc2626;font-size:12px">
+              <strong>Error:</strong> {{ report.error_message or 'Report generation failed' }}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div style="text-align:center;padding:60px 20px;background:var(--surface);border-radius:12px;border:2px dashed var(--border)">
+      <i class="fas fa-sparkles" style="font-size:48px;color:var(--text-secondary);margin-bottom:16px"></i>
+      <h3 style="color:var(--text);font-size:18px;margin-bottom:8px">No Reports Yet</h3>
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:20px">
+        Start your first AI market research to see reports here
+      </p>
+      <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+        <i class="fas fa-arrow-left"></i> Back to Dashboard
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Report View Modal -->
+<div id="reportModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <h2 id="modalReportTitle">Report</h2>
+      <button class="close-modal" onclick="closeReportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportContent"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function viewReport(reportId) {
+  fetch(`/api/reports/${reportId}/view`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok) {
+        document.getElementById('modalReportTitle').textContent = data.report.item_title;
+
+        let html = data.report.result_html;
+
+        // Add examples
+        if (data.report.examples && data.report.examples.length > 0) {
+          html += `
+            <div style="margin-top:16px;padding:12px;background:#0f1115;border-radius:6px;border-left:3px solid #60a5fa">
+              <div style="color:#9ca3af;font-size:12px;margin-bottom:8px;font-weight:600">🔍 Real Examples Analyzed</div>
+              <div style="font-size:11px;color:#e8e8e8">
+          `;
+
+          data.report.examples.forEach((item, idx) => {
+            html += `
+              <div style="margin-bottom:${idx < data.report.examples.length - 1 ? '10px' : '0'};
+                          padding-bottom:${idx < data.report.examples.length - 1 ? '10px' : '0'};
+                          border-bottom:${idx < data.report.examples.length - 1 ? '1px solid #1a1d24' : 'none'}">
+                <div style="color:#60a5fa;margin-bottom:3px">${idx + 1}. ${item.title}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#34d399;font-weight:600">$${item.price.toFixed(2)}</span>
+                  <a href="${item.link}" target="_blank" style="color:#9ca3af;text-decoration:none;font-size:10px">View ↗</a>
+                </div>
+              </div>
+            `;
+          });
+
+          html += `</div></div>`;
+        }
+
+        document.getElementById('reportContent').innerHTML = html;
+        document.getElementById('reportModal').style.display = 'flex';
+
+        // Remove new badge
+        const card = document.querySelector(`[data-report-id="${reportId}"]`);
+        if (card) {
+          card.style.borderLeft = '1px solid var(--border)';
+        }
+      }
+    });
+}
+
+function closeReportModal() {
+  document.getElementById('reportModal').style.display = 'none';
+}
+
+// Auto-refresh processing reports
+setInterval(() => {
+  const processingCards = document.querySelectorAll('.report-card');
+  processingCards.forEach(card => {
+    const status = card.querySelector('span');
+    if (status && status.textContent.includes('Processing')) {
+      location.reload();
+    }
+  });
+}, 10000); // Check every 10 seconds
+</script>
+
+<style>
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: var(--bg);
+  border-radius: 12px;
+  width: 90%;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text);
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 20px;
+}
+</style>
+{% endblock %}

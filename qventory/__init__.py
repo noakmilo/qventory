@@ -2,6 +2,7 @@ from flask import Flask
 from .config import Config
 from .extensions import db, login_manager
 from .routes import main_bp, auth_bp
+from .routes.reports import reports_bp
 
 def _maybe_seed_demo():
     """
@@ -58,6 +59,7 @@ def create_app():
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
+    app.register_blueprint(reports_bp)
 
     # Register error handlers
     @app.errorhandler(404)

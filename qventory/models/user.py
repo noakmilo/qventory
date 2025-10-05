@@ -9,6 +9,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), default='free', nullable=False)  # free, premium, pro, god
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # opcional: relaciones convenientes
@@ -129,6 +130,40 @@ class User(UserMixin, db.Model):
         """Get current plan name"""
         subscription = self.get_subscription()
         return subscription.plan.capitalize()
+
+    # ==================== AI TOKEN MANAGEMENT ====================
+
+    def get_ai_token_stats(self):
+        """Get AI token usage statistics"""
+        from .ai_token import AITokenUsage
+        return AITokenUsage.get_user_stats(self)
+
+    def can_use_ai_research(self):
+        """Check if user has AI research tokens available"""
+        from .ai_token import AITokenUsage
+        can_use, remaining = AITokenUsage.can_use_token(self)
+        return can_use, remaining
+
+    def consume_ai_token(self):
+        """Consume one AI research token"""
+        from .ai_token import AITokenUsage
+        return AITokenUsage.consume_token(self.id)
+
+    @property
+    def is_god_mode(self):
+        """Check if user has god mode (unlimited access)"""
+        return self.role == 'god'
+
+    @property
+    def role_display_name(self):
+        """Get display name for user's role"""
+        names = {
+            'free': 'Free',
+            'premium': 'Premium',
+            'pro': 'Pro',
+            'god': 'God Mode'
+        }
+        return names.get(self.role, 'Free')
 
 @login_manager.user_loader
 def load_user(user_id):

@@ -33,7 +33,8 @@ def main():
     from qventory import create_app, db
     from qventory.models import (
         User, Item, Setting, Sale, Listing,
-        MarketplaceCredential, Subscription, PlanLimit
+        MarketplaceCredential, Subscription, PlanLimit,
+        Report, AITokenConfig, AITokenUsage
     )
 
     app = create_app()
@@ -94,10 +95,47 @@ def main():
         db.session.commit()
         print("✅ Plan limits created (free, pro, premium)")
 
+        # Initialize AI Token configs
+        print("\n🤖 Creating AI Token configurations...")
+
+        AITokenConfig.initialize_defaults()
+        print("✅ AI Token configs created:")
+
+        configs = AITokenConfig.query.all()
+        for config in configs:
+            print(f"  - {config.role}: {config.daily_tokens} tokens/day ({config.display_name})")
+
+        # Create a sample god mode user (optional)
+        print("\n👤 Creating sample god mode user...")
+        god_user = User(
+            username='admin',
+            email='admin@qventory.com',
+            role='god'
+        )
+        god_user.set_password('admin123')  # CHANGE THIS IN PRODUCTION!
+        db.session.add(god_user)
+        db.session.flush()  # Get the user ID
+
+        # Create default subscription for god user
+        god_subscription = Subscription(
+            user_id=god_user.id,
+            plan='premium',
+            status='active'
+        )
+        db.session.add(god_subscription)
+
+        # Create default setting for god user
+        god_setting = Setting(user_id=god_user.id)
+        db.session.add(god_setting)
+
+        db.session.commit()
+        print("✅ God mode user created: admin@qventory.com / admin123")
+        print("   ⚠️  CHANGE PASSWORD IN PRODUCTION!")
+
         # List all tables created
         print("\n📊 Tables created:")
         inspector = db.inspect(db.engine)
-        for table_name in inspector.get_table_names():
+        for table_name in sorted(inspector.get_table_names()):
             print(f"  - {table_name}")
 
         print("\n" + "="*60)
@@ -105,8 +143,10 @@ def main():
         print("="*60)
         print("\nNext steps:")
         print("1. Restart qventory: sudo systemctl restart qventory")
-        print("2. Create a new user account")
-        print("3. Start using Qventory!\n")
+        print("2. Login with admin@qventory.com / admin123")
+        print("3. Change admin password immediately!")
+        print("4. Create regular user accounts")
+        print("5. Start using Qventory!\n")
 
 if __name__ == '__main__':
     main()

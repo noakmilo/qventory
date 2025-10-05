@@ -5,6 +5,8 @@ from .sale import Sale
 from .listing import Listing
 from .marketplace_credential import MarketplaceCredential
 from .subscription import Subscription, PlanLimit
+from .report import Report
+from .ai_token import AITokenConfig, AITokenUsage
 
 __all__ = [
     'User',
@@ -14,5 +16,8 @@ __all__ = [
     'Listing',
     'MarketplaceCredential',
     'Subscription',
-    'PlanLimit'
+    'PlanLimit',
+    'Report',
+    'AITokenConfig',
+    'AITokenUsage'
 ]
