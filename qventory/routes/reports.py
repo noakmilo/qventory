@@ -40,7 +40,7 @@ def process_report_async(report_id):
 
             # Import here to avoid circular imports
             from qventory.helpers.ebay_scraper import scrape_ebay_sold_listings, format_listings_for_ai
-            import openai
+            from openai import OpenAI
             import os
 
             # Get item data
@@ -129,9 +129,10 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
 </div>
 """
 
-            openai.api_key = os.environ.get("OPENAI_API_KEY")
+            # Initialize OpenAI client with API key
+            client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -320,3 +321,18 @@ def view_report(report_id):
             "error_message": report.error_message
         }
     })
+
+
+@reports_bp.route("/api/reports/<int:report_id>/delete", methods=["POST"])
+@login_required
+def delete_report(report_id):
+    """Delete a report"""
+    report = Report.query.filter_by(id=report_id, user_id=current_user.id).first()
+
+    if not report:
+        return jsonify({"ok": False, "error": "Report not found"}), 404
+
+    db.session.delete(report)
+    db.session.commit()
+
+    return jsonify({"ok": True, "message": "Report deleted successfully"})
