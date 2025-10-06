@@ -156,11 +156,14 @@ def get_active_listings(user_id, limit=200, offset=0):
     Returns:
         dict with 'offers' list and 'total' count
     """
+    log_inv(f"Getting active listings (offers) for user {user_id} (limit={limit}, offset={offset})")
+
     access_token = get_user_access_token(user_id)
     if not access_token:
         raise Exception("No valid eBay access token available")
 
     url = f"{EBAY_API_BASE}/sell/inventory/v1/offer"
+    log_inv(f"Offers API URL: {url}")
 
     headers = {
         'Authorization': f'Bearer {access_token}',
@@ -173,10 +176,24 @@ def get_active_listings(user_id, limit=200, offset=0):
         'offset': offset
     }
 
+    log_inv(f"Making request to eBay Offers API...")
     response = requests.get(url, headers=headers, params=params, timeout=30)
+    log_inv(f"Offers API response status: {response.status_code}")
+
+    if response.status_code != 200:
+        log_inv(f"ERROR response body: {response.text[:500]}")
+
     response.raise_for_status()
 
     data = response.json()
+    log_inv(f"Offers API response data keys: {list(data.keys())}")
+    log_inv(f"Number of offers: {len(data.get('offers', []))}")
+    log_inv(f"Total available: {data.get('total', 0)}")
+
+    # Log first offer details for debugging
+    if data.get('offers'):
+        first_offer = data['offers'][0]
+        log_inv(f"First offer sample: {list(first_offer.keys())}")
 
     return {
         'offers': data.get('offers', []),
@@ -190,17 +207,22 @@ def get_all_inventory(user_id, max_items=1000):
     """
     Get all inventory items (paginated)
 
+    Falls back to Offers API if Inventory API returns 0 items
+    (Inventory API only shows new-style inventory, Offers API shows all active listings)
+
     Args:
         user_id: Qventory user ID
         max_items: Maximum total items to fetch
 
     Returns:
-        list of inventory items
+        list of combined inventory items with offer data
     """
+    log_inv(f"Starting inventory fetch for user {user_id}")
     all_items = []
     offset = 0
     limit = 200
 
+    # Try Inventory API first
     while len(all_items) < max_items:
         result = get_inventory_items(user_id, limit=limit, offset=offset)
         items = result['items']
@@ -215,6 +237,74 @@ def get_all_inventory(user_id, max_items=1000):
 
         offset += limit
 
+    # If Inventory API returned 0 items, try Offers API (for traditional listings)
+    if len(all_items) == 0:
+        log_inv("Inventory API returned 0 items, trying Offers API for traditional listings...")
+
+        try:
+            offset = 0
+            while len(all_items) < max_items:
+                result = get_active_listings(user_id, limit=limit, offset=offset)
+                offers = result['offers']
+
+                log_inv(f"Offers API returned {len(offers)} offers (total: {result['total']})")
+
+                if not offers:
+                    break
+
+                # Convert offers to inventory-like format
+                for offer in offers:
+                    # Get SKU from offer
+                    sku = offer.get('sku', '')
+
+                    # Extract listing data from offer
+                    listing_id = offer.get('listingId')
+                    pricing = offer.get('pricingSummary', {})
+                    price_value = pricing.get('price', {}).get('value', 0)
+
+                    # Get quantity available
+                    quantity_limit = offer.get('quantityLimitPerBuyer', 0)
+                    available_quantity = offer.get('availableQuantity', 0)
+
+                    # Try to get listing details if available
+                    listing = offer.get('listing', {})
+
+                    # Build item data structure similar to inventory items
+                    item_data = {
+                        'sku': sku,
+                        'product': {
+                            'title': listing.get('title', offer.get('merchantLocationKey', f'Listing {listing_id}')),
+                            'description': listing.get('description', ''),
+                            'imageUrls': listing.get('pictureUrls', [])
+                        },
+                        'availability': {
+                            'shipToLocationAvailability': {
+                                'quantity': available_quantity
+                            }
+                        },
+                        'condition': offer.get('listingPolicies', {}).get('condition', 'USED_EXCELLENT'),
+                        'ebay_listing_id': listing_id,
+                        'ebay_offer_id': offer.get('offerId'),
+                        'item_price': float(price_value) if price_value else 0,
+                        'ebay_url': f"https://www.ebay.com/itm/{listing_id}" if listing_id else None,
+                        'listing_status': offer.get('status', 'UNKNOWN'),
+                        'source': 'offers_api'  # Mark as coming from offers API
+                    }
+
+                    all_items.append(item_data)
+
+                if len(all_items) >= result['total']:
+                    break
+
+                offset += limit
+
+            log_inv(f"Offers API fallback complete: fetched {len(all_items)} offers")
+
+        except Exception as e:
+            log_inv(f"ERROR in Offers API fallback: {str(e)}")
+            # Return empty if both APIs fail
+            return []
+
     return all_items[:max_items]
 
 
@@ -222,41 +312,76 @@ def parse_ebay_inventory_item(ebay_item):
     """
     Parse eBay inventory item to Qventory format
 
+    Handles both Inventory API and Offers API formats
+
     Args:
         ebay_item: eBay inventory item dict from API
 
     Returns:
         dict with Qventory item fields
     """
-    # Get product info
-    product = ebay_item.get('product', {})
-    title = product.get('title', '')
-    description = product.get('description', '')
+    # Check if this is from Offers API (has 'source' marker)
+    is_from_offers = ebay_item.get('source') == 'offers_api'
 
-    # Get image
-    images = product.get('imageUrls', [])
-    item_thumb = images[0] if images else None
+    if is_from_offers:
+        # Already normalized in get_all_inventory()
+        product = ebay_item.get('product', {})
+        title = product.get('title', '')
+        description = product.get('description', '')
+        images = product.get('imageUrls', [])
+        item_thumb = images[0] if images else None
+        sku = ebay_item.get('sku', '')
+        availability = ebay_item.get('availability', {})
+        quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
+        condition = ebay_item.get('condition', 'USED_EXCELLENT')
 
-    # Get SKU
-    sku = ebay_item.get('sku', '')
+        # Get additional offer-specific data
+        ebay_listing_id = ebay_item.get('ebay_listing_id')
+        ebay_url = ebay_item.get('ebay_url')
+        item_price = ebay_item.get('item_price', 0)
 
-    # Get availability
-    availability = ebay_item.get('availability', {})
-    shipToLocationAvailability = availability.get('shipToLocationAvailability', {})
-    quantity = shipToLocationAvailability.get('quantity', 0)
+        return {
+            'title': title,
+            'description': description,
+            'item_thumb': item_thumb,
+            'ebay_sku': sku,
+            'quantity': quantity,
+            'condition': condition,
+            'ebay_listing_id': ebay_listing_id,
+            'ebay_url': ebay_url,
+            'item_price': item_price,
+            'ebay_item_data': ebay_item
+        }
+    else:
+        # Original Inventory API format
+        product = ebay_item.get('product', {})
+        title = product.get('title', '')
+        description = product.get('description', '')
 
-    # Get condition
-    condition = ebay_item.get('condition', 'USED_EXCELLENT')
+        # Get image
+        images = product.get('imageUrls', [])
+        item_thumb = images[0] if images else None
 
-    return {
-        'title': title,
-        'description': description,
-        'item_thumb': item_thumb,
-        'ebay_sku': sku,
-        'quantity': quantity,
-        'condition': condition,
-        'ebay_item_data': ebay_item  # Store full data for reference
-    }
+        # Get SKU
+        sku = ebay_item.get('sku', '')
+
+        # Get availability
+        availability = ebay_item.get('availability', {})
+        shipToLocationAvailability = availability.get('shipToLocationAvailability', {})
+        quantity = shipToLocationAvailability.get('quantity', 0)
+
+        # Get condition
+        condition = ebay_item.get('condition', 'USED_EXCELLENT')
+
+        return {
+            'title': title,
+            'description': description,
+            'item_thumb': item_thumb,
+            'ebay_sku': sku,
+            'quantity': quantity,
+            'condition': condition,
+            'ebay_item_data': ebay_item
+        }
 
 
 def parse_ebay_offer(ebay_offer):

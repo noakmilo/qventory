@@ -631,6 +631,15 @@ def import_ebay():
                         existing_item.item_thumb = parsed.get('item_thumb')
                         existing_item.synced_from_ebay = True
                         existing_item.last_ebay_sync = datetime.utcnow()
+
+                        # Update eBay-specific fields if available
+                        if parsed.get('ebay_listing_id'):
+                            existing_item.ebay_listing_id = parsed['ebay_listing_id']
+                        if parsed.get('ebay_url'):
+                            existing_item.ebay_url = parsed['ebay_url']
+                        if parsed.get('item_price'):
+                            existing_item.item_price = parsed['item_price']
+
                         updated_count += 1
                         log_import(f"  → Updated")
                     else:
@@ -647,6 +656,9 @@ def import_ebay():
                             title=parsed['title'],
                             item_thumb=parsed.get('item_thumb'),
                             ebay_sku=ebay_sku,
+                            ebay_listing_id=parsed.get('ebay_listing_id'),
+                            ebay_url=parsed.get('ebay_url'),
+                            item_price=parsed.get('item_price'),
                             synced_from_ebay=True,
                             last_ebay_sync=datetime.utcnow()
                         )
