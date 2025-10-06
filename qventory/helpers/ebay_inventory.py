@@ -302,8 +302,153 @@ def get_all_inventory(user_id, max_items=1000):
 
         except Exception as e:
             log_inv(f"ERROR in Offers API fallback: {str(e)}")
-            # Return empty if both APIs fail
+
+            # Last resort: Try getting seller username and use Browse API
+            log_inv("Offers API failed, trying Browse API with seller search...")
+            try:
+                browse_items = get_seller_listings_browse_api(user_id, max_items=max_items)
+                if browse_items:
+                    log_inv(f"Browse API returned {len(browse_items)} items")
+                    return browse_items
+            except Exception as browse_error:
+                log_inv(f"ERROR in Browse API fallback: {str(browse_error)}")
+
+            # Return empty if all APIs fail
             return []
+
+    return all_items[:max_items]
+
+
+def get_seller_listings_browse_api(user_id, max_items=1000):
+    """
+    Get seller's active listings using Browse API
+    This is a fallback when Inventory and Offers APIs fail
+
+    Args:
+        user_id: Qventory user ID
+        max_items: Maximum items to fetch
+
+    Returns:
+        list of items in normalized format
+    """
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    log_inv(f"Attempting Browse API for user {user_id}")
+
+    # Get seller's eBay username from credentials
+    credential = MarketplaceCredential.query.filter_by(
+        user_id=user_id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    if not credential or not credential.marketplace_user_id:
+        log_inv("No eBay username found in credentials")
+        return []
+
+    seller_username = credential.marketplace_user_id
+    log_inv(f"Seller username: {seller_username}")
+
+    # Get application token (not user token) for Browse API
+    import os
+    client_id = os.environ.get('EBAY_CLIENT_ID')
+    client_secret = os.environ.get('EBAY_CLIENT_SECRET')
+
+    if not client_id or not client_secret:
+        log_inv("Missing eBay app credentials")
+        return []
+
+    # Get application access token
+    import base64
+    auth_header = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    token_url = f"{EBAY_API_BASE}/identity/v1/oauth2/token"
+    token_headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': f'Basic {auth_header}'
+    }
+    token_data = {
+        'grant_type': 'client_credentials',
+        'scope': 'https://api.ebay.com/oauth/api_scope'
+    }
+
+    log_inv("Getting application token for Browse API...")
+    token_response = requests.post(token_url, headers=token_headers, data=token_data, timeout=30)
+
+    if token_response.status_code != 200:
+        log_inv(f"Failed to get app token: {token_response.status_code}")
+        return []
+
+    app_token = token_response.json().get('access_token')
+
+    # Search for seller's items using Browse API
+    browse_url = f"{EBAY_API_BASE}/buy/browse/v1/item_summary/search"
+    browse_headers = {
+        'Authorization': f'Bearer {app_token}',
+        'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
+    }
+
+    all_items = []
+    offset = 0
+    limit = 200
+
+    while len(all_items) < max_items:
+        params = {
+            'q': f'*',
+            'filter': f'sellers:{{{seller_username}}}',
+            'limit': limit,
+            'offset': offset
+        }
+
+        log_inv(f"Browse API search: offset={offset}, limit={limit}")
+        browse_response = requests.get(browse_url, headers=browse_headers, params=params, timeout=30)
+
+        if browse_response.status_code != 200:
+            log_inv(f"Browse API error: {browse_response.status_code} - {browse_response.text[:200]}")
+            break
+
+        data = browse_response.json()
+        items = data.get('itemSummaries', [])
+        total = data.get('total', 0)
+
+        log_inv(f"Browse API returned {len(items)} items (total: {total})")
+
+        if not items:
+            break
+
+        # Convert Browse API items to normalized format
+        for item in items:
+            item_id = item.get('itemId')
+            title = item.get('title', '')
+            price_obj = item.get('price', {})
+            price = float(price_obj.get('value', 0))
+            image_url = item.get('image', {}).get('imageUrl')
+            item_url = item.get('itemWebUrl')
+
+            normalized = {
+                'sku': '',  # Browse API doesn't return SKU
+                'product': {
+                    'title': title,
+                    'description': '',
+                    'imageUrls': [image_url] if image_url else []
+                },
+                'availability': {
+                    'shipToLocationAvailability': {
+                        'quantity': 1  # Browse API doesn't return exact quantity
+                    }
+                },
+                'condition': item.get('condition', 'USED_EXCELLENT'),
+                'ebay_listing_id': item_id,
+                'item_price': price,
+                'ebay_url': item_url,
+                'source': 'browse_api'
+            }
+            all_items.append(normalized)
+
+        if len(all_items) >= total:
+            break
+
+        offset += limit
 
     return all_items[:max_items]
 
@@ -320,10 +465,12 @@ def parse_ebay_inventory_item(ebay_item):
     Returns:
         dict with Qventory item fields
     """
-    # Check if this is from Offers API (has 'source' marker)
-    is_from_offers = ebay_item.get('source') == 'offers_api'
+    # Check source of data
+    source = ebay_item.get('source', '')
+    is_from_offers = source == 'offers_api'
+    is_from_browse = source == 'browse_api'
 
-    if is_from_offers:
+    if is_from_offers or is_from_browse:
         # Already normalized in get_all_inventory()
         product = ebay_item.get('product', {})
         title = product.get('title', '')
