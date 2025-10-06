@@ -90,7 +90,7 @@
       <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
         <i class="fas fa-chart-line"></i> Sales Overview
       </h3>
-      <canvas id="salesChart" height="250"></canvas>
+      <canvas id="salesChart"></canvas>
     </div>
 
     <!-- Sales by Marketplace -->
@@ -98,7 +98,7 @@
       <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
         <i class="fas fa-store"></i> Sales by Marketplace
       </h3>
-      <canvas id="marketplaceChart" height="250"></canvas>
+      <canvas id="marketplaceChart"></canvas>
     </div>
 
   </div>
@@ -108,7 +108,7 @@
     <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
       <i class="fas fa-chart-pie"></i> Active Listings by Supplier
     </h3>
-    <canvas id="supplierChart" height="300"></canvas>
+    <canvas id="supplierChart"></canvas>
   </div>
 
   <!-- AI Research History (Collapsible) -->
@@ -230,7 +230,8 @@ new Chart(salesCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 2,
     plugins: {
       legend: { display: false }
     },
@@ -265,7 +266,8 @@ new Chart(marketplaceCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 1.5,
     plugins: {
       legend: {
         position: 'bottom',
@@ -301,7 +303,8 @@ new Chart(supplierCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 1.8,
     plugins: {
       legend: {
         position: 'right',
