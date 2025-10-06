@@ -5,7 +5,7 @@
 <div class="row">
   <div class="card" style="flex:1 1 100%;max-width:800px;margin:0 auto">
     <h1 style="text-align:center;margin-bottom:1.2rem;">
-      <i class="fas fa-brain" style="color:var(--accent)"></i> AI Market Research
+      <i class="fas fa-robot" style="color:var(--accent)"></i> AI Market Research
     </h1>
 
     <div id="aiResearchContainer">
@@ -46,7 +46,7 @@
 
       <!-- Research Button -->
       <button class="btn submitbtn block" onclick="AIResearch.analyze()" style="margin-top:1.2rem" id="analyzeBtn">
-        <i class="fas fa-brain"></i> Analyze Market
+        <i class="fas fa-robot"></i> Analyze Market
       </button>
 
       <!-- Result Display with Typing Animation -->
@@ -321,7 +321,7 @@ const AIResearch = {
       resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}</div>`;
     } finally {
       analyzeBtn.classList.remove('loading');
-      analyzeBtn.innerHTML = '<i class="fas fa-brain"></i> Analyze Market';
+      analyzeBtn.innerHTML = '<i class="fas fa-robot"></i> Analyze Market';
     }
   },
 

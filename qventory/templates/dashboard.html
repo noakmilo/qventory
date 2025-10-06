@@ -108,7 +108,7 @@
       <h2>Items ({{ total_items }})</h2>
       <div class="backup-actions">
         <button class="btn backup-btn" onclick="openAIResearchModal()" title="AI Market Research">
-          <i class="fas fa-brain"></i> AI Research
+          <i class="fas fa-robot"></i> AI Research
         </button>
         <a class="btn backup-btn" href="{{ url_for('main.export_csv') }}" title="Export all items to CSV">
           <i class="fas fa-download"></i> Export
@@ -219,7 +219,7 @@
 <div id="aiResearchModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="AI Market Research">
   <div class="qr-sheet" style="max-width:800px;max-height:90vh;overflow-y:auto">
     <div class="qr-header">
-      <strong><i class="fas fa-brain"></i> AI Market Research</strong>
+      <strong><i class="fas fa-robot"></i> AI Market Research</strong>
       <div class="qr-actions">
         <button type="button" id="aiResearchClose" class="qr-icon" aria-label="Close">
           <i class="fas fa-times"></i>
@@ -265,7 +265,7 @@
 
         <!-- Analyze Button -->
         <button class="btn submitbtn block" onclick="analyzeAIResearch()" style="margin-top:1.2rem;width:100%" id="aiAnalyzeBtn">
-          <i class="fas fa-brain"></i> Analyze Market
+          <i class="fas fa-robot"></i> Analyze Market
         </button>
 
         <!-- Result Display with Progress Bar -->
@@ -1609,7 +1609,7 @@ const ModalAIResearch = (function() {
       analyzeBtn.classList.remove('loading');
       analyzeBtn.style.opacity = '1';
       analyzeBtn.style.pointerEvents = 'auto';
-      analyzeBtn.innerHTML = '<i class="fas fa-brain"></i> Analyze Market';
+      analyzeBtn.innerHTML = '<i class="fas fa-robot"></i> Analyze Market';
     }
   }
 
