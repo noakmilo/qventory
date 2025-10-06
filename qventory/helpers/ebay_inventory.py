@@ -104,9 +104,10 @@ def get_inventory_items(user_id, limit=200, offset=0):
 
     url = f"{EBAY_API_BASE}/sell/inventory/v1/inventory_item"
     log_inv(f"API URL: {url}")
+    log_inv(f"Access token (first 20 chars): {access_token[:20]}...")
 
     headers = {
-        'Authorization': f'Bearer {access_token[:20]}...',
+        'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
