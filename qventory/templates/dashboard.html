@@ -107,6 +107,18 @@
     <div class="items-header">
       <h2>Items ({{ total_items }})</h2>
       <div class="backup-actions">
+        <!-- Bulk Actions -->
+        <div id="bulkActionsContainer" style="display:none;margin-right:10px">
+          <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
+            <option value="">Bulk Actions</option>
+            <option value="delete">Delete Selected</option>
+          </select>
+          <button id="bulkActionApply" class="btn" style="padding:0.5rem 1rem">
+            <i class="fas fa-check"></i> Apply
+          </button>
+          <span id="bulkSelectedCount" style="margin-left:10px;color:var(--sub);font-size:var(--fs-sm)"></span>
+        </div>
+
         <a class="btn backup-btn" href="{{ url_for('main.export_csv') }}" title="Export all items to CSV">
           <i class="fas fa-download"></i> Export
         </a>
@@ -124,6 +136,9 @@
       <table>
         <thead>
           <tr>
+            <th style="width:40px;text-align:center">
+              <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+            </th>
             <th style="width:44px"></th>
             <th>Title</th>
             <th>SKU</th>
@@ -856,6 +871,127 @@
       handleClose();
     }
   });
+})();
+</script>
+
+<script>
+/* ===== Bulk Selection & Delete ===== */
+(function(){
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const bulkActionsContainer = document.getElementById('bulkActionsContainer');
+  const bulkActionSelect = document.getElementById('bulkActionSelect');
+  const bulkActionApply = document.getElementById('bulkActionApply');
+  const bulkSelectedCount = document.getElementById('bulkSelectedCount');
+
+  if (!selectAllCheckbox || !bulkActionsContainer) return;
+
+  // Update selected count and show/hide bulk actions
+  function updateBulkUI(){
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    const count = checkboxes.length;
+
+    if (count > 0){
+      bulkActionsContainer.style.display = 'inline-block';
+      bulkSelectedCount.textContent = `(${count} selected)`;
+    } else {
+      bulkActionsContainer.style.display = 'none';
+      bulkActionSelect.value = '';
+    }
+
+    // Update "select all" checkbox state
+    const allCheckboxes = document.querySelectorAll('.item-checkbox');
+    selectAllCheckbox.checked = allCheckboxes.length > 0 && count === allCheckboxes.length;
+    selectAllCheckbox.indeterminate = count > 0 && count < allCheckboxes.length;
+  }
+
+  // Select all / deselect all
+  selectAllCheckbox.addEventListener('change', function(){
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+    updateBulkUI();
+  });
+
+  // Listen to individual checkbox changes
+  document.addEventListener('change', function(e){
+    if (e.target.classList.contains('item-checkbox')){
+      updateBulkUI();
+    }
+  });
+
+  // Apply bulk action
+  bulkActionApply.addEventListener('click', function(){
+    const action = bulkActionSelect.value;
+    if (!action){
+      alert('Please select an action');
+      return;
+    }
+
+    const checkedBoxes = document.querySelectorAll('.item-checkbox:checked');
+    if (checkedBoxes.length === 0){
+      alert('No items selected');
+      return;
+    }
+
+    if (action === 'delete'){
+      const itemIds = Array.from(checkedBoxes).map(cb => cb.dataset.itemId);
+      showBulkDeleteModal(itemIds);
+    }
+  });
+
+  // Show bulk delete confirmation modal
+  function showBulkDeleteModal(itemIds){
+    const count = itemIds.length;
+    const message = `Are you sure you want to delete ${count} item${count > 1 ? 's' : ''}?\n\nThis action cannot be undone.`;
+
+    if (!confirm(message)) return;
+
+    // Show loading indicator
+    bulkActionApply.disabled = true;
+    bulkActionApply.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+
+    // Call bulk delete API
+    fetch('{{ url_for("main.bulk_delete_items") }}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ item_ids: itemIds })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok){
+        // Remove deleted rows from table
+        itemIds.forEach(id => {
+          const checkbox = document.querySelector(`.item-checkbox[data-item-id="${id}"]`);
+          if (checkbox){
+            const row = checkbox.closest('tr');
+            if (row) row.remove();
+          }
+        });
+
+        alert(`Successfully deleted ${data.deleted_count} item${data.deleted_count > 1 ? 's' : ''}`);
+
+        // Reset UI
+        bulkActionSelect.value = '';
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        updateBulkUI();
+
+        // Reload page to update count
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to delete items'));
+      }
+    })
+    .catch(err => {
+      console.error('Bulk delete error:', err);
+      alert('Error deleting items. Please try again.');
+    })
+    .finally(() => {
+      bulkActionApply.disabled = false;
+      bulkActionApply.innerHTML = '<i class="fas fa-check"></i> Apply';
+    });
+  }
 })();
 </script>
 

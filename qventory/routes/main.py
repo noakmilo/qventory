@@ -1026,6 +1026,53 @@ def delete_item(item_id):
     return redirect(url_for("main.dashboard"))
 
 
+@main_bp.route("/items/bulk_delete", methods=["POST"])
+@login_required
+def bulk_delete_items():
+    """
+    Bulk delete multiple items
+    Expects JSON: {"item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = data['item_ids']
+
+        # Validate item_ids is a list
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        # Convert to integers
+        try:
+            item_ids = [int(x) for x in item_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        # Delete items (only those belonging to current user)
+        deleted_count = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).delete(synchronize_session=False)
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "deleted_count": deleted_count,
+            "message": f"Successfully deleted {deleted_count} item(s)"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_DELETE] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ---------------------- Settings (protegido) ----------------------
 
 @main_bp.route("/settings", methods=["GET", "POST"])

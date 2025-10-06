@@ -407,14 +407,24 @@ def get_ebay_user_info(access_token):
             headers=headers,
             timeout=10
         )
+        log(f"Commerce Identity API status: {response.status_code}")
+
         if response.status_code == 200:
             user_data = response.json()
+            log(f"Commerce Identity API response keys: {list(user_data.keys())}")
+            log(f"Commerce Identity API full response: {user_data}")
             username = user_data.get('username')
             if username:
                 log(f"Got username from Commerce Identity API: {username}")
                 return username
+            else:
+                log("No username field in Commerce Identity response")
+        else:
+            log(f"Commerce Identity API error response: {response.text[:300]}")
     except Exception as e:
-        log(f"Commerce Identity API failed: {str(e)}")
+        log(f"Commerce Identity API exception: {str(e)}")
+        import traceback
+        log(f"Commerce Identity API traceback: {traceback.format_exc()}")
 
     # Try 2: Account API - get seller username
     try:
@@ -424,17 +434,27 @@ def get_ebay_user_info(access_token):
             headers=headers,
             timeout=10
         )
+        log(f"Account Privilege API status: {response.status_code}")
+
         if response.status_code == 200:
             data = response.json()
             log(f"Privilege API response keys: {list(data.keys())}")
+            log(f"Privilege API full response: {data}")
+
             # The privilege API returns sellingLimit with username
             seller_account = data.get('sellerAccount', {})
             username = seller_account.get('username')
             if username:
                 log(f"Got username from Privilege API: {username}")
                 return username
+            else:
+                log("No username in sellerAccount field")
+        else:
+            log(f"Privilege API error response: {response.text[:300]}")
     except Exception as e:
-        log(f"Account Privilege API failed: {str(e)}")
+        log(f"Account Privilege API exception: {str(e)}")
+        import traceback
+        log(f"Privilege API traceback: {traceback.format_exc()}")
 
     # Try 3: Fulfillment Orders API
     try:
@@ -445,17 +465,33 @@ def get_ebay_user_info(access_token):
             params={'limit': 1},
             timeout=10
         )
+        log(f"Fulfillment API status: {response.status_code}")
+
         if response.status_code == 200:
             data = response.json()
+            log(f"Fulfillment API response keys: {list(data.keys())}")
+            log(f"Fulfillment API has orders: {len(data.get('orders', []))} orders")
+
             # Check if there are orders and extract seller info
             if data.get('orders'):
-                seller_info = data['orders'][0].get('seller', {})
+                first_order = data['orders'][0]
+                log(f"First order keys: {list(first_order.keys())}")
+                seller_info = first_order.get('seller', {})
+                log(f"Seller info: {seller_info}")
                 username = seller_info.get('username')
                 if username:
                     log(f"Got username from Fulfillment API: {username}")
                     return username
+                else:
+                    log("No username in seller info")
+            else:
+                log("No orders found in Fulfillment API response")
+        else:
+            log(f"Fulfillment API error response: {response.text[:300]}")
     except Exception as e:
-        log(f"Fulfillment API failed: {str(e)}")
+        log(f"Fulfillment API exception: {str(e)}")
+        import traceback
+        log(f"Fulfillment API traceback: {traceback.format_exc()}")
 
     # Fallback
     log("All APIs failed, using generic 'eBay User'")

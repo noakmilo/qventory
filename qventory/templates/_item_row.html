@@ -4,6 +4,9 @@
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set un = current_user.username %}
 <tr>
+  <td style="text-align:center">
+    <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
+  </td>
   <td>
     {% if it.item_thumb %}
       <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
