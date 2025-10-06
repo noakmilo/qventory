@@ -1263,6 +1263,102 @@ def admin_create_user():
     return render_template("admin_create_user.html")
 
 
+@main_bp.route("/admin/users/roles")
+def admin_user_roles():
+    """Manage user roles for AI Research token limits"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    # Get all users with their token stats
+    from qventory.models.ai_token import AITokenUsage, AITokenConfig
+
+    users = User.query.order_by(User.created_at.desc()).all()
+    user_data = []
+
+    for user in users:
+        today_usage = AITokenUsage.get_today_usage(user.id)
+        token_limit = AITokenConfig.get_token_limit(user.role)
+
+        user_data.append({
+            'user': user,
+            'tokens_used_today': today_usage.tokens_used if today_usage else 0,
+            'token_limit': token_limit,
+            'tokens_remaining': token_limit - (today_usage.tokens_used if today_usage else 0)
+        })
+
+    return render_template("admin_user_roles.html", user_data=user_data)
+
+
+@main_bp.route("/admin/user/<int:user_id>/role", methods=["POST"])
+def admin_change_user_role(user_id):
+    """Change a user's role"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    user = User.query.get_or_404(user_id)
+    new_role = request.form.get("role", "").strip().lower()
+
+    valid_roles = ['free', 'premium', 'pro', 'god']
+    if new_role not in valid_roles:
+        flash(f"Invalid role. Must be one of: {', '.join(valid_roles)}", "error")
+        return redirect(url_for('main.admin_user_roles'))
+
+    old_role = user.role
+    user.role = new_role
+    db.session.commit()
+
+    flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
+    return redirect(url_for('main.admin_user_roles'))
+
+
+@main_bp.route("/admin/tokens/config")
+def admin_token_config():
+    """Manage AI token configurations per role"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    from qventory.models.ai_token import AITokenConfig
+
+    configs = AITokenConfig.query.order_by(AITokenConfig.daily_tokens.desc()).all()
+
+    return render_template("admin_token_config.html", configs=configs)
+
+
+@main_bp.route("/admin/tokens/config/<string:role>", methods=["POST"])
+def admin_update_token_config(role):
+    """Update token limit for a role"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    from qventory.models.ai_token import AITokenConfig
+
+    new_limit = request.form.get("daily_tokens", "").strip()
+
+    try:
+        new_limit = int(new_limit)
+        if new_limit < 0:
+            raise ValueError("Limit must be positive")
+    except ValueError:
+        flash("Invalid token limit. Must be a positive number.", "error")
+        return redirect(url_for('main.admin_token_config'))
+
+    config = AITokenConfig.query.filter_by(role=role).first()
+    if not config:
+        flash(f"Role '{role}' not found", "error")
+        return redirect(url_for('main.admin_token_config'))
+
+    old_limit = config.daily_tokens
+    config.daily_tokens = new_limit
+    db.session.commit()
+
+    flash(f"Token limit for '{role}' updated from {old_limit} to {new_limit} tokens/day", "ok")
+    return redirect(url_for('main.admin_token_config'))
+
+
 # ==================== PRIVACY POLICY ====================
 
 @main_bp.route("/privacy")

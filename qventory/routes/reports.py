@@ -20,7 +20,15 @@ def process_report_async(report_id):
     Background task to process AI research report
     This runs in a separate thread
     """
-    from qventory import app
+    from qventory import create_app
+    from flask import current_app
+
+    # Get app instance - either from current context or create new one
+    try:
+        app = current_app._get_current_object()
+    except RuntimeError:
+        # No app context available, create new app
+        app = create_app()
 
     with app.app_context():
         try:

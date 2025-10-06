@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}AI Token Configuration – Admin – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card" style="width:98%;max-width:900px;margin:0 auto;">
+    <div class="admin-header">
+      <div>
+        <h1><i class="fas fa-cog"></i> AI Token Configuration</h1>
+        <p style="color:var(--sub);">Configure daily AI Research token limits per role</p>
+      </div>
+      <div class="admin-actions">
+        <a href="{{ url_for('main.admin_user_roles') }}" class="btn">
+          <i class="fas fa-user-tag"></i> User Roles
+        </a>
+        <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Info Banner -->
+    <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:var(--space-3);margin-bottom:var(--space-4);">
+      <div style="display:flex;align-items:start;gap:var(--space-3);">
+        <i class="fas fa-lightbulb" style="color:#fbbf24;font-size:24px;margin-top:2px;"></i>
+        <div>
+          <div style="font-weight:600;margin-bottom:var(--space-1);color:#fbbf24;">About AI Tokens</div>
+          <div style="font-size:var(--fs-sm);line-height:1.5;color:var(--text);">
+            Each AI Research request consumes 1 token. Token limits reset daily at midnight UTC.
+            Changes here affect all users with the corresponding role immediately. God mode users have unlimited access.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="margin:var(--space-4) 0 var(--space-3) 0;">Role Token Limits</h2>
+
+    <div class="token-config-grid">
+      {% for config in configs %}
+      <div class="token-config-card">
+        <div class="config-header">
+          <div>
+            <span class="role-badge role-{{ config.role }}">
+              {{ config.role|capitalize }}
+            </span>
+          </div>
+          <div class="token-display">
+            {% if config.daily_tokens >= 999999 %}
+              <i class="fas fa-infinity" style="color:#34d399;font-size:32px;"></i>
+            {% else %}
+              <div class="token-count">{{ config.daily_tokens }}</div>
+              <div class="token-label">tokens/day</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <form method="post" action="{{ url_for('main.admin_update_token_config', role=config.role) }}">
+          <div style="margin-bottom:var(--space-3);">
+            <label for="tokens_{{ config.role }}" style="display:block;margin-bottom:var(--space-2);font-weight:600;font-size:var(--fs-sm);">
+              Daily Token Limit
+            </label>
+            <input
+              type="number"
+              name="daily_tokens"
+              id="tokens_{{ config.role }}"
+              value="{{ config.daily_tokens }}"
+              min="0"
+              max="999999"
+              class="form-control"
+              style="width:100%;padding:10px;font-size:var(--fs-base);"
+              {% if config.role == 'god' %}readonly{% endif %}
+            >
+            {% if config.role == 'god' %}
+              <div style="margin-top:var(--space-1);font-size:var(--fs-xs);color:var(--sub);">
+                <i class="fas fa-lock"></i> God mode is always unlimited
+              </div>
+            {% else %}
+              <div style="margin-top:var(--space-1);font-size:var(--fs-xs);color:var(--sub);">
+                Set to 0 to disable AI Research for this role
+              </div>
+            {% endif %}
+          </div>
+
+          {% if config.role != 'god' %}
+            <button type="submit" class="btn btn-primary" style="width:100%;">
+              <i class="fas fa-save"></i> Save Changes
+            </button>
+          {% endif %}
+        </form>
+
+        <!-- Usage Stats (optional future feature) -->
+        <div style="margin-top:var(--space-3);padding-top:var(--space-3);border-top:1px solid rgba(255,255,255,0.1);">
+          <div style="font-size:var(--fs-xs);color:var(--sub);display:flex;justify-content:space-between;">
+            <span>Role users:</span>
+            <span>{{ config.get_user_count() if config.get_user_count is defined else '—' }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if not configs %}
+    <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
+      <i class="fas fa-cog" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
+      <p>No token configurations found</p>
+      <p style="font-size:var(--fs-sm);margin-top:var(--space-2);">Run <code>create_fresh_db.py</code> to initialize default configs</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-free {
+  background: rgba(156,163,175,0.15);
+  border: 1px solid rgba(156,163,175,0.3);
+  color: #9ca3af;
+}
+
+.role-premium {
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.3);
+  color: #60a5fa;
+}
+
+.role-pro {
+  background: rgba(168,85,247,0.15);
+  border: 1px solid rgba(168,85,247,0.3);
+  color: #a855f7;
+}
+
+.role-god {
+  background: rgba(251,191,36,0.15);
+  border: 1px solid rgba(251,191,36,0.3);
+  color: #fbbf24;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.token-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.token-config-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: var(--space-4);
+  transition: all 0.2s ease;
+}
+
+.token-config-card:hover {
+  border-color: rgba(96,165,250,0.3);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.token-display {
+  text-align: right;
+}
+
+.token-count {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: #34d399;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.token-label {
+  font-size: var(--fs-xs);
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+.form-control {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.1);
+}
+
+.form-control:read-only {
+  background: rgba(255,255,255,0.02);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+</style>
+{% endblock %}

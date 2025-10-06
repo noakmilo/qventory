@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Manage User Roles – Admin – Qventory{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="card" style="width:98%;margin:0 auto;">
+    <div class="admin-header">
+      <div>
+        <h1><i class="fas fa-user-tag"></i> User Roles & AI Tokens</h1>
+        <p style="color:var(--sub);">Manage user access levels and AI Research usage</p>
+      </div>
+      <div class="admin-actions">
+        <a href="{{ url_for('main.admin_token_config') }}" class="btn">
+          <i class="fas fa-cog"></i> Token Config
+        </a>
+        <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+          <i class="fas fa-arrow-left"></i> Back
+        </a>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Role Legend -->
+    <div style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:var(--space-3);margin-bottom:var(--space-4);">
+      <div style="font-weight:600;margin-bottom:var(--space-2);color:#60a5fa;">
+        <i class="fas fa-info-circle"></i> Role Levels
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-2);font-size:var(--fs-sm);">
+        <div><span class="role-badge role-free">Free</span> – Basic access</div>
+        <div><span class="role-badge role-premium">Premium</span> – Enhanced features</div>
+        <div><span class="role-badge role-pro">Pro</span> – Professional tier</div>
+        <div><span class="role-badge role-god">God</span> – Unlimited access</div>
+      </div>
+    </div>
+
+    <h2 style="margin:var(--space-4) 0 var(--space-3) 0;">All Users ({{ user_data|length }})</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Email</th>
+            <th>Current Role</th>
+            <th>Tokens Today</th>
+            <th>Daily Limit</th>
+            <th>Remaining</th>
+            <th>Change Role</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for data in user_data %}
+          <tr>
+            <td><strong>{{ data.user.username }}</strong></td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);">{{ data.user.email }}</td>
+            <td>
+              <span class="role-badge role-{{ data.user.role }}">
+                {{ data.user.role|capitalize }}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              <span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">
+                {{ data.tokens_used_today }}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              <span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">
+                {{ data.token_limit if data.token_limit < 999999 else '∞' }}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              {% if data.tokens_remaining <= 0 and data.user.role != 'god' %}
+                <span style="color:#f87171;font-weight:600;">0</span>
+              {% elif data.user.role == 'god' %}
+                <span style="color:#34d399;">∞</span>
+              {% else %}
+                <span style="color:#34d399;">{{ data.tokens_remaining }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="post" action="{{ url_for('main.admin_change_user_role', user_id=data.user.id) }}" style="display:flex;gap:8px;align-items:center;">
+                <select name="role" class="form-control" style="width:120px;padding:6px 8px;font-size:var(--fs-sm);">
+                  <option value="free" {% if data.user.role == 'free' %}selected{% endif %}>Free</option>
+                  <option value="premium" {% if data.user.role == 'premium' %}selected{% endif %}>Premium</option>
+                  <option value="pro" {% if data.user.role == 'pro' %}selected{% endif %}>Pro</option>
+                  <option value="god" {% if data.user.role == 'god' %}selected{% endif %}>God</option>
+                </select>
+                <button type="submit" class="btn btn-primary" style="padding:6px 12px;font-size:var(--fs-sm);">
+                  <i class="fas fa-check"></i> Update
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if not user_data %}
+    <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
+      <i class="fas fa-users" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
+      <p>No users found</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.role-free {
+  background: rgba(156,163,175,0.15);
+  border: 1px solid rgba(156,163,175,0.3);
+  color: #9ca3af;
+}
+
+.role-premium {
+  background: rgba(96,165,250,0.15);
+  border: 1px solid rgba(96,165,250,0.3);
+  color: #60a5fa;
+}
+
+.role-pro {
+  background: rgba(168,85,247,0.15);
+  border: 1px solid rgba(168,85,247,0.3);
+  color: #a855f7;
+}
+
+.role-god {
+  background: rgba(251,191,36,0.15);
+  border: 1px solid rgba(251,191,36,0.3);
+  color: #fbbf24;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+}
+</style>
+{% endblock %}

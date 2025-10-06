@@ -9,6 +9,12 @@
         <p style="color:var(--sub);">Manage all users and their inventory</p>
       </div>
       <div class="admin-actions">
+        <a href="{{ url_for('main.admin_user_roles') }}" class="btn">
+          <i class="fas fa-user-tag"></i> User Roles
+        </a>
+        <a href="{{ url_for('main.admin_token_config') }}" class="btn">
+          <i class="fas fa-cog"></i> Token Config
+        </a>
         <a href="{{ url_for('main.admin_create_user') }}" class="btn">
           <i class="fas fa-user-plus"></i> Create User
         </a>
