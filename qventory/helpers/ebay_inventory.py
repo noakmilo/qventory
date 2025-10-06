@@ -35,6 +35,9 @@ def get_user_access_token(user_id):
     from qventory.extensions import db
     from datetime import timedelta
 
+    # Force refresh from database (avoid stale cache in multi-worker environment)
+    db.session.expire_all()
+
     credential = MarketplaceCredential.query.filter_by(
         user_id=user_id,
         marketplace='ebay',
