@@ -1,6 +1,6 @@
 from flask import Flask
 from .config import Config
-from .extensions import db, login_manager
+from .extensions import db, login_manager, migrate
 from .routes import main_bp, auth_bp
 from .routes.reports import reports_bp
 from .routes.ebay_auth import ebay_auth_bp
@@ -56,6 +56,7 @@ def create_app():
     app.config.from_object(Config)
 
     db.init_app(app)
+    migrate.init_app(app, db)
     login_manager.init_app(app)
 
     app.register_blueprint(auth_bp)

@@ -13,9 +13,13 @@ __pycache__/
 venv/
 ENV/
 
-# SQLite (dev only — la de producción vive en Render Persistent Disk)
+# SQLite databases (contienen datos de usuarios, NO versionar)
 app.db
+app.db-wal
+app.db-shm
 *.sqlite3
+*.db
+instance/
 
 # IDEs / OS
 .vscode/
