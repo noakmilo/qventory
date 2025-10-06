@@ -10,7 +10,7 @@ import base64
 import os
 import secrets
 
-from qventory import db
+from qventory.extensions import db
 from qventory.models.marketplace_credential import MarketplaceCredential
 
 ebay_auth_bp = Blueprint('ebay_auth', __name__, url_prefix='/settings/ebay')
