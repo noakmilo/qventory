@@ -1487,9 +1487,9 @@ const ModalAIResearch = (function() {
       updateProgress('📡 Connecting to Browse.AI...', 15);
 
       const startTime = Date.now();
-      console.log('[AI Research] Sending request to /api/ai-research...');
+      console.log('[AI Research] Sending request to /api/ai-research-async...');
 
-      const response = await fetch('/api/ai-research', {
+      const response = await fetch('/api/ai-research-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -1535,66 +1535,71 @@ const ModalAIResearch = (function() {
       }
 
       const data = await response.json();
-      console.log('[AI Research] Data received:', {
-        success: data.ok,
-        scraped_count: data.scraped_count,
-        examples_count: data.examples?.length || 0
-      });
+      console.log('[AI Research] Response:', data);
 
       if (data.ok) {
-        updateProgress(`✅ Scraped ${data.scraped_count || 0} sold listings`, 88);
-        console.log(`[AI Research] Successfully scraped ${data.scraped_count} listings`);
-        await new Promise(resolve => setTimeout(resolve, 400));
+        // ASYNC MODE: Report started in background
+        updateProgress('✅ Report generation started!', 100);
+        await new Promise(resolve => setTimeout(resolve, 800));
 
-        updateProgress('📊 Preparing market data for AI...', 91);
-        await new Promise(resolve => setTimeout(resolve, 400));
-
-        updateProgress('🤖 Analyzing with OpenAI GPT-4...', 94);
-        await new Promise(resolve => setTimeout(resolve, 600));
-
-        updateProgress('✨ Generating pricing strategy...', 97);
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        updateProgress('✅ Analysis complete!', 100);
-        await new Promise(resolve => setTimeout(resolve, 600));
-
-        // Hide progress and show result
         hideProgress();
 
-        // Build the final HTML with AI result + examples
-        let finalHTML = data.result;
+        // Show success message with token info
+        const tokenInfo = data.token_stats ?
+          `<div style="font-size:11px;color:#9ca3af;margin-top:8px">
+            🎫 Tokens remaining today: ${data.token_stats.remaining}/${data.token_stats.daily_limit}
+          </div>` : '';
 
-        // Add example listings for transparency
-        if (data.examples && data.examples.length > 0) {
-          finalHTML += `
-            <div style="margin-top:16px;padding:12px;background:#0f1115;border-radius:6px;border-left:3px solid #60a5fa">
-              <div style="color:#9ca3af;font-size:12px;margin-bottom:8px;font-weight:600">🔍 Real Examples Analyzed</div>
-              <div style="font-size:11px;color:#e8e8e8">
-          `;
+        resultContent.innerHTML = `
+          <div style="padding:20px;background:#1a1d24;border-radius:8px;text-align:center">
+            <div style="font-size:48px;margin-bottom:16px">⚡</div>
+            <h3 style="color:#34d399;margin-bottom:8px">Report Processing Started!</h3>
+            <p style="color:#e8e8e8;font-size:14px;margin-bottom:12px">
+              Your AI market research is being generated in the background.
+            </p>
+            <p style="color:#9ca3af;font-size:12px;margin-bottom:20px">
+              This usually takes 60-90 seconds. You'll be notified when it's ready.
+            </p>
+            ${tokenInfo}
+            <div style="margin-top:20px">
+              <a href="/reports" class="btn btn-primary" style="text-decoration:none;display:inline-block;padding:12px 24px">
+                <i class="fas fa-file-chart"></i> View Reports
+              </a>
+              <button onclick="document.getElementById('aiModal').style.display='none'" class="btn" style="margin-left:8px;padding:12px 24px">
+                Close
+              </button>
+            </div>
+          </div>
+        `;
 
-          data.examples.forEach((item, idx) => {
-            finalHTML += `
-              <div style="margin-bottom:${idx < data.examples.length - 1 ? '10px' : '0'};padding-bottom:${idx < data.examples.length - 1 ? '10px' : '0'};border-bottom:${idx < data.examples.length - 1 ? '1px solid #1a1d24' : 'none'}">
-                <div style="color:#60a5fa;margin-bottom:3px">${idx + 1}. ${item.title}</div>
-                <div style="display:flex;justify-content:space-between;align-items:center">
-                  <span style="color:#34d399;font-weight:600">$${item.price.toFixed(2)}</span>
-                  <a href="${item.link}" target="_blank" style="color:#9ca3af;text-decoration:none;font-size:10px;hover:color:#60a5fa">View ↗</a>
-                </div>
-              </div>
-            `;
-          });
+      } else {
+        // Error handling
+        updateProgress('❌ Error occurred', 100);
+        hideProgress();
 
-          finalHTML += `
-              </div>
+        let errorMsg = data.error || 'Unknown error';
+
+        // Special handling for no tokens
+        if (data.error_type === 'no_tokens' && data.token_stats) {
+          errorMsg = `
+            <div style="text-align:center;padding:20px">
+              <div style="font-size:48px;margin-bottom:16px">🎫</div>
+              <h3 style="color:#f59e0b;margin-bottom:8px">No AI Tokens Remaining</h3>
+              <p style="color:#e8e8e8;margin-bottom:8px">
+                You've used ${data.token_stats.used_today}/${data.token_stats.daily_limit} tokens today.
+              </p>
+              <p style="color:#9ca3af;font-size:12px;margin-bottom:16px">
+                Your role: <strong>${data.token_stats.role}</strong><br>
+                Tokens reset daily at midnight UTC.
+              </p>
+              <a href="/settings" class="btn btn-primary" style="text-decoration:none;display:inline-block">
+                <i class="fas fa-crown"></i> Upgrade Plan
+              </a>
             </div>
           `;
         }
 
-        resultContent.innerHTML = finalHTML;
-      } else {
-        updateProgress('❌ Error occurred', 100);
-        hideProgress();
-        resultContent.innerHTML = `<div style="color:var(--error);margin-top:20px"><strong>Error:</strong> ${data.error}</div>`;
+        resultContent.innerHTML = `<div style="color:var(--error);margin-top:20px">${errorMsg}</div>`;
       }
     } catch (err) {
       console.error('Full error:', err);
