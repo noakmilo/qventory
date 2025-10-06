@@ -588,11 +588,9 @@ def import_ebay():
 
         import_mode = request.form.get('import_mode', 'new_only')
         listing_status = request.form.get('listing_status', 'ACTIVE')
-        sync_custom_sku = request.form.get('sync_custom_sku') == 'on'
 
         log_import(f"Import mode: {import_mode}")
         log_import(f"Listing status: {listing_status}")
-        log_import(f"Sync custom SKU: {sync_custom_sku}")
 
         # Fetch inventory from eBay
         log_import("Fetching inventory from eBay API...")
@@ -610,29 +608,40 @@ def import_ebay():
                 # Parse eBay item
                 parsed = parse_ebay_inventory_item(ebay_item)
                 ebay_sku = parsed.get('ebay_sku', '')
+                ebay_title = parsed.get('title', '')
 
-                log_import(f"  Title: {parsed.get('title', 'N/A')[:50]}")
+                log_import(f"  Title: {ebay_title[:50]}")
                 log_import(f"  eBay SKU: {ebay_sku}")
 
-                # Check if item already exists (by eBay SKU)
+                # Check if item already exists (by eBay SKU OR by matching title)
                 existing_item = None
+
+                # First try to match by eBay SKU
                 if ebay_sku:
                     existing_item = Item.query.filter_by(
                         user_id=current_user.id,
                         ebay_sku=ebay_sku
                     ).first()
 
+                # If not found by SKU, try to match by exact title
+                if not existing_item and ebay_title:
+                    existing_item = Item.query.filter_by(
+                        user_id=current_user.id,
+                        title=ebay_title
+                    ).first()
+                    if existing_item:
+                        log_import(f"  Matched by title (no SKU match)")
+
                 if existing_item:
-                    log_import(f"  Item exists (ID: {existing_item.id})")
-                    # Item exists
+                    log_import(f"  Item exists in Qventory (ID: {existing_item.id})")
+                    # Item exists - only update eBay-specific fields
+                    # RESPECT existing SKU and location in Qventory
                     if import_mode in ['update_existing', 'sync_all']:
-                        # Update existing item
-                        existing_item.title = parsed['title']
-                        existing_item.item_thumb = parsed.get('item_thumb')
+                        # Only update eBay-specific fields, preserve Qventory data
                         existing_item.synced_from_ebay = True
                         existing_item.last_ebay_sync = datetime.utcnow()
 
-                        # Update eBay-specific fields if available
+                        # Update eBay listing info
                         if parsed.get('ebay_listing_id'):
                             existing_item.ebay_listing_id = parsed['ebay_listing_id']
                         if parsed.get('ebay_url'):
@@ -640,20 +649,27 @@ def import_ebay():
                         if parsed.get('item_price'):
                             existing_item.item_price = parsed['item_price']
 
+                        # Store eBay SKU if not already set
+                        if ebay_sku and not existing_item.ebay_sku:
+                            existing_item.ebay_sku = ebay_sku
+
+                        # DON'T update: title, sku, location (A,B,S,C), item_thumb
+                        # User's Qventory data takes priority
+
                         updated_count += 1
-                        log_import(f"  → Updated")
+                        log_import(f"  → Updated eBay data (preserved Qventory SKU & location)")
                     else:
                         skipped_count += 1
                         log_import(f"  → Skipped (mode: {import_mode})")
                 else:
-                    log_import(f"  Item does not exist")
-                    # New item
+                    log_import(f"  New item - not in Qventory")
+                    # New item - create it
                     if import_mode in ['new_only', 'sync_all']:
                         new_sku = generate_sku()
                         new_item = Item(
                             user_id=current_user.id,
                             sku=new_sku,
-                            title=parsed['title'],
+                            title=ebay_title,
                             item_thumb=parsed.get('item_thumb'),
                             ebay_sku=ebay_sku,
                             ebay_listing_id=parsed.get('ebay_listing_id'),
@@ -1070,6 +1086,86 @@ def bulk_delete_items():
     except Exception as e:
         db.session.rollback()
         print(f"[BULK_DELETE] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/item/sync_to_ebay", methods=["POST"])
+@login_required
+def sync_item_to_ebay():
+    """
+    Sync single item location to eBay Custom SKU
+    Expects JSON: {"item_id": 123}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_id' not in data:
+            return jsonify({"ok": False, "error": "Missing item_id"}), 400
+
+        item_id = int(data['item_id'])
+        item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+
+        if not item:
+            return jsonify({"ok": False, "error": "Item not found"}), 404
+
+        if not item.ebay_listing_id:
+            return jsonify({"ok": False, "error": "Item not linked to eBay"}), 400
+
+        if not item.location_code:
+            return jsonify({"ok": False, "error": "Item has no location code"}), 400
+
+        # Sync to eBay
+        from qventory.helpers.ebay_inventory import sync_location_to_ebay_sku
+        success = sync_location_to_ebay_sku(current_user.id, item.ebay_listing_id, item.location_code)
+
+        if success:
+            return jsonify({"ok": True, "message": "Synced to eBay"})
+        else:
+            return jsonify({"ok": False, "error": "Failed to sync to eBay"}), 500
+
+    except Exception as e:
+        print(f"[SYNC_TO_EBAY] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/items/bulk_sync_to_ebay", methods=["POST"])
+@login_required
+def bulk_sync_to_ebay():
+    """
+    Bulk sync items location to eBay Custom SKU
+    Expects JSON: {"item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = [int(x) for x in data['item_ids']]
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        # Get items
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+
+        from qventory.helpers.ebay_inventory import sync_location_to_ebay_sku
+
+        synced_count = 0
+        for item in items:
+            if item.ebay_listing_id and item.location_code:
+                success = sync_location_to_ebay_sku(current_user.id, item.ebay_listing_id, item.location_code)
+                if success:
+                    synced_count += 1
+
+        return jsonify({
+            "ok": True,
+            "synced_count": synced_count,
+            "message": f"Successfully synced {synced_count} item(s)"
+        })
+
+    except Exception as e:
+        print(f"[BULK_SYNC] Error: {str(e)}", file=sys.stderr)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

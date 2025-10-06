@@ -66,6 +66,16 @@
             title="Profit Calculator">
       <i class="fas fa-calculator"></i>
     </button>
+    {% if it.ebay_listing_id %}
+    <button class="btn settingsbtn sync-to-ebay-btn"
+            data-item-id="{{ it.id }}"
+            data-ebay-listing-id="{{ it.ebay_listing_id }}"
+            data-location-code="{{ it.location_code if it.location_code else '' }}"
+            title="Sync location to eBay Custom SKU"
+            style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
+      <i class="fab fa-ebay"></i>
+    </button>
+    {% endif %}
     <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
     <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
       <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>

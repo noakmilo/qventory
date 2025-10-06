@@ -788,6 +788,85 @@ def parse_ebay_inventory_item(ebay_item):
         }
 
 
+def sync_location_to_ebay_sku(user_id, ebay_listing_id, location_code):
+    """
+    Sync Qventory location code to eBay Custom SKU field using Trading API
+
+    Args:
+        user_id: Qventory user ID
+        ebay_listing_id: eBay Item ID
+        location_code: Location code from Qventory (e.g., "A1-B2-S3-C4")
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    log_inv(f"Syncing location '{location_code}' to eBay listing {ebay_listing_id}")
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("No access token available")
+        return False
+
+    import os
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+
+    # Trading API endpoint
+    if EBAY_ENV == 'production':
+        trading_url = "https://api.ebay.com/ws/api.dll"
+    else:
+        trading_url = "https://api.sandbox.ebay.com/ws/api.dll"
+
+    # Build XML request for ReviseItem (update Custom SKU)
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<ReviseItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <Item>
+    <ItemID>{ebay_listing_id}</ItemID>
+    <SKU>{location_code}</SKU>
+  </Item>
+</ReviseItemRequest>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+        'X-EBAY-API-CALL-NAME': 'ReviseItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'Content-Type': 'text/xml'
+    }
+
+    try:
+        response = requests.post(trading_url, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"Sync response status: {response.status_code}")
+
+        if response.status_code != 200:
+            log_inv(f"Sync error: {response.text[:500]}")
+            return False
+
+        # Parse XML response
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(response.content)
+        ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+
+        # Check for errors
+        ack = root.find('ebay:Ack', ns)
+        if ack is not None and ack.text in ['Success', 'Warning']:
+            log_inv(f"Successfully synced location to eBay listing {ebay_listing_id}")
+            return True
+        else:
+            errors = root.findall('.//ebay:Errors', ns)
+            for error in errors:
+                error_msg = error.find('ebay:LongMessage', ns)
+                if error_msg is not None:
+                    log_inv(f"eBay error: {error_msg.text}")
+            return False
+
+    except Exception as e:
+        log_inv(f"Exception syncing to eBay: {str(e)}")
+        return False
+
+
 def parse_ebay_offer(ebay_offer):
     """
     Parse eBay offer (listing) to get pricing and listing URL

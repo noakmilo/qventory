@@ -111,6 +111,7 @@
         <div id="bulkActionsContainer" style="display:none;margin-right:10px">
           <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
             <option value="">Bulk Actions</option>
+            <option value="sync_to_ebay">Sync to eBay</option>
             <option value="delete">Delete Selected</option>
           </select>
           <button id="bulkActionApply" class="btn" style="padding:0.5rem 1rem">
@@ -935,6 +936,9 @@
     if (action === 'delete'){
       const itemIds = Array.from(checkedBoxes).map(cb => cb.dataset.itemId);
       showBulkDeleteModal(itemIds);
+    } else if (action === 'sync_to_ebay'){
+      const itemIds = Array.from(checkedBoxes).map(cb => cb.dataset.itemId);
+      showBulkSyncModal(itemIds);
     }
   });
 
@@ -992,6 +996,86 @@
       bulkActionApply.innerHTML = '<i class="fas fa-check"></i> Apply';
     });
   }
+
+  // Bulk sync to eBay
+  function showBulkSyncModal(itemIds){
+    const count = itemIds.length;
+    const message = `Sync ${count} item${count > 1 ? 's' : ''} location code to eBay Custom SKU?\n\nThis will update your eBay listings.`;
+
+    if (!confirm(message)) return;
+
+    bulkActionApply.disabled = true;
+    bulkActionApply.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+
+    fetch('{{ url_for("main.bulk_sync_to_ebay") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_ids: itemIds })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok){
+        alert(`Successfully synced ${data.synced_count} item${data.synced_count > 1 ? 's' : ''} to eBay`);
+        bulkActionSelect.value = '';
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        updateBulkUI();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to sync items'));
+      }
+    })
+    .catch(err => {
+      console.error('Bulk sync error:', err);
+      alert('Error syncing items. Please try again.');
+    })
+    .finally(() => {
+      bulkActionApply.disabled = false;
+      bulkActionApply.innerHTML = '<i class="fas fa-check"></i> Apply';
+    });
+  }
+
+  // Individual sync to eBay buttons
+  document.addEventListener('click', function(e){
+    if (e.target.closest('.sync-to-ebay-btn')){
+      const btn = e.target.closest('.sync-to-ebay-btn');
+      const itemId = btn.dataset.itemId;
+      const locationCode = btn.dataset.locationCode;
+
+      if (!locationCode){
+        alert('This item has no location code to sync');
+        return;
+      }
+
+      if (!confirm(`Sync location "${locationCode}" to eBay Custom SKU?`)){
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      fetch('{{ url_for("main.sync_item_to_ebay") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok){
+          alert('Successfully synced to eBay!');
+        } else {
+          alert('Error: ' + (data.error || 'Failed to sync'));
+        }
+      })
+      .catch(err => {
+        console.error('Sync error:', err);
+        alert('Error syncing to eBay. Please try again.');
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fab fa-ebay"></i>';
+      });
+    }
+  });
 })();
 </script>
 
