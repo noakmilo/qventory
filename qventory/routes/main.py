@@ -889,7 +889,22 @@ def settings():
         db.session.commit()
         flash("Settings saved.", "ok")
         return redirect(url_for("main.settings"))
-    return render_template("settings.html", settings=s)
+
+    # Check eBay connection status
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    ebay_connected = ebay_cred is not None
+    ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+
+    return render_template("settings.html",
+                         settings=s,
+                         ebay_connected=ebay_connected,
+                         ebay_username=ebay_username)
 
 
 # ---------------------- Batch QR (protegido) ----------------------

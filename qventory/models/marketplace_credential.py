@@ -26,6 +26,9 @@ class MarketplaceCredential(db.Model):
     refresh_token = db.Column(db.Text, nullable=True)
     token_expires_at = db.Column(db.DateTime, nullable=True)
 
+    # eBay user information
+    ebay_user_id = db.Column(db.String(100), nullable=True)  # eBay username/user ID
+
     # Estado
     is_active = db.Column(db.Boolean, default=True, index=True)
     last_synced_at = db.Column(db.DateTime, nullable=True)

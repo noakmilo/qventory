@@ -23,6 +23,9 @@ class Listing(db.Model):
     price = db.Column(db.Float, nullable=True)
     quantity = db.Column(db.Integer, default=1)
 
+    # eBay specific fields
+    ebay_custom_sku = db.Column(db.String(100), nullable=True)  # Custom SKU synced to eBay (location code)
+
     # Estado
     status = db.Column(db.String(50), nullable=False, default='draft', index=True)  # draft, active, sold, ended, deleted
     is_synced = db.Column(db.Boolean, default=False, index=True)  # Si está sincronizado con la plataforma

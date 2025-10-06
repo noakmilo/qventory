@@ -1,6 +1,65 @@
 {% extends "base.html" %}
 {% block title %}Settings – Qventory{% endblock %}
 {% block content %}
+
+<!-- eBay Integration Section -->
+<div class="card" style="margin-bottom:20px">
+  <h2><i class="fab fa-ebay" style="color:#E53238"></i> eBay Integration</h2>
+
+  {% if ebay_connected %}
+    <!-- Connected State -->
+    <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <i class="fas fa-check-circle" style="color:#10b981;font-size:24px"></i>
+        <div>
+          <div style="font-weight:600;color:#10b981">Connected to eBay</div>
+          <div style="font-size:13px;color:var(--sub)">Account: {{ ebay_username }}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--sub);margin-top:12px">
+        <div>✓ Import inventory from eBay</div>
+        <div>✓ Sync location to Custom SKU</div>
+        <div>✓ Auto-sync sales and orders</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <form method="post" action="{{ url_for('ebay_auth.refresh_token') }}" style="display:inline">
+        <button type="submit" class="btn" style="background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.3);color:#60a5fa">
+          <i class="fas fa-sync-alt"></i> Refresh Token
+        </button>
+      </form>
+      <form method="post" action="{{ url_for('ebay_auth.disconnect') }}" style="display:inline"
+            onsubmit="return confirm('Are you sure you want to disconnect your eBay account?')">
+        <button type="submit" class="btn" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444">
+          <i class="fas fa-unlink"></i> Disconnect
+        </button>
+      </form>
+    </div>
+  {% else %}
+    <!-- Not Connected State -->
+    <div style="background:rgba(156,163,175,0.1);border:1px solid rgba(156,163,175,0.3);border-radius:8px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <i class="fas fa-link-slash" style="color:#9ca3af;font-size:24px"></i>
+        <div>
+          <div style="font-weight:600;color:var(--text)">Not Connected</div>
+          <div style="font-size:13px;color:var(--sub)">Connect your eBay seller account to unlock:</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--sub);margin-top:12px;margin-left:36px">
+        <div>• Import all your eBay listings to Qventory</div>
+        <div>• Sync inventory locations to eBay Custom SKU</div>
+        <div>• Auto-import sales and order data</div>
+        <div>• Real-time analytics from your eBay store</div>
+      </div>
+    </div>
+
+    <a href="{{ url_for('ebay_auth.connect') }}" class="btn btn-primary" style="background:#E53238;border-color:#E53238">
+      <i class="fab fa-ebay"></i> Connect eBay Account
+    </a>
+  {% endif %}
+</div>
+
 <div class="card">
   <h2>Hierarchy & Labels</h2>
   <form method="post" class="grid cols-2">

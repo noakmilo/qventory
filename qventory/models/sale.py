@@ -45,7 +45,17 @@ class Sale(db.Model):
     buyer_username = db.Column(db.String(255), nullable=True)
 
     # Estado
-    status = db.Column(db.String(50), nullable=False, default='pending', index=True)  # pending, paid, shipped, completed, cancelled, refunded
+    status = db.Column(db.String(50), nullable=False, default='pending', index=True)  # pending, paid, shipped, completed, cancelled, refunded, returned
+
+    # Return/Refund tracking
+    return_reason = db.Column(db.String(255), nullable=True)  # Reason for return
+    returned_at = db.Column(db.DateTime, nullable=True)  # Date item was returned
+    refund_amount = db.Column(db.Float, nullable=True)  # Partial or full refund amount
+    refund_reason = db.Column(db.String(255), nullable=True)  # Reason for refund
+
+    # eBay specific tracking
+    ebay_transaction_id = db.Column(db.String(100), nullable=True, index=True)  # eBay transaction ID
+    ebay_buyer_username = db.Column(db.String(100), nullable=True)  # eBay buyer username
 
     # Metadata
     notes = db.Column(db.Text, nullable=True)
