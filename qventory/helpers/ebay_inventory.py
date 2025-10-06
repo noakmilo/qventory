@@ -303,7 +303,7 @@ def get_all_inventory(user_id, max_items=1000):
         except Exception as e:
             log_inv(f"ERROR in Offers API fallback: {str(e)}")
 
-            # Last resort: Try getting seller username and use Browse API
+            # Third fallback: Try Browse API with seller search
             log_inv("Offers API failed, trying Browse API with seller search...")
             try:
                 browse_items = get_seller_listings_browse_api(user_id, max_items=max_items)
@@ -313,10 +313,114 @@ def get_all_inventory(user_id, max_items=1000):
             except Exception as browse_error:
                 log_inv(f"ERROR in Browse API fallback: {str(browse_error)}")
 
+            # Fourth fallback: Try Fulfillment Orders API to extract listings
+            log_inv("Browse API failed, trying Fulfillment Orders API...")
+            try:
+                fulfillment_items = get_listings_from_fulfillment_api(user_id, max_items=max_items)
+                if fulfillment_items:
+                    log_inv(f"Fulfillment API returned {len(fulfillment_items)} items")
+                    return fulfillment_items
+            except Exception as fulfillment_error:
+                log_inv(f"ERROR in Fulfillment API fallback: {str(fulfillment_error)}")
+
             # Return empty if all APIs fail
             return []
 
     return all_items[:max_items]
+
+
+def get_listings_from_fulfillment_api(user_id, max_items=1000):
+    """
+    Extract active listings from recent orders using Fulfillment API
+    This is a workaround when other APIs fail
+
+    Args:
+        user_id: Qventory user ID
+        max_items: Maximum items to fetch
+
+    Returns:
+        list of items in normalized format
+    """
+    log_inv(f"Attempting Fulfillment API for user {user_id}")
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("No access token available")
+        return []
+
+    # Get recent orders (last 90 days)
+    from datetime import datetime, timedelta
+    created_after = (datetime.utcnow() - timedelta(days=90)).isoformat() + 'Z'
+
+    url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order"
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    params = {
+        'filter': f'creationdate:[{created_after}..]',
+        'limit': 50
+    }
+
+    log_inv("Fetching recent orders from Fulfillment API...")
+    response = requests.get(url, headers=headers, params=params, timeout=30)
+
+    if response.status_code != 200:
+        log_inv(f"Fulfillment API error: {response.status_code} - {response.text[:200]}")
+        return []
+
+    data = response.json()
+    orders = data.get('orders', [])
+    log_inv(f"Found {len(orders)} recent orders")
+
+    # Extract unique listings from orders
+    seen_listing_ids = set()
+    items = []
+
+    for order in orders:
+        line_items = order.get('lineItems', [])
+        for line_item in line_items:
+            listing_id = line_item.get('legacyItemId')
+            if not listing_id or listing_id in seen_listing_ids:
+                continue
+
+            seen_listing_ids.add(listing_id)
+
+            title = line_item.get('title', '')
+            sku = line_item.get('sku', '')
+            image_url = line_item.get('image', {}).get('imageUrl')
+            price = float(line_item.get('lineItemCost', {}).get('value', 0))
+
+            normalized = {
+                'sku': sku,
+                'product': {
+                    'title': title,
+                    'description': '',
+                    'imageUrls': [image_url] if image_url else []
+                },
+                'availability': {
+                    'shipToLocationAvailability': {
+                        'quantity': 1
+                    }
+                },
+                'condition': 'USED_EXCELLENT',
+                'ebay_listing_id': listing_id,
+                'item_price': price,
+                'ebay_url': f"https://www.ebay.com/itm/{listing_id}",
+                'source': 'fulfillment_api'
+            }
+            items.append(normalized)
+
+            if len(items) >= max_items:
+                break
+
+        if len(items) >= max_items:
+            break
+
+    log_inv(f"Extracted {len(items)} unique listings from orders")
+    return items
 
 
 def get_seller_listings_browse_api(user_id, max_items=1000):
@@ -348,6 +452,11 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
 
     seller_username = credential.ebay_user_id
     log_inv(f"Seller username: {seller_username}")
+
+    # If username is generic, we can't use Browse API
+    if seller_username in ['eBay User', 'eBay Seller', None, '']:
+        log_inv(f"Username '{seller_username}' is too generic for Browse API search")
+        return []
 
     # Get application token (not user token) for Browse API
     import os
@@ -467,10 +576,9 @@ def parse_ebay_inventory_item(ebay_item):
     """
     # Check source of data
     source = ebay_item.get('source', '')
-    is_from_offers = source == 'offers_api'
-    is_from_browse = source == 'browse_api'
+    is_normalized = source in ['offers_api', 'browse_api', 'fulfillment_api']
 
-    if is_from_offers or is_from_browse:
+    if is_normalized:
         # Already normalized in get_all_inventory()
         product = ebay_item.get('product', {})
         title = product.get('title', '')
