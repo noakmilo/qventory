@@ -536,6 +536,106 @@ def import_csv():
     return redirect(url_for('main.dashboard'))
 
 
+# ---------------------- Import from eBay (OAuth-based) ----------------------
+
+@main_bp.route("/import/ebay", methods=["GET", "POST"])
+@login_required
+def import_ebay():
+    """Import inventory from connected eBay seller account"""
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    # Check if user has connected eBay account
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    ebay_connected = ebay_cred is not None
+    ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+
+    if request.method == "GET":
+        return render_template(
+            "import_ebay.html",
+            ebay_connected=ebay_connected,
+            ebay_username=ebay_username
+        )
+
+    # POST - Handle import
+    if not ebay_connected:
+        return jsonify({"ok": False, "error": "eBay account not connected"}), 400
+
+    try:
+        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item
+        from qventory.helpers import generate_sku
+
+        import_mode = request.form.get('import_mode', 'new_only')
+        listing_status = request.form.get('listing_status', 'ACTIVE')
+        sync_custom_sku = request.form.get('sync_custom_sku') == 'on'
+
+        # Fetch inventory from eBay
+        ebay_items = get_all_inventory(current_user.id, max_items=1000)
+
+        imported_count = 0
+        updated_count = 0
+        skipped_count = 0
+
+        for ebay_item in ebay_items:
+            # Parse eBay item
+            parsed = parse_ebay_inventory_item(ebay_item)
+            ebay_sku = parsed.get('ebay_sku', '')
+
+            # Check if item already exists (by eBay SKU)
+            existing_item = None
+            if ebay_sku:
+                existing_item = Item.query.filter_by(
+                    user_id=current_user.id,
+                    ebay_sku=ebay_sku
+                ).first()
+
+            if existing_item:
+                # Item exists
+                if import_mode in ['update_existing', 'sync_all']:
+                    # Update existing item
+                    existing_item.title = parsed['title']
+                    existing_item.item_thumb = parsed.get('item_thumb')
+                    existing_item.synced_from_ebay = True
+                    existing_item.last_ebay_sync = datetime.utcnow()
+                    updated_count += 1
+                else:
+                    skipped_count += 1
+            else:
+                # New item
+                if import_mode in ['new_only', 'sync_all']:
+                    new_sku = generate_sku()
+                    new_item = Item(
+                        user_id=current_user.id,
+                        sku=new_sku,
+                        title=parsed['title'],
+                        item_thumb=parsed.get('item_thumb'),
+                        ebay_sku=ebay_sku,
+                        synced_from_ebay=True,
+                        last_ebay_sync=datetime.utcnow()
+                    )
+                    db.session.add(new_item)
+                    imported_count += 1
+                else:
+                    skipped_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "imported": imported_count,
+            "updated": updated_count,
+            "skipped": skipped_count
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ---------------------- eBay Browse API ----------------------
 
 EBAY_ENV = (os.environ.get("EBAY_ENV") or "production").lower()

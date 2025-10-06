@@ -353,6 +353,7 @@ def refresh_access_token(refresh_token):
 def get_ebay_user_info(access_token):
     """
     Get eBay user information using access token
+    Tries multiple APIs to get the username
 
     Args:
         access_token: eBay access token
@@ -364,22 +365,45 @@ def get_ebay_user_info(access_token):
 
     headers = {
         'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
     }
 
+    # Try 1: Commerce Identity API
     try:
+        log("Trying Commerce Identity API...")
         response = requests.get(
             f'{base_url}/commerce/identity/v1/user/',
             headers=headers,
             timeout=10
         )
-        response.raise_for_status()
+        if response.status_code == 200:
+            user_data = response.json()
+            username = user_data.get('username')
+            if username:
+                log(f"Got username from Commerce Identity API: {username}")
+                return username
+    except Exception as e:
+        log(f"Commerce Identity API failed: {str(e)}")
 
-        user_data = response.json()
-        return user_data.get('username', 'Unknown')
-    except:
-        # If user info fails, return generic identifier
-        return 'eBay User'
+    # Try 2: Account API (Fulfillment Policy - just to get user context)
+    try:
+        log("Trying Account API...")
+        response = requests.get(
+            f'{base_url}/sell/account/v1/fulfillment_policy',
+            headers=headers,
+            timeout=10
+        )
+        if response.status_code == 200:
+            # Account API doesn't return username directly, but if it works, we're connected
+            log("Account API works, using 'eBay Seller' as fallback")
+            return 'eBay Seller'
+    except Exception as e:
+        log(f"Account API failed: {str(e)}")
+
+    # Fallback
+    log("All APIs failed, using generic 'eBay User'")
+    return 'eBay User'
 
 
 def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay_user_id):
