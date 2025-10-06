@@ -3,9 +3,14 @@ eBay Inventory API Helper
 Functions to fetch and sync inventory from eBay Sell API
 """
 import os
+import sys
 import requests
 from datetime import datetime
 from qventory.models.marketplace_credential import MarketplaceCredential
+
+def log_inv(msg):
+    """Helper function for logging"""
+    print(f"[EBAY_INVENTORY] {msg}", file=sys.stderr, flush=True)
 
 EBAY_ENV = os.environ.get('EBAY_ENV', 'production')
 
@@ -81,14 +86,18 @@ def get_inventory_items(user_id, limit=200, offset=0):
     Returns:
         dict with 'items' list and 'total' count
     """
+    log_inv(f"Getting inventory items for user {user_id} (limit={limit}, offset={offset})")
+
     access_token = get_user_access_token(user_id)
     if not access_token:
+        log_inv("ERROR: No valid eBay access token available")
         raise Exception("No valid eBay access token available")
 
     url = f"{EBAY_API_BASE}/sell/inventory/v1/inventory_item"
+    log_inv(f"API URL: {url}")
 
     headers = {
-        'Authorization': f'Bearer {access_token}',
+        'Authorization': f'Bearer {access_token[:20]}...',
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
@@ -98,17 +107,31 @@ def get_inventory_items(user_id, limit=200, offset=0):
         'offset': offset
     }
 
-    response = requests.get(url, headers=headers, params=params, timeout=30)
-    response.raise_for_status()
+    log_inv(f"Making request to eBay Inventory API...")
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        log_inv(f"Response status: {response.status_code}")
 
-    data = response.json()
+        if response.status_code != 200:
+            log_inv(f"ERROR response body: {response.text[:500]}")
 
-    return {
-        'items': data.get('inventoryItems', []),
-        'total': data.get('total', 0),
-        'limit': limit,
-        'offset': offset
-    }
+        response.raise_for_status()
+
+        data = response.json()
+        item_count = len(data.get('inventoryItems', []))
+        total = data.get('total', 0)
+
+        log_inv(f"Got {item_count} items (total available: {total})")
+
+        return {
+            'items': data.get('inventoryItems', []),
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        }
+    except Exception as e:
+        log_inv(f"ERROR calling eBay API: {str(e)}")
+        raise
 
 
 def get_active_listings(user_id, limit=200, offset=0):

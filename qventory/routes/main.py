@@ -542,6 +542,14 @@ def import_csv():
 @login_required
 def import_ebay():
     """Import inventory from connected eBay seller account"""
+    import sys
+    import traceback
+
+    def log_import(msg):
+        print(f"[EBAY_IMPORT] {msg}", file=sys.stderr, flush=True)
+
+    log_import("=== IMPORT ROUTE CALLED ===")
+
     from qventory.models.marketplace_credential import MarketplaceCredential
 
     # Check if user has connected eBay account
@@ -554,7 +562,12 @@ def import_ebay():
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
 
+    log_import(f"User: {current_user.id} ({current_user.username})")
+    log_import(f"eBay connected: {ebay_connected}")
+    log_import(f"eBay username: {ebay_username}")
+
     if request.method == "GET":
+        log_import("GET request - rendering template")
         return render_template(
             "import_ebay.html",
             ebay_connected=ebay_connected,
@@ -562,10 +575,14 @@ def import_ebay():
         )
 
     # POST - Handle import
+    log_import("POST request - starting import")
+
     if not ebay_connected:
+        log_import("ERROR: eBay account not connected")
         return jsonify({"ok": False, "error": "eBay account not connected"}), 400
 
     try:
+        log_import("Importing helpers...")
         from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item
         from qventory.helpers import generate_sku
 
@@ -573,56 +590,82 @@ def import_ebay():
         listing_status = request.form.get('listing_status', 'ACTIVE')
         sync_custom_sku = request.form.get('sync_custom_sku') == 'on'
 
+        log_import(f"Import mode: {import_mode}")
+        log_import(f"Listing status: {listing_status}")
+        log_import(f"Sync custom SKU: {sync_custom_sku}")
+
         # Fetch inventory from eBay
+        log_import("Fetching inventory from eBay API...")
         ebay_items = get_all_inventory(current_user.id, max_items=1000)
+        log_import(f"Fetched {len(ebay_items)} items from eBay")
 
         imported_count = 0
         updated_count = 0
         skipped_count = 0
 
-        for ebay_item in ebay_items:
-            # Parse eBay item
-            parsed = parse_ebay_inventory_item(ebay_item)
-            ebay_sku = parsed.get('ebay_sku', '')
+        for idx, ebay_item in enumerate(ebay_items):
+            try:
+                log_import(f"Processing item {idx + 1}/{len(ebay_items)}")
 
-            # Check if item already exists (by eBay SKU)
-            existing_item = None
-            if ebay_sku:
-                existing_item = Item.query.filter_by(
-                    user_id=current_user.id,
-                    ebay_sku=ebay_sku
-                ).first()
+                # Parse eBay item
+                parsed = parse_ebay_inventory_item(ebay_item)
+                ebay_sku = parsed.get('ebay_sku', '')
 
-            if existing_item:
-                # Item exists
-                if import_mode in ['update_existing', 'sync_all']:
-                    # Update existing item
-                    existing_item.title = parsed['title']
-                    existing_item.item_thumb = parsed.get('item_thumb')
-                    existing_item.synced_from_ebay = True
-                    existing_item.last_ebay_sync = datetime.utcnow()
-                    updated_count += 1
-                else:
-                    skipped_count += 1
-            else:
-                # New item
-                if import_mode in ['new_only', 'sync_all']:
-                    new_sku = generate_sku()
-                    new_item = Item(
+                log_import(f"  Title: {parsed.get('title', 'N/A')[:50]}")
+                log_import(f"  eBay SKU: {ebay_sku}")
+
+                # Check if item already exists (by eBay SKU)
+                existing_item = None
+                if ebay_sku:
+                    existing_item = Item.query.filter_by(
                         user_id=current_user.id,
-                        sku=new_sku,
-                        title=parsed['title'],
-                        item_thumb=parsed.get('item_thumb'),
-                        ebay_sku=ebay_sku,
-                        synced_from_ebay=True,
-                        last_ebay_sync=datetime.utcnow()
-                    )
-                    db.session.add(new_item)
-                    imported_count += 1
-                else:
-                    skipped_count += 1
+                        ebay_sku=ebay_sku
+                    ).first()
 
+                if existing_item:
+                    log_import(f"  Item exists (ID: {existing_item.id})")
+                    # Item exists
+                    if import_mode in ['update_existing', 'sync_all']:
+                        # Update existing item
+                        existing_item.title = parsed['title']
+                        existing_item.item_thumb = parsed.get('item_thumb')
+                        existing_item.synced_from_ebay = True
+                        existing_item.last_ebay_sync = datetime.utcnow()
+                        updated_count += 1
+                        log_import(f"  → Updated")
+                    else:
+                        skipped_count += 1
+                        log_import(f"  → Skipped (mode: {import_mode})")
+                else:
+                    log_import(f"  Item does not exist")
+                    # New item
+                    if import_mode in ['new_only', 'sync_all']:
+                        new_sku = generate_sku()
+                        new_item = Item(
+                            user_id=current_user.id,
+                            sku=new_sku,
+                            title=parsed['title'],
+                            item_thumb=parsed.get('item_thumb'),
+                            ebay_sku=ebay_sku,
+                            synced_from_ebay=True,
+                            last_ebay_sync=datetime.utcnow()
+                        )
+                        db.session.add(new_item)
+                        imported_count += 1
+                        log_import(f"  → Created (SKU: {new_sku})")
+                    else:
+                        skipped_count += 1
+                        log_import(f"  → Skipped (mode: {import_mode})")
+            except Exception as item_error:
+                log_import(f"ERROR processing item {idx + 1}: {str(item_error)}")
+                log_import(f"Traceback: {traceback.format_exc()}")
+                # Continue with next item
+                continue
+
+        log_import("Committing to database...")
         db.session.commit()
+
+        log_import(f"Import completed: {imported_count} imported, {updated_count} updated, {skipped_count} skipped")
 
         return jsonify({
             "ok": True,
@@ -632,6 +675,8 @@ def import_ebay():
         })
 
     except Exception as e:
+        log_import(f"CRITICAL ERROR: {str(e)}")
+        log_import(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
 
