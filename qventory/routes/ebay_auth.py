@@ -81,17 +81,20 @@ def connect():
     session['ebay_oauth_state'] = state
     log(f"Generated state token: {state[:10]}...")
 
-    # Build authorization URL
+    # Build authorization URL with proper URL encoding
+    from urllib.parse import urlencode, quote
+
     scope_string = ' '.join(EBAY_SCOPES)
 
-    auth_url = (
-        f"{EBAY_OAUTH_URL}"
-        f"?client_id={EBAY_CLIENT_ID}"
-        f"&response_type=code"
-        f"&redirect_uri={EBAY_REDIRECT_URI}"
-        f"&scope={scope_string}"
-        f"&state={state}"
-    )
+    params = {
+        'client_id': EBAY_CLIENT_ID,
+        'response_type': 'code',
+        'redirect_uri': EBAY_REDIRECT_URI,
+        'scope': scope_string,
+        'state': state
+    }
+
+    auth_url = f"{EBAY_OAUTH_URL}?{urlencode(params)}"
 
     log(f"Full auth URL: {auth_url}")
     log(f"Redirecting to eBay authorization page...")
