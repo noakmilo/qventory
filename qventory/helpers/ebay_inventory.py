@@ -88,10 +88,16 @@ def get_inventory_items(user_id, limit=200, offset=0):
     """
     log_inv(f"Getting inventory items for user {user_id} (limit={limit}, offset={offset})")
 
-    access_token = get_user_access_token(user_id)
-    if not access_token:
-        log_inv("ERROR: No valid eBay access token available")
-        raise Exception("No valid eBay access token available")
+    try:
+        access_token = get_user_access_token(user_id)
+        if not access_token:
+            log_inv("ERROR: No valid eBay access token available")
+            raise Exception("No valid eBay access token available")
+    except Exception as e:
+        if 'InvalidToken' in str(type(e)) or 'InvalidSignature' in str(e):
+            log_inv("ERROR: Token decryption failed - SECRET_KEY may have changed")
+            raise Exception("eBay credentials are corrupted. Please disconnect and reconnect your eBay account in Settings.")
+        raise
 
     url = f"{EBAY_API_BASE}/sell/inventory/v1/inventory_item"
     log_inv(f"API URL: {url}")
