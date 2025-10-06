@@ -1628,12 +1628,17 @@ const ModalAIResearch = (function() {
     type();
   }
 
-  return { init, openModal, selectItem, analyze };
+  return { init, openModal, closeModal, selectItem, analyze };
 })();
 
 // Global function for modal opening from header button
 function openAIResearchModal() {
   ModalAIResearch.openModal();
+}
+
+// Global function for closing modal
+function closeAIResearchModal() {
+  ModalAIResearch.closeModal();
 }
 
 // Global function for analyze button

@@ -45,14 +45,9 @@ def process_report_async(report_id):
 
             # Get item data
             item_title = report.item_title
-            condition = "Used"
+            condition = "Used"  # Default condition
             market_region = "US"
             currency = "USD"
-
-            if report.item_id:
-                item = Item.query.get(report.item_id)
-                if item:
-                    condition = item.condition or "Used"
 
             # STEP 1: Scrape eBay
             print(f"[Report {report_id}] Scraping eBay...", file=sys.stderr)
