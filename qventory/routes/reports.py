@@ -39,7 +39,7 @@ def process_report_async(report_id):
             print(f"[Report {report_id}] Starting async processing...", file=sys.stderr)
 
             # Import here to avoid circular imports
-            from qventory.helpers.ebay_scraper import scrape_ebay_sold_listings, format_listings_for_ai
+            from qventory.helpers.ebay_api_scraper import get_sold_listings_ebay_api, format_listings_for_ai
             from openai import OpenAI
             import os
 
@@ -49,13 +49,13 @@ def process_report_async(report_id):
             market_region = "US"
             currency = "USD"
 
-            # STEP 1: Scrape eBay
-            print(f"[Report {report_id}] Scraping eBay...", file=sys.stderr)
-            scraped_data = scrape_ebay_sold_listings(item_title, max_results=10)
+            # STEP 1: Get sold listings from eBay API (last 7 days)
+            print(f"[Report {report_id}] Fetching sold listings from eBay API...", file=sys.stderr)
+            scraped_data = get_sold_listings_ebay_api(item_title, max_results=10, days_back=7)
             report.scraped_count = scraped_data.get('count', 0)
             db.session.commit()
 
-            print(f"[Report {report_id}] Scraped {report.scraped_count} listings", file=sys.stderr)
+            print(f"[Report {report_id}] Found {report.scraped_count} sold listings (last 7 days)", file=sys.stderr)
 
             # Save examples
             examples = []
