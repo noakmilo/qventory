@@ -416,20 +416,46 @@ def get_ebay_user_info(access_token):
     except Exception as e:
         log(f"Commerce Identity API failed: {str(e)}")
 
-    # Try 2: Account API (Fulfillment Policy - just to get user context)
+    # Try 2: Account API - get seller username
     try:
-        log("Trying Account API...")
+        log("Trying Account API for seller username...")
         response = requests.get(
-            f'{base_url}/sell/account/v1/fulfillment_policy',
+            f'{base_url}/sell/account/v1/privilege',
             headers=headers,
             timeout=10
         )
         if response.status_code == 200:
-            # Account API doesn't return username directly, but if it works, we're connected
-            log("Account API works, using 'eBay Seller' as fallback")
-            return 'eBay Seller'
+            data = response.json()
+            log(f"Privilege API response keys: {list(data.keys())}")
+            # The privilege API returns sellingLimit with username
+            seller_account = data.get('sellerAccount', {})
+            username = seller_account.get('username')
+            if username:
+                log(f"Got username from Privilege API: {username}")
+                return username
     except Exception as e:
-        log(f"Account API failed: {str(e)}")
+        log(f"Account Privilege API failed: {str(e)}")
+
+    # Try 3: Fulfillment Orders API
+    try:
+        log("Trying Fulfillment Orders API...")
+        response = requests.get(
+            f'{base_url}/sell/fulfillment/v1/order',
+            headers=headers,
+            params={'limit': 1},
+            timeout=10
+        )
+        if response.status_code == 200:
+            data = response.json()
+            # Check if there are orders and extract seller info
+            if data.get('orders'):
+                seller_info = data['orders'][0].get('seller', {})
+                username = seller_info.get('username')
+                if username:
+                    log(f"Got username from Fulfillment API: {username}")
+                    return username
+    except Exception as e:
+        log(f"Fulfillment API failed: {str(e)}")
 
     # Fallback
     log("All APIs failed, using generic 'eBay User'")

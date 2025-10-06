@@ -342,11 +342,11 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
         is_active=True
     ).first()
 
-    if not credential or not credential.marketplace_user_id:
+    if not credential or not credential.ebay_user_id:
         log_inv("No eBay username found in credentials")
         return []
 
-    seller_username = credential.marketplace_user_id
+    seller_username = credential.ebay_user_id
     log_inv(f"Seller username: {seller_username}")
 
     # Get application token (not user token) for Browse API
