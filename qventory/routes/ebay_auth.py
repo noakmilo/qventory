@@ -9,11 +9,16 @@ import requests
 import base64
 import os
 import secrets
+import sys
 
 from qventory.extensions import db
 from qventory.models.marketplace_credential import MarketplaceCredential
 
 ebay_auth_bp = Blueprint('ebay_auth', __name__, url_prefix='/settings/ebay')
+
+def log(msg):
+    """Helper function for logging to stderr (visible in journalctl)"""
+    print(f"[EBAY_AUTH] {msg}", file=sys.stderr, flush=True)
 
 # eBay OAuth Configuration
 EBAY_CLIENT_ID = os.environ.get('EBAY_CLIENT_ID')
@@ -28,6 +33,15 @@ else:
     EBAY_OAUTH_URL = "https://auth.sandbox.ebay.com/oauth2/authorize"
     EBAY_TOKEN_URL = "https://api.sandbox.ebay.com/identity/v1/oauth2/token"
     EBAY_REDIRECT_URI = os.environ.get('EBAY_REDIRECT_URI', 'https://qventory.com/settings/ebay/callback')
+
+# Log configuration on startup
+log(f"eBay OAuth Configuration:")
+log(f"  Environment: {EBAY_ENV}")
+log(f"  Client ID: {'SET' if EBAY_CLIENT_ID else 'NOT SET'}")
+log(f"  Client Secret: {'SET' if EBAY_CLIENT_SECRET else 'NOT SET'}")
+log(f"  Redirect URI: {EBAY_REDIRECT_URI}")
+log(f"  OAuth URL: {EBAY_OAUTH_URL}")
+log(f"  Token URL: {EBAY_TOKEN_URL}")
 
 # OAuth scopes for selling and inventory management
 EBAY_SCOPES = [
@@ -53,9 +67,19 @@ def connect():
     Initiate eBay OAuth flow
     Redirects user to eBay consent page
     """
+    log(f"=== CONNECT ROUTE CALLED ===")
+    log(f"User: {current_user.id} ({current_user.username})")
+
+    # Check if credentials are configured
+    if not EBAY_CLIENT_ID or not EBAY_CLIENT_SECRET:
+        log("ERROR: eBay credentials not configured!")
+        flash('eBay integration not configured. Please contact administrator.', 'error')
+        return redirect(url_for('main.settings'))
+
     # Generate and store state token for CSRF protection
     state = secrets.token_urlsafe(32)
     session['ebay_oauth_state'] = state
+    log(f"Generated state token: {state[:10]}...")
 
     # Build authorization URL
     scope_string = ' '.join(EBAY_SCOPES)
@@ -69,6 +93,7 @@ def connect():
         f"&state={state}"
     )
 
+    log(f"Redirecting to: {auth_url[:100]}...")
     return redirect(auth_url)
 
 
@@ -79,11 +104,19 @@ def callback():
     eBay OAuth callback
     Exchanges authorization code for access token and refresh token
     """
+    log(f"=== CALLBACK ROUTE CALLED ===")
+    log(f"User: {current_user.id} ({current_user.username})")
+    log(f"Request args: {dict(request.args)}")
+
     # Verify state token (CSRF protection)
     state = request.args.get('state')
     stored_state = session.pop('ebay_oauth_state', None)
 
+    log(f"State from eBay: {state[:10] if state else 'None'}...")
+    log(f"Stored state: {stored_state[:10] if stored_state else 'None'}...")
+
     if not state or state != stored_state:
+        log("ERROR: State mismatch!")
         flash('Invalid OAuth state. Please try again.', 'error')
         return redirect(url_for('main.settings'))
 
@@ -91,27 +124,38 @@ def callback():
     error = request.args.get('error')
     if error:
         error_desc = request.args.get('error_description', 'Unknown error')
+        log(f"ERROR from eBay: {error} - {error_desc}")
         flash(f'eBay authorization failed: {error_desc}', 'error')
         return redirect(url_for('main.settings'))
 
     # Get authorization code
     auth_code = request.args.get('code')
     if not auth_code:
+        log("ERROR: No authorization code received")
         flash('No authorization code received from eBay.', 'error')
         return redirect(url_for('main.settings'))
 
+    log(f"Authorization code received: {auth_code[:10]}...")
+
     try:
         # Exchange authorization code for tokens
+        log("Exchanging code for token...")
         tokens = exchange_code_for_token(auth_code)
 
         if not tokens:
+            log("ERROR: Failed to get tokens")
             flash('Failed to get access token from eBay.', 'error')
             return redirect(url_for('main.settings'))
 
+        log(f"Tokens received: access_token={tokens['access_token'][:10]}..., refresh_token={tokens['refresh_token'][:10]}...")
+
         # Get eBay user info
+        log("Getting eBay user info...")
         ebay_user_id = get_ebay_user_info(tokens['access_token'])
+        log(f"eBay user ID: {ebay_user_id}")
 
         # Save or update credentials in database
+        log("Saving credentials to database...")
         save_ebay_credentials(
             user_id=current_user.id,
             access_token=tokens['access_token'],
@@ -120,10 +164,14 @@ def callback():
             ebay_user_id=ebay_user_id
         )
 
+        log(f"SUCCESS: eBay account connected for user {current_user.username}")
         flash(f'Successfully connected to eBay! (User: {ebay_user_id})', 'success')
         return redirect(url_for('main.settings'))
 
     except Exception as e:
+        log(f"ERROR in callback: {str(e)}")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}")
         flash(f'Error connecting to eBay: {str(e)}', 'error')
         return redirect(url_for('main.settings'))
 
@@ -211,6 +259,8 @@ def exchange_code_for_token(auth_code):
     Returns:
         dict with access_token, refresh_token, expires_in
     """
+    log("exchange_code_for_token: Starting token exchange...")
+
     # Create Basic Auth header
     credentials = f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}"
     b64_credentials = base64.b64encode(credentials.encode()).decode()
@@ -226,16 +276,30 @@ def exchange_code_for_token(auth_code):
         'redirect_uri': EBAY_REDIRECT_URI
     }
 
-    response = requests.post(EBAY_TOKEN_URL, headers=headers, data=data, timeout=10)
-    response.raise_for_status()
+    log(f"Token URL: {EBAY_TOKEN_URL}")
+    log(f"Redirect URI: {EBAY_REDIRECT_URI}")
+    log(f"Auth code: {auth_code[:10]}...")
 
-    token_data = response.json()
+    try:
+        response = requests.post(EBAY_TOKEN_URL, headers=headers, data=data, timeout=10)
+        log(f"Response status: {response.status_code}")
 
-    return {
-        'access_token': token_data['access_token'],
-        'refresh_token': token_data['refresh_token'],
-        'expires_in': token_data.get('expires_in', 7200)  # Usually 2 hours
-    }
+        if response.status_code != 200:
+            log(f"ERROR response body: {response.text}")
+
+        response.raise_for_status()
+
+        token_data = response.json()
+        log("Token exchange successful!")
+
+        return {
+            'access_token': token_data['access_token'],
+            'refresh_token': token_data['refresh_token'],
+            'expires_in': token_data.get('expires_in', 7200)  # Usually 2 hours
+        }
+    except Exception as e:
+        log(f"ERROR in exchange_code_for_token: {str(e)}")
+        raise
 
 
 def refresh_access_token(refresh_token):
@@ -318,6 +382,8 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         expires_in: Token expiration time in seconds
         ebay_user_id: eBay username
     """
+    log(f"save_ebay_credentials: Saving for user {user_id}...")
+
     # Check if credential already exists
     credential = MarketplaceCredential.query.filter_by(
         user_id=user_id,
@@ -325,6 +391,7 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
     ).first()
 
     if credential:
+        log("Updating existing credential...")
         # Update existing
         credential.set_access_token(access_token)
         credential.set_refresh_token(refresh_token)
@@ -333,6 +400,7 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         credential.is_active = True
         credential.updated_at = datetime.utcnow()
     else:
+        log("Creating new credential...")
         # Create new
         credential = MarketplaceCredential(
             user_id=user_id,
@@ -346,4 +414,10 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
 
         db.session.add(credential)
 
-    db.session.commit()
+    try:
+        db.session.commit()
+        log("Credentials saved successfully!")
+    except Exception as e:
+        log(f"ERROR saving credentials: {str(e)}")
+        db.session.rollback()
+        raise
