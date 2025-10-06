@@ -93,20 +93,28 @@ def connect():
         f"&state={state}"
     )
 
-    log(f"Redirecting to: {auth_url[:100]}...")
+    log(f"Full auth URL: {auth_url}")
+    log(f"Redirecting to eBay authorization page...")
     return redirect(auth_url)
 
 
 @ebay_auth_bp.route('/callback')
-@login_required
 def callback():
     """
     eBay OAuth callback
     Exchanges authorization code for access token and refresh token
     """
     log(f"=== CALLBACK ROUTE CALLED ===")
-    log(f"User: {current_user.id} ({current_user.username})")
     log(f"Request args: {dict(request.args)}")
+    log(f"User authenticated: {current_user.is_authenticated}")
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        log("ERROR: User not authenticated in callback!")
+        flash('Session expired. Please try again.', 'error')
+        return redirect(url_for('auth.login'))
+
+    log(f"User: {current_user.id} ({current_user.username})")
 
     # Verify state token (CSRF protection)
     state = request.args.get('state')
