@@ -1,5 +1,5 @@
 // static/sw.js
-const CACHE = 'qventory-v2'; // <-- sube versión (v2, v3...) cuando cambies el SW
+const CACHE = 'qventory-v3'; // <-- sube versión (v2, v3...) cuando cambies el SW
 const APP_SHELL = [
   '/',                     // landing pública
   '/offline',              // fallback sin conexión
@@ -33,16 +33,15 @@ self.addEventListener('fetch', (event) => {
     return; // Let browser handle external requests
   }
 
+  // Skip eBay OAuth routes - let browser handle redirects natively
+  if (req.url.includes('/settings/ebay/')) {
+    return; // Don't intercept OAuth flow
+  }
+
   // Navegación: intenta red, si falla usa /offline
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req, { redirect: 'manual' }).then(response => {
-        // If it's a redirect (3xx), let browser handle it natively
-        if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
-          return response;
-        }
-        return response;
-      }).catch(() => caches.match('/offline'))
+      fetch(req).catch(() => caches.match('/offline'))
     );
     return;
   }
