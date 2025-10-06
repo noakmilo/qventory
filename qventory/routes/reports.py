@@ -277,14 +277,102 @@ def token_stats():
 @reports_bp.route("/reports")
 @login_required
 def reports_page():
-    """View all reports page"""
-    # Cleanup expired reports
+    """DEPRECATED - Redirect to analytics"""
+    return redirect(url_for('reports.analytics'))
+
+
+@reports_bp.route("/analytics")
+@login_required
+def analytics():
+    """Business insights and analytics dashboard"""
+    from qventory.models.sale import Sale
+    from qventory.models.item import Item
+    from qventory.models.listing import Listing
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+
+    # Get AI Research reports for toggle section
     Report.cleanup_expired()
+    ai_reports = Report.get_user_reports(current_user.id)
 
-    # Get user reports
-    reports = Report.get_user_reports(current_user.id)
+    # Get date range from query params (default: last 30 days)
+    range_param = request.args.get('range', 'last_30_days')
 
-    return render_template("reports.html", reports=reports)
+    # Calculate date range
+    now = datetime.utcnow()
+    if range_param == 'today':
+        start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == 'yesterday':
+        start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == 'last_7_days':
+        start_date = now - timedelta(days=7)
+    elif range_param == 'last_30_days':
+        start_date = now - timedelta(days=30)
+    elif range_param == 'last_90_days':
+        start_date = now - timedelta(days=90)
+    elif range_param == 'week_to_date':
+        start_date = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == 'month_to_date':
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == 'year_to_date':
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    elif range_param == 'all_time':
+        start_date = datetime(2000, 1, 1)
+    else:
+        start_date = now - timedelta(days=30)
+
+    # Query sales in date range (only completed sales)
+    sales_query = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.sold_at >= start_date,
+        Sale.status.in_(['completed', 'shipped', 'paid'])
+    )
+
+    sales = sales_query.all()
+
+    # Calculate metrics
+    total_sales = len(sales)
+    gross_sales = sum(s.sold_price for s in sales)
+    total_costs = sum(s.item_cost or 0 for s in sales)
+    total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales)
+    net_sales = sum(s.net_profit or 0 for s in sales)
+
+    avg_gross_per_sale = gross_sales / total_sales if total_sales > 0 else 0
+    avg_net_per_sale = net_sales / total_sales if total_sales > 0 else 0
+    npm = (net_sales / gross_sales * 100) if gross_sales > 0 else 0
+
+    # Active listings by supplier
+    active_items = Item.query.filter_by(user_id=current_user.id, is_active=True).all()
+    listings_by_supplier = {}
+    for item in active_items:
+        supplier = item.supplier or 'Unknown'
+        if supplier not in listings_by_supplier:
+            listings_by_supplier[supplier] = {'count': 0, 'value': 0}
+        listings_by_supplier[supplier]['count'] += 1
+        listings_by_supplier[supplier]['value'] += item.item_price or 0
+
+    # Sales by marketplace
+    sales_by_marketplace = {}
+    for sale in sales:
+        mp = sale.marketplace
+        if mp not in sales_by_marketplace:
+            sales_by_marketplace[mp] = {'count': 0, 'revenue': 0}
+        sales_by_marketplace[mp]['count'] += 1
+        sales_by_marketplace[mp]['revenue'] += sale.sold_price
+
+    return render_template("analytics.html",
+                         ai_reports=ai_reports,
+                         range_param=range_param,
+                         total_sales=total_sales,
+                         gross_sales=gross_sales,
+                         net_sales=net_sales,
+                         avg_gross_per_sale=avg_gross_per_sale,
+                         avg_net_per_sale=avg_net_per_sale,
+                         npm=npm,
+                         listings_by_supplier=listings_by_supplier,
+                         sales_by_marketplace=sales_by_marketplace,
+                         sales=sales)
 
 
 @reports_bp.route("/api/reports/<int:report_id>/view")

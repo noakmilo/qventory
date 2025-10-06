@@ -1851,10 +1851,7 @@ const ModalAIResearch = (function() {
   return { init, openModal, closeModal, selectItem, analyze };
 })();
 
-// Global function for modal opening from header button
-function openAIResearchModal() {
-  ModalAIResearch.openModal();
-}
+// Note: Modal now only opens from item rows, header button goes to /ai-research page
 
 // Global function for closing modal
 function closeAIResearchModal() {

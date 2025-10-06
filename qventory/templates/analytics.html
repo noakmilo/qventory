@@ -1,0 +1,424 @@
+{% extends "base.html" %}
+
+{% block title %}Business Analytics - Qventory{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width:1400px;margin:40px auto;padding:0 20px">
+
+  <!-- Header -->
+  <div style="margin-bottom:30px">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+      <i class="fas fa-chart-bar"></i> Business Analytics
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px">
+      Track your sales performance and inventory insights
+    </p>
+  </div>
+
+  <!-- Date Range Selector -->
+  <div style="background:var(--surface);border-radius:12px;padding:20px;margin-bottom:24px;border:1px solid var(--border)">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <span style="color:var(--text-secondary);font-size:14px;margin-right:8px">Time Period:</span>
+
+      <button class="range-btn {% if range_param == 'today' %}active{% endif %}"
+              onclick="changeRange('today')">Today</button>
+      <button class="range-btn {% if range_param == 'yesterday' %}active{% endif %}"
+              onclick="changeRange('yesterday')">Yesterday</button>
+      <button class="range-btn {% if range_param == 'last_7_days' %}active{% endif %}"
+              onclick="changeRange('last_7_days')">Last 7 Days</button>
+      <button class="range-btn {% if range_param == 'last_30_days' %}active{% endif %}"
+              onclick="changeRange('last_30_days')">Last 30 Days</button>
+      <button class="range-btn {% if range_param == 'last_90_days' %}active{% endif %}"
+              onclick="changeRange('last_90_days')">Last 90 Days</button>
+      <button class="range-btn {% if range_param == 'week_to_date' %}active{% endif %}"
+              onclick="changeRange('week_to_date')">Week to Date</button>
+      <button class="range-btn {% if range_param == 'month_to_date' %}active{% endif %}"
+              onclick="changeRange('month_to_date')">Month to Date</button>
+      <button class="range-btn {% if range_param == 'year_to_date' %}active{% endif %}"
+              onclick="changeRange('year_to_date')">Year to Date</button>
+      <button class="range-btn {% if range_param == 'all_time' %}active{% endif %}"
+              onclick="changeRange('all_time')">All Time</button>
+    </div>
+  </div>
+
+  <!-- Key Metrics Cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px">
+
+    <!-- Total Sales -->
+    <div class="metric-card">
+      <div class="metric-label">Total Sales</div>
+      <div class="metric-value">{{ total_sales }}</div>
+    </div>
+
+    <!-- Gross Sales -->
+    <div class="metric-card">
+      <div class="metric-label">Gross Sales</div>
+      <div class="metric-value">${{ "%.2f"|format(gross_sales) }}</div>
+    </div>
+
+    <!-- Net Profit -->
+    <div class="metric-card">
+      <div class="metric-label">Net Profit</div>
+      <div class="metric-value" style="color:#10b981">${{ "%.2f"|format(net_sales) }}</div>
+    </div>
+
+    <!-- Avg Gross per Sale -->
+    <div class="metric-card">
+      <div class="metric-label">Avg Gross / Sale</div>
+      <div class="metric-value">${{ "%.2f"|format(avg_gross_per_sale) }}</div>
+    </div>
+
+    <!-- Avg Net per Sale -->
+    <div class="metric-card">
+      <div class="metric-label">Avg Net / Sale</div>
+      <div class="metric-value" style="color:#10b981">${{ "%.2f"|format(avg_net_per_sale) }}</div>
+    </div>
+
+    <!-- Net Profit Margin -->
+    <div class="metric-card">
+      <div class="metric-label">Net Profit Margin</div>
+      <div class="metric-value">{{ "%.1f"|format(npm) }}%</div>
+    </div>
+
+  </div>
+
+  <!-- Charts Section -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(500px,1fr));gap:24px;margin-bottom:24px">
+
+    <!-- Gross vs Net Sales Chart -->
+    <div style="background:var(--surface);border-radius:12px;padding:20px;border:1px solid var(--border)">
+      <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
+        <i class="fas fa-chart-line"></i> Sales Overview
+      </h3>
+      <canvas id="salesChart" height="250"></canvas>
+    </div>
+
+    <!-- Sales by Marketplace -->
+    <div style="background:var(--surface);border-radius:12px;padding:20px;border:1px solid var(--border)">
+      <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
+        <i class="fas fa-store"></i> Sales by Marketplace
+      </h3>
+      <canvas id="marketplaceChart" height="250"></canvas>
+    </div>
+
+  </div>
+
+  <!-- Listings by Supplier Pie Chart -->
+  <div style="background:var(--surface);border-radius:12px;padding:20px;border:1px solid var(--border);margin-bottom:24px;max-width:600px">
+    <h3 style="color:var(--text);font-size:16px;margin-bottom:16px">
+      <i class="fas fa-chart-pie"></i> Active Listings by Supplier
+    </h3>
+    <canvas id="supplierChart" height="300"></canvas>
+  </div>
+
+  <!-- AI Research History (Collapsible) -->
+  <div style="background:var(--surface);border-radius:12px;border:1px solid var(--border);margin-bottom:24px">
+    <button onclick="toggleAIHistory()"
+            style="width:100%;padding:16px;background:none;border:none;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+      <span style="color:var(--text);font-size:16px">
+        <i class="fas fa-robot"></i> AI Research History
+        {% if ai_reports|length > 0 %}
+          <span style="background:#60a5fa;color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px">
+            {{ ai_reports|length }}
+          </span>
+        {% endif %}
+      </span>
+      <i id="aiHistoryIcon" class="fas fa-chevron-down" style="color:var(--text-secondary);transition:transform 0.3s"></i>
+    </button>
+
+    <div id="aiHistoryContent" style="display:none;padding:0 16px 16px 16px;border-top:1px solid var(--border)">
+      {% if ai_reports %}
+        <div style="display:grid;gap:12px;margin-top:16px">
+          {% for report in ai_reports %}
+          <div class="ai-report-card" data-report-id="{{ report.id }}">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+              <div style="flex:1">
+                <h4 style="color:var(--text);font-size:14px;margin-bottom:4px">{{ report.item_title }}</h4>
+                <div style="font-size:11px;color:var(--text-secondary)">
+                  <i class="far fa-clock"></i> {{ report.created_at.strftime('%b %d, %Y at %I:%M %p') }}
+                </div>
+              </div>
+              <button class="btn-sm" onclick="viewAIReport({{ report.id }})">View</button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="text-align:center;color:var(--text-secondary);padding:20px;font-size:14px">
+          No AI research reports yet
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- AI Report View Modal -->
+<div id="reportModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <h2 id="modalReportTitle">Report</h2>
+      <button class="close-modal" onclick="closeReportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script>
+// Date range selector
+function changeRange(range) {
+  window.location.href = `?range=${range}`;
+}
+
+// AI History toggle
+function toggleAIHistory() {
+  const content = document.getElementById('aiHistoryContent');
+  const icon = document.getElementById('aiHistoryIcon');
+  if (content.style.display === 'none') {
+    content.style.display = 'block';
+    icon.style.transform = 'rotate(180deg)';
+  } else {
+    content.style.display = 'none';
+    icon.style.transform = 'rotate(0deg)';
+  }
+}
+
+// View AI Report
+function viewAIReport(reportId) {
+  fetch(`/api/reports/${reportId}/view`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.ok) {
+        document.getElementById('modalReportTitle').textContent = data.report.item_title;
+        document.getElementById('reportContent').innerHTML = data.report.result_html;
+        document.getElementById('reportModal').style.display = 'flex';
+      }
+    });
+}
+
+function closeReportModal() {
+  document.getElementById('reportModal').style.display = 'none';
+}
+
+// Charts
+const chartColors = {
+  primary: '#60a5fa',
+  success: '#10b981',
+  warning: '#f59e0b',
+  danger: '#ef4444',
+  purple: '#8b5cf6',
+  teal: '#14b8a6'
+};
+
+// Sales Overview Chart
+const salesCtx = document.getElementById('salesChart').getContext('2d');
+new Chart(salesCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Gross Sales', 'Net Profit'],
+    datasets: [{
+      label: 'Amount ($)',
+      data: [{{ gross_sales }}, {{ net_sales }}],
+      backgroundColor: [chartColors.primary, chartColors.success],
+      borderRadius: 8
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#9ca3af' },
+        grid: { color: 'rgba(156,163,175,0.1)' }
+      },
+      x: {
+        ticks: { color: '#9ca3af' },
+        grid: { display: false }
+      }
+    }
+  }
+});
+
+// Marketplace Chart
+const marketplaceLabels = {{ sales_by_marketplace.keys()|list|tojson }};
+const marketplaceCounts = {{ sales_by_marketplace.values()|map(attribute='count')|list|tojson }};
+
+const marketplaceCtx = document.getElementById('marketplaceChart').getContext('2d');
+new Chart(marketplaceCtx, {
+  type: 'doughnut',
+  data: {
+    labels: marketplaceLabels,
+    datasets: [{
+      data: marketplaceCounts,
+      backgroundColor: [chartColors.primary, chartColors.success, chartColors.warning, chartColors.purple, chartColors.teal],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#9ca3af', padding: 15 }
+      }
+    }
+  }
+});
+
+// Supplier Chart
+const supplierLabels = {{ listings_by_supplier.keys()|list|tojson }};
+const supplierCounts = {{ listings_by_supplier.values()|map(attribute='count')|list|tojson }};
+
+const supplierCtx = document.getElementById('supplierChart').getContext('2d');
+new Chart(supplierCtx, {
+  type: 'pie',
+  data: {
+    labels: supplierLabels,
+    datasets: [{
+      data: supplierCounts,
+      backgroundColor: [
+        chartColors.primary,
+        chartColors.success,
+        chartColors.warning,
+        chartColors.danger,
+        chartColors.purple,
+        chartColors.teal,
+        '#f472b6',
+        '#fb923c'
+      ],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'right',
+        labels: { color: '#9ca3af', padding: 12, font: { size: 11 } }
+      }
+    }
+  }
+});
+</script>
+
+<style>
+.range-btn {
+  padding: 6px 14px;
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.range-btn:hover {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+.range-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.metric-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+}
+
+.metric-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.ai-report-card {
+  background: var(--muted);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.btn-sm {
+  padding: 4px 12px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-sm:hover {
+  opacity: 0.9;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: var(--bg);
+  border-radius: 12px;
+  width: 90%;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text);
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 20px;
+}
+</style>
+{% endblock %}
