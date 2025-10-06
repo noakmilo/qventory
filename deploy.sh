@@ -5,16 +5,16 @@ set -euo pipefail
 # Qventory Production Deploy Script with Flask-Migrate
 # ============================================================================
 # Este script:
-# 1. Para el servicio
-# 2. Hace backup automático de la DB (con -wal y -shm)
-# 3. Actualiza código (git pull)
-# 4. Instala dependencias
-# 5. Aplica migraciones de DB (flask db upgrade)
-# 6. Reinicia servicio
+# 1. Hace backup automático de la DB (con -wal y -shm)
+# 2. Actualiza código (git pull)
+# 3. Instala dependencias
+# 4. Aplica migraciones de DB (flask db upgrade)
+# 5. Reinicia servicio
 #
 # IMPORTANTE: Con Flask-Migrate, la DB NO se mueve ni restaura.
 #             La DB persistente ES la fuente de verdad.
 #             Las migraciones actualizan el schema sin perder datos.
+#             El servicio NO se para durante el deploy para evitar downtime.
 # ============================================================================
 
 # === Ajustes de tu entorno ===
@@ -47,10 +47,6 @@ mkdir -p "${PERSIST_DIR}" "${BACKUP_DIR}"
 git config --global --add safe.directory "${APP_DIR}" || true
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 grep -q github.com ~/.ssh/known_hosts 2>/dev/null || ssh-keyscan github.com >> ~/.ssh/known_hosts
-
-# === 0) Parar servicio ===
-log "Parando servicio ${SERVICE_NAME}"
-systemctl stop "${SERVICE_NAME}" || true
 
 # === 1) Backup de DB persistente ===
 if [ -f "${PERSIST_DB}" ]; then
@@ -127,9 +123,9 @@ ls -t app.db.*.bak 2>/dev/null | tail -n +11 | xargs -r rm -f
 ls -t app.db.*.bak-wal 2>/dev/null | tail -n +11 | xargs -r rm -f
 ls -t app.db.*.bak-shm 2>/dev/null | tail -n +11 | xargs -r rm -f
 
-# === 7) Arrancar servicio ===
-log "Iniciando servicio ${SERVICE_NAME}"
-systemctl start "${SERVICE_NAME}"
+# === 7) Reiniciar servicio ===
+log "Reiniciando servicio ${SERVICE_NAME}"
+systemctl restart "${SERVICE_NAME}"
 
 sleep 2
 
