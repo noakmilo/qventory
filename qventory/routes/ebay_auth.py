@@ -194,6 +194,9 @@ def disconnect():
     Disconnect eBay account
     Removes credentials from database
     """
+    log(f"=== DISCONNECT ROUTE CALLED ===")
+    log(f"User: {current_user.id} ({current_user.username})")
+
     try:
         credential = MarketplaceCredential.query.filter_by(
             user_id=current_user.id,
@@ -201,13 +204,19 @@ def disconnect():
         ).first()
 
         if credential:
+            log(f"Found credential ID: {credential.id}")
             db.session.delete(credential)
             db.session.commit()
+            log("Credential deleted successfully")
             flash('eBay account disconnected successfully.', 'success')
         else:
+            log("No credential found to delete")
             flash('No eBay account connected.', 'info')
 
     except Exception as e:
+        log(f"ERROR disconnecting: {str(e)}")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}")
         flash(f'Error disconnecting eBay: {str(e)}', 'error')
 
     return redirect(url_for('main.settings'))
@@ -220,6 +229,9 @@ def refresh_token():
     Manually refresh eBay token
     Useful for debugging or force refresh
     """
+    log(f"=== REFRESH TOKEN ROUTE CALLED ===")
+    log(f"User: {current_user.id} ({current_user.username})")
+
     try:
         credential = MarketplaceCredential.query.filter_by(
             user_id=current_user.id,
@@ -227,22 +239,36 @@ def refresh_token():
         ).first()
 
         if not credential:
+            log("ERROR: No credential found")
             flash('No eBay account connected.', 'error')
             return redirect(url_for('main.settings'))
 
-        # Get current refresh token
-        refresh_token = credential.get_refresh_token()
+        log(f"Found credential ID: {credential.id}")
 
-        if not refresh_token:
+        # Get current refresh token
+        try:
+            refresh_token_val = credential.get_refresh_token()
+            log(f"Got refresh token: {refresh_token_val[:20] if refresh_token_val else 'None'}...")
+        except Exception as decrypt_error:
+            log(f"ERROR decrypting refresh token: {str(decrypt_error)}")
+            flash('Token is corrupted. Please disconnect and reconnect your eBay account.', 'error')
+            return redirect(url_for('main.settings'))
+
+        if not refresh_token_val:
+            log("ERROR: No refresh token available")
             flash('No refresh token available. Please reconnect your eBay account.', 'error')
             return redirect(url_for('main.settings'))
 
         # Request new access token using refresh token
-        tokens = refresh_access_token(refresh_token)
+        log("Calling refresh_access_token...")
+        tokens = refresh_access_token(refresh_token_val)
 
         if not tokens:
+            log("ERROR: refresh_access_token returned None")
             flash('Failed to refresh token. Please reconnect your eBay account.', 'error')
             return redirect(url_for('main.settings'))
+
+        log("Token refreshed successfully from eBay API")
 
         # Update credentials
         credential.set_access_token(tokens['access_token'])
@@ -250,9 +276,13 @@ def refresh_token():
         credential.updated_at = datetime.utcnow()
         db.session.commit()
 
+        log("Credentials updated in database")
         flash('eBay token refreshed successfully.', 'success')
 
     except Exception as e:
+        log(f"ERROR refreshing token: {str(e)}")
+        import traceback
+        log(f"Traceback: {traceback.format_exc()}")
         flash(f'Error refreshing token: {str(e)}', 'error')
 
     return redirect(url_for('main.settings'))
