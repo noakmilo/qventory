@@ -13,6 +13,8 @@ import requests
 from urllib.parse import urlparse, parse_qs
 import csv
 from datetime import datetime, date
+import hashlib
+
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
 from dotenv import load_dotenv
@@ -43,6 +45,9 @@ CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 CLOUDINARY_UPLOAD_FOLDER = os.environ.get("CLOUDINARY_UPLOAD_FOLDER", "qventory/items")
+EBAY_VERIFICATION_TOKEN = os.environ.get("EBAY_VERIFICATION_TOKEN", "")
+EBAY_DELETIONS_ENDPOINT_URL = os.environ.get("EBAY_DELETIONS_ENDPOINT_URL", "")
+
 
 cloudinary_enabled = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
 
@@ -976,6 +981,45 @@ def qr_for_location(username, code):
     img.save(buf, format="PNG")
     buf.seek(0)
     return send_file(buf, mimetype="image/png")
+
+# ---------------------- eBay Deletion Auth ----------------------
+
+@main_bp.get("/ebay/deletions")
+def ebay_deletions_challenge():
+    """
+    Verificación de endpoint (GET con ?challenge_code=...).
+    Responder con JSON: {"challengeResponse": "<sha256hex>"}.
+    Hash = SHA256( challengeCode + verificationToken + endpointURL ).
+    """
+    challenge_code = request.args.get("challenge_code", "").strip()
+    if not challenge_code:
+        return jsonify({"error": "Missing challenge_code"}), 400
+
+    # Validaciones mínimas
+    if not EBAY_VERIFICATION_TOKEN or not EBAY_DELETIONS_ENDPOINT_URL:
+        return jsonify({"error": "Server misconfigured: missing VERIFICATION_TOKEN or ENDPOINT_URL"}), 500
+
+    # Concatenación EXACTA (orden importa)
+    to_hash = f"{challenge_code}{EBAY_VERIFICATION_TOKEN}{EBAY_DELETIONS_ENDPOINT_URL}".encode("utf-8")
+    response_hash = hashlib.sha256(to_hash).hexdigest()
+
+    return jsonify({"challengeResponse": response_hash}), 200
+
+
+@main_bp.post("/ebay/deletions")
+def ebay_deletions_notify():
+    """
+    Notificaciones reales (POST). eBay puede enviarte MARKETPLACE_ACCOUNT_DELETION.
+    Responde rápido 2xx como ACK; procesa en background si necesitas.
+    """
+    try:
+        payload = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        payload = {}
+
+    # TODO: aquí guardas logs, encolas un job, borras datos del usuario, etc.
+    # Por ahora solo ACK:
+    return "", 204
 
 
 # ---------------------- SEO / PWA extra ----------------------
