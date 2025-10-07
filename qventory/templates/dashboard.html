@@ -16,8 +16,9 @@
     <div id="filtersContent" class="filters-content">
       <form id="filterForm" method="get" action="{{ url_for('main.dashboard') }}" class="filters-grid">
         <div style="grid-column:1/-1">
-          <div class="input-with-button">
-            <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…">
+          <div class="input-with-button" style="position:relative">
+            <input class="input" type="text" id="q" name="q" value="{{ q }}" placeholder="Search title / SKU / supplier…" autocomplete="off">
+            <div id="dashboardAutocompleteList" class="autocomplete-list"></div>
             <button class="icon-btn" type="button" id="btnScanQR" title="Scan QR code with camera" aria-label="Scan QR code">
               <i class="fas fa-qrcode"></i>
             </button>
@@ -412,24 +413,78 @@
   const content = document.getElementById('filtersContent');
   const shell = document.getElementById('filtersShell');
   if(!btn || !content) return;
-  
+
   const KEY = 'qv_filters_collapsed';
-  
+
   function setCollapsed(collapsed){
     content.hidden = collapsed;
     btn.setAttribute('aria-expanded', String(!collapsed));
     shell?.classList.toggle('collapsed', collapsed);
     try{ localStorage.setItem(KEY, collapsed ? '1':'0'); }catch{}
   }
-  
+
   function initState(){
     let collapsed = false;
     try{ collapsed = localStorage.getItem(KEY) === '1'; }catch{}
     setCollapsed(collapsed);
   }
-  
+
   btn.addEventListener('click', ()=> setCollapsed(content.hidden !== true));
   initState();
+})();
+
+/* ===== Autocomplete para búsqueda principal ===== */
+(function(){
+  const inputQ = document.getElementById('q');
+  const autocompleteList = document.getElementById('dashboardAutocompleteList');
+
+  if (!inputQ || !autocompleteList) return;
+
+  inputQ.addEventListener('input', async (e) => {
+    const query = e.target.value.trim();
+    if (query.length < 2) {
+      autocompleteList.classList.remove('show');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+
+      if (data.ok && data.items.length > 0) {
+        autocompleteList.innerHTML = data.items.map(item => `
+          <div class="autocomplete-item dashboard-autocomplete-item" data-item-title="${item.title.replace(/"/g, '&quot;')}">
+            <strong>${item.title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</strong>
+            <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier.replace(/</g, '&lt;').replace(/>/g, '&gt;') : ''}</small>
+          </div>
+        `).join('');
+        autocompleteList.classList.add('show');
+      } else {
+        autocompleteList.classList.remove('show');
+      }
+    } catch (err) {
+      console.error('Autocomplete error:', err);
+    }
+  });
+
+  // Close autocomplete on outside click
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#q') && !e.target.closest('#dashboardAutocompleteList')) {
+      autocompleteList?.classList.remove('show');
+    }
+  });
+
+  // Select item from autocomplete
+  document.addEventListener('click', (e) => {
+    const item = e.target.closest('.dashboard-autocomplete-item');
+    if (item) {
+      const itemTitle = item.getAttribute('data-item-title');
+      inputQ.value = itemTitle;
+      autocompleteList.classList.remove('show');
+      // Auto-submit form
+      document.getElementById('filterForm').submit();
+    }
+  });
 })();
 </script>
 

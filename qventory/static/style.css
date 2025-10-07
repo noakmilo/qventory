@@ -1550,6 +1550,55 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 }
 .thumb-wrap:hover .thumb-zoom{ filter:brightness(1.07) }
 
+/* ===== Autocomplete ===== */
+.autocomplete-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--card);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  margin-top: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 10px 24px var(--glass-shadow);
+}
+
+.autocomplete-list.show {
+  display: block;
+}
+
+.autocomplete-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--glass-border);
+  transition: background 0.15s ease;
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover {
+  background: var(--muted);
+}
+
+.autocomplete-item strong {
+  display: block;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  margin-bottom: 4px;
+}
+
+.autocomplete-item small {
+  display: block;
+  color: var(--sub);
+  font-size: var(--fs-xs);
+}
+
 /* === Accesibilidad === */
 @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important } }
 @media (prefers-reduced-transparency: reduce){
