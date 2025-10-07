@@ -27,6 +27,34 @@
         <div id="autocompleteList" class="autocomplete-list"></div>
       </div>
 
+      <!-- Condition -->
+      <label for="condition">Condition</label>
+      <input type="text" id="condition" class="input" placeholder="e.g. Used - Fully working" value="Used">
+
+      <!-- Notes -->
+      <label for="notes">Relevant Notes (Optional)</label>
+      <textarea id="notes" class="input" placeholder="e.g. Includes controller, original box, upgraded 1TB SSD" rows="3"></textarea>
+
+      <!-- Market Region -->
+      <label for="marketRegion">Market Region</label>
+      <select id="marketRegion" class="input">
+        <option value="US">United States</option>
+        <option value="UK">United Kingdom</option>
+        <option value="CA">Canada</option>
+        <option value="AU">Australia</option>
+        <option value="DE">Germany</option>
+      </select>
+
+      <!-- Currency -->
+      <label for="currency">Currency</label>
+      <select id="currency" class="input">
+        <option value="USD">USD ($)</option>
+        <option value="GBP">GBP (£)</option>
+        <option value="CAD">CAD ($)</option>
+        <option value="AUD">AUD ($)</option>
+        <option value="EUR">EUR (€)</option>
+      </select>
+
       <!-- Research Button -->
       <button class="btn submitbtn block" onclick="AIResearch.analyze()" style="margin-top:1.5rem" id="analyzeBtn">
         <i class="fas fa-robot"></i> Start AI Research
@@ -131,6 +159,11 @@
     background: var(--muted);
     color: var(--text);
     font-size: var(--fs-base);
+  }
+
+  textarea.input {
+    resize: vertical;
+    font-family: inherit;
   }
 
   .input:focus {
@@ -332,6 +365,10 @@ const AIResearch = {
 
   async analyze() {
     const itemTitle = document.getElementById('itemTitle').value.trim();
+    const condition = document.getElementById('condition').value.trim();
+    const notes = document.getElementById('notes').value.trim();
+    const marketRegion = document.getElementById('marketRegion').value;
+    const currency = document.getElementById('currency').value;
 
     if (!itemTitle) {
       alert('Please enter an item title');
@@ -344,8 +381,8 @@ const AIResearch = {
 
     try {
       const payload = this.currentItemId
-        ? { item_id: this.currentItemId }
-        : { title: itemTitle };
+        ? { item_id: this.currentItemId, condition, notes, market_region: marketRegion, currency }
+        : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
 
       const response = await fetch('/api/ai-research-async', {
         method: 'POST',
@@ -362,6 +399,7 @@ const AIResearch = {
 
         // Clear form
         document.getElementById('itemTitle').value = '';
+        document.getElementById('notes').value = '';
         this.currentItemId = null;
 
         // Reload stats and reports

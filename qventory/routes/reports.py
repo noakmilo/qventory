@@ -370,6 +370,42 @@ def analytics():
                          sales=sales)
 
 
+@reports_bp.route("/api/reports/user-reports")
+@login_required
+def get_user_reports():
+    """Get all reports for current user"""
+    Report.cleanup_expired()
+
+    reports = Report.query.filter_by(user_id=current_user.id)\
+        .order_by(Report.created_at.desc())\
+        .all()
+
+    reports_data = []
+    for report in reports:
+        # Parse examples
+        examples = []
+        if report.examples_json:
+            try:
+                examples = json.loads(report.examples_json)
+            except:
+                pass
+
+        reports_data.append({
+            "id": report.id,
+            "item_title": report.item_title,
+            "status": report.status,
+            "scraped_count": report.scraped_count or 0,
+            "viewed": report.viewed,
+            "created_at": report.created_at.isoformat(),
+            "error_message": report.error_message
+        })
+
+    return jsonify({
+        "ok": True,
+        "reports": reports_data
+    })
+
+
 @reports_bp.route("/api/reports/<int:report_id>/view")
 @login_required
 def view_report(report_id):
