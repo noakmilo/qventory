@@ -126,6 +126,9 @@
 </style>
 
 <script>
+let pollInterval = null;
+let currentJobId = null;
+
 document.getElementById('importForm')?.addEventListener('submit', async (e) => {
   e.preventDefault();
 
@@ -138,7 +141,10 @@ document.getElementById('importForm')?.addEventListener('submit', async (e) => {
   // Disable form
   importBtn.disabled = true;
   importProgress.style.display = 'block';
-  importStatus.textContent = 'Connecting to eBay API...';
+  importStatus.innerHTML = `
+    <div style="color:#3b82f6;font-weight:600">Starting import...</div>
+    <div style="margin-top:4px;font-size:12px">Connecting to eBay API...</div>
+  `;
 
   try {
     const response = await fetch('{{ url_for("main.import_ebay") }}', {
@@ -149,28 +155,151 @@ document.getElementById('importForm')?.addEventListener('submit', async (e) => {
     const result = await response.json();
 
     if (result.ok) {
+      currentJobId = result.job_id;
+
       importStatus.innerHTML = `
-        <div style="color:#10b981;font-weight:600">✓ Import completed successfully!</div>
-        <div style="margin-top:8px">
-          • ${result.imported || 0} new items imported<br>
-          • ${result.updated || 0} existing items updated<br>
-          • ${result.skipped || 0} items skipped
+        <div style="color:#10b981;font-weight:600">✓ Import started in background!</div>
+        <div style="margin-top:8px;padding:12px;background:rgba(59,130,246,0.05);border-radius:6px">
+          <div style="font-size:13px;color:var(--text);margin-bottom:8px">
+            <i class="fas fa-info-circle"></i> <strong>You can continue working</strong>
+          </div>
+          <div style="font-size:12px;color:var(--sub)">
+            • The import is running in the background<br>
+            • You'll be notified when it's complete<br>
+            • You can close this page and come back later<br>
+            • Check progress below or refresh the page
+          </div>
         </div>
+        <div id="progressDetails" style="margin-top:12px"></div>
       `;
 
-      setTimeout(() => {
-        window.location.href = '{{ url_for("main.dashboard") }}';
-      }, 2000);
+      // Start polling for status
+      startPolling(currentJobId);
     } else {
-      throw new Error(result.error || 'Import failed');
+      throw new Error(result.error || 'Failed to start import');
     }
   } catch (error) {
     importStatus.innerHTML = `
-      <div style="color:#ef4444;font-weight:600">✗ Import failed</div>
+      <div style="color:#ef4444;font-weight:600">✗ Failed to start import</div>
       <div style="margin-top:4px">${error.message}</div>
     `;
     importBtn.disabled = false;
   }
+});
+
+function startPolling(jobId) {
+  // Poll every 2 seconds
+  pollInterval = setInterval(() => {
+    checkJobStatus(jobId);
+  }, 2000);
+
+  // Initial check
+  checkJobStatus(jobId);
+}
+
+async function checkJobStatus(jobId) {
+  try {
+    const response = await fetch(`/api/import/status/${jobId}`);
+    const data = await response.json();
+
+    if (data.ok) {
+      const job = data.job;
+      updateProgressDisplay(job);
+
+      // Stop polling if completed or failed
+      if (job.status === 'completed' || job.status === 'failed') {
+        clearInterval(pollInterval);
+        showFinalResult(job);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking job status:', error);
+  }
+}
+
+function updateProgressDisplay(job) {
+  const progressDetails = document.getElementById('progressDetails');
+  if (!progressDetails) return;
+
+  const percent = job.progress_percent || 0;
+  const statusColor = job.status === 'processing' ? '#3b82f6' : (job.status === 'completed' ? '#10b981' : '#f59e0b');
+
+  progressDetails.innerHTML = `
+    <div style="background:rgba(156,163,175,0.05);border-radius:6px;padding:12px;border:1px solid rgba(156,163,175,0.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--sub);text-transform:uppercase;font-weight:600">Progress</span>
+        <span style="font-size:14px;color:${statusColor};font-weight:600">${percent}%</span>
+      </div>
+      <div style="background:rgba(156,163,175,0.1);height:8px;border-radius:4px;overflow:hidden">
+        <div style="background:${statusColor};height:100%;width:${percent}%;transition:width 0.3s"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12px;color:var(--sub)">
+        ${job.processed_items || 0} / ${job.total_items || 0} items processed
+      </div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px">
+        <div style="text-align:center;padding:6px;background:rgba(16,185,129,0.1);border-radius:4px">
+          <div style="color:#10b981;font-weight:600">${job.imported_count || 0}</div>
+          <div style="color:var(--sub)">Imported</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:rgba(59,130,246,0.1);border-radius:4px">
+          <div style="color:#3b82f6;font-weight:600">${job.updated_count || 0}</div>
+          <div style="color:var(--sub)">Updated</div>
+        </div>
+        <div style="text-align:center;padding:6px;background:rgba(156,163,175,0.1);border-radius:4px">
+          <div style="color:var(--sub);font-weight:600">${job.skipped_count || 0}</div>
+          <div style="color:var(--sub)">Skipped</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function showFinalResult(job) {
+  const importStatus = document.getElementById('importStatus');
+
+  if (job.status === 'completed') {
+    importStatus.innerHTML = `
+      <div style="color:#10b981;font-weight:600;font-size:16px;margin-bottom:12px">✓ Import Completed Successfully!</div>
+      <div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:16px">
+        <div style="font-size:14px;color:var(--text);margin-bottom:8px">
+          <strong>Summary:</strong>
+        </div>
+        <div style="font-size:13px;color:var(--sub)">
+          • <strong style="color:#10b981">${job.imported_count || 0}</strong> new items imported<br>
+          • <strong style="color:#3b82f6">${job.updated_count || 0}</strong> existing items updated<br>
+          • <strong>${job.skipped_count || 0}</strong> items skipped
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+          <i class="fas fa-th-large"></i> View Inventory
+        </a>
+      </div>
+    `;
+  } else if (job.status === 'failed') {
+    importStatus.innerHTML = `
+      <div style="color:#ef4444;font-weight:600;font-size:16px;margin-bottom:12px">✗ Import Failed</div>
+      <div style="background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:16px">
+        <div style="font-size:13px;color:var(--sub)">
+          ${job.error_message || 'An unknown error occurred'}
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <button onclick="location.reload()" class="btn btn-primary">
+          <i class="fas fa-redo"></i> Try Again
+        </button>
+      </div>
+    `;
+  }
+
+  // Hide spinner
+  document.querySelector('.spinner').style.display = 'none';
+}
+
+// Check for existing running jobs on page load
+window.addEventListener('DOMContentLoaded', async () => {
+  // Could add API endpoint to get user's most recent job and auto-resume polling
+  // For now, jobs can be checked manually by refreshing
 });
 </script>
 
