@@ -7,6 +7,7 @@ from .marketplace_credential import MarketplaceCredential
 from .subscription import Subscription, PlanLimit
 from .report import Report
 from .ai_token import AITokenConfig, AITokenUsage
+from .import_job import ImportJob
 
 __all__ = [
     'User',
@@ -19,5 +20,6 @@ __all__ = [
     'PlanLimit',
     'Report',
     'AITokenConfig',
-    'AITokenUsage'
+    'AITokenUsage',
+    'ImportJob'
 ]

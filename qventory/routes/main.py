@@ -574,17 +574,16 @@ def import_ebay():
             ebay_username=ebay_username
         )
 
-    # POST - Handle import
-    log_import("POST request - starting import")
+    # POST - Start async import
+    log_import("POST request - starting async import")
 
     if not ebay_connected:
         log_import("ERROR: eBay account not connected")
         return jsonify({"ok": False, "error": "eBay account not connected"}), 400
 
     try:
-        log_import("Importing helpers...")
-        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item
-        from qventory.helpers import generate_sku
+        from qventory.models.import_job import ImportJob
+        from qventory.tasks import import_ebay_inventory as import_task
 
         import_mode = request.form.get('import_mode', 'new_only')
         listing_status = request.form.get('listing_status', 'ACTIVE')
@@ -592,121 +591,53 @@ def import_ebay():
         log_import(f"Import mode: {import_mode}")
         log_import(f"Listing status: {listing_status}")
 
-        # Fetch inventory from eBay
-        log_import("Fetching inventory from eBay API...")
-        ebay_items = get_all_inventory(current_user.id, max_items=1000)
-        log_import(f"Fetched {len(ebay_items)} items from eBay")
+        # Start Celery task
+        log_import("Dispatching Celery task...")
+        task = import_task.delay(current_user.id, import_mode, listing_status)
 
-        imported_count = 0
-        updated_count = 0
-        skipped_count = 0
-
-        for idx, ebay_item in enumerate(ebay_items):
-            try:
-                log_import(f"Processing item {idx + 1}/{len(ebay_items)}")
-
-                # Parse eBay item
-                parsed = parse_ebay_inventory_item(ebay_item)
-                ebay_sku = parsed.get('ebay_sku', '')
-                ebay_title = parsed.get('title', '')
-
-                log_import(f"  Title: {ebay_title[:50]}")
-                log_import(f"  eBay SKU: {ebay_sku}")
-
-                # Check if item already exists (by eBay SKU OR by matching title)
-                existing_item = None
-
-                # First try to match by eBay SKU
-                if ebay_sku:
-                    existing_item = Item.query.filter_by(
-                        user_id=current_user.id,
-                        ebay_sku=ebay_sku
-                    ).first()
-
-                # If not found by SKU, try to match by exact title
-                if not existing_item and ebay_title:
-                    existing_item = Item.query.filter_by(
-                        user_id=current_user.id,
-                        title=ebay_title
-                    ).first()
-                    if existing_item:
-                        log_import(f"  Matched by title (no SKU match)")
-
-                if existing_item:
-                    log_import(f"  Item exists in Qventory (ID: {existing_item.id})")
-                    # Item exists - only update eBay-specific fields
-                    # RESPECT existing SKU and location in Qventory
-                    if import_mode in ['update_existing', 'sync_all']:
-                        # Only update eBay-specific fields, preserve Qventory data
-                        existing_item.synced_from_ebay = True
-                        existing_item.last_ebay_sync = datetime.utcnow()
-
-                        # Update eBay listing info
-                        if parsed.get('ebay_listing_id'):
-                            existing_item.ebay_listing_id = parsed['ebay_listing_id']
-                        if parsed.get('ebay_url'):
-                            existing_item.ebay_url = parsed['ebay_url']
-                        if parsed.get('item_price'):
-                            existing_item.item_price = parsed['item_price']
-
-                        # Store eBay SKU if not already set
-                        if ebay_sku and not existing_item.ebay_sku:
-                            existing_item.ebay_sku = ebay_sku
-
-                        # DON'T update: title, sku, location (A,B,S,C), item_thumb
-                        # User's Qventory data takes priority
-
-                        updated_count += 1
-                        log_import(f"  → Updated eBay data (preserved Qventory SKU & location)")
-                    else:
-                        skipped_count += 1
-                        log_import(f"  → Skipped (mode: {import_mode})")
-                else:
-                    log_import(f"  New item - not in Qventory")
-                    # New item - create it
-                    if import_mode in ['new_only', 'sync_all']:
-                        new_sku = generate_sku()
-                        new_item = Item(
-                            user_id=current_user.id,
-                            sku=new_sku,
-                            title=ebay_title,
-                            item_thumb=parsed.get('item_thumb'),
-                            ebay_sku=ebay_sku,
-                            ebay_listing_id=parsed.get('ebay_listing_id'),
-                            ebay_url=parsed.get('ebay_url'),
-                            item_price=parsed.get('item_price'),
-                            synced_from_ebay=True,
-                            last_ebay_sync=datetime.utcnow()
-                        )
-                        db.session.add(new_item)
-                        imported_count += 1
-                        log_import(f"  → Created (SKU: {new_sku})")
-                    else:
-                        skipped_count += 1
-                        log_import(f"  → Skipped (mode: {import_mode})")
-            except Exception as item_error:
-                log_import(f"ERROR processing item {idx + 1}: {str(item_error)}")
-                log_import(f"Traceback: {traceback.format_exc()}")
-                # Continue with next item
-                continue
-
-        log_import("Committing to database...")
+        # Create ImportJob record
+        job = ImportJob(
+            user_id=current_user.id,
+            celery_task_id=task.id,
+            import_mode=import_mode,
+            listing_status=listing_status,
+            status='pending'
+        )
+        db.session.add(job)
         db.session.commit()
 
-        log_import(f"Import completed: {imported_count} imported, {updated_count} updated, {skipped_count} skipped")
+        log_import(f"Task dispatched: {task.id}, Job ID: {job.id}")
 
         return jsonify({
             "ok": True,
-            "imported": imported_count,
-            "updated": updated_count,
-            "skipped": skipped_count
+            "job_id": job.id,
+            "task_id": task.id,
+            "message": "Import started in background. You'll be notified when complete."
         })
 
     except Exception as e:
-        log_import(f"CRITICAL ERROR: {str(e)}")
-        log_import(f"Traceback: {traceback.format_exc()}")
+        log_import(f"ERROR: {str(e)}")
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# API endpoint to check import job status
+@main_bp.route("/api/import/status/<int:job_id>")
+@login_required
+def import_job_status(job_id):
+    """Get status of import job"""
+    from qventory.models.import_job import ImportJob
+
+    job = ImportJob.query.filter_by(id=job_id, user_id=current_user.id).first()
+
+    if not job:
+        return jsonify({"ok": False, "error": "Job not found"}), 404
+
+    return jsonify({"ok": True, "job": job.to_dict()})
+
+
+# eBay import is now handled by Celery task
+# See tasks.py for implementation
 
 
 # ---------------------- eBay Browse API ----------------------

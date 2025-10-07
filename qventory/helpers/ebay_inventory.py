@@ -711,7 +711,7 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
     return all_items[:max_items]
 
 
-def parse_ebay_inventory_item(ebay_item):
+def parse_ebay_inventory_item(ebay_item, process_images=True):
     """
     Parse eBay inventory item to Qventory format
 
@@ -719,6 +719,7 @@ def parse_ebay_inventory_item(ebay_item):
 
     Args:
         ebay_item: eBay inventory item dict from API
+        process_images: If True, download and upload images to Cloudinary (default True)
 
     Returns:
         dict with Qventory item fields
@@ -733,7 +734,19 @@ def parse_ebay_inventory_item(ebay_item):
         title = product.get('title', '')
         description = product.get('description', '')
         images = product.get('imageUrls', [])
-        item_thumb = images[0] if images else None
+
+        # Process image: download from eBay, compress, upload to Cloudinary
+        item_thumb = None
+        if images and process_images:
+            from qventory.helpers.image_processor import download_and_upload_image
+            ebay_image_url = images[0]
+            log_inv(f"Processing image for: {title[:50]}")
+            item_thumb = download_and_upload_image(ebay_image_url, target_size_kb=2, max_dimension=400)
+            if not item_thumb:
+                log_inv(f"Failed to process image, using original URL")
+                item_thumb = ebay_image_url  # Fallback to original URL
+        elif images:
+            item_thumb = images[0]  # Use original URL if not processing
         sku = ebay_item.get('sku', '')
         availability = ebay_item.get('availability', {})
         quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
@@ -762,9 +775,19 @@ def parse_ebay_inventory_item(ebay_item):
         title = product.get('title', '')
         description = product.get('description', '')
 
-        # Get image
+        # Process image: download from eBay, compress, upload to Cloudinary
         images = product.get('imageUrls', [])
-        item_thumb = images[0] if images else None
+        item_thumb = None
+        if images and process_images:
+            from qventory.helpers.image_processor import download_and_upload_image
+            ebay_image_url = images[0]
+            log_inv(f"Processing image for: {title[:50]}")
+            item_thumb = download_and_upload_image(ebay_image_url, target_size_kb=2, max_dimension=400)
+            if not item_thumb:
+                log_inv(f"Failed to process image, using original URL")
+                item_thumb = ebay_image_url  # Fallback to original URL
+        elif images:
+            item_thumb = images[0]  # Use original URL if not processing
 
         # Get SKU
         sku = ebay_item.get('sku', '')
