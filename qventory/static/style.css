@@ -292,6 +292,11 @@ header nav .btn{
 }
 .input:focus, select:focus{ border-color:#3b5aa3; box-shadow:0 0 0 3px rgba(138,180,255,.15) }
 .input::placeholder{ color:#b9c7e4; opacity:.5 }
+
+/* White cursor for all text inputs */
+input, textarea, select {
+  caret-color: #ffffff;
+}
 select{
   appearance:none;
   background-image:
