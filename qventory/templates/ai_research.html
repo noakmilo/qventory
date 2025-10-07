@@ -1,14 +1,25 @@
 {% extends "base.html" %}
-{% block title %}AI Research – Qventory{% endblock %}
+{% block title %}AI Market Research – Qventory{% endblock %}
 {% block content %}
 
-<div class="row">
-  <div class="card" style="flex:1 1 100%;max-width:800px;margin:0 auto">
-    <h1 style="text-align:center;margin-bottom:1.2rem;">
-      <i class="fas fa-robot" style="color:var(--accent)"></i> AI Market Research
-    </h1>
+<div class="container" style="max-width:1200px;margin:40px auto;padding:0 20px">
 
-    <div id="aiResearchContainer">
+  <!-- Header -->
+  <div style="margin-bottom:30px">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+      <i class="fas fa-robot"></i> AI Market Research
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px">
+      Get AI-powered pricing insights from real eBay sold listings
+    </p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 400px;gap:24px">
+
+    <!-- Research Form -->
+    <div class="card" style="padding:24px">
+      <h2 style="color:var(--text);font-size:18px;margin-bottom:20px">New Research</h2>
+
       <!-- Item Name with Autocomplete -->
       <label for="itemTitle">Item Title</label>
       <div style="position:relative">
@@ -16,126 +27,47 @@
         <div id="autocompleteList" class="autocomplete-list"></div>
       </div>
 
-      <!-- Condition -->
-      <label for="condition">Condition</label>
-      <input type="text" id="condition" class="input" placeholder="e.g. Used - Fully working" value="Used">
-
-      <!-- Notes -->
-      <label for="notes">Relevant Notes (Optional)</label>
-      <textarea id="notes" class="input" placeholder="e.g. Includes controller, original box, upgraded 1TB SSD" rows="3"></textarea>
-
-      <!-- Market Region -->
-      <label for="marketRegion">Market Region</label>
-      <select id="marketRegion" class="input">
-        <option value="US">United States</option>
-        <option value="UK">United Kingdom</option>
-        <option value="CA">Canada</option>
-        <option value="AU">Australia</option>
-        <option value="DE">Germany</option>
-      </select>
-
-      <!-- Currency -->
-      <label for="currency">Currency</label>
-      <select id="currency" class="input">
-        <option value="USD">USD ($)</option>
-        <option value="GBP">GBP (£)</option>
-        <option value="CAD">CAD ($)</option>
-        <option value="AUD">AUD ($)</option>
-        <option value="EUR">EUR (€)</option>
-      </select>
-
       <!-- Research Button -->
-      <button class="btn submitbtn block" onclick="AIResearch.analyze()" style="margin-top:1.2rem" id="analyzeBtn">
-        <i class="fas fa-robot"></i> Analyze Market
+      <button class="btn submitbtn block" onclick="AIResearch.analyze()" style="margin-top:1.5rem" id="analyzeBtn">
+        <i class="fas fa-robot"></i> Start AI Research
       </button>
 
-      <!-- Result Display with Typing Animation -->
-      <div id="result" class="result-box" style="display:none">
-        <div class="typing-indicator" style="display:none">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-        <div id="resultContent"></div>
+      <!-- Token Stats -->
+      <div id="tokenStats" style="margin-top:16px;padding:12px;background:var(--muted);border-radius:8px;font-size:13px;color:var(--text-secondary)">
+        Loading token stats...
       </div>
+    </div>
+
+    <!-- Reports History -->
+    <div class="card" style="padding:24px">
+      <h2 style="color:var(--text);font-size:18px;margin-bottom:16px">
+        Recent Reports
+        <span id="reportCount" style="background:var(--accent);color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px">0</span>
+      </h2>
+
+      <div id="reportsList" style="display:grid;gap:12px;max-height:500px;overflow-y:auto">
+        <!-- Reports loaded via JS -->
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Report View Modal -->
+<div id="reportModal" class="modal" style="display:none">
+  <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto">
+    <div class="modal-header">
+      <h2 id="modalReportTitle">Report</h2>
+      <button class="close-modal" onclick="closeReportModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="reportContent"></div>
     </div>
   </div>
 </div>
 
 <style>
-  .checkbox-container {
-    display: flex;
-    align-items: center;
-    margin-top: 0.8rem;
-    font-size: var(--fs-sm);
-  }
-  .checkbox-container input[type="checkbox"] {
-    margin-right: 0.5rem;
-    width: auto;
-  }
-
-  .result-box {
-    margin-top: 1.5rem;
-    padding: 1.5rem;
-    background: var(--muted);
-    border-radius: var(--radius);
-    font-size: var(--fs-sm);
-    line-height: 1.6;
-  }
-
-  #resultContent {
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  /* Typing indicator animation */
-  .typing-indicator {
-    display: flex;
-    gap: 6px;
-    padding: 1rem 0;
-    align-items: center;
-  }
-
-  .typing-indicator span {
-    width: 8px;
-    height: 8px;
-    background: var(--accent);
-    border-radius: 50%;
-    animation: typing-bounce 1.4s infinite ease-in-out;
-  }
-
-  .typing-indicator span:nth-child(1) {
-    animation-delay: -0.32s;
-  }
-
-  .typing-indicator span:nth-child(2) {
-    animation-delay: -0.16s;
-  }
-
-  @keyframes typing-bounce {
-    0%, 80%, 100% {
-      transform: scale(0);
-      opacity: 0.5;
-    }
-    40% {
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
-  /* Typewriter effect */
-  @keyframes typewriter {
-    from { width: 0; }
-    to { width: 100%; }
-  }
-
-  .typewriter-text {
-    overflow: hidden;
-    white-space: pre-wrap;
-    animation: typewriter 0.05s steps(1) forwards;
-  }
-
-  /* Autocomplete styles */
   .autocomplete-list {
     position: absolute;
     top: 100%;
@@ -201,29 +133,96 @@
     font-size: var(--fs-base);
   }
 
-  textarea.input {
-    resize: vertical;
-    font-family: inherit;
-  }
-
   .input:focus {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
   }
 
-  /* Loading state for button */
   .btn.loading {
     opacity: 0.6;
     pointer-events: none;
+  }
+
+  .report-card {
+    background: var(--muted);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+
+  .report-card:hover {
+    border-color: var(--accent);
+  }
+
+  .report-card.processing {
+    border-left: 3px solid var(--accent);
+  }
+
+  .report-card.new {
+    border-left: 3px solid #10b981;
+  }
+
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-content {
+    background: var(--bg);
+    border-radius: 12px;
+    width: 90%;
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .modal-header h2 {
+    margin: 0;
+    color: var(--text);
+  }
+
+  .close-modal {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 20px;
   }
 </style>
 
 <script>
 const AIResearch = {
   currentItemId: null,
-  typingSpeed: 15, // ms per character
 
   init() {
+    // Load token stats
+    this.loadTokenStats();
+
+    // Load reports
+    this.loadReports();
+
+    // Poll for new reports every 5 seconds
+    setInterval(() => this.loadReports(), 5000);
+
     // Autocomplete functionality
     const itemTitle = document.getElementById('itemTitle');
     const autocompleteList = document.getElementById('autocompleteList');
@@ -241,7 +240,7 @@ const AIResearch = {
 
         if (data.ok && data.items.length > 0) {
           autocompleteList.innerHTML = data.items.map(item => `
-            <div class="autocomplete-item" onclick="AIResearch.selectItem(${item.id}, '${item.title.replace(/'/g, "\\'")}', '${(item.supplier || '').replace(/'/g, "\\'")}')">
+            <div class="autocomplete-item" onclick="AIResearch.selectItem(${item.id}, '${item.title.replace(/'/g, "\\'")}')">
               <strong>${item.title}</strong>
               <small>SKU: ${item.sku}${item.supplier ? ' • Supplier: ' + item.supplier : ''}</small>
             </div>
@@ -263,18 +262,76 @@ const AIResearch = {
     });
   },
 
-  selectItem(itemId, title, supplier) {
+  selectItem(itemId, title) {
     this.currentItemId = itemId;
     document.getElementById('itemTitle').value = title;
     document.getElementById('autocompleteList').classList.remove('show');
   },
 
+  async loadTokenStats() {
+    try {
+      const response = await fetch('/api/ai-tokens/stats');
+      const data = await response.json();
+      if (data.ok) {
+        const stats = data.stats;
+        const statsHtml = `
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span>AI Research Tokens</span>
+            <strong style="color:var(--text)">${stats.remaining}/${stats.daily_limit} remaining today</strong>
+          </div>
+        `;
+        document.getElementById('tokenStats').innerHTML = statsHtml;
+      }
+    } catch (err) {
+      console.error('Token stats error:', err);
+    }
+  },
+
+  async loadReports() {
+    try {
+      const response = await fetch('/api/reports/user-reports');
+      const data = await response.json();
+      if (data.ok) {
+        this.renderReports(data.reports);
+      }
+    } catch (err) {
+      console.error('Load reports error:', err);
+    }
+  },
+
+  renderReports(reports) {
+    const reportsList = document.getElementById('reportsList');
+    const reportCount = document.getElementById('reportCount');
+
+    reportCount.textContent = reports.length;
+
+    if (reports.length === 0) {
+      reportsList.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:14px">No reports yet</p>';
+      return;
+    }
+
+    reportsList.innerHTML = reports.map(report => {
+      const statusClass = report.status === 'processing' ? 'processing' : (!report.viewed ? 'new' : '');
+      const statusIcon = report.status === 'completed' ? '✓' : (report.status === 'processing' ? '⏳' : '✗');
+      const statusColor = report.status === 'completed' ? '#10b981' : (report.status === 'processing' ? '#f59e0b' : '#ef4444');
+
+      return `
+        <div class="report-card ${statusClass}" onclick="AIResearch.viewReport(${report.id})">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:6px">
+            <strong style="color:var(--text);font-size:14px;flex:1">${report.item_title}</strong>
+            <span style="color:${statusColor};font-size:12px">${statusIcon}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary)">
+            <i class="far fa-clock"></i> ${new Date(report.created_at).toLocaleDateString()}
+            ${report.scraped_count > 0 ? ` • ${report.scraped_count} listings analyzed` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
   async analyze() {
     const itemTitle = document.getElementById('itemTitle').value.trim();
-    const condition = document.getElementById('condition').value.trim();
-    const notes = document.getElementById('notes').value.trim();
-    const marketRegion = document.getElementById('marketRegion').value;
-    const currency = document.getElementById('currency').value;
 
     if (!itemTitle) {
       alert('Please enter an item title');
@@ -282,23 +339,15 @@ const AIResearch = {
     }
 
     const analyzeBtn = document.getElementById('analyzeBtn');
-    const resultBox = document.getElementById('result');
-    const resultContent = document.getElementById('resultContent');
-    const typingIndicator = resultBox.querySelector('.typing-indicator');
-
-    // Show loading state
     analyzeBtn.classList.add('loading');
-    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
-    resultBox.style.display = 'block';
-    resultContent.innerHTML = '';
-    typingIndicator.style.display = 'flex';
+    analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
 
     try {
       const payload = this.currentItemId
         ? { item_id: this.currentItemId }
-        : { title: itemTitle, condition, notes, market_region: marketRegion, currency };
+        : { title: itemTitle };
 
-      const response = await fetch('/api/ai-research', {
+      const response = await fetch('/api/ai-research-async', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -307,39 +356,82 @@ const AIResearch = {
 
       const data = await response.json();
 
-      // Hide typing indicator
-      typingIndicator.style.display = 'none';
-
       if (data.ok) {
-        // Typewriter effect
-        this.typewriterEffect(resultContent, data.result);
+        // Success - report is processing
+        alert(`✓ Research started for "${itemTitle}"!\n\nYour report will appear in the list when ready (usually 10-30 seconds).`);
+
+        // Clear form
+        document.getElementById('itemTitle').value = '';
+        this.currentItemId = null;
+
+        // Reload stats and reports
+        this.loadTokenStats();
+        this.loadReports();
       } else {
-        resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${data.error}</div>`;
+        if (data.error_type === 'no_tokens') {
+          alert(`⚠️ No AI tokens remaining.\n\nYou've used ${data.token_stats.used_today}/${data.token_stats.daily_limit} tokens today.\nTokens reset daily.`);
+        } else {
+          alert('Error: ' + data.error);
+        }
       }
     } catch (err) {
-      typingIndicator.style.display = 'none';
-      resultContent.innerHTML = `<div style="color:var(--error)"><strong>Error:</strong> ${err.message}</div>`;
+      alert('Error: ' + err.message);
     } finally {
       analyzeBtn.classList.remove('loading');
-      analyzeBtn.innerHTML = '<i class="fas fa-robot"></i> Analyze Market';
+      analyzeBtn.innerHTML = '<i class="fas fa-robot"></i> Start AI Research';
     }
   },
 
-  typewriterEffect(element, text) {
-    let index = 0;
-    element.innerHTML = '';
+  async viewReport(reportId) {
+    try {
+      const response = await fetch(`/api/reports/${reportId}/view`);
+      const data = await response.json();
 
-    const type = () => {
-      if (index < text.length) {
-        element.textContent += text.charAt(index);
-        index++;
-        setTimeout(type, this.typingSpeed);
+      if (data.ok) {
+        document.getElementById('modalReportTitle').textContent = data.report.item_title;
+
+        let html = data.report.result_html || '<p style="color:var(--text-secondary)">Report is still processing...</p>';
+
+        // Add examples if available
+        if (data.report.examples && data.report.examples.length > 0) {
+          html += `
+            <div style="margin-top:16px;padding:12px;background:#0f1115;border-radius:6px;border-left:3px solid #60a5fa">
+              <div style="color:#9ca3af;font-size:12px;margin-bottom:8px;font-weight:600">🔍 Real Examples Analyzed</div>
+              <div style="font-size:11px;color:#e8e8e8">
+          `;
+
+          data.report.examples.forEach((item, idx) => {
+            html += `
+              <div style="margin-bottom:${idx < data.report.examples.length - 1 ? '10px' : '0'};
+                          padding-bottom:${idx < data.report.examples.length - 1 ? '10px' : '0'};
+                          border-bottom:${idx < data.report.examples.length - 1 ? '1px solid #1a1d24' : 'none'}">
+                <div style="color:#60a5fa;margin-bottom:3px">${idx + 1}. ${item.title}</div>
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <span style="color:#34d399;font-weight:600">$${item.price.toFixed(2)}</span>
+                  <a href="${item.link}" target="_blank" style="color:#9ca3af;text-decoration:none;font-size:10px">View ↗</a>
+                </div>
+              </div>
+            `;
+          });
+
+          html += `</div></div>`;
+        }
+
+        document.getElementById('reportContent').innerHTML = html;
+        document.getElementById('reportModal').style.display = 'flex';
+
+        // Reload reports to update viewed status
+        setTimeout(() => this.loadReports(), 1000);
       }
-    };
-
-    type();
+    } catch (err) {
+      console.error('View report error:', err);
+    }
   }
 };
+
+function closeReportModal() {
+  document.getElementById('reportModal').style.display = 'none';
+}
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {

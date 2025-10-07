@@ -111,60 +111,9 @@
     <canvas id="supplierChart"></canvas>
   </div>
 
-  <!-- AI Research History (Collapsible) -->
-  <div style="background:var(--surface);border-radius:12px;border:1px solid var(--border);margin-bottom:24px">
-    <button onclick="toggleAIHistory()"
-            style="width:100%;padding:16px;background:none;border:none;text-align:left;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-      <span style="color:var(--text);font-size:16px">
-        <i class="fas fa-robot"></i> AI Research History
-        {% if ai_reports|length > 0 %}
-          <span style="background:#60a5fa;color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;margin-left:8px">
-            {{ ai_reports|length }}
-          </span>
-        {% endif %}
-      </span>
-      <i id="aiHistoryIcon" class="fas fa-chevron-down" style="color:var(--text-secondary);transition:transform 0.3s"></i>
-    </button>
-
-    <div id="aiHistoryContent" style="display:none;padding:0 16px 16px 16px;border-top:1px solid var(--border)">
-      {% if ai_reports %}
-        <div style="display:grid;gap:12px;margin-top:16px">
-          {% for report in ai_reports %}
-          <div class="ai-report-card" data-report-id="{{ report.id }}">
-            <div style="display:flex;justify-content:space-between;align-items:start">
-              <div style="flex:1">
-                <h4 style="color:var(--text);font-size:14px;margin-bottom:4px">{{ report.item_title }}</h4>
-                <div style="font-size:11px;color:var(--text-secondary)">
-                  <i class="far fa-clock"></i> {{ report.created_at.strftime('%b %d, %Y at %I:%M %p') }}
-                </div>
-              </div>
-              <button class="btn-sm" onclick="viewAIReport({{ report.id }})">View</button>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <p style="text-align:center;color:var(--text-secondary);padding:20px;font-size:14px">
-          No AI research reports yet
-        </p>
-      {% endif %}
-    </div>
-  </div>
 
 </div>
 
-<!-- AI Report View Modal -->
-<div id="reportModal" class="modal" style="display:none">
-  <div class="modal-content" style="max-width:900px;max-height:90vh;overflow-y:auto">
-    <div class="modal-header">
-      <h2 id="modalReportTitle">Report</h2>
-      <button class="close-modal" onclick="closeReportModal()">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="reportContent"></div>
-    </div>
-  </div>
-</div>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -175,35 +124,6 @@ function changeRange(range) {
   window.location.href = `?range=${range}`;
 }
 
-// AI History toggle
-function toggleAIHistory() {
-  const content = document.getElementById('aiHistoryContent');
-  const icon = document.getElementById('aiHistoryIcon');
-  if (content.style.display === 'none') {
-    content.style.display = 'block';
-    icon.style.transform = 'rotate(180deg)';
-  } else {
-    content.style.display = 'none';
-    icon.style.transform = 'rotate(0deg)';
-  }
-}
-
-// View AI Report
-function viewAIReport(reportId) {
-  fetch(`/api/reports/${reportId}/view`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.ok) {
-        document.getElementById('modalReportTitle').textContent = data.report.item_title;
-        document.getElementById('reportContent').innerHTML = data.report.result_html;
-        document.getElementById('reportModal').style.display = 'flex';
-      }
-    });
-}
-
-function closeReportModal() {
-  document.getElementById('reportModal').style.display = 'none';
-}
 
 // Charts
 const chartColors = {
@@ -359,69 +279,5 @@ new Chart(supplierCtx, {
   font-weight: 600;
 }
 
-.ai-report-card {
-  background: var(--muted);
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-}
-
-.btn-sm {
-  padding: 4px 12px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.btn-sm:hover {
-  opacity: 0.9;
-}
-
-.modal {
-  display: none;
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.7);
-  z-index: 9999;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-content {
-  background: var(--bg);
-  border-radius: 12px;
-  width: 90%;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h2 {
-  margin: 0;
-  color: var(--text);
-}
-
-.close-modal {
-  background: none;
-  border: none;
-  font-size: 28px;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.modal-body {
-  padding: 20px;
-}
 </style>
 {% endblock %}

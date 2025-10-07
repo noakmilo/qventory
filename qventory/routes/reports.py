@@ -291,10 +291,6 @@ def analytics():
     from sqlalchemy import func
     from datetime import datetime, timedelta
 
-    # Get AI Research reports for toggle section
-    Report.cleanup_expired()
-    ai_reports = Report.get_user_reports(current_user.id)
-
     # Get date range from query params (default: last 30 days)
     range_param = request.args.get('range', 'last_30_days')
 
@@ -362,7 +358,6 @@ def analytics():
         sales_by_marketplace[mp]['revenue'] += sale.sold_price
 
     return render_template("analytics.html",
-                         ai_reports=ai_reports,
                          range_param=range_param,
                          total_sales=total_sales,
                          gross_sales=gross_sales,
