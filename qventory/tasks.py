@@ -83,6 +83,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     log_task(f"  Title: {ebay_title[:50]}")
                     log_task(f"  Image processed: {parsed.get('item_thumb', 'N/A')[:80]}")
 
+                    # Check if location was detected from eBay SKU
+                    if parsed.get('location_code'):
+                        log_task(f"  Location detected: {parsed['location_code']}")
+
                     # Check if item already exists
                     existing_item = None
 
@@ -136,6 +140,12 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 ebay_listing_id=parsed.get('ebay_listing_id'),
                                 ebay_url=parsed.get('ebay_url'),
                                 item_price=parsed.get('item_price'),
+                                # Import location from eBay Custom SKU if detected
+                                A=parsed.get('location_A'),
+                                B=parsed.get('location_B'),
+                                S=parsed.get('location_S'),
+                                C=parsed.get('location_C'),
+                                location_code=parsed.get('location_code'),
                                 synced_from_ebay=True,
                                 last_ebay_sync=datetime.utcnow()
                             )

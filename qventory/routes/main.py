@@ -511,7 +511,12 @@ def import_csv():
                         for r in csv.DictReader(io.StringIO(csv_content))]
                        if parsed_data}
             items_to_delete = Item.query.filter_by(user_id=current_user.id).filter(~Item.sku.in_(csv_skus)).all()
+
+            # Delete images from Cloudinary before deleting items
+            from qventory.helpers.image_processor import delete_cloudinary_image
             for item in items_to_delete:
+                if item.item_thumb:
+                    delete_cloudinary_image(item.item_thumb)
                 db.session.delete(item)
 
         db.session.commit()
@@ -967,6 +972,12 @@ def edit_item(item_id):
 @login_required
 def delete_item(item_id):
     it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+
+    # Delete image from Cloudinary if it exists
+    if it.item_thumb:
+        from qventory.helpers.image_processor import delete_cloudinary_image
+        delete_cloudinary_image(it.item_thumb)
+
     db.session.delete(it)
     db.session.commit()
     flash("Item deleted.", "ok")
@@ -1000,18 +1011,32 @@ def bulk_delete_items():
         if len(item_ids) == 0:
             return jsonify({"ok": False, "error": "No items selected"}), 400
 
-        # Delete items (only those belonging to current user)
-        deleted_count = Item.query.filter(
+        # Get items to delete (to access image URLs before deletion)
+        items_to_delete = Item.query.filter(
             Item.id.in_(item_ids),
             Item.user_id == current_user.id
-        ).delete(synchronize_session=False)
+        ).all()
+
+        # Delete images from Cloudinary
+        from qventory.helpers.image_processor import delete_cloudinary_image
+        deleted_images = 0
+        for item in items_to_delete:
+            if item.item_thumb:
+                if delete_cloudinary_image(item.item_thumb):
+                    deleted_images += 1
+
+        # Delete items from database
+        deleted_count = len(items_to_delete)
+        for item in items_to_delete:
+            db.session.delete(item)
 
         db.session.commit()
 
         return jsonify({
             "ok": True,
             "deleted_count": deleted_count,
-            "message": f"Successfully deleted {deleted_count} item(s)"
+            "deleted_images": deleted_images,
+            "message": f"Successfully deleted {deleted_count} item(s) and {deleted_images} image(s)"
         })
 
     except Exception as e:

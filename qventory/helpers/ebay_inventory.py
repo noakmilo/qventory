@@ -683,6 +683,18 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
             image_url = item.get('image', {}).get('imageUrl')
             item_url = item.get('itemWebUrl')
 
+            # Verify item_id matches URL to prevent title mismatch
+            # Some Browse API responses can have stale data
+            if item_url and item_id:
+                # Extract ID from URL (e.g., https://www.ebay.com/itm/376512069186)
+                url_id = item_url.split('/')[-1].split('?')[0]
+                if url_id != item_id:
+                    log_inv(f"WARNING: itemId mismatch - API says {item_id}, URL says {url_id}. Using URL ID.")
+                    item_id = url_id
+
+            # Build canonical eBay URL from item_id to ensure consistency
+            canonical_url = f"https://www.ebay.com/itm/{item_id}" if item_id else item_url
+
             normalized = {
                 'sku': '',  # Browse API doesn't return SKU
                 'product': {
@@ -698,7 +710,7 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
                 'condition': item.get('condition', 'USED_EXCELLENT'),
                 'ebay_listing_id': item_id,
                 'item_price': price,
-                'ebay_url': item_url,
+                'ebay_url': canonical_url,
                 'source': 'browse_api'
             }
             all_items.append(normalized)
@@ -724,6 +736,8 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
     Returns:
         dict with Qventory item fields
     """
+    from qventory.helpers import is_valid_location_code, parse_location_code
+
     # Check source of data
     source = ebay_item.get('source', '')
     is_normalized = source in ['offers_api', 'browse_api', 'fulfillment_api', 'trading_api']
@@ -757,6 +771,16 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         ebay_url = ebay_item.get('ebay_url')
         item_price = ebay_item.get('item_price', 0)
 
+        # Check if eBay Custom SKU is a valid Qventory location code
+        location_components = {}
+        location_code = None
+        if sku and is_valid_location_code(sku):
+            log_inv(f"Detected valid location code in eBay SKU: {sku}")
+            location_components = parse_location_code(sku)
+            location_code = sku
+        else:
+            log_inv(f"eBay SKU '{sku}' is not a valid location code format")
+
         return {
             'title': title,
             'description': description,
@@ -767,6 +791,11 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'ebay_listing_id': ebay_listing_id,
             'ebay_url': ebay_url,
             'item_price': item_price,
+            'location_code': location_code,  # Parsed location code if valid
+            'location_A': location_components.get('A'),
+            'location_B': location_components.get('B'),
+            'location_S': location_components.get('S'),
+            'location_C': location_components.get('C'),
             'ebay_item_data': ebay_item
         }
     else:
@@ -800,6 +829,16 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         # Get condition
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
 
+        # Check if eBay Custom SKU is a valid Qventory location code
+        location_components = {}
+        location_code = None
+        if sku and is_valid_location_code(sku):
+            log_inv(f"Detected valid location code in eBay SKU: {sku}")
+            location_components = parse_location_code(sku)
+            location_code = sku
+        else:
+            log_inv(f"eBay SKU '{sku}' is not a valid location code format")
+
         return {
             'title': title,
             'description': description,
@@ -807,6 +846,11 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'ebay_sku': sku,
             'quantity': quantity,
             'condition': condition,
+            'location_code': location_code,
+            'location_A': location_components.get('A'),
+            'location_B': location_components.get('B'),
+            'location_S': location_components.get('S'),
+            'location_C': location_components.get('C'),
             'ebay_item_data': ebay_item
         }
 

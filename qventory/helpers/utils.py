@@ -63,6 +63,53 @@ def parse_location_code(code):
         result[current_key] = "".join(current_val).strip() or None
     return result
 
+def is_valid_location_code(sku):
+    """
+    Check if a SKU string matches Qventory location code format
+    Valid formats: A1, B2S3, A1B2, A1B2S3C4, S3C1, C5, etc.
+
+    Args:
+        sku: SKU string to validate
+
+    Returns:
+        bool: True if valid location code format
+    """
+    if not sku:
+        return False
+
+    # Must start with A, B, S, or C
+    if not sku or sku[0] not in 'ABSC':
+        return False
+
+    # Parse the code
+    parts = parse_location_code(sku)
+
+    # Must have at least one component
+    if not parts:
+        return False
+
+    # All components must have numeric values
+    import re
+    for key, value in parts.items():
+        if not value or not re.match(r'^\d+$', value):
+            return False
+
+    # Keys must be valid and in order (A before B before S before C)
+    valid_keys = ['A', 'B', 'S', 'C']
+    keys_present = [k for k in valid_keys if k in parts]
+
+    # Check if keys maintain order
+    last_index = -1
+    for key in parts.keys():
+        if key not in valid_keys:
+            return False
+        current_index = valid_keys.index(key)
+        if current_index <= last_index:
+            return False
+        last_index = current_index
+
+    return True
+
 # =========================
 #   Batch helpers
 # =========================

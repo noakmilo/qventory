@@ -136,3 +136,60 @@ def batch_process_images(image_urls, target_size_kb=2, max_dimension=400):
         results.append(cloudinary_url)
 
     return results
+
+
+def delete_cloudinary_image(image_url):
+    """
+    Delete an image from Cloudinary by URL
+    Extracts public_id from Cloudinary URL and deletes it
+
+    Args:
+        image_url (str): Cloudinary URL of the image
+
+    Returns:
+        bool: True if deleted successfully, False otherwise
+    """
+    if not image_url:
+        return False
+
+    # Check if this is actually a Cloudinary URL
+    if 'cloudinary.com' not in image_url:
+        log_img(f"Not a Cloudinary URL, skipping: {image_url}")
+        return False
+
+    try:
+        # Extract public_id from URL
+        # Example: https://res.cloudinary.com/dxxxx/image/upload/v123456/qventory/items/abc123.jpg
+        # public_id: qventory/items/abc123
+
+        # Split by '/upload/' to get the path after it
+        if '/upload/' not in image_url:
+            log_img(f"Invalid Cloudinary URL format: {image_url}")
+            return False
+
+        path_after_upload = image_url.split('/upload/')[-1]
+
+        # Remove version (v123456/) if present
+        parts = path_after_upload.split('/')
+        if parts[0].startswith('v') and parts[0][1:].isdigit():
+            parts = parts[1:]  # Skip version
+
+        # Remove file extension
+        public_id_parts = '/'.join(parts).rsplit('.', 1)
+        public_id = public_id_parts[0]
+
+        log_img(f"Deleting Cloudinary image with public_id: {public_id}")
+
+        # Delete from Cloudinary
+        result = cloudinary.uploader.destroy(public_id)
+
+        if result.get('result') == 'ok':
+            log_img(f"Successfully deleted: {public_id}")
+            return True
+        else:
+            log_img(f"Delete failed: {result}")
+            return False
+
+    except Exception as e:
+        log_img(f"Error deleting Cloudinary image: {str(e)}")
+        return False
