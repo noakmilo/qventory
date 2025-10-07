@@ -59,7 +59,7 @@
               <td>
                 {% if it.item_thumb %}
                   <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
-                    <img src="{{ it.item_thumb }}" alt="{{ it.title }}" class="thumb-img">
+                    <img src="{{ it.item_thumb }}" alt="{{ it.title }}" class="thumb-img" referrerpolicy="no-referrer">
                     <span class="thumb-zoom"><i class="fas fa-search"></i></span>
                   </button>
                 {% else %}
