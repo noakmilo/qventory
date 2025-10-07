@@ -123,13 +123,19 @@ ls -t app.db.*.bak 2>/dev/null | tail -n +11 | xargs -r rm -f
 ls -t app.db.*.bak-wal 2>/dev/null | tail -n +11 | xargs -r rm -f
 ls -t app.db.*.bak-shm 2>/dev/null | tail -n +11 | xargs -r rm -f
 
-# === 7) Reiniciar servicio ===
+# === 7) Reiniciar servicios ===
 log "Reiniciando servicio ${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
+
+log "Reiniciando Celery worker"
+systemctl restart celery-qventory || log "⚠️  Celery no instalado o no configurado"
 
 sleep 2
 
 systemctl status "${SERVICE_NAME}" --no-pager -l | sed -n '1,25p'
+
+log "Estado de Celery:"
+systemctl status celery-qventory --no-pager -l | sed -n '1,15p' || echo "Celery worker no configurado"
 
 log "
 ============================================================================
