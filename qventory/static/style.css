@@ -297,6 +297,12 @@ header nav .btn{
 input, textarea, select {
   caret-color: #ffffff;
 }
+
+/* Pointer cursor for all interactive elements */
+button, a, .btn, select, [onclick], [role="button"], label[for] {
+  cursor: pointer;
+}
+
 select{
   appearance:none;
   background-image:
