@@ -485,10 +485,16 @@ def get_active_listings_trading_api(user_id, max_items=1000):
                     items_in_page += 1
 
                 except Exception as e:
-                    log_inv(f"Error parsing item: {str(e)}")
+                    # Log which item failed
+                    try:
+                        failed_id = item_elem.find('ebay:ItemID', ns)
+                        failed_title = item_elem.find('ebay:Title', ns)
+                        log_inv(f"❌ Error parsing item ID={failed_id.text if failed_id is not None else 'Unknown'}, Title={failed_title.text[:50] if failed_title is not None else 'Unknown'}: {str(e)}")
+                    except:
+                        log_inv(f"❌ Error parsing item (couldn't extract ID/title): {str(e)}")
                     continue
 
-            log_inv(f"Parsed {items_in_page} items from page {page_number}")
+            log_inv(f"✓ Parsed {items_in_page} items from page {page_number}")
 
         except ET.ParseError as e:
             log_inv(f"XML parsing error: {str(e)}")
@@ -501,7 +507,20 @@ def get_active_listings_trading_api(user_id, max_items=1000):
         # Move to next page
         page_number += 1
 
-    log_inv(f"Trading API complete: fetched {len(all_items)} total listings")
+    # Final summary
+    log_inv(f"=" * 60)
+    log_inv(f"Trading API Summary:")
+    log_inv(f"  eBay reported: {total_entries if 'total_entries' in locals() else 'Unknown'} total active listings")
+    log_inv(f"  Successfully fetched: {len(all_items)} items")
+    if 'total_entries' in locals() and len(all_items) < total_entries:
+        missing = total_entries - len(all_items)
+        log_inv(f"  ⚠️  MISSING {missing} items ({missing/total_entries*100:.1f}%)")
+        log_inv(f"  Possible causes:")
+        log_inv(f"    - Items failed to parse (check ❌ errors above)")
+        log_inv(f"    - eBay API returned incomplete data")
+        log_inv(f"    - Items don't meet API filter criteria")
+    log_inv(f"=" * 60)
+
     return all_items[:max_items]
 
 
