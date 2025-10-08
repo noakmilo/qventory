@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Plan Limits{% endblock %}
+
+{% block content %}
+<div style="padding: 20px;">
+  <h1 style="margin-bottom: 8px;">Plan Limits Management</h1>
+  <p style="color: var(--sub); margin-bottom: 20px;">
+    Configure limits and features for each subscription plan
+  </p>
+
+  <div style="margin-bottom: 20px;">
+    <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+      <i class="fas fa-arrow-left"></i> Back to Admin Dashboard
+    </a>
+  </div>
+
+  {% for plan in plans %}
+  <div class="glass" style="padding: 20px; margin-bottom: 20px; border-radius: var(--radius);">
+    <h2 style="margin: 0 0 16px 0; text-transform: capitalize; color: var(--accent);">
+      {{ plan.plan.replace('_', ' ').title() }}
+    </h2>
+
+    <form method="POST" action="{{ url_for('main.admin_update_plan_limits', plan=plan.plan) }}" style="display: grid; gap: 16px;">
+
+      <!-- Numeric Limits -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <div>
+          <label for="max_items_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Max Items
+          </label>
+          <input
+            type="text"
+            id="max_items_{{ plan.plan }}"
+            name="max_items"
+            value="{{ plan.max_items if plan.max_items is not none else 'Unlimited' }}"
+            placeholder="Unlimited"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+          <small style="color: var(--sub); font-size: var(--fs-xs);">Leave empty or write "Unlimited" for no limit</small>
+        </div>
+
+        <div>
+          <label for="max_images_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Max Images Per Item
+          </label>
+          <input
+            type="number"
+            id="max_images_{{ plan.plan }}"
+            name="max_images_per_item"
+            value="{{ plan.max_images_per_item }}"
+            min="1"
+            max="20"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+        </div>
+
+        <div>
+          <label for="max_marketplace_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Max Marketplace Integrations
+          </label>
+          <input
+            type="number"
+            id="max_marketplace_{{ plan.plan }}"
+            name="max_marketplace_integrations"
+            value="{{ plan.max_marketplace_integrations }}"
+            min="0"
+            max="20"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+        </div>
+      </div>
+
+      <!-- Feature Toggles -->
+      <div>
+        <h3 style="margin: 8px 0 12px 0; font-size: var(--fs-base); color: var(--text);">Features</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px;">
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_use_ai_research" {{ 'checked' if plan.can_use_ai_research else '' }}>
+            <span>AI Research</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_bulk_operations" {{ 'checked' if plan.can_bulk_operations else '' }}>
+            <span>Bulk Operations</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_export_csv" {{ 'checked' if plan.can_export_csv else '' }}>
+            <span>Export CSV</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_import_csv" {{ 'checked' if plan.can_import_csv else '' }}>
+            <span>Import CSV</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_use_analytics" {{ 'checked' if plan.can_use_analytics else '' }}>
+            <span>Analytics</span>
+          </label>
+
+          <label style="display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; background: var(--muted); cursor: pointer;">
+            <input type="checkbox" name="can_create_listings" {{ 'checked' if plan.can_create_listings else '' }}>
+            <span>Create Listings (API)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Support Level -->
+      <div>
+        <label for="support_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+          Support Level
+        </label>
+        <select
+          id="support_{{ plan.plan }}"
+          name="support_level"
+          style="width: 100%; max-width: 300px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+        >
+          <option value="community" {{ 'selected' if plan.support_level == 'community' else '' }}>Community</option>
+          <option value="email" {{ 'selected' if plan.support_level == 'email' else '' }}>Email</option>
+          <option value="priority" {{ 'selected' if plan.support_level == 'priority' else '' }}>Priority</option>
+        </select>
+      </div>
+
+      <!-- Save Button -->
+      <div>
+        <button type="submit" class="btn submitbtn" style="min-width: 150px;">
+          <i class="fas fa-save"></i> Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endfor %}
+
+  {% if not plans %}
+  <div class="glass" style="padding: 40px; text-align: center; border-radius: var(--radius);">
+    <p style="color: var(--sub); margin: 0;">
+      No plan limits configured. Plans will be seeded automatically on next app restart.
+    </p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1615,7 +1615,7 @@ def admin_change_user_role(user_id):
     user = User.query.get_or_404(user_id)
     new_role = request.form.get("role", "").strip().lower()
 
-    valid_roles = ['free', 'premium', 'pro', 'god']
+    valid_roles = ['free', 'early_adopter', 'premium', 'pro', 'god']
     if new_role not in valid_roles:
         flash(f"Invalid role. Must be one of: {', '.join(valid_roles)}", "error")
         return redirect(url_for('main.admin_user_roles'))
@@ -1672,6 +1672,68 @@ def admin_update_token_config(role):
 
     flash(f"Token limit for '{role}' updated from {old_limit} to {new_limit} tokens/day", "ok")
     return redirect(url_for('main.admin_token_config'))
+
+
+# ==================== PLAN LIMITS MANAGEMENT ====================
+
+@main_bp.route("/admin/plan-limits")
+def admin_plan_limits():
+    """Manage plan limits (items, features, etc.)"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    from qventory.models.subscription import PlanLimit
+
+    plans = PlanLimit.query.order_by(PlanLimit.max_items.nullslast(), PlanLimit.max_items).all()
+
+    return render_template("admin_plan_limits.html", plans=plans)
+
+
+@main_bp.route("/admin/plan-limits/<string:plan>", methods=["POST"])
+def admin_update_plan_limits(plan):
+    """Update limits for a specific plan"""
+    auth_check = require_admin()
+    if auth_check:
+        return auth_check
+
+    from qventory.models.subscription import PlanLimit
+
+    plan_limit = PlanLimit.query.filter_by(plan=plan).first_or_404()
+
+    try:
+        # Parse max_items (can be empty for unlimited)
+        max_items_str = request.form.get("max_items", "").strip()
+        if max_items_str == "" or max_items_str.lower() == "unlimited":
+            plan_limit.max_items = None
+        else:
+            plan_limit.max_items = int(max_items_str)
+            if plan_limit.max_items < 0:
+                raise ValueError("Max items must be positive")
+
+        # Other numeric limits
+        plan_limit.max_images_per_item = int(request.form.get("max_images_per_item", 1))
+        plan_limit.max_marketplace_integrations = int(request.form.get("max_marketplace_integrations", 0))
+
+        # Boolean features
+        plan_limit.can_use_ai_research = request.form.get("can_use_ai_research") == "on"
+        plan_limit.can_bulk_operations = request.form.get("can_bulk_operations") == "on"
+        plan_limit.can_export_csv = request.form.get("can_export_csv") == "on"
+        plan_limit.can_import_csv = request.form.get("can_import_csv") == "on"
+        plan_limit.can_use_analytics = request.form.get("can_use_analytics") == "on"
+        plan_limit.can_create_listings = request.form.get("can_create_listings") == "on"
+
+        # Support level
+        plan_limit.support_level = request.form.get("support_level", "community")
+
+        db.session.commit()
+
+        flash(f"Plan limits for '{plan}' updated successfully", "ok")
+
+    except ValueError as e:
+        flash(f"Error updating plan: {str(e)}", "error")
+
+    return redirect(url_for('main.admin_plan_limits'))
 
 
 # ==================== PRIVACY POLICY ====================

@@ -79,6 +79,11 @@ def create_app():
     with app.app_context():
         print("DB URI ->", app.config.get("SQLALCHEMY_DATABASE_URI"), flush=True)
         db.create_all()
+
+        # Seed plan limits (always run to keep them updated)
+        from qventory.helpers.seed_plans import seed_plan_limits
+        seed_plan_limits()
+
         _maybe_seed_demo()  # ahora sí existe
 
     return app

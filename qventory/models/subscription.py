@@ -11,7 +11,7 @@ class Subscription(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True, index=True)
 
     # Plan
-    plan = db.Column(db.String(50), nullable=False, default='free', index=True)  # free, pro, premium
+    plan = db.Column(db.String(50), nullable=False, default='free', index=True)  # free, early_adopter, premium, pro
     status = db.Column(db.String(50), nullable=False, default='active', index=True)  # active, cancelled, expired, suspended
 
     # Fechas
@@ -50,7 +50,7 @@ class Subscription(db.Model):
     @property
     def is_premium(self):
         """Check if user has premium features"""
-        return self.is_active and self.plan in ['pro', 'premium']
+        return self.is_active and self.plan in ['early_adopter', 'premium', 'pro']
 
     @property
     def days_until_renewal(self):
@@ -89,7 +89,7 @@ class PlanLimit(db.Model):
     __tablename__ = "plan_limits"
 
     id = db.Column(db.Integer, primary_key=True)
-    plan = db.Column(db.String(50), nullable=False, unique=True, index=True)  # free, pro, premium
+    plan = db.Column(db.String(50), nullable=False, unique=True, index=True)  # free, early_adopter, premium, pro
 
     # Límites
     max_items = db.Column(db.Integer, nullable=True)  # None = unlimited

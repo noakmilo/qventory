@@ -79,11 +79,12 @@
             </td>
             <td>
               <form method="post" action="{{ url_for('main.admin_change_user_role', user_id=data.user.id) }}" style="display:flex;gap:8px;align-items:center;">
-                <select name="role" class="form-control" style="width:120px;padding:6px 8px;font-size:var(--fs-sm);">
+                <select name="role" class="form-control" style="width:150px;padding:6px 8px;font-size:var(--fs-sm);">
                   <option value="free" {% if data.user.role == 'free' %}selected{% endif %}>Free</option>
+                  <option value="early_adopter" {% if data.user.role == 'early_adopter' %}selected{% endif %}>Early Adopter</option>
                   <option value="premium" {% if data.user.role == 'premium' %}selected{% endif %}>Premium</option>
                   <option value="pro" {% if data.user.role == 'pro' %}selected{% endif %}>Pro</option>
-                  <option value="god" {% if data.user.role == 'god' %}selected{% endif %}>God</option>
+                  <option value="god" {% if data.user.role == 'god' %}selected{% endif %}>God Mode</option>
                 </select>
                 <button type="submit" class="btn btn-primary" style="padding:6px 12px;font-size:var(--fs-sm);">
                   <i class="fas fa-check"></i> Update

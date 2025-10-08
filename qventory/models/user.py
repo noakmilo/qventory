@@ -9,7 +9,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='free', nullable=False)  # free, premium, pro, god
+    role = db.Column(db.String(20), default='free', nullable=False)  # free, early_adopter, premium, pro, god
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # opcional: relaciones convenientes
@@ -69,6 +69,10 @@ class User(UserMixin, db.Model):
         - analytics
         - create_listings
         """
+        # God mode bypasses all restrictions
+        if self.is_god_mode:
+            return True
+
         subscription = self.get_subscription()
 
         # Check if subscription is active
@@ -90,6 +94,10 @@ class User(UserMixin, db.Model):
 
     def can_add_items(self, count: int = 1) -> bool:
         """Check if user can add more items"""
+        # God mode has unlimited items
+        if self.is_god_mode:
+            return True
+
         limits = self.get_plan_limits()
 
         # None means unlimited
@@ -101,6 +109,10 @@ class User(UserMixin, db.Model):
 
     def can_add_marketplace(self) -> bool:
         """Check if user can connect more marketplaces"""
+        # God mode has unlimited marketplace integrations
+        if self.is_god_mode:
+            return True
+
         limits = self.get_plan_limits()
 
         if limits.max_marketplace_integrations == 0:
@@ -111,6 +123,10 @@ class User(UserMixin, db.Model):
 
     def items_remaining(self) -> int:
         """Get number of items user can still add (None = unlimited)"""
+        # God mode has unlimited items
+        if self.is_god_mode:
+            return None
+
         limits = self.get_plan_limits()
 
         if limits.max_items is None:
@@ -159,6 +175,7 @@ class User(UserMixin, db.Model):
         """Get display name for user's role"""
         names = {
             'free': 'Free',
+            'early_adopter': 'Early Adopter',
             'premium': 'Premium',
             'pro': 'Pro',
             'god': 'God Mode'
