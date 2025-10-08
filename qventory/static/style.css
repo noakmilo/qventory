@@ -149,8 +149,21 @@ header{
   box-shadow:0 8px 18px var(--glass-shadow);
   width:100%;
 }
-.brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto; min-width:0 }
+.brand{ display:flex; gap:8px; align-items:center; flex:0 1 auto; min-width:0; position: relative }
 .brand .dot{ width:9px; height:9px; border-radius:50%; background:var(--accent) }
+.brand .beta-badge {
+  position: absolute;
+  top: -8px;
+  left: 110px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #4a9eff;
+  background: rgba(74, 158, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  white-space: nowrap;
+}
 
 /* Nav siempre horizontal; si no cabe, scroll-x */
 header nav{
@@ -180,7 +193,7 @@ header nav .btn{
     justify-content: flex-start !important;
     padding-bottom: 4px;
   }
-  .brand .tag, .brand .badge { display:none !important }
+  .brand .tag, .brand .badge, .brand .beta-badge { display:none !important }
   .brand a{ font-size:16px}
 
   /* Nav ocupa toda la fila de abajo */
