@@ -329,14 +329,14 @@ def get_all_inventory(user_id, max_items=1000):
     return all_items[:max_items]
 
 
-def get_active_listings_trading_api(user_id, max_items=200):
+def get_active_listings_trading_api(user_id, max_items=1000):
     """
     Get active listings using Trading API (legacy but reliable)
     Uses GetMyeBaySelling call which works with all listing types
 
     Args:
         user_id: Qventory user ID
-        max_items: Maximum items to fetch (max 200 per call)
+        max_items: Maximum items to fetch (supports pagination for 200+)
 
     Returns:
         list of items in normalized format
@@ -357,8 +357,20 @@ def get_active_listings_trading_api(user_id, max_items=200):
     else:
         trading_url = "https://api.sandbox.ebay.com/ws/api.dll"
 
-    # Build XML request for GetMyeBaySelling
-    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+    import xml.etree.ElementTree as ET
+    ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+
+    all_items = []
+    page_number = 1
+    entries_per_page = 200  # Max allowed by eBay
+    total_pages = 1  # Will be updated from first response
+
+    # Paginate through all results
+    while page_number <= total_pages and len(all_items) < max_items:
+        log_inv(f"Fetching page {page_number}/{total_pages} (entries per page: {entries_per_page})")
+
+        # Build XML request for GetMyeBaySelling
+        xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
 <GetMyeBaySellingRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <RequesterCredentials>
     <eBayAuthToken>{access_token}</eBayAuthToken>
@@ -366,116 +378,131 @@ def get_active_listings_trading_api(user_id, max_items=200):
   <ActiveList>
     <Include>true</Include>
     <Pagination>
-      <EntriesPerPage>{min(max_items, 200)}</EntriesPerPage>
-      <PageNumber>1</PageNumber>
+      <EntriesPerPage>{entries_per_page}</EntriesPerPage>
+      <PageNumber>{page_number}</PageNumber>
     </Pagination>
   </ActiveList>
   <DetailLevel>ReturnAll</DetailLevel>
 </GetMyeBaySellingRequest>'''
 
-    headers = {
-        'X-EBAY-API-SITEID': '0',  # 0 = US
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
-        'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
-        'X-EBAY-API-APP-NAME': app_id,
-        'Content-Type': 'text/xml'
-    }
+        headers = {
+            'X-EBAY-API-SITEID': '0',  # 0 = US
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
+            'X-EBAY-API-APP-NAME': app_id,
+            'Content-Type': 'text/xml'
+        }
 
-    log_inv(f"Calling Trading API: {trading_url}")
-    response = requests.post(trading_url, data=xml_request, headers=headers, timeout=30)
-    log_inv(f"Trading API response status: {response.status_code}")
+        log_inv(f"Calling Trading API: {trading_url}")
+        response = requests.post(trading_url, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"Trading API response status: {response.status_code}")
 
-    if response.status_code != 200:
-        log_inv(f"Trading API error: {response.text[:500]}")
-        return []
+        if response.status_code != 200:
+            log_inv(f"Trading API error: {response.text[:500]}")
+            break
 
-    # Parse XML response
-    import xml.etree.ElementTree as ET
+        # Parse XML response
+        try:
+            root = ET.fromstring(response.content)
 
-    try:
-        root = ET.fromstring(response.content)
-        ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+            # Check for errors
+            ack = root.find('ebay:Ack', ns)
+            if ack is not None and ack.text in ['Failure', 'PartialFailure']:
+                errors = root.findall('.//ebay:Errors', ns)
+                for error in errors:
+                    error_msg = error.find('ebay:LongMessage', ns)
+                    if error_msg is not None:
+                        log_inv(f"Trading API error: {error_msg.text}")
+                break
 
-        # Check for errors
-        ack = root.find('ebay:Ack', ns)
-        if ack is not None and ack.text in ['Failure', 'PartialFailure']:
-            errors = root.findall('.//ebay:Errors', ns)
-            for error in errors:
-                error_msg = error.find('ebay:LongMessage', ns)
-                if error_msg is not None:
-                    log_inv(f"Trading API error: {error_msg.text}")
-            return []
+            # Get pagination info from response
+            pagination_result = root.find('.//ebay:ActiveList/ebay:PaginationResult', ns)
+            if pagination_result is not None:
+                total_pages_elem = pagination_result.find('ebay:TotalNumberOfPages', ns)
+                total_entries_elem = pagination_result.find('ebay:TotalNumberOfEntries', ns)
 
-        # Extract active listings
-        items = []
-        item_array = root.find('.//ebay:ActiveList/ebay:ItemArray', ns)
+                if total_pages_elem is not None:
+                    total_pages = int(total_pages_elem.text)
+                if total_entries_elem is not None:
+                    total_entries = int(total_entries_elem.text)
+                    log_inv(f"Total listings available: {total_entries} across {total_pages} page(s)")
 
-        if item_array is None:
-            log_inv("No ItemArray found in response")
-            return []
+            # Extract active listings
+            item_array = root.find('.//ebay:ActiveList/ebay:ItemArray', ns)
 
-        for item_elem in item_array.findall('ebay:Item', ns):
-            try:
-                # Extract item data
-                item_id = item_elem.find('ebay:ItemID', ns)
-                title = item_elem.find('ebay:Title', ns)
+            if item_array is None:
+                log_inv("No ItemArray found in response")
+                break
 
-                # Price
-                selling_status = item_elem.find('ebay:SellingStatus', ns)
-                current_price = selling_status.find('ebay:CurrentPrice', ns) if selling_status is not None else None
-                price = float(current_price.text) if current_price is not None else 0
+            items_in_page = 0
+            for item_elem in item_array.findall('ebay:Item', ns):
+                try:
+                    # Extract item data
+                    item_id = item_elem.find('ebay:ItemID', ns)
+                    title = item_elem.find('ebay:Title', ns)
 
-                # Quantity
-                quantity_elem = item_elem.find('ebay:Quantity', ns)
-                quantity = int(quantity_elem.text) if quantity_elem is not None else 1
+                    # Price
+                    selling_status = item_elem.find('ebay:SellingStatus', ns)
+                    current_price = selling_status.find('ebay:CurrentPrice', ns) if selling_status is not None else None
+                    price = float(current_price.text) if current_price is not None else 0
 
-                # SKU
-                sku_elem = item_elem.find('ebay:SKU', ns)
-                sku = sku_elem.text if sku_elem is not None else ''
+                    # Quantity
+                    quantity_elem = item_elem.find('ebay:Quantity', ns)
+                    quantity = int(quantity_elem.text) if quantity_elem is not None else 1
 
-                # Image
-                picture_details = item_elem.find('ebay:PictureDetails', ns)
-                image_url = None
-                if picture_details is not None:
-                    gallery_url = picture_details.find('ebay:GalleryURL', ns)
-                    if gallery_url is not None:
-                        image_url = gallery_url.text
+                    # SKU
+                    sku_elem = item_elem.find('ebay:SKU', ns)
+                    sku = sku_elem.text if sku_elem is not None else ''
 
-                # Build normalized item
-                normalized = {
-                    'sku': sku,
-                    'product': {
-                        'title': title.text if title is not None else 'Unknown',
-                        'description': '',
-                        'imageUrls': [image_url] if image_url else []
-                    },
-                    'availability': {
-                        'shipToLocationAvailability': {
-                            'quantity': quantity
-                        }
-                    },
-                    'condition': 'USED_EXCELLENT',
-                    'ebay_listing_id': item_id.text if item_id is not None else '',
-                    'item_price': price,
-                    'ebay_url': f"https://www.ebay.com/itm/{item_id.text}" if item_id is not None else None,
-                    'source': 'trading_api'
-                }
-                items.append(normalized)
+                    # Image
+                    picture_details = item_elem.find('ebay:PictureDetails', ns)
+                    image_url = None
+                    if picture_details is not None:
+                        gallery_url = picture_details.find('ebay:GalleryURL', ns)
+                        if gallery_url is not None:
+                            image_url = gallery_url.text
 
-            except Exception as e:
-                log_inv(f"Error parsing item: {str(e)}")
-                continue
+                    # Build normalized item
+                    normalized = {
+                        'sku': sku,
+                        'product': {
+                            'title': title.text if title is not None else 'Unknown',
+                            'description': '',
+                            'imageUrls': [image_url] if image_url else []
+                        },
+                        'availability': {
+                            'shipToLocationAvailability': {
+                                'quantity': quantity
+                            }
+                        },
+                        'condition': 'USED_EXCELLENT',
+                        'ebay_listing_id': item_id.text if item_id is not None else '',
+                        'item_price': price,
+                        'ebay_url': f"https://www.ebay.com/itm/{item_id.text}" if item_id is not None else None,
+                        'source': 'trading_api'
+                    }
+                    all_items.append(normalized)
+                    items_in_page += 1
 
-        log_inv(f"Parsed {len(items)} active listings from Trading API")
-        return items
+                except Exception as e:
+                    log_inv(f"Error parsing item: {str(e)}")
+                    continue
 
-    except ET.ParseError as e:
-        log_inv(f"XML parsing error: {str(e)}")
-        log_inv(f"Response content: {response.text[:500]}")
-        return []
-    except Exception as e:
-        log_inv(f"Error processing Trading API response: {str(e)}")
-        return []
+            log_inv(f"Parsed {items_in_page} items from page {page_number}")
+
+        except ET.ParseError as e:
+            log_inv(f"XML parsing error: {str(e)}")
+            log_inv(f"Response content: {response.text[:500]}")
+            break
+        except Exception as e:
+            log_inv(f"Error processing Trading API response: {str(e)}")
+            break
+
+        # Move to next page
+        page_number += 1
+
+    log_inv(f"Trading API complete: fetched {len(all_items)} total listings")
+    return all_items[:max_items]
 
 
 def get_listings_from_fulfillment_api(user_id, max_items=1000):
