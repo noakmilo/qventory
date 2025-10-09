@@ -1,5 +1,16 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 {% block title %}Manage User Roles – Admin – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">User Roles</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row">
   <div class="card" style="width:98%;margin:0 auto;">

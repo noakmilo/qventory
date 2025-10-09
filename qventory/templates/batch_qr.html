@@ -1,5 +1,14 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 {% block title %}QR Batch – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">QR Batch</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="card">
   <h2>Generate QR Labels (Batch)</h2>

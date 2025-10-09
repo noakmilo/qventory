@@ -1,6 +1,14 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 
 {% block title %}Business Analytics - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Analytics</span>
+</nav>
+{% endblock %}
 
 {% block content %}
 <div class="container" style="max-width:1400px;margin:40px auto;padding:0 20px">

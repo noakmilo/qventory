@@ -1,6 +1,16 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 
 {% block title %}AI Research Reports - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.ai_research') }}">AI Research</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Reports</span>
+</nav>
+{% endblock %}
 
 {% block content %}
 <div class="container" style="max-width:1200px;margin:40px auto;padding:0 20px">

@@ -1,6 +1,16 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 
 {% block title %}Admin - Plan Limits{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Plan Limits</span>
+</nav>
+{% endblock %}
 
 {% block content %}
 <div style="padding: 20px;">

@@ -1,5 +1,14 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 {% block title %}Import Inventory – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Import CSV</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 
 <div class="card" style="max-width:1200px; margin:20px auto;">

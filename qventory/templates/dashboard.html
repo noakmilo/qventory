@@ -1,5 +1,12 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 {% block title %}Dashboard – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <span class="breadcrumb-current">Dashboard</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 <!-- Después de la etiqueta de apertura de content -->
 <div data-username="{{ current_user.username }}" style="display:none"></div>

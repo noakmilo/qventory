@@ -1,5 +1,16 @@
-{% extends "base.html" %}
+{% extends "base_new.html" %}
 {% block title %}Create User – Admin{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Create User</span>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row">
   <div class="card" style="max-width:600px;margin:0 auto;width:98%;">

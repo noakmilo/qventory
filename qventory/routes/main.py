@@ -141,7 +141,7 @@ def dashboard():
     ]
 
     return render_template(
-        "dashboard_new.html",
+        "dashboard.html",
         items=items,
         settings=s,
         options=options,
