@@ -37,6 +37,7 @@ class AITokenConfig(db.Model):
         # Defaults if not configured
         defaults = {
             'free': 3,
+            'early_adopter': 10,
             'premium': 5,
             'pro': 10,
             'god': 999999
@@ -49,6 +50,8 @@ class AITokenConfig(db.Model):
         defaults = [
             {'role': 'free', 'daily_tokens': 3, 'display_name': 'Free',
              'description': '3 AI Research reports per day'},
+            {'role': 'early_adopter', 'daily_tokens': 10, 'display_name': 'Early Adopter',
+             'description': '10 AI Research reports per day'},
             {'role': 'premium', 'daily_tokens': 5, 'display_name': 'Premium',
              'description': '5 AI Research reports per day'},
             {'role': 'pro', 'daily_tokens': 10, 'display_name': 'Pro',

@@ -27,6 +27,7 @@
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--space-2);font-size:var(--fs-sm);">
         <div><span class="role-badge role-free">Free</span> – Basic access</div>
+        <div><span class="role-badge role-early_adopter">Early Adopter</span> – 10 AI tokens/day</div>
         <div><span class="role-badge role-premium">Premium</span> – Enhanced features</div>
         <div><span class="role-badge role-pro">Pro</span> – Professional tier</div>
         <div><span class="role-badge role-god">God</span> – Unlimited access</div>
@@ -55,7 +56,9 @@
             <td style="font-size:var(--fs-xs);color:var(--sub);">{{ data.user.email }}</td>
             <td>
               <span class="role-badge role-{{ data.user.role }}">
-                {{ data.user.role|capitalize }}
+                {% if data.user.role == 'early_adopter' %}Early Adopter
+                {% elif data.user.role == 'god' %}God Mode
+                {% else %}{{ data.user.role|capitalize }}{% endif %}
               </span>
             </td>
             <td style="text-align:center;">
@@ -121,6 +124,12 @@
   background: rgba(156,163,175,0.15);
   border: 1px solid rgba(156,163,175,0.3);
   color: #9ca3af;
+}
+
+.role-early_adopter {
+  background: rgba(52,211,153,0.15);
+  border: 1px solid rgba(52,211,153,0.3);
+  color: #34d399;
 }
 
 .role-premium {

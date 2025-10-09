@@ -42,7 +42,7 @@
         <div class="config-header">
           <div>
             <span class="role-badge role-{{ config.role }}">
-              {{ config.role|capitalize }}
+              {{ config.display_name }}
             </span>
           </div>
           <div class="token-display">
@@ -127,6 +127,12 @@
   background: rgba(156,163,175,0.15);
   border: 1px solid rgba(156,163,175,0.3);
   color: #9ca3af;
+}
+
+.role-early_adopter {
+  background: rgba(52,211,153,0.15);
+  border: 1px solid rgba(52,211,153,0.3);
+  color: #34d399;
 }
 
 .role-premium {
