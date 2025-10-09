@@ -19,14 +19,14 @@
     {% if ebay_connected %}
     <div>
       <form method="post" action="{{ url_for('reports.import_ebay_sales_route') }}" style="display:inline-block">
-        <input type="hidden" name="days_back" value="30">
+        <input type="hidden" name="days_back" value="all">
         <button type="submit" class="btn btn-primary" style="display:flex;align-items:center;gap:8px">
           <i class="fab fa-ebay"></i>
           <span>Import eBay Sales</span>
         </button>
       </form>
       <p style="color:var(--text-secondary);font-size:12px;margin-top:6px;text-align:right">
-        Last 30 days
+        All Time (Lifetime)
       </p>
     </div>
     {% endif %}

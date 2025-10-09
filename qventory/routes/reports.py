@@ -288,13 +288,18 @@ def import_ebay_sales_route():
     try:
         from qventory.tasks import import_ebay_sales
 
-        # Get days_back parameter (default 30)
-        days_back = int(request.form.get('days_back', 30))
+        # Get days_back parameter (None = all time)
+        days_back_str = request.form.get('days_back', '').strip()
+        days_back = int(days_back_str) if days_back_str and days_back_str.lower() != 'all' else None
 
         # Trigger Celery task
         task = import_ebay_sales.delay(current_user.id, days_back=days_back)
 
-        flash(f"eBay sales import started (last {days_back} days). This may take a few minutes.", "ok")
+        if days_back:
+            flash(f"eBay sales import started (last {days_back} days). This may take a few minutes.", "ok")
+        else:
+            flash("eBay sales import started (ALL TIME - lifetime). This may take several minutes.", "ok")
+
         return redirect(url_for('reports.analytics'))
 
     except Exception as e:

@@ -329,33 +329,28 @@ def get_all_inventory(user_id, max_items=1000):
     return all_items[:max_items]
 
 
-def get_ebay_orders(user_id, days_back=30, max_orders=200):
+def get_ebay_orders(user_id, days_back=None, max_orders=5000):
     """
-    Get completed orders from eBay Fulfillment API
+    Get completed orders from eBay Fulfillment API with pagination
 
     Args:
         user_id: Qventory user ID
-        days_back: How many days back to fetch orders (default 30)
-        max_orders: Maximum orders to fetch (default 200)
+        days_back: How many days back to fetch orders (None = lifetime, all orders)
+        max_orders: Maximum orders to fetch (default 5000)
 
     Returns:
         list of order dicts with sale information
     """
     from datetime import datetime, timedelta
 
-    log_inv(f"Getting eBay orders for user {user_id} (last {days_back} days)")
+    if days_back:
+        log_inv(f"Getting eBay orders for user {user_id} (last {days_back} days)")
+    else:
+        log_inv(f"Getting ALL eBay orders for user {user_id} (lifetime)")
 
     access_token = get_user_access_token(user_id)
     if not access_token:
         raise Exception("No valid eBay access token available")
-
-    # Calculate date range
-    end_date = datetime.utcnow()
-    start_date = end_date - timedelta(days=days_back)
-
-    # Format dates for eBay API (ISO 8601)
-    date_from = start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-    date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
 
     url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order"
 
@@ -365,31 +360,68 @@ def get_ebay_orders(user_id, days_back=30, max_orders=200):
         'Accept': 'application/json'
     }
 
-    params = {
-        'filter': f'creationdate:[{date_from}..{date_to}]',
-        'limit': min(max_orders, 200)
-    }
+    # Build filter
+    if days_back:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days_back)
+        date_from = start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        filter_param = f'creationdate:[{date_from}..{date_to}]'
+        log_inv(f"Fetching orders from {date_from} to {date_to}")
+    else:
+        # No date filter = all orders lifetime
+        filter_param = None
+        log_inv(f"Fetching ALL orders (no date filter)")
 
-    log_inv(f"Fetching orders from {date_from} to {date_to}")
+    all_orders = []
+    offset = 0
+    limit = 200  # eBay API max per request
 
-    try:
-        response = requests.get(url, headers=headers, params=params, timeout=30)
-        log_inv(f"Response status: {response.status_code}")
+    # Paginate through all orders
+    while len(all_orders) < max_orders:
+        params = {
+            'limit': limit,
+            'offset': offset
+        }
 
-        if response.status_code != 200:
-            log_inv(f"ERROR response: {response.text[:500]}")
+        if filter_param:
+            params['filter'] = filter_param
 
-        response.raise_for_status()
-        data = response.json()
+        try:
+            log_inv(f"Fetching page: offset={offset}, limit={limit}")
+            response = requests.get(url, headers=headers, params=params, timeout=30)
 
-        orders = data.get('orders', [])
-        log_inv(f"Fetched {len(orders)} orders")
+            if response.status_code != 200:
+                log_inv(f"ERROR response: {response.text[:500]}")
+                response.raise_for_status()
 
-        return orders
+            data = response.json()
+            orders = data.get('orders', [])
+            total = data.get('total', 0)
 
-    except Exception as e:
-        log_inv(f"ERROR fetching eBay orders: {str(e)}")
-        raise
+            log_inv(f"Page result: {len(orders)} orders (total available: {total})")
+
+            if not orders:
+                log_inv("No more orders, stopping pagination")
+                break
+
+            all_orders.extend(orders)
+            log_inv(f"Total fetched so far: {len(all_orders)}")
+
+            # Check if we've fetched all available orders
+            if len(all_orders) >= total:
+                log_inv(f"Fetched all {total} available orders")
+                break
+
+            # Move to next page
+            offset += limit
+
+        except Exception as e:
+            log_inv(f"ERROR fetching eBay orders: {str(e)}")
+            raise
+
+    log_inv(f"✅ Total orders fetched: {len(all_orders)}")
+    return all_orders[:max_orders]
 
 
 def get_active_listings_trading_api(user_id, max_items=1000):

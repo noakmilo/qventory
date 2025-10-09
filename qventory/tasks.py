@@ -249,13 +249,13 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
 
 @celery.task(bind=True, name='qventory.tasks.import_ebay_sales')
-def import_ebay_sales(self, user_id, days_back=30):
+def import_ebay_sales(self, user_id, days_back=None):
     """
     Background task to import eBay sales/orders
 
     Args:
         user_id: Qventory user ID
-        days_back: How many days back to fetch orders (default 30)
+        days_back: How many days back to fetch orders (None = lifetime/all orders)
 
     Returns:
         dict with import results
@@ -268,7 +268,10 @@ def import_ebay_sales(self, user_id, days_back=30):
         from qventory.helpers.ebay_inventory import get_ebay_orders
         from dateutil import parser as date_parser
 
-        log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
+        if days_back:
+            log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
+        else:
+            log_task(f"Starting eBay sales import for user {user_id}, ALL TIME (lifetime)")
 
         try:
             # Fetch orders from eBay
