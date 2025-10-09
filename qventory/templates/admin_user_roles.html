@@ -36,6 +36,25 @@
 
     <h2 style="margin:var(--space-4) 0 var(--space-3) 0;">All Users ({{ user_data|length }})</h2>
 
+    <!-- Search Bar -->
+    <div style="margin-bottom:var(--space-4);">
+      <div style="position:relative;max-width:500px;">
+        <input
+          type="text"
+          id="userSearch"
+          placeholder="Search by username or email..."
+          style="width:100%;padding:12px 40px 12px 40px;border-radius:8px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);font-size:var(--fs-sm);"
+        >
+        <i class="fas fa-search" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--sub);"></i>
+        <button
+          id="clearSearch"
+          onclick="document.getElementById('userSearch').value='';filterUsers();"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--sub);cursor:pointer;display:none;font-size:18px;padding:4px 8px;"
+        >×</button>
+      </div>
+      <div id="searchStats" style="margin-top:8px;font-size:var(--fs-xs);color:var(--sub);"></div>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
@@ -43,7 +62,6 @@
             <th>User</th>
             <th>Email</th>
             <th>Current Role</th>
-            <th>Last Login</th>
             <th>Tokens Today</th>
             <th>Daily Limit</th>
             <th>Remaining</th>
@@ -61,16 +79,6 @@
                 {% elif data.user.role == 'god' %}God Mode
                 {% else %}{{ data.user.role|capitalize }}{% endif %}
               </span>
-            </td>
-            <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">
-              {% if data.user.last_login %}
-                <div style="display:flex;flex-direction:column;gap:2px;">
-                  <span style="color:var(--text);">{{ data.user.last_login.strftime('%Y-%m-%d') }}</span>
-                  <span style="color:var(--sub);font-size:10px;">{{ data.user.last_login.strftime('%H:%M:%S UTC') }}</span>
-                </div>
-              {% else %}
-                <span style="color:#9ca3af;font-style:italic;">Never</span>
-              {% endif %}
             </td>
             <td style="text-align:center;">
               <span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">
@@ -172,5 +180,72 @@
   display: flex;
   gap: 8px;
 }
+
+#userSearch:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.1);
+}
 </style>
+
+<script>
+// Real-time user search
+const searchInput = document.getElementById('userSearch');
+const clearBtn = document.getElementById('clearSearch');
+const searchStats = document.getElementById('searchStats');
+const userRows = document.querySelectorAll('tbody tr');
+const totalUsers = userRows.length;
+
+function filterUsers() {
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  let visibleCount = 0;
+
+  userRows.forEach(row => {
+    const username = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
+    const email = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+
+    const matches = username.includes(searchTerm) || email.includes(searchTerm);
+
+    if (matches) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+
+  // Show/hide clear button
+  clearBtn.style.display = searchTerm ? 'block' : 'none';
+
+  // Update stats
+  if (searchTerm) {
+    searchStats.textContent = `Showing ${visibleCount} of ${totalUsers} users`;
+    if (visibleCount === 0) {
+      searchStats.innerHTML = '<span style="color:#f87171;">No users found</span>';
+    }
+  } else {
+    searchStats.textContent = '';
+  }
+}
+
+// Filter on input
+searchInput.addEventListener('input', filterUsers);
+
+// Filter on Enter key
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    filterUsers();
+  }
+});
+
+// Focus search with Ctrl+K or Cmd+K
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
+</script>
 {% endblock %}
