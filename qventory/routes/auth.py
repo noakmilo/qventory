@@ -1,6 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash
 from flask_login import login_user, logout_user, login_required, current_user
 from email_validator import validate_email, EmailNotValidError
+from datetime import datetime
 
 from ..extensions import db
 from ..models.user import User
@@ -32,6 +33,10 @@ def login():
         # define 'user' SIEMPRE dentro del POST (no en GET)
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
+            # Update last login timestamp
+            user.last_login = datetime.utcnow()
+            db.session.commit()
+
             login_user(user)
             flash("Welcome back.", "ok")
             return redirect(_safe_next())

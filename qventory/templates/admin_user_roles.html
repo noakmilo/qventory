@@ -43,6 +43,7 @@
             <th>User</th>
             <th>Email</th>
             <th>Current Role</th>
+            <th>Last Login</th>
             <th>Tokens Today</th>
             <th>Daily Limit</th>
             <th>Remaining</th>
@@ -60,6 +61,16 @@
                 {% elif data.user.role == 'god' %}God Mode
                 {% else %}{{ data.user.role|capitalize }}{% endif %}
               </span>
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">
+              {% if data.user.last_login %}
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <span style="color:var(--text);">{{ data.user.last_login.strftime('%Y-%m-%d') }}</span>
+                  <span style="color:var(--sub);font-size:10px;">{{ data.user.last_login.strftime('%H:%M:%S UTC') }}</span>
+                </div>
+              {% else %}
+                <span style="color:#9ca3af;font-style:italic;">Never</span>
+              {% endif %}
             </td>
             <td style="text-align:center;">
               <span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">
