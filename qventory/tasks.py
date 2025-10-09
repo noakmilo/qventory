@@ -89,7 +89,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
                     # Check if item already exists
                     existing_item = None
+                    match_method = None
                     ebay_listing_id = parsed.get('ebay_listing_id')
+
+                    log_task(f"  eBay Listing ID: {ebay_listing_id or 'None'}")
+                    log_task(f"  eBay SKU: {ebay_sku or 'None'}")
 
                     # First try: Match by eBay Listing ID (most reliable)
                     if ebay_listing_id:
@@ -97,6 +101,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             user_id=user_id,
                             ebay_listing_id=ebay_listing_id
                         ).first()
+                        if existing_item:
+                            match_method = "ebay_listing_id"
 
                     # Second try: Match by eBay SKU
                     if not existing_item and ebay_sku:
@@ -104,6 +110,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             user_id=user_id,
                             ebay_sku=ebay_sku
                         ).first()
+                        if existing_item:
+                            match_method = "ebay_sku"
 
                     # Third try: Match by exact title (least reliable)
                     if not existing_item and ebay_title:
@@ -111,9 +119,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             user_id=user_id,
                             title=ebay_title
                         ).first()
+                        if existing_item:
+                            match_method = "title"
 
                     if existing_item:
-                        log_task(f"  Item exists in Qventory (ID: {existing_item.id})")
+                        log_task(f"  ✓ Match found (method: {match_method}, Qventory ID: {existing_item.id}, mode: {import_mode})")
 
                         if import_mode in ['update_existing', 'sync_all']:
                             # Update eBay-specific fields
