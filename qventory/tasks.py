@@ -89,13 +89,23 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
                     # Check if item already exists
                     existing_item = None
+                    ebay_listing_id = parsed.get('ebay_listing_id')
 
-                    if ebay_sku:
+                    # First try: Match by eBay Listing ID (most reliable)
+                    if ebay_listing_id:
+                        existing_item = Item.query.filter_by(
+                            user_id=user_id,
+                            ebay_listing_id=ebay_listing_id
+                        ).first()
+
+                    # Second try: Match by eBay SKU
+                    if not existing_item and ebay_sku:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
                             ebay_sku=ebay_sku
                         ).first()
 
+                    # Third try: Match by exact title (least reliable)
                     if not existing_item and ebay_title:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
@@ -103,7 +113,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         ).first()
 
                     if existing_item:
-                        log_task(f"  Item exists (ID: {existing_item.id})")
+                        log_task(f"  Item exists in Qventory (ID: {existing_item.id})")
 
                         if import_mode in ['update_existing', 'sync_all']:
                             # Update eBay-specific fields
@@ -122,12 +132,13 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 existing_item.ebay_sku = ebay_sku
 
                             updated_count += 1
-                            log_task(f"  → Updated")
+                            log_task(f"  → Updated existing item")
                         else:
+                            # new_only mode: skip items that already exist
                             skipped_count += 1
-                            log_task(f"  → Skipped")
+                            log_task(f"  → Skipped (already in Qventory)")
                     else:
-                        log_task(f"  New item")
+                        log_task(f"  New item from eBay")
 
                         if import_mode in ['new_only', 'sync_all']:
                             new_sku = generate_sku()
@@ -151,10 +162,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             )
                             db.session.add(new_item)
                             imported_count += 1
-                            log_task(f"  → Created (SKU: {new_sku})")
+                            log_task(f"  → Created new item (SKU: {new_sku})")
                         else:
+                            # update_existing mode: skip new items
                             skipped_count += 1
-                            log_task(f"  → Skipped")
+                            log_task(f"  → Skipped (update_existing mode only updates)")
 
                     # Update progress every item
                     job.processed_items = idx + 1
