@@ -33,11 +33,12 @@ def login():
         # define 'user' SIEMPRE dentro del POST (no en GET)
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
-            # Update last login timestamp
+            login_user(user)
+
+            # Update last login timestamp (after login_user)
             user.last_login = datetime.utcnow()
             db.session.commit()
 
-            login_user(user)
             flash("Welcome back.", "ok")
             return redirect(_safe_next())
         else:
