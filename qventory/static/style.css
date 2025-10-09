@@ -164,6 +164,9 @@ header{
   border: 1px solid rgba(74, 158, 255, 0.3);
   white-space: nowrap;
 }
+.brand > .tag {
+  margin-left: 50px;
+}
 
 /* Nav siempre horizontal; si no cabe, scroll-x */
 header nav{
