@@ -329,6 +329,69 @@ def get_all_inventory(user_id, max_items=1000):
     return all_items[:max_items]
 
 
+def get_ebay_orders(user_id, days_back=30, max_orders=200):
+    """
+    Get completed orders from eBay Fulfillment API
+
+    Args:
+        user_id: Qventory user ID
+        days_back: How many days back to fetch orders (default 30)
+        max_orders: Maximum orders to fetch (default 200)
+
+    Returns:
+        list of order dicts with sale information
+    """
+    from datetime import datetime, timedelta
+
+    log_inv(f"Getting eBay orders for user {user_id} (last {days_back} days)")
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        raise Exception("No valid eBay access token available")
+
+    # Calculate date range
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=days_back)
+
+    # Format dates for eBay API (ISO 8601)
+    date_from = start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+    date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+    url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order"
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    params = {
+        'filter': f'creationdate:[{date_from}..{date_to}]',
+        'limit': min(max_orders, 200)
+    }
+
+    log_inv(f"Fetching orders from {date_from} to {date_to}")
+
+    try:
+        response = requests.get(url, headers=headers, params=params, timeout=30)
+        log_inv(f"Response status: {response.status_code}")
+
+        if response.status_code != 200:
+            log_inv(f"ERROR response: {response.text[:500]}")
+
+        response.raise_for_status()
+        data = response.json()
+
+        orders = data.get('orders', [])
+        log_inv(f"Fetched {len(orders)} orders")
+
+        return orders
+
+    except Exception as e:
+        log_inv(f"ERROR fetching eBay orders: {str(e)}")
+        raise
+
+
 def get_active_listings_trading_api(user_id, max_items=1000):
     """
     Get active listings using Trading API (legacy but reliable)

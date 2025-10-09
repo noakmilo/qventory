@@ -281,6 +281,27 @@ def reports_page():
     return redirect(url_for('reports.analytics'))
 
 
+@reports_bp.route("/api/import-ebay-sales", methods=["POST"])
+@login_required
+def import_ebay_sales_route():
+    """Trigger eBay sales import"""
+    try:
+        from qventory.tasks import import_ebay_sales
+
+        # Get days_back parameter (default 30)
+        days_back = int(request.form.get('days_back', 30))
+
+        # Trigger Celery task
+        task = import_ebay_sales.delay(current_user.id, days_back=days_back)
+
+        flash(f"eBay sales import started (last {days_back} days). This may take a few minutes.", "ok")
+        return redirect(url_for('reports.analytics'))
+
+    except Exception as e:
+        flash(f"Error starting import: {str(e)}", "error")
+        return redirect(url_for('reports.analytics'))
+
+
 @reports_bp.route("/analytics")
 @login_required
 def analytics():
@@ -288,8 +309,15 @@ def analytics():
     from qventory.models.sale import Sale
     from qventory.models.item import Item
     from qventory.models.listing import Listing
+    from qventory.models.marketplace_credential import MarketplaceCredential
     from sqlalchemy import func
     from datetime import datetime, timedelta
+
+    # Check if eBay is connected
+    ebay_connected = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay'
+    ).first() is not None
 
     # Get date range from query params (default: last 30 days)
     range_param = request.args.get('range', 'last_30_days')
@@ -367,7 +395,8 @@ def analytics():
                          npm=npm,
                          listings_by_supplier=listings_by_supplier,
                          sales_by_marketplace=sales_by_marketplace,
-                         sales=sales)
+                         sales=sales,
+                         ebay_connected=ebay_connected)
 
 
 @reports_bp.route("/api/reports/user-reports")

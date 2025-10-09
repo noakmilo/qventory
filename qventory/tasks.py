@@ -246,3 +246,146 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             db.session.commit()
 
             raise  # Re-raise to mark Celery task as failed
+
+
+@celery.task(bind=True, name='qventory.tasks.import_ebay_sales')
+def import_ebay_sales(self, user_id, days_back=30):
+    """
+    Background task to import eBay sales/orders
+
+    Args:
+        user_id: Qventory user ID
+        days_back: How many days back to fetch orders (default 30)
+
+    Returns:
+        dict with import results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.sale import Sale
+        from qventory.models.item import Item
+        from qventory.helpers.ebay_inventory import get_ebay_orders
+        from dateutil import parser as date_parser
+
+        log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
+
+        try:
+            # Fetch orders from eBay
+            orders = get_ebay_orders(user_id, days_back=days_back)
+            log_task(f"Fetched {len(orders)} orders from eBay")
+
+            imported_count = 0
+            updated_count = 0
+            skipped_count = 0
+
+            for order in orders:
+                try:
+                    order_id = order.get('orderId')
+                    order_status = order.get('orderFulfillmentStatus', 'UNKNOWN')
+
+                    # Only process completed/paid orders
+                    if order_status not in ['FULFILLED', 'IN_PROGRESS']:
+                        skipped_count += 1
+                        continue
+
+                    # Get order pricing
+                    pricing_summary = order.get('pricingSummary', {})
+                    total_price = float(pricing_summary.get('total', {}).get('value', 0))
+
+                    # Get order creation date
+                    creation_date_str = order.get('creationDate', '')
+                    sold_at = date_parser.parse(creation_date_str) if creation_date_str else datetime.utcnow()
+
+                    # Get buyer info
+                    buyer = order.get('buyer', {})
+                    buyer_username = buyer.get('username', '')
+
+                    # Process each line item in the order
+                    line_items = order.get('lineItems', [])
+
+                    for line_item in line_items:
+                        sku = line_item.get('sku', '')
+                        title = line_item.get('title', 'Unknown Item')
+                        line_item_id = line_item.get('lineItemId', '')
+
+                        # Get price for this line item
+                        line_total = float(line_item.get('total', {}).get('value', 0))
+
+                        # Try to find matching item in Qventory
+                        item = None
+                        if sku:
+                            item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+
+                        if not item and title:
+                            item = Item.query.filter_by(user_id=user_id, title=title).first()
+
+                        # Check if sale already exists
+                        existing_sale = Sale.query.filter_by(
+                            user_id=user_id,
+                            marketplace='ebay',
+                            marketplace_order_id=order_id,
+                            item_sku=sku
+                        ).first()
+
+                        if existing_sale:
+                            # Update existing sale
+                            existing_sale.sold_price = line_total
+                            existing_sale.status = 'completed' if order_status == 'FULFILLED' else 'shipped'
+                            existing_sale.updated_at = datetime.utcnow()
+
+                            # Update fees if available
+                            if item and item.item_cost:
+                                existing_sale.item_cost = item.item_cost
+
+                            existing_sale.calculate_profit()
+                            updated_count += 1
+                            log_task(f"  Updated sale: {title[:50]}")
+                        else:
+                            # Create new sale
+                            new_sale = Sale(
+                                user_id=user_id,
+                                item_id=item.id if item else None,
+                                marketplace='ebay',
+                                marketplace_order_id=order_id,
+                                item_title=title,
+                                item_sku=sku,
+                                sold_price=line_total,
+                                item_cost=item.item_cost if item else None,
+                                marketplace_fee=line_total * 0.1325,  # eBay ~13.25% fee (approx)
+                                payment_processing_fee=line_total * 0.029 + 0.30,  # PayPal/payment fee (approx)
+                                sold_at=sold_at,
+                                status='completed' if order_status == 'FULFILLED' else 'shipped',
+                                buyer_username=buyer_username,
+                                ebay_transaction_id=line_item_id,
+                                ebay_buyer_username=buyer_username
+                            )
+
+                            new_sale.calculate_profit()
+                            db.session.add(new_sale)
+                            imported_count += 1
+                            log_task(f"  Imported sale: {title[:50]} - ${line_total}")
+
+                except Exception as item_error:
+                    log_task(f"  ERROR processing line item: {str(item_error)}")
+                    continue
+
+            # Commit all sales
+            db.session.commit()
+
+            log_task(f"✅ Sales import complete: {imported_count} new, {updated_count} updated, {skipped_count} skipped")
+
+            return {
+                'success': True,
+                'imported': imported_count,
+                'updated': updated_count,
+                'skipped': skipped_count,
+                'total_orders': len(orders)
+            }
+
+        except Exception as e:
+            log_task(f"✗ ERROR importing eBay sales: {str(e)}")
+            import traceback
+            log_task(f"Traceback: {traceback.format_exc()}")
+            db.session.rollback()
+            raise

@@ -6,13 +6,30 @@
 <div class="container" style="max-width:1400px;margin:40px auto;padding:0 20px">
 
   <!-- Header -->
-  <div style="margin-bottom:30px">
-    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
-      <i class="fas fa-chart-bar"></i> Business Analytics
-    </h1>
-    <p style="color:var(--text-secondary);font-size:14px">
-      Track your sales performance and inventory insights
-    </p>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;flex-wrap:wrap;gap:16px">
+    <div>
+      <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+        <i class="fas fa-chart-bar"></i> Business Analytics
+      </h1>
+      <p style="color:var(--text-secondary);font-size:14px">
+        Track your sales performance and inventory insights
+      </p>
+    </div>
+
+    {% if ebay_connected %}
+    <div>
+      <form method="post" action="{{ url_for('reports.import_ebay_sales_route') }}" style="display:inline-block">
+        <input type="hidden" name="days_back" value="30">
+        <button type="submit" class="btn btn-primary" style="display:flex;align-items:center;gap:8px">
+          <i class="fab fa-ebay"></i>
+          <span>Import eBay Sales</span>
+        </button>
+      </form>
+      <p style="color:var(--text-secondary);font-size:12px;margin-top:6px;text-align:right">
+        Last 30 days
+      </p>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Date Range Selector -->
