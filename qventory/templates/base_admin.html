@@ -337,7 +337,8 @@
     height: 60px;
     background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
     border-bottom: 1px solid rgba(239, 68, 68, 0.2);
-    padding: 0 16px;
+    padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+    padding-top: env(safe-area-inset-top);
     align-items: center;
     justify-content: space-between;
     z-index: 999;
@@ -480,7 +481,11 @@
 
     .admin-main-content {
       margin-left: 0;
-      margin-top: 60px;
+      margin-top: calc(60px + env(safe-area-inset-top));
+    }
+
+    .admin-breadcrumb {
+      top: calc(60px + env(safe-area-inset-top));
     }
 
     .admin-sidebar-overlay {

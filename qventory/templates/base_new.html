@@ -357,7 +357,8 @@
     height: 60px;
     background: var(--card);
     border-bottom: 1px solid var(--glass-border);
-    padding: 0 16px;
+    padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+    padding-top: env(safe-area-inset-top);
     align-items: center;
     justify-content: space-between;
     position: fixed;
@@ -561,11 +562,11 @@
 
     .main-content {
       margin-left: 0;
-      margin-top: 60px;
+      margin-top: calc(60px + env(safe-area-inset-top));
     }
 
     .breadcrumb {
-      top: 60px;
+      top: calc(60px + env(safe-area-inset-top));
     }
 
     .sidebar-overlay.show {
