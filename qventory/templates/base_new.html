@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Qventory – Inventory QR{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/icon-16.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#0b1020">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Qventory">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body class="new-layout">
+
+  <!-- Sidebar (Desktop Only) -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="Qventory" class="sidebar-logo">
+      <div class="sidebar-brand">
+        <strong>Qventory</strong>
+        <span class="beta-badge-sidebar">BETA</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('main.dashboard') }}" class="sidebar-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+        <i class="fas fa-home"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <!-- Inventory Section -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Inventory</div>
+        <a href="{{ url_for('main.inventory_active') }}" class="sidebar-item {% if 'inventory_active' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-box"></i>
+          <span>Active</span>
+        </a>
+        <a href="{{ url_for('main.inventory_sold') }}" class="sidebar-item {% if 'inventory_sold' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-check-circle"></i>
+          <span>Sold</span>
+        </a>
+        <a href="{{ url_for('main.inventory_ended') }}" class="sidebar-item {% if 'inventory_ended' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-times-circle"></i>
+          <span>Ended</span>
+        </a>
+      </div>
+
+      <a href="{{ url_for('reports.analytics') }}" class="sidebar-item {% if 'analytics' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-chart-bar"></i>
+        <span>Analytics</span>
+      </a>
+
+      <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-plus-circle"></i>
+        <span>Add Item</span>
+      </a>
+
+      <a href="{{ url_for('main.ai_research') }}" class="sidebar-item {% if 'ai_research' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-robot"></i>
+        <span>AI Research</span>
+      </a>
+
+      <a href="{{ url_for('main.qr_batch') }}" class="sidebar-item {% if 'qr_batch' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-qrcode"></i>
+        <span>QR Batch</span>
+      </a>
+
+      <a href="{{ url_for('main.settings') }}" class="sidebar-item {% if 'settings' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </a>
+
+      {% if current_user.is_authenticated %}
+      <a href="{{ url_for('auth.logout') }}" class="sidebar-item">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+      {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user">
+        <i class="fas fa-user-circle" style="font-size:24px;color:var(--accent);"></i>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</div>
+          <div class="sidebar-user-role">{{ current_user.role|capitalize if current_user.is_authenticated else '' }}</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Header (Mobile Only) -->
+  <header class="mobile-header">
+    <button class="mobile-menu-toggle" id="mobileMenuToggle">
+      <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="mobile-brand">
+      <img src="{{ url_for('static', filename='icons/icon-32.png') }}" alt="Qventory">
+      <strong>Qventory</strong>
+    </div>
+
+    <div class="mobile-actions">
+      <a href="{{ url_for('main.new_item') }}" class="mobile-icon-btn">
+        <i class="fas fa-plus"></i>
+      </a>
+      <a href="{{ url_for('main.settings') }}" class="mobile-icon-btn">
+        <i class="fas fa-cog"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <!-- Breadcrumb Navigation -->
+    {% block breadcrumb %}
+    <nav class="breadcrumb">
+      <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+      {% block breadcrumb_items %}{% endblock %}
+    </nav>
+    {% endblock %}
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container">
+      {% for category, message in messages %}
+      <div class="flash {{ 'ok' if category=='ok' else 'error' if category=='error' else '' }}">
+        {{ message }}
+        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Page Content -->
+    <div class="content-wrapper">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Mobile Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <script>
+  // Mobile menu toggle
+  const toggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      sidebar.classList.toggle('show');
+      overlay.classList.toggle('show');
+    });
+
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('show');
+      overlay.classList.remove('show');
+    });
+  }
+
+  // PWA Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    });
+  }
+
+  // Focus search with Ctrl+K or Cmd+K
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      const searchInput = document.querySelector('input[type="search"], input[placeholder*="Search"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
+  </script>
+
+  <style>
+  /* ========== New Layout Styles ========== */
+
+  .new-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    background: var(--bg);
+  }
+
+  /* ========== Sidebar (Desktop) ========== */
+
+  .sidebar {
+    width: 260px;
+    height: 100vh;
+    background: var(--card);
+    border-right: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+  }
+
+  .sidebar-header {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .sidebar-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar-brand strong {
+    font-size: 18px;
+    color: var(--text);
+  }
+
+  .beta-badge-sidebar {
+    font-size: 9px;
+    font-weight: 600;
+    color: #4a9eff;
+    background: rgba(74, 158, 255, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    width: fit-content;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+
+  .sidebar-section {
+    margin: 16px 0;
+  }
+
+  .sidebar-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 12px 4px;
+  }
+
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    margin: 2px 0;
+    border-radius: 8px;
+    color: var(--text);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-size: 14px;
+  }
+
+  .sidebar-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 16px;
+    color: var(--sub);
+  }
+
+  .sidebar-item:hover {
+    background: rgba(96, 165, 250, 0.1);
+    color: #60a5fa;
+  }
+
+  .sidebar-item:hover i {
+    color: #60a5fa;
+  }
+
+  .sidebar-item.active {
+    background: rgba(96, 165, 250, 0.15);
+    color: #60a5fa;
+    font-weight: 600;
+  }
+
+  .sidebar-item.active i {
+    color: #60a5fa;
+  }
+
+  .sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .sidebar-user-info {
+    flex: 1;
+  }
+
+  .sidebar-user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .sidebar-user-role {
+    font-size: 11px;
+    color: var(--sub);
+  }
+
+  /* ========== Mobile Header ========== */
+
+  .mobile-header {
+    display: none;
+    height: 60px;
+    background: var(--card);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 0 16px;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 999;
+  }
+
+  .mobile-menu-toggle {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+  }
+
+  .mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-brand img {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+  }
+
+  .mobile-brand strong {
+    font-size: 16px;
+    color: var(--text);
+  }
+
+  .mobile-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .mobile-icon-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(96, 165, 250, 0.1);
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  /* ========== Main Content ========== */
+
+  .main-content {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* ========== Breadcrumb ========== */
+
+  .breadcrumb {
+    background: var(--card);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .breadcrumb a {
+    color: var(--sub);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .breadcrumb a:hover {
+    color: #60a5fa;
+  }
+
+  .breadcrumb a:not(:last-child)::after {
+    content: '›';
+    margin-left: 8px;
+    color: var(--sub);
+  }
+
+  .breadcrumb .active {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* ========== Content Wrapper ========== */
+
+  .content-wrapper {
+    flex: 1;
+    padding: 24px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ========== Flash Messages ========== */
+
+  .flash-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 400px;
+  }
+
+  .flash {
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    animation: slideIn 0.3s ease;
+  }
+
+  .flash.ok {
+    background: rgba(16,185,129,0.15);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: #10b981;
+  }
+
+  .flash.error {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: #ef4444;
+  }
+
+  .flash-close {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  /* ========== Mobile Overlay ========== */
+
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 998;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  /* ========== Mobile Responsive ========== */
+
+  @media (max-width: 768px) {
+    .sidebar {
+      transform: translateX(-100%);
+    }
+
+    .sidebar.show {
+      transform: translateX(0);
+    }
+
+    .mobile-header {
+      display: flex;
+    }
+
+    .main-content {
+      margin-left: 0;
+      margin-top: 60px;
+    }
+
+    .breadcrumb {
+      top: 60px;
+    }
+
+    .sidebar-overlay.show {
+      display: block;
+      opacity: 1;
+    }
+
+    .content-wrapper {
+      padding: 16px;
+    }
+
+    .flash-container {
+      top: 140px;
+      left: 16px;
+      right: 16px;
+      max-width: none;
+    }
+  }
+  </style>
+
+</body>
+</html>

@@ -1,0 +1,241 @@
+{% extends "base_new.html" %}
+
+{% block title %}{{ page_title }} – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('main.inventory_active') }}">Inventory</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ page_title }}</span>
+{% endblock %}
+
+{% block content %}
+<div data-username="{{ current_user.username }}" style="display:none"></div>
+
+<div class="inventory-container" style="max-width:1600px;margin:0 auto;">
+
+  <!-- Page Header -->
+  <div style="margin-bottom:24px;">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px;">
+      {% if view_type == 'active' %}
+        <i class="fas fa-box"></i> Active Inventory
+      {% elif view_type == 'sold' %}
+        <i class="fas fa-check-circle"></i> Sold Items
+      {% elif view_type == 'ended' %}
+        <i class="fas fa-times-circle"></i> Ended Inventory
+      {% endif %}
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px;">
+      {% if view_type == 'active' %}
+        Items currently active and available for sale
+      {% elif view_type == 'sold' %}
+        Items that have been sold
+      {% elif view_type == 'ended' %}
+        Items that are no longer active
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- Filters Card -->
+  <div id="filtersShell" class="card cardfilters filters-shell" style="margin-bottom:20px;">
+    <div class="filters-bar">
+      <h2>Filters</h2>
+      <button id="filtersToggle" class="btn filters-toggle submitbtn" type="button" aria-expanded="true">
+        <i class="fas fa-filter"></i> Toggle
+      </button>
+    </div>
+    <div id="filtersContent" class="filters-content">
+      <form id="filterForm" method="get" action="{{ request.path }}" class="filters-grid">
+        <div style="grid-column:1/-1">
+          <div class="input-with-button" style="position:relative">
+            <input class="input" type="text" id="q" name="q" placeholder="Search title / SKU / supplier…" autocomplete="off">
+          </div>
+        </div>
+
+        {# Dynamic Filters #}
+        {% if settings.enable_A %}
+        <div>
+          <label>{{ settings.label_A }}</label>
+          <select name="A">
+            <option value="">All</option>
+            {% for opt in options.A %}
+            <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if settings.enable_B %}
+        <div>
+          <label>{{ settings.label_B }}</label>
+          <select name="B">
+            <option value="">All</option>
+            {% for opt in options.B %}
+            <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if settings.enable_S %}
+        <div>
+          <label>{{ settings.label_S }}</label>
+          <select name="S">
+            <option value="">All</option>
+            {% for opt in options.S %}
+            <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+        {% if settings.enable_C %}
+        <div>
+          <label>{{ settings.label_C }}</label>
+          <select name="C">
+            <option value="">All</option>
+            {% for opt in options.C %}
+            <option value="{{ opt }}">{{ opt }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+
+        <div style="grid-column:1/-1">
+          <button class="btn submitbtn" type="submit">Apply</button>
+          <a class="btn" href="{{ request.path }}">Clear</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Inventory Table Card -->
+  <div class="card inventory-shell">
+    <div class="items-header">
+      <h2>Items ({{ total_items }})</h2>
+      <div class="backup-actions">
+        <!-- Bulk Actions -->
+        <div id="bulkActionsContainer" style="display:none;margin-right:10px">
+          <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
+            <option value="">Bulk Actions</option>
+            {% if view_type == 'active' %}
+            <option value="sync_to_ebay">Sync to eBay</option>
+            {% endif %}
+            <option value="delete">Delete Selected</option>
+          </select>
+          <button id="bulkActionApply" class="btn" style="padding:0.5rem 1rem">
+            <i class="fas fa-check"></i> Apply
+          </button>
+          <span id="bulkSelectedCount" style="margin-left:10px;color:var(--sub);font-size:var(--fs-sm)"></span>
+        </div>
+
+        <a class="btn backup-btn" href="{{ url_for('main.export_csv') }}" title="Export all items to CSV">
+          <i class="fas fa-download"></i> Export
+        </a>
+        {% if view_type == 'active' %}
+        <a class="btn backup-btn" href="{{ url_for('main.import_csv') }}" title="Import items from CSV">
+          <i class="fas fa-upload"></i> Import
+        </a>
+        <a class="btn backup-btn" href="{{ url_for('main.import_ebay') }}" title="Import inventory from eBay">
+          <i class="fab fa-ebay"></i> Import from eBay
+        </a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      {% set un = current_user.username %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;text-align:center">
+              <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+            </th>
+            <th style="width:44px"></th>
+            <th>Title</th>
+            <th>SKU</th>
+            <th class="mobile-hide">Supplier</th>
+            <th class="mobile-hide">Cost</th>
+            <th>Price</th>
+            <th class="mobile-hide">ROI</th>
+            <th>Location</th>
+            <th class="mobile-hide">Listings</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="itemsTableBody">
+          {% for it in items %}
+            {% include "_item_row.html" %}
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if total_items == 0 %}
+      <div style="text-align:center;padding:60px 20px;color:var(--sub);">
+        <i class="fas fa-box-open" style="font-size:64px;opacity:0.3;margin-bottom:20px;display:block;"></i>
+        <p style="font-size:18px;margin-bottom:8px;">No items found</p>
+        <p style="font-size:14px;">
+          {% if view_type == 'active' %}
+            Add items to your inventory to get started
+          {% elif view_type == 'sold' %}
+            No items have been sold yet
+          {% elif view_type == 'ended' %}
+            No ended items found
+          {% endif %}
+        </p>
+      </div>
+      {% endif %}
+
+      <!-- Spinner for loading more items -->
+      <div id="loadingSpinner" style="display:none;text-align:center;padding:20px;color:#888;">
+        <i class="fas fa-spinner fa-spin"></i> Loading more items...
+      </div>
+
+      <!-- Scroll sentinel for infinite loading -->
+      <div id="scrollSentinel" style="height:1px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Include the same modals as dashboard -->
+<!-- QR Modal for Locations -->
+<div id="qrModal" class="qr-modal hidden" role="dialog" aria-hidden="true" aria-labelledby="qrTitle">
+  <div class="qr-sheet">
+    <div class="qr-header">
+      <strong id="qrTitle"><i class="fas fa-qrcode"></i> QR</strong>
+      <div class="qr-actions">
+        <a id="qrOpenNew" class="qr-icon" href="#" target="_blank" title="Open in new tab" aria-label="Open in new tab">
+          <i class="fas fa-external-link-alt"></i>
+        </a>
+        <button type="button" id="qrClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport">
+        <img id="qrImage" alt="QR code">
+      </div>
+      <div id="qrCaption" class="qr-tip"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Image Modal -->
+<div id="imgModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="Image viewer">
+  <div class="qr-sheet" style="max-width:90vw;width:auto">
+    <div class="qr-header">
+      <strong><i class="fas fa-image"></i> Image</strong>
+      <div class="qr-actions">
+        <button type="button" id="imgClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="img-viewport">
+        <img id="imgModalImg" alt="">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endblock %}

@@ -141,13 +141,132 @@ def dashboard():
     ]
 
     return render_template(
-        "dashboard.html",
+        "dashboard_new.html",
         items=items,
         settings=s,
         options=options,
         total_items=total_items,
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
+    )
+
+
+# ---------------------- Inventory Views ----------------------
+
+@main_bp.route("/inventory/active")
+@login_required
+def inventory_active():
+    """Show only active items (is_active=True)"""
+    s = get_or_create_settings(current_user)
+
+    items_query = Item.query.filter_by(user_id=current_user.id, is_active=True)
+    items_query = items_query.order_by(Item.created_at.desc())
+    total_items = items_query.count()
+    items = items_query.limit(20).all()
+
+    def distinct(col):
+        return [
+            r[0] for r in db.session.query(col)
+            .filter(col.isnot(None), Item.user_id == current_user.id)
+            .distinct().order_by(col.asc()).all()
+        ]
+
+    options = {
+        "A": distinct(Item.A) if s.enable_A else [],
+        "B": distinct(Item.B) if s.enable_B else [],
+        "S": distinct(Item.S) if s.enable_S else [],
+        "C": distinct(Item.C) if s.enable_C else [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        view_type="active",
+        page_title="Active Inventory"
+    )
+
+
+@main_bp.route("/inventory/sold")
+@login_required
+def inventory_sold():
+    """Show items that have been sold (have sales records)"""
+    from ..models.sale import Sale
+
+    s = get_or_create_settings(current_user)
+
+    # Get items that have at least one sale
+    sold_item_ids = db.session.query(Sale.item_id).filter(
+        Sale.user_id == current_user.id,
+        Sale.item_id.isnot(None)
+    ).distinct().all()
+    sold_item_ids = [sid[0] for sid in sold_item_ids]
+
+    items_query = Item.query.filter(Item.id.in_(sold_item_ids))
+    items_query = items_query.order_by(Item.created_at.desc())
+    total_items = items_query.count()
+    items = items_query.limit(20).all()
+
+    def distinct(col):
+        return [
+            r[0] for r in db.session.query(col)
+            .filter(col.isnot(None), Item.user_id == current_user.id)
+            .distinct().order_by(col.asc()).all()
+        ]
+
+    options = {
+        "A": distinct(Item.A) if s.enable_A else [],
+        "B": distinct(Item.B) if s.enable_B else [],
+        "S": distinct(Item.S) if s.enable_S else [],
+        "C": distinct(Item.C) if s.enable_C else [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        view_type="sold",
+        page_title="Sold Items"
+    )
+
+
+@main_bp.route("/inventory/ended")
+@login_required
+def inventory_ended():
+    """Show inactive/ended items (is_active=False)"""
+    s = get_or_create_settings(current_user)
+
+    items_query = Item.query.filter_by(user_id=current_user.id, is_active=False)
+    items_query = items_query.order_by(Item.created_at.desc())
+    total_items = items_query.count()
+    items = items_query.limit(20).all()
+
+    def distinct(col):
+        return [
+            r[0] for r in db.session.query(col)
+            .filter(col.isnot(None), Item.user_id == current_user.id)
+            .distinct().order_by(col.asc()).all()
+        ]
+
+    options = {
+        "A": distinct(Item.A) if s.enable_A else [],
+        "B": distinct(Item.B) if s.enable_B else [],
+        "S": distinct(Item.S) if s.enable_S else [],
+        "C": distinct(Item.C) if s.enable_C else [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        view_type="ended",
+        page_title="Ended Inventory"
     )
 
 
