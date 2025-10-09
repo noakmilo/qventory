@@ -81,24 +81,12 @@
       </a>
 
       {% if current_user.is_authenticated and current_user.is_admin %}
-      <!-- Admin Section -->
+      <!-- Admin Panel Access -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Admin</div>
-        <a href="{{ url_for('main.admin_dashboard') }}" class="sidebar-item {% if 'admin_dashboard' in request.endpoint %}active{% endif %}">
-          <i class="fas fa-tachometer-alt"></i>
-          <span>Dashboard</span>
-        </a>
-        <a href="{{ url_for('main.admin_users_roles') }}" class="sidebar-item {% if 'admin_users_roles' in request.endpoint %}active{% endif %}">
-          <i class="fas fa-users-cog"></i>
-          <span>User Roles</span>
-        </a>
-        <a href="{{ url_for('main.admin_token_config') }}" class="sidebar-item {% if 'admin_token_config' in request.endpoint %}active{% endif %}">
-          <i class="fas fa-coins"></i>
-          <span>AI Tokens</span>
-        </a>
-        <a href="{{ url_for('main.admin_plan_limits') }}" class="sidebar-item {% if 'admin_plan_limits' in request.endpoint %}active{% endif %}">
-          <i class="fas fa-layer-group"></i>
-          <span>Plan Limits</span>
+        <a href="{{ url_for('main.admin_dashboard') }}" class="sidebar-item">
+          <i class="fas fa-user-shield"></i>
+          <span>Admin Panel</span>
         </a>
       </div>
       {% endif %}

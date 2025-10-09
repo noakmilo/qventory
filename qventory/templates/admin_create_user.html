@@ -1,14 +1,9 @@
-{% extends "base_new.html" %}
+{% extends "base_admin.html" %}
 {% block title %}Create User – Admin{% endblock %}
 
-{% block breadcrumb %}
-<nav class="breadcrumb">
-  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-  <span class="breadcrumb-separator">/</span>
-  <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
-  <span class="breadcrumb-separator">/</span>
-  <span class="breadcrumb-current">Create User</span>
-</nav>
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Create User</span>
 {% endblock %}
 
 {% block content %}

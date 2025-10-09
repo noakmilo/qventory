@@ -1,11 +1,9 @@
-{% extends "base_new.html" %}
+{% extends "base_admin.html" %}
 {% block title %}Admin Dashboard – Qventory{% endblock %}
 
 {% block breadcrumb %}
-<nav class="breadcrumb">
-  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-  <span class="breadcrumb-separator">/</span>
-  <span class="breadcrumb-current">Admin</span>
+<nav class="admin-breadcrumb">
+  <span class="breadcrumb-current">Dashboard</span>
 </nav>
 {% endblock %}
 

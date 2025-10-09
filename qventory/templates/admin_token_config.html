@@ -1,14 +1,9 @@
-{% extends "base_new.html" %}
+{% extends "base_admin.html" %}
 {% block title %}AI Token Configuration – Admin – Qventory{% endblock %}
 
-{% block breadcrumb %}
-<nav class="breadcrumb">
-  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
-  <span class="breadcrumb-separator">/</span>
-  <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
-  <span class="breadcrumb-separator">/</span>
-  <span class="breadcrumb-current">AI Token Config</span>
-</nav>
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">AI Token Config</span>
 {% endblock %}
 
 {% block content %}

@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <title>{% block title %}Admin – Qventory{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/icon-16.png') }}">
+  <link rel="shortcut icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#0b1020">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Qventory Admin">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body class="admin-layout">
+
+  <!-- Admin Sidebar (Desktop Only) -->
+  <aside class="admin-sidebar">
+    <div class="admin-sidebar-header">
+      <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="Qventory" class="admin-sidebar-logo">
+      <div class="admin-sidebar-brand">
+        <strong>Qventory</strong>
+        <span class="admin-badge">ADMIN</span>
+      </div>
+    </div>
+
+    <nav class="admin-sidebar-nav">
+      <!-- Admin Dashboard -->
+      <a href="{{ url_for('main.admin_dashboard') }}" class="admin-sidebar-item {% if request.endpoint == 'main.admin_dashboard' %}active{% endif %}">
+        <i class="fas fa-tachometer-alt"></i>
+        <span>Dashboard</span>
+      </a>
+
+      <!-- User Management Section -->
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-section-title">User Management</div>
+        <a href="{{ url_for('main.admin_users_roles') }}" class="admin-sidebar-item {% if 'admin_users_roles' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-users-cog"></i>
+          <span>User Roles</span>
+        </a>
+        <a href="{{ url_for('main.admin_create_user') }}" class="admin-sidebar-item {% if 'admin_create_user' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-user-plus"></i>
+          <span>Create User</span>
+        </a>
+      </div>
+
+      <!-- Configuration Section -->
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-section-title">Configuration</div>
+        <a href="{{ url_for('main.admin_token_config') }}" class="admin-sidebar-item {% if 'admin_token_config' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-coins"></i>
+          <span>AI Token Config</span>
+        </a>
+        <a href="{{ url_for('main.admin_plan_limits') }}" class="admin-sidebar-item {% if 'admin_plan_limits' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-layer-group"></i>
+          <span>Plan Limits</span>
+        </a>
+      </div>
+
+      <!-- Divider -->
+      <div class="admin-sidebar-divider"></div>
+
+      <!-- Back to App -->
+      <a href="{{ url_for('main.dashboard') }}" class="admin-sidebar-item">
+        <i class="fas fa-arrow-left"></i>
+        <span>Back to Dashboard</span>
+      </a>
+
+      <a href="{{ url_for('auth.logout') }}" class="admin-sidebar-item">
+        <i class="fas fa-sign-out-alt"></i>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <div class="admin-sidebar-footer">
+      <div class="admin-sidebar-user">
+        <i class="fas fa-user-shield" style="font-size:24px;color:#ef4444;"></i>
+        <div class="admin-sidebar-user-info">
+          <div class="admin-sidebar-user-name">{{ current_user.username if current_user.is_authenticated else 'Admin' }}</div>
+          <div class="admin-sidebar-user-role">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Header (Mobile Only) -->
+  <header class="admin-mobile-header">
+    <button class="admin-mobile-menu-toggle" id="adminMobileMenuToggle">
+      <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="admin-mobile-brand">
+      <img src="{{ url_for('static', filename='icons/icon-32.png') }}" alt="Qventory">
+      <strong>Admin</strong>
+    </div>
+
+    <div class="admin-mobile-actions">
+      <a href="{{ url_for('main.dashboard') }}" class="admin-mobile-icon-btn" title="Back to Dashboard">
+        <i class="fas fa-arrow-left"></i>
+      </a>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="admin-main-content">
+    <!-- Breadcrumb Navigation -->
+    {% block breadcrumb %}
+    <nav class="admin-breadcrumb">
+      <a href="{{ url_for('main.admin_dashboard') }}">Admin</a>
+      {% block breadcrumb_items %}{% endblock %}
+    </nav>
+    {% endblock %}
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-container">
+      {% for category, message in messages %}
+      <div class="flash {{ 'ok' if category=='ok' else 'error' if category=='error' else '' }}">
+        {{ message }}
+        <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Page Content -->
+    <div class="admin-content-wrapper">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <!-- Mobile Sidebar Overlay -->
+  <div class="admin-sidebar-overlay" id="adminSidebarOverlay"></div>
+
+  <script>
+  // Mobile menu toggle
+  const adminToggle = document.getElementById('adminMobileMenuToggle');
+  const adminSidebar = document.querySelector('.admin-sidebar');
+  const adminOverlay = document.getElementById('adminSidebarOverlay');
+
+  if (adminToggle) {
+    adminToggle.addEventListener('click', () => {
+      adminSidebar.classList.toggle('show');
+      adminOverlay.classList.toggle('show');
+    });
+
+    adminOverlay.addEventListener('click', () => {
+      adminSidebar.classList.remove('show');
+      adminOverlay.classList.remove('show');
+    });
+  }
+
+  // PWA Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(console.error);
+    });
+  }
+  </script>
+
+  <style>
+  /* ========== Admin Layout Styles ========== */
+
+  .admin-layout {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    margin: 0;
+    background: var(--bg);
+  }
+
+  /* ========== Admin Sidebar (Desktop) ========== */
+
+  .admin-sidebar {
+    width: 260px;
+    height: 100vh;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-right: 1px solid rgba(239, 68, 68, 0.2);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    overflow-y: auto;
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .admin-sidebar-header {
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.05);
+  }
+
+  .admin-sidebar-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .admin-sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .admin-sidebar-brand strong {
+    font-size: 18px;
+    color: #fff;
+  }
+
+  .admin-badge {
+    font-size: 9px;
+    font-weight: 600;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    width: fit-content;
+  }
+
+  .admin-sidebar-nav {
+    flex: 1;
+    padding: 16px 12px;
+    overflow-y: auto;
+  }
+
+  .admin-sidebar-section {
+    margin: 16px 0;
+  }
+
+  .admin-sidebar-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: rgba(255, 255, 255, 0.5);
+    padding: 8px 12px 4px;
+    margin-bottom: 4px;
+  }
+
+  .admin-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+    margin-bottom: 2px;
+    font-size: 14px;
+  }
+
+  .admin-sidebar-item i {
+    width: 20px;
+    font-size: 16px;
+    color: rgba(239, 68, 68, 0.8);
+  }
+
+  .admin-sidebar-item:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #fff;
+  }
+
+  .admin-sidebar-item.active {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .admin-sidebar-item.active i {
+    color: #ef4444;
+  }
+
+  .admin-sidebar-divider {
+    height: 1px;
+    background: rgba(239, 68, 68, 0.2);
+    margin: 16px 0;
+  }
+
+  .admin-sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid rgba(239, 68, 68, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .admin-sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .admin-sidebar-user-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin-sidebar-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-sidebar-user-role {
+    font-size: 11px;
+    color: #ef4444;
+    font-weight: 500;
+  }
+
+  /* ========== Admin Mobile Header ========== */
+
+  .admin-mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 0 16px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 999;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .admin-mobile-menu-toggle {
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 8px;
+  }
+
+  .admin-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .admin-mobile-brand img {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+  }
+
+  .admin-mobile-brand strong {
+    font-size: 16px;
+    color: #ef4444;
+    font-weight: 600;
+  }
+
+  .admin-mobile-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .admin-mobile-icon-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    text-decoration: none;
+  }
+
+  /* ========== Admin Main Content ========== */
+
+  .admin-main-content {
+    flex: 1;
+    margin-left: 260px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  /* ========== Admin Breadcrumb ========== */
+
+  .admin-breadcrumb {
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.2);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .admin-breadcrumb a {
+    color: var(--sub);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .admin-breadcrumb a:hover {
+    color: #ef4444;
+  }
+
+  .breadcrumb-separator {
+    color: var(--sub);
+    margin: 0 4px;
+  }
+
+  .breadcrumb-current {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ========== Admin Content Wrapper ========== */
+
+  .admin-content-wrapper {
+    flex: 1;
+    padding: 24px;
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ========== Admin Overlay ========== */
+
+  .admin-sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 998;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .admin-sidebar-overlay.show {
+    opacity: 1;
+  }
+
+  /* ========== Mobile Responsive ========== */
+
+  @media (max-width: 768px) {
+    .admin-sidebar {
+      transform: translateX(-100%);
+    }
+
+    .admin-sidebar.show {
+      transform: translateX(0);
+    }
+
+    .admin-mobile-header {
+      display: flex;
+    }
+
+    .admin-main-content {
+      margin-left: 0;
+      margin-top: 60px;
+    }
+
+    .admin-sidebar-overlay {
+      display: block;
+    }
+
+    .admin-content-wrapper {
+      padding: 16px;
+    }
+  }
+
+  /* ========== Desktop ========== */
+
+  @media (min-width: 769px) {
+    .admin-sidebar-overlay {
+      display: none !important;
+    }
+  }
+  </style>
+
+</body>
+</html>
