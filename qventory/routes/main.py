@@ -1608,6 +1608,7 @@ def admin_logout():
 
 
 @main_bp.route("/admin/dashboard")
+@login_required
 def admin_dashboard():
     """Admin dashboard - view all users and their inventory stats"""
     auth_check = require_admin()
@@ -1657,6 +1658,7 @@ def admin_delete_user(user_id):
 
 
 @main_bp.route("/admin/user/create", methods=["GET", "POST"])
+@login_required
 def admin_create_user():
     """Create a new user from admin panel"""
     auth_check = require_admin()
@@ -1698,7 +1700,8 @@ def admin_create_user():
 
 
 @main_bp.route("/admin/users/roles")
-def admin_user_roles():
+@login_required
+def admin_users_roles():
     """Manage user roles for AI Research token limits"""
     auth_check = require_admin()
     if auth_check:
@@ -1737,17 +1740,18 @@ def admin_change_user_role(user_id):
     valid_roles = ['free', 'early_adopter', 'premium', 'pro', 'god']
     if new_role not in valid_roles:
         flash(f"Invalid role. Must be one of: {', '.join(valid_roles)}", "error")
-        return redirect(url_for('main.admin_user_roles'))
+        return redirect(url_for('main.admin_users_roles'))
 
     old_role = user.role
     user.role = new_role
     db.session.commit()
 
     flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
-    return redirect(url_for('main.admin_user_roles'))
+    return redirect(url_for('main.admin_users_roles'))
 
 
 @main_bp.route("/admin/tokens/config")
+@login_required
 def admin_token_config():
     """Manage AI token configurations per role"""
     auth_check = require_admin()
@@ -1796,6 +1800,7 @@ def admin_update_token_config(role):
 # ==================== PLAN LIMITS MANAGEMENT ====================
 
 @main_bp.route("/admin/plan-limits")
+@login_required
 def admin_plan_limits():
     """Manage plan limits (items, features, etc.)"""
     auth_check = require_admin()
