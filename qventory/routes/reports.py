@@ -315,6 +315,7 @@ def analytics():
     from qventory.models.item import Item
     from qventory.models.listing import Listing
     from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.models.expense import Expense
     from sqlalchemy import func
     from collections import defaultdict
     from datetime import datetime, timedelta
@@ -410,6 +411,14 @@ def analytics():
         listings_by_supplier[supplier]['count'] += 1
         listings_by_supplier[supplier]['value'] += item.item_price or 0
 
+    # Query business expenses in date range
+    business_expenses_query = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.expense_date >= start_date.date() if isinstance(start_date, datetime) else start_date,
+        Expense.expense_date < (end_date.date() if isinstance(end_date, datetime) else end_date)
+    )
+    business_expenses_total = sum(exp.amount for exp in business_expenses_query.all())
+
     # Expenses summary (based on sales)
     # Note: other_fees now contains store subscription prorate
     expenses = {
@@ -418,6 +427,7 @@ def analytics():
         "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
         "shipping": sum(s.shipping_cost or 0 for s in sales),
         "store_subscription": sum(s.other_fees or 0 for s in sales),  # Store subscription prorated
+        "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
     }
 
     # New listings created in range

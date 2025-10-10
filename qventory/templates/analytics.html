@@ -134,23 +134,27 @@
   <div class="analytics-expenses">
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-box"></i> Inventory Spend</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['inventory']) }}</strong>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['inventory']) }}</strong>
     </div>
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-receipt"></i> Marketplace Fees</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['marketplace']) }}</strong>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['marketplace']) }}</strong>
     </div>
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-shipping-fast"></i> Shipping</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['shipping']) }}</strong>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['shipping']) }}</strong>
     </div>
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fab fa-ebay"></i> Store Subscription</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['store_subscription']) }}</strong>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['store_subscription']) }}</strong>
     </div>
     <div class="analytics-expense-card">
-      <span class="analytics-expense-label"><i class="fas fa-toolbox"></i> Other Fees</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['supplies']) }}</strong>
+      <span class="analytics-expense-label"><i class="fas fa-building"></i> Business Expenses</span>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['business_expenses']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-ellipsis-h"></i> Other</span>
+      <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['supplies']) }}</strong>
     </div>
   </div>
 

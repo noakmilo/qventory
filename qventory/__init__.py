@@ -4,6 +4,7 @@ from .extensions import db, login_manager, migrate
 from .routes import main_bp, auth_bp
 from .routes.reports import reports_bp
 from .routes.ebay_auth import ebay_auth_bp
+from .routes.expenses import expenses_bp
 
 def _maybe_seed_demo():
     """
@@ -63,6 +64,7 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(reports_bp)
     app.register_blueprint(ebay_auth_bp)
+    app.register_blueprint(expenses_bp)
 
     # Register error handlers
     @app.errorhandler(404)

@@ -1,0 +1,419 @@
+{% extends "base_new.html" %}
+
+{% block title %}Business Expenses - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Expenses</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell page-shell--large">
+
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;flex-wrap:wrap;gap:16px">
+    <div>
+      <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+        <i class="fas fa-receipt"></i> Business Expenses
+      </h1>
+      <p style="color:var(--text-secondary);font-size:14px">
+        Track your operational costs: supplies, rent, transportation, and more
+      </p>
+    </div>
+
+    <button class="btn btn-primary" onclick="openAddExpenseModal()">
+      <i class="fas fa-plus"></i> Add Expense
+    </button>
+  </div>
+
+  <!-- Summary Cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
+    <div class="metric-card">
+      <div class="metric-label">Total Expenses</div>
+      <div class="metric-value" style="color:#ef4444">${{ "%.2f"|format(total_amount) }}</div>
+    </div>
+
+    {% for category, amount in totals_by_category.items() %}
+    <div class="metric-card">
+      <div class="metric-label">{{ category }}</div>
+      <div class="metric-value" style="font-size:20px;color:#ef4444">${{ "%.2f"|format(amount) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Date Range Selector -->
+  <div class="analytics-range" style="margin-bottom:20px">
+    <div class="analytics-range__inner">
+      <span class="analytics-range__label">Time Period:</span>
+      <button class="range-btn {% if range_param == 'this_month' %}active{% endif %}"
+              onclick="changeRange('this_month')">This Month</button>
+      <button class="range-btn {% if range_param == 'last_month' %}active{% endif %}"
+              onclick="changeRange('last_month')">Last Month</button>
+      <button class="range-btn {% if range_param == 'this_year' %}active{% endif %}"
+              onclick="changeRange('this_year')">This Year</button>
+      <button class="range-btn {% if range_param == 'all_time' %}active{% endif %}"
+              onclick="changeRange('all_time')">All Time</button>
+    </div>
+  </div>
+
+  <!-- Expenses Table -->
+  <div style="background:var(--card-bg);border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    <table class="table" style="width:100%">
+      <thead>
+        <tr>
+          <th style="text-align:left">Date</th>
+          <th style="text-align:left">Description</th>
+          <th style="text-align:left">Category</th>
+          <th style="text-align:right">Amount</th>
+          <th style="text-align:center">Recurring</th>
+          <th style="text-align:center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if expenses %}
+          {% for expense in expenses %}
+          <tr data-expense-id="{{ expense.id }}">
+            <td style="white-space:nowrap">{{ expense.expense_date.strftime('%Y-%m-%d') }}</td>
+            <td>
+              <strong>{{ expense.description }}</strong>
+              {% if expense.notes %}
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">{{ expense.notes[:50] }}...</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="badge" style="background:#3b82f6;color:white;padding:4px 8px;border-radius:4px;font-size:11px">
+                {{ expense.category or 'Other' }}
+              </span>
+            </td>
+            <td style="text-align:right;color:#ef4444;font-weight:600">${{ "%.2f"|format(expense.amount) }}</td>
+            <td style="text-align:center">
+              {% if expense.is_recurring %}
+                <span style="color:#10b981">
+                  <i class="fas fa-sync-alt"></i> {{ expense.recurring_frequency|capitalize }}
+                </span>
+              {% else %}
+                <span style="color:var(--text-secondary)">—</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center">
+              <button class="btn btn-sm" onclick="editExpense({{ expense.id }})"
+                      style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:4px 8px">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn btn-sm" onclick="deleteExpense({{ expense.id }})"
+                      style="background:none;border:none;color:#ef4444;cursor:pointer;padding:4px 8px">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">
+              <i class="fas fa-inbox" style="font-size:48px;opacity:0.3;margin-bottom:16px"></i>
+              <p>No expenses recorded yet. Click "Add Expense" to get started.</p>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Add/Edit Expense Modal -->
+<div id="expenseModal" class="modal" hidden>
+  <div class="modal__backdrop" onclick="closeExpenseModal()"></div>
+  <div class="modal__dialog" style="max-width:600px">
+    <div class="modal__header">
+      <h3 id="modalTitle">Add Expense</h3>
+      <button class="modal__close" onclick="closeExpenseModal()">×</button>
+    </div>
+
+    <form id="expenseForm" onsubmit="saveExpense(event)">
+      <div class="modal__body">
+        <input type="hidden" id="expenseId">
+
+        <div class="form-group">
+          <label>Description *</label>
+          <input type="text" id="description" required class="form-control"
+                 placeholder="e.g., Shipping boxes, Garage rent, Gas">
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="form-group">
+            <label>Amount *</label>
+            <input type="number" id="amount" step="0.01" required class="form-control"
+                   placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label>Date *</label>
+            <input type="date" id="expense_date" required class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Category</label>
+          <select id="category" class="form-control">
+            <option value="">Select category...</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="is_recurring" onchange="toggleRecurring()">
+            Recurring Expense
+          </label>
+        </div>
+
+        <div id="recurringFields" style="display:none;padding:16px;background:var(--card-bg);border-radius:8px;margin-top:16px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="form-group">
+              <label>Frequency</label>
+              <select id="recurring_frequency" class="form-control">
+                <option value="weekly">Weekly</option>
+                <option value="monthly" selected>Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Day of Month (1-31)</label>
+              <input type="number" id="recurring_day" min="1" max="31" class="form-control">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Recurring Until (optional)</label>
+            <input type="date" id="recurring_until" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Notes (optional)</label>
+          <textarea id="notes" rows="3" class="form-control"
+                    placeholder="Additional details..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Expense
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function changeRange(range) {
+  window.location.href = "{{ url_for('expenses.expenses_page') }}?range=" + range;
+}
+
+function openAddExpenseModal() {
+  document.getElementById('modalTitle').textContent = 'Add Expense';
+  document.getElementById('expenseForm').reset();
+  document.getElementById('expenseId').value = '';
+  document.getElementById('expense_date').valueAsDate = new Date();
+  document.getElementById('expenseModal').hidden = false;
+}
+
+function closeExpenseModal() {
+  document.getElementById('expenseModal').hidden = true;
+}
+
+function toggleRecurring() {
+  const isRecurring = document.getElementById('is_recurring').checked;
+  document.getElementById('recurringFields').style.display = isRecurring ? 'block' : 'none';
+}
+
+async function saveExpense(e) {
+  e.preventDefault();
+
+  const expenseId = document.getElementById('expenseId').value;
+  const isEdit = expenseId !== '';
+
+  const data = {
+    description: document.getElementById('description').value,
+    amount: parseFloat(document.getElementById('amount').value),
+    category: document.getElementById('category').value,
+    expense_date: document.getElementById('expense_date').value,
+    is_recurring: document.getElementById('is_recurring').checked,
+    recurring_frequency: document.getElementById('recurring_frequency').value,
+    recurring_day: parseInt(document.getElementById('recurring_day').value) || null,
+    recurring_until: document.getElementById('recurring_until').value || null,
+    notes: document.getElementById('notes').value
+  };
+
+  const url = isEdit
+    ? `/api/expenses/${expenseId}`
+    : '/api/expenses';
+
+  const method = isEdit ? 'PUT' : 'POST';
+
+  try {
+    const response = await fetch(url, {
+      method: method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (result.ok) {
+      window.location.reload();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (err) {
+    alert('Error saving expense: ' + err.message);
+  }
+}
+
+async function editExpense(expenseId) {
+  // TODO: Load expense data and populate form
+  alert('Edit functionality - coming soon');
+}
+
+async function deleteExpense(expenseId) {
+  if (!confirm('Are you sure you want to delete this expense?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/expenses/${expenseId}`, {
+      method: 'DELETE'
+    });
+
+    const result = await response.json();
+
+    if (result.ok) {
+      window.location.reload();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (err) {
+    alert('Error deleting expense: ' + err.message);
+  }
+}
+</script>
+
+<style>
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+}
+
+.modal__backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+}
+
+.modal__dialog {
+  position: relative;
+  background: var(--card-bg);
+  margin: 50px auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal__header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal__header h3 {
+  margin: 0;
+  color: var(--text);
+}
+
+.modal__close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.modal__body {
+  padding: 20px;
+}
+
+.modal__footer {
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.form-control {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.table {
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 12px;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+</style>
+
+{% endblock %}

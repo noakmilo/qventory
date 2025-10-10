@@ -60,6 +60,11 @@
         <span>Analytics</span>
       </a>
 
+      <a href="{{ url_for('expenses.expenses_page') }}" class="sidebar-item {% if 'expenses' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-receipt"></i>
+        <span>Expenses</span>
+      </a>
+
       <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}">
         <i class="fas fa-plus-circle"></i>
         <span>Add Item</span>
