@@ -270,15 +270,58 @@ def inventory_ended():
     )
 
 
+# ---------------------- Fulfillment View ----------------------
+
+@main_bp.route("/fulfillment")
+@login_required
+def fulfillment():
+    """Show shipped and delivered orders"""
+    from ..models.sale import Sale
+
+    # Get shipped orders (shipped_at exists, delivered_at is None)
+    shipped_orders = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.shipped_at.isnot(None),
+        Sale.delivered_at.is_(None)
+    ).order_by(Sale.shipped_at.desc()).all()
+
+    # Get delivered orders (delivered_at exists)
+    delivered_orders = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.delivered_at.isnot(None)
+    ).order_by(Sale.delivered_at.desc()).limit(100).all()
+
+    # Calculate stats
+    shipped_count = len(shipped_orders)
+    delivered_count = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.delivered_at.isnot(None)
+    ).count()
+
+    total_value = sum(sale.sold_price for sale in shipped_orders + delivered_orders)
+
+    return render_template(
+        "fulfillment.html",
+        shipped_orders=shipped_orders,
+        delivered_orders=delivered_orders,
+        shipped_count=shipped_count,
+        delivered_count=delivered_count,
+        total_value=total_value
+    )
+
+
 # ---------------------- API: Load more items (infinite scroll) ----------------------
 
 @main_bp.route("/api/load-more-items")
 @login_required
 def api_load_more_items():
+    from ..models.sale import Sale
+
     s = get_or_create_settings(current_user)
 
     offset = int(request.args.get("offset", 0))
     limit = int(request.args.get("limit", 20))
+    view_type = (request.args.get("view_type") or "").strip()  # active, sold, ended
 
     q = (request.args.get("q") or "").strip()
     fA = (request.args.get("A") or "").strip()
@@ -287,8 +330,24 @@ def api_load_more_items():
     fC = (request.args.get("C") or "").strip()
     fPlatform = (request.args.get("platform") or "").strip()
 
-    items_query = Item.query.filter_by(user_id=current_user.id)
+    # Build query based on view type
+    if view_type == "active":
+        items_query = Item.query.filter_by(user_id=current_user.id, is_active=True)
+    elif view_type == "sold":
+        # Get items that have sales
+        sold_item_ids = db.session.query(Sale.item_id).filter(
+            Sale.user_id == current_user.id,
+            Sale.item_id.isnot(None)
+        ).distinct().all()
+        sold_item_ids = [sid[0] for sid in sold_item_ids]
+        items_query = Item.query.filter(Item.id.in_(sold_item_ids))
+    elif view_type == "ended":
+        items_query = Item.query.filter_by(user_id=current_user.id, is_active=False)
+    else:
+        # Default: all items (dashboard view)
+        items_query = Item.query.filter_by(user_id=current_user.id)
 
+    # Apply filters
     if q:
         like = f"%{q}%"
         items_query = items_query.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
@@ -314,8 +373,6 @@ def api_load_more_items():
     items = items_query.order_by(Item.created_at.desc()).offset(offset).limit(limit).all()
 
     # Renderizar solo las filas de items
-    from flask import render_template_string
-
     items_html = []
     for it in items:
         # Generar HTML para cada item (usando el mismo formato del dashboard)

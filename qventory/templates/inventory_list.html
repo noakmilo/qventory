@@ -241,5 +241,9 @@
   </div>
 </div>
 
+<script>
+  // Pass view_type to dashboard.js
+  window.QVENTORY_VIEW_TYPE = "{{ view_type }}";
+</script>
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 {% endblock %}

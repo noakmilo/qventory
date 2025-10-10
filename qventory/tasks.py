@@ -345,17 +345,46 @@ def import_ebay_sales(self, user_id, days_back=None):
                             if delivery_cost:
                                 shipping_charged = float(delivery_cost.get('value', 0))
 
-                        # Extract ACTUAL shipping cost (what seller paid for label)
+                        # Extract ACTUAL shipping cost and fulfillment data (what seller paid for label)
                         # This is available when seller buys shipping label through eBay
                         shipping_cost = 0.0
+                        tracking_number = None
+                        carrier = None
+                        shipped_at = None
+                        delivered_at = None
+
                         fulfillment_instructions = order.get('fulfillmentStartInstructions', [])
                         if fulfillment_instructions:
                             shipping_step = fulfillment_instructions[0].get('shippingStep', {})
                             shipment_details = shipping_step.get('shipmentDetails', {})
+
+                            # Get actual shipping cost
                             actual_shipping = shipment_details.get('actualShippingCost', {})
                             if actual_shipping:
                                 shipping_cost = float(actual_shipping.get('value', 0))
                                 log_task(f"    Actual shipping cost from eBay: ${shipping_cost}")
+
+                            # Get tracking number and carrier
+                            tracking_number = shipment_details.get('trackingNumber')
+                            carrier = shipment_details.get('shippingCarrierCode')
+
+                            # Get shipped date
+                            shipped_date_str = shipment_details.get('shippedDate') or shipment_details.get('actualShipDate')
+                            if shipped_date_str:
+                                try:
+                                    shipped_at = date_parser.parse(shipped_date_str)
+                                    log_task(f"    Shipped: {shipped_at}")
+                                except:
+                                    pass
+
+                            # Get delivery date (if available)
+                            delivery_date_str = shipment_details.get('deliveredDate') or shipment_details.get('actualDeliveryDate')
+                            if delivery_date_str:
+                                try:
+                                    delivered_at = date_parser.parse(delivery_date_str)
+                                    log_task(f"    Delivered: {delivered_at}")
+                                except:
+                                    pass
 
                         # Calculate eBay fees (approximate - eBay doesn't provide exact fees in Order API)
                         # Final value fee: ~13.25% for most categories (can vary 10-15%)
@@ -395,9 +424,20 @@ def import_ebay_sales(self, user_id, days_back=None):
                             existing_sale.status = 'completed' if order_status == 'FULFILLED' else 'shipped'
                             existing_sale.marketplace_fee = marketplace_fee
                             existing_sale.payment_processing_fee = payment_fee
+                            existing_sale.shipping_cost = shipping_cost
                             existing_sale.shipping_charged = shipping_charged
                             existing_sale.other_fees = store_fee_per_sale  # Store subscription prorate
                             existing_sale.updated_at = datetime.utcnow()
+
+                            # Update fulfillment data
+                            if tracking_number:
+                                existing_sale.tracking_number = tracking_number
+                            if carrier:
+                                existing_sale.carrier = carrier
+                            if shipped_at:
+                                existing_sale.shipped_at = shipped_at
+                            if delivered_at:
+                                existing_sale.delivered_at = delivered_at
 
                             # Update item cost if available
                             if item and item.item_cost:
@@ -423,6 +463,10 @@ def import_ebay_sales(self, user_id, days_back=None):
                                 shipping_charged=shipping_charged,
                                 other_fees=store_fee_per_sale,  # Store subscription prorate
                                 sold_at=sold_at,
+                                shipped_at=shipped_at,
+                                delivered_at=delivered_at,
+                                tracking_number=tracking_number,
+                                carrier=carrier,
                                 status='completed' if order_status == 'FULFILLED' else 'shipped',
                                 buyer_username=buyer_username,
                                 ebay_transaction_id=line_item_id,

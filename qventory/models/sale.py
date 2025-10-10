@@ -39,10 +39,12 @@ class Sale(db.Model):
     sold_at = db.Column(db.DateTime, nullable=False, index=True)  # Fecha de venta
     paid_at = db.Column(db.DateTime, nullable=True)  # Fecha de pago recibido
     shipped_at = db.Column(db.DateTime, nullable=True)  # Fecha de envío
+    delivered_at = db.Column(db.DateTime, nullable=True)  # Fecha de entrega
 
     # Tracking
     tracking_number = db.Column(db.String(255), nullable=True)
     buyer_username = db.Column(db.String(255), nullable=True)
+    carrier = db.Column(db.String(100), nullable=True)  # USPS, FedEx, UPS, etc
 
     # Estado
     status = db.Column(db.String(50), nullable=False, default='pending', index=True)  # pending, paid, shipped, completed, cancelled, refunded, returned

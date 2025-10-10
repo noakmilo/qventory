@@ -1,0 +1,238 @@
+{% extends "base_new.html" %}
+
+{% block title %}Fulfillment - Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Fulfillment</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell page-shell--wide">
+
+  <!-- Header -->
+  <div style="margin-bottom:24px;">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px;">
+      <i class="fas fa-shipping-fast"></i> Order Fulfillment
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px;">
+      Track your shipped and delivered orders
+    </p>
+  </div>
+
+  <!-- Stats Cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px;">
+    <!-- Shipped (not delivered) -->
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="color:var(--text-secondary);font-size:14px;">
+          <i class="fas fa-box" style="color:#fbbf24;"></i> In Transit
+        </span>
+        <span style="color:#fbbf24;font-size:24px;font-weight:700;">{{ shipped_count }}</span>
+      </div>
+      <p style="color:var(--text-secondary);font-size:12px;">Orders shipped, awaiting delivery</p>
+    </div>
+
+    <!-- Delivered -->
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="color:var(--text-secondary);font-size:14px;">
+          <i class="fas fa-check-circle" style="color:#34d399;"></i> Delivered
+        </span>
+        <span style="color:#34d399;font-size:24px;font-weight:700;">{{ delivered_count }}</span>
+      </div>
+      <p style="color:var(--text-secondary);font-size:12px;">Orders successfully delivered</p>
+    </div>
+
+    <!-- Total Revenue -->
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="color:var(--text-secondary);font-size:14px;">
+          <i class="fas fa-dollar-sign" style="color:#60a5fa;"></i> Total Value
+        </span>
+        <span style="color:#60a5fa;font-size:24px;font-weight:700;">${{ "%.2f"|format(total_value) }}</span>
+      </div>
+      <p style="color:var(--text-secondary);font-size:12px;">Combined value of all orders</p>
+    </div>
+  </div>
+
+  <!-- Shipped Orders Section -->
+  <div class="card" style="margin-bottom:24px;">
+    <div style="padding:20px;border-bottom:1px solid var(--border);">
+      <h2 style="color:var(--text);font-size:18px;display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-box" style="color:#fbbf24;"></i>
+        <span>In Transit ({{ shipped_count }})</span>
+      </h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin-top:4px;">
+        Orders that have been shipped but not yet delivered
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Item</th>
+            <th>Buyer</th>
+            <th>Shipped Date</th>
+            <th>Carrier</th>
+            <th>Tracking</th>
+            <th>Value</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if shipped_orders|length == 0 %}
+          <tr>
+            <td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary);">
+              <i class="fas fa-box-open" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;"></i>
+              <p>No orders in transit</p>
+            </td>
+          </tr>
+          {% else %}
+          {% for sale in shipped_orders %}
+          <tr>
+            <td style="font-family:monospace;color:var(--text-secondary);">
+              {{ sale.marketplace_order_id or sale.id }}
+            </td>
+            <td>
+              <div style="font-weight:500;color:var(--text);">{{ sale.item_title }}</div>
+              {% if sale.item_sku %}
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">SKU: {{ sale.item_sku }}</div>
+              {% endif %}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {% if sale.shipped_at %}
+              {{ sale.shipped_at.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.shipped_at.strftime('%I:%M %p') }}</span>
+              {% else %}
+              N/A
+              {% endif %}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {{ sale.carrier or 'N/A' }}
+            </td>
+            <td>
+              {% if sale.tracking_number %}
+              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
+                 target="_blank"
+                 style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
+                 title="Track package">
+                {{ sale.tracking_number[:15] }}{% if sale.tracking_number|length > 15 %}...{% endif %}
+                <i class="fas fa-external-link-alt" style="font-size:10px;margin-left:4px;"></i>
+              </a>
+              {% else %}
+              <span style="color:var(--text-tertiary);">N/A</span>
+              {% endif %}
+            </td>
+            <td style="font-weight:600;color:#34d399;">
+              ${{ "%.2f"|format(sale.sold_price) }}
+            </td>
+            <td>
+              <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:500;">
+                <i class="fas fa-truck"></i> Shipped
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Delivered Orders Section -->
+  <div class="card">
+    <div style="padding:20px;border-bottom:1px solid var(--border);">
+      <h2 style="color:var(--text);font-size:18px;display:flex;align-items:center;gap:8px;">
+        <i class="fas fa-check-circle" style="color:#34d399;"></i>
+        <span>Delivered ({{ delivered_count }})</span>
+      </h2>
+      <p style="color:var(--text-secondary);font-size:13px;margin-top:4px;">
+        Orders that have been successfully delivered
+      </p>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Item</th>
+            <th>Buyer</th>
+            <th>Delivered Date</th>
+            <th>Carrier</th>
+            <th>Tracking</th>
+            <th>Value</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if delivered_orders|length == 0 %}
+          <tr>
+            <td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary);">
+              <i class="fas fa-box-open" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;"></i>
+              <p>No delivered orders yet</p>
+            </td>
+          </tr>
+          {% else %}
+          {% for sale in delivered_orders %}
+          <tr>
+            <td style="font-family:monospace;color:var(--text-secondary);">
+              {{ sale.marketplace_order_id or sale.id }}
+            </td>
+            <td>
+              <div style="font-weight:500;color:var(--text);">{{ sale.item_title }}</div>
+              {% if sale.item_sku %}
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">SKU: {{ sale.item_sku }}</div>
+              {% endif %}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {% if sale.delivered_at %}
+              {{ sale.delivered_at.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.delivered_at.strftime('%I:%M %p') }}</span>
+              {% else %}
+              N/A
+              {% endif %}
+            </td>
+            <td style="color:var(--text-secondary);">
+              {{ sale.carrier or 'N/A' }}
+            </td>
+            <td>
+              {% if sale.tracking_number %}
+              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
+                 target="_blank"
+                 style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
+                 title="Track package">
+                {{ sale.tracking_number[:15] }}{% if sale.tracking_number|length > 15 %}...{% endif %}
+                <i class="fas fa-external-link-alt" style="font-size:10px;margin-left:4px;"></i>
+              </a>
+              {% else %}
+              <span style="color:var(--text-tertiary);">N/A</span>
+              {% endif %}
+            </td>
+            <td style="font-weight:600;color:#34d399;">
+              ${{ "%.2f"|format(sale.sold_price) }}
+            </td>
+            <td>
+              <span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:500;">
+                <i class="fas fa-check"></i> Delivered
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

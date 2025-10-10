@@ -65,6 +65,11 @@
         <span>Expenses</span>
       </a>
 
+      <a href="{{ url_for('main.fulfillment') }}" class="sidebar-item {% if 'fulfillment' in request.endpoint %}active{% endif %}">
+        <i class="fas fa-shipping-fast"></i>
+        <span>Fulfillment</span>
+      </a>
+
       <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}">
         <i class="fas fa-plus-circle"></i>
         <span>Add Item</span>
