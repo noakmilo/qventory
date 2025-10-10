@@ -345,11 +345,17 @@ def import_ebay_sales(self, user_id, days_back=None):
                             if delivery_cost:
                                 shipping_charged = float(delivery_cost.get('value', 0))
 
-                        # Actual shipping cost seller paid (not in Order API)
-                        # eBay Order API doesn't provide actual shipping label cost
-                        # This needs to come from Shipping Fulfillment API or manual entry
-                        # For now, estimate 70% of charged amount or leave at 0
-                        shipping_cost = 0.0  # User can edit manually
+                        # Extract ACTUAL shipping cost (what seller paid for label)
+                        # This is available when seller buys shipping label through eBay
+                        shipping_cost = 0.0
+                        fulfillment_instructions = order.get('fulfillmentStartInstructions', [])
+                        if fulfillment_instructions:
+                            shipping_step = fulfillment_instructions[0].get('shippingStep', {})
+                            shipment_details = shipping_step.get('shipmentDetails', {})
+                            actual_shipping = shipment_details.get('actualShippingCost', {})
+                            if actual_shipping:
+                                shipping_cost = float(actual_shipping.get('value', 0))
+                                log_task(f"    Actual shipping cost from eBay: ${shipping_cost}")
 
                         # Calculate eBay fees (approximate - eBay doesn't provide exact fees in Order API)
                         # Final value fee: ~13.25% for most categories (can vary 10-15%)
