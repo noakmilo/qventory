@@ -190,18 +190,19 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         db.session.commit()
                         log_task(f"Progress: {idx + 1}/{len(ebay_items)} - Committed")
 
-                        # Update Celery task state
-                        self.update_state(
-                            state='PROGRESS',
-                            meta={
-                                'current': idx + 1,
-                                'total': len(ebay_items),
-                                'imported': imported_count,
-                                'updated': updated_count,
-                                'skipped': skipped_count,
-                                'errors': error_count
-                            }
-                        )
+                        # Update Celery task state (only if we have a valid task_id)
+                        if hasattr(self, 'request') and self.request.id:
+                            self.update_state(
+                                state='PROGRESS',
+                                meta={
+                                    'current': idx + 1,
+                                    'total': len(ebay_items),
+                                    'imported': imported_count,
+                                    'updated': updated_count,
+                                    'skipped': skipped_count,
+                                    'errors': error_count
+                                }
+                            )
 
                 except Exception as item_error:
                     error_count += 1
