@@ -1,7 +1,7 @@
 """add ebay store subscription
 
 Revision ID: 003_add_ebay_store_subscription
-Revises: 002_add_last_login_to_users
+Revises: 001_initial_schema
 Create Date: 2025-10-09 22:49:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '003_add_ebay_store_subscription'
-down_revision = '002_add_last_login_to_users'
+down_revision = '001_initial_schema'
 branch_labels = None
 depends_on = None
 
