@@ -282,7 +282,9 @@ def import_ebay_sales(self, user_id, days_back=None):
                 marketplace='ebay'
             ).first()
 
-            ebay_store_monthly_fee = ebay_cred.ebay_store_subscription if ebay_cred else 0.0
+            # TEMPORAL FIX: Use getattr to safely access ebay_store_subscription
+            # In case migration hasn't been applied yet
+            ebay_store_monthly_fee = getattr(ebay_cred, 'ebay_store_subscription', 0.0) if ebay_cred else 0.0
 
             # Fetch orders from eBay
             orders = get_ebay_orders(user_id, days_back=days_back)
