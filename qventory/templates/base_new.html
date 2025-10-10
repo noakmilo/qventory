@@ -348,12 +348,11 @@
     height: 60px;
     background: var(--card);
     border-bottom: 1px solid var(--glass-border);
-    padding: 0 max(16px, env(safe-area-inset-right)) 0 0;
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
     padding-top: env(safe-area-inset-top);
-    padding-left: max(5px, env(safe-area-inset-left));
     align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 12px;
     position: fixed;
     top: 0;
     left: 0;
@@ -404,6 +403,8 @@
     flex-direction: column;
     height: 100vh;
     overflow-y: auto;
+    transform: none;
+    will-change: auto;
   }
 
   /* ========== Breadcrumb ========== */
@@ -418,7 +419,7 @@
     font-size: 13px;
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 40;
   }
 
   .breadcrumb a {
@@ -454,19 +455,22 @@
     max-width: 1600px;
     width: 100%;
     margin: 0 auto;
+    transform: none;
+    will-change: auto;
   }
 
   /* ========== Flash Messages ========== */
 
   .flash-container {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    z-index: 9999;
+    position: sticky;
+    top: 60px;
+    right: 0;
+    z-index: 30;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-width: 400px;
+    max-width: 100%;
+    margin: 12px 24px 0;
   }
 
   .flash {
@@ -550,7 +554,8 @@
     }
 
     .breadcrumb {
-      top: calc(60px + env(safe-area-inset-top));
+      top: 0;
+      z-index: 40;
     }
 
     .sidebar-overlay.show {
@@ -563,9 +568,10 @@
     }
 
     .flash-container {
-      top: 140px;
-      left: 16px;
-      right: 16px;
+      position: sticky;
+      top: 0;
+      margin: 12px 16px 0;
+      z-index: 30;
       max-width: none;
     }
   }

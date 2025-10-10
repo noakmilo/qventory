@@ -363,7 +363,7 @@ select{
 i {color:#8ab4fd;}
 
 /* ===== Filters ===== */
-.filters-shell{ width:100%; margin:0 auto 12px auto; transition:box-shadow .15s ease }
+.filters-shell{ width:100%; margin:0 auto 12px auto; transition:box-shadow .15s ease; position:relative; z-index:1 }
 .filters-bar{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 8px 0 }
 .filters-toggle{ display:inline-flex; align-items:center; gap:6px }
 .filters-content{ width:100% }
