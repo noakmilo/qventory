@@ -240,56 +240,62 @@ def migrate_data():
         db.session.commit()
         print(f"✅ Migrados {len(sales_data)} ventas")
 
-        # 6. Migrar Expenses
+        # 6. Migrar Expenses (puede no existir en SQLite antiguo)
         print("\n📦 Migrando gastos...")
-        cursor.execute("SELECT * FROM expenses ORDER BY id")
-        expenses_data = cursor.fetchall()
-        for row in expenses_data:
-            expense = Expense(
-                id=row['id'],
-                user_id=row['user_id'],
-                description=row['description'],
-                amount=row['amount'],
-                category=get_value(row, 'category'),
-                expense_date=row['expense_date'],
-                is_recurring=bool(get_value(row, 'is_recurring', False)),
-                recurring_frequency=get_value(row, 'recurring_frequency'),
-                recurring_day=get_value(row, 'recurring_day'),
-                recurring_until=get_value(row, 'recurring_until'),
-                notes=get_value(row, 'notes'),
-                created_at=row['created_at'],
-                updated_at=row['updated_at']
-            )
-            db.session.add(expense)
-        db.session.commit()
-        print(f"✅ Migrados {len(expenses_data)} gastos")
+        try:
+            cursor.execute("SELECT * FROM expenses ORDER BY id")
+            expenses_data = cursor.fetchall()
+            for row in expenses_data:
+                expense = Expense(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    description=row['description'],
+                    amount=row['amount'],
+                    category=get_value(row, 'category'),
+                    expense_date=row['expense_date'],
+                    is_recurring=bool(get_value(row, 'is_recurring', False)),
+                    recurring_frequency=get_value(row, 'recurring_frequency'),
+                    recurring_day=get_value(row, 'recurring_day'),
+                    recurring_until=get_value(row, 'recurring_until'),
+                    notes=get_value(row, 'notes'),
+                    created_at=row['created_at'],
+                    updated_at=row['updated_at']
+                )
+                db.session.add(expense)
+            db.session.commit()
+            print(f"✅ Migrados {len(expenses_data)} gastos")
+        except sqlite3.OperationalError:
+            print("⚠️  Tabla 'expenses' no existe en SQLite (es nueva)")
 
-        # 7. Migrar Import Jobs
+        # 7. Migrar Import Jobs (puede no existir)
         print("\n📦 Migrando import jobs...")
-        cursor.execute("SELECT * FROM import_jobs ORDER BY id")
-        jobs_data = cursor.fetchall()
-        for row in jobs_data:
-            job = ImportJob(
-                id=row['id'],
-                user_id=row['user_id'],
-                celery_task_id=get_value(row, 'celery_task_id'),
-                import_mode=get_value(row, 'import_mode'),
-                listing_status=get_value(row, 'listing_status'),
-                status=get_value(row, 'status', 'pending'),
-                total_items=get_value(row, 'total_items', 0),
-                processed_items=get_value(row, 'processed_items', 0),
-                imported_count=get_value(row, 'imported_count', 0),
-                updated_count=get_value(row, 'updated_count', 0),
-                skipped_count=get_value(row, 'skipped_count', 0),
-                error_count=get_value(row, 'error_count', 0),
-                error_message=get_value(row, 'error_message'),
-                started_at=get_value(row, 'started_at'),
-                completed_at=get_value(row, 'completed_at'),
-                created_at=row['created_at']
-            )
-            db.session.add(job)
-        db.session.commit()
-        print(f"✅ Migrados {len(jobs_data)} import jobs")
+        try:
+            cursor.execute("SELECT * FROM import_jobs ORDER BY id")
+            jobs_data = cursor.fetchall()
+            for row in jobs_data:
+                job = ImportJob(
+                    id=row['id'],
+                    user_id=row['user_id'],
+                    celery_task_id=get_value(row, 'celery_task_id'),
+                    import_mode=get_value(row, 'import_mode'),
+                    listing_status=get_value(row, 'listing_status'),
+                    status=get_value(row, 'status', 'pending'),
+                    total_items=get_value(row, 'total_items', 0),
+                    processed_items=get_value(row, 'processed_items', 0),
+                    imported_count=get_value(row, 'imported_count', 0),
+                    updated_count=get_value(row, 'updated_count', 0),
+                    skipped_count=get_value(row, 'skipped_count', 0),
+                    error_count=get_value(row, 'error_count', 0),
+                    error_message=get_value(row, 'error_message'),
+                    started_at=get_value(row, 'started_at'),
+                    completed_at=get_value(row, 'completed_at'),
+                    created_at=row['created_at']
+                )
+                db.session.add(job)
+            db.session.commit()
+            print(f"✅ Migrados {len(jobs_data)} import jobs")
+        except sqlite3.OperationalError:
+            print("⚠️  Tabla 'import_jobs' no existe en SQLite (es nueva)")
 
         # 8. Migrar Subscriptions (si existen)
         print("\n📦 Migrando suscripciones...")
