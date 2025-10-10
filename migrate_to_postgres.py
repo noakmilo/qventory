@@ -47,6 +47,14 @@ def migrate_data():
         sqlite_conn.row_factory = sqlite3.Row
         cursor = sqlite_conn.cursor()
 
+        # Helper para obtener valores de sqlite3.Row
+        def get_value(row, key, default=None):
+            """Obtiene valor de sqlite3.Row con fallback"""
+            try:
+                return row[key] if row[key] is not None else default
+            except (KeyError, IndexError):
+                return default
+
         print("\n🔄 Iniciando migración de datos...\n")
 
         # Importar todos los modelos
@@ -113,17 +121,17 @@ def migrate_data():
                 id=row['id'],
                 user_id=row['user_id'],
                 marketplace=row['marketplace'],
-                ebay_user_id=row.get('ebay_user_id'),
+                ebay_user_id=get_value(row, 'ebay_user_id'),
                 is_active=bool(row['is_active']),
                 created_at=row['created_at'],
                 updated_at=row['updated_at']
             )
             # Campos encriptados
-            if row.get('access_token_encrypted'):
+            if get_value(row, 'access_token_encrypted'):
                 cred.access_token_encrypted = row['access_token_encrypted']
-            if row.get('refresh_token_encrypted'):
+            if get_value(row, 'refresh_token_encrypted'):
                 cred.refresh_token_encrypted = row['refresh_token_encrypted']
-            if row.get('token_expires_at'):
+            if get_value(row, 'token_expires_at'):
                 cred.token_expires_at = row['token_expires_at']
             if 'ebay_store_subscription' in row.keys() and row['ebay_store_subscription']:
                 cred.ebay_store_subscription = row['ebay_store_subscription']
@@ -141,45 +149,45 @@ def migrate_data():
                 user_id=row['user_id'],
                 title=row['title'],
                 sku=row['sku'],
-                description=row.get('description'),
-                upc=row.get('upc'),
-                listing_link=row.get('listing_link'),
-                web_url=row.get('web_url'),
-                ebay_url=row.get('ebay_url'),
-                amazon_url=row.get('amazon_url'),
-                mercari_url=row.get('mercari_url'),
-                vinted_url=row.get('vinted_url'),
-                poshmark_url=row.get('poshmark_url'),
-                depop_url=row.get('depop_url'),
-                whatnot_url=row.get('whatnot_url'),
-                A=row.get('A'),
-                B=row.get('B'),
-                S=row.get('S'),
-                C=row.get('C'),
-                location_code=row.get('location_code'),
-                item_thumb=row.get('item_thumb'),
-                supplier=row.get('supplier'),
-                item_cost=row.get('item_cost'),
-                item_price=row.get('item_price'),
-                quantity=row.get('quantity', 1),
-                low_stock_threshold=row.get('low_stock_threshold', 1),
-                is_active=bool(row.get('is_active', True)),
-                category=row.get('category'),
-                listing_date=row.get('listing_date'),
-                purchased_at=row.get('purchased_at'),
-                ebay_item_id=row.get('ebay_item_id'),
-                ebay_listing_id=row.get('ebay_listing_id'),
-                ebay_sku=row.get('ebay_sku'),
-                synced_from_ebay=bool(row.get('synced_from_ebay', False)),
-                last_ebay_sync=row.get('last_ebay_sync'),
-                notes=row.get('notes'),
+                description=get_value(row, 'description'),
+                upc=get_value(row, 'upc'),
+                listing_link=get_value(row, 'listing_link'),
+                web_url=get_value(row, 'web_url'),
+                ebay_url=get_value(row, 'ebay_url'),
+                amazon_url=get_value(row, 'amazon_url'),
+                mercari_url=get_value(row, 'mercari_url'),
+                vinted_url=get_value(row, 'vinted_url'),
+                poshmark_url=get_value(row, 'poshmark_url'),
+                depop_url=get_value(row, 'depop_url'),
+                whatnot_url=get_value(row, 'whatnot_url'),
+                A=get_value(row, 'A'),
+                B=get_value(row, 'B'),
+                S=get_value(row, 'S'),
+                C=get_value(row, 'C'),
+                location_code=get_value(row, 'location_code'),
+                item_thumb=get_value(row, 'item_thumb'),
+                supplier=get_value(row, 'supplier'),
+                item_cost=get_value(row, 'item_cost'),
+                item_price=get_value(row, 'item_price'),
+                quantity=get_value(row, 'quantity', 1),
+                low_stock_threshold=get_value(row, 'low_stock_threshold', 1),
+                is_active=bool(get_value(row, 'is_active', True)),
+                category=get_value(row, 'category'),
+                listing_date=get_value(row, 'listing_date'),
+                purchased_at=get_value(row, 'purchased_at'),
+                ebay_item_id=get_value(row, 'ebay_item_id'),
+                ebay_listing_id=get_value(row, 'ebay_listing_id'),
+                ebay_sku=get_value(row, 'ebay_sku'),
+                synced_from_ebay=bool(get_value(row, 'synced_from_ebay', False)),
+                last_ebay_sync=get_value(row, 'last_ebay_sync'),
+                notes=get_value(row, 'notes'),
                 created_at=row['created_at'],
                 updated_at=row['updated_at']
             )
             # JSON fields
-            if row.get('image_urls'):
+            if get_value(row, 'image_urls'):
                 item.image_urls = row['image_urls']
-            if row.get('tags'):
+            if get_value(row, 'tags'):
                 item.tags = row['tags']
             db.session.add(item)
         db.session.commit()
@@ -193,33 +201,33 @@ def migrate_data():
             sale = Sale(
                 id=row['id'],
                 user_id=row['user_id'],
-                item_id=row.get('item_id'),
+                item_id=get_value(row, 'item_id'),
                 marketplace=row['marketplace'],
-                marketplace_order_id=row.get('marketplace_order_id'),
+                marketplace_order_id=get_value(row, 'marketplace_order_id'),
                 item_title=row['item_title'],
-                item_sku=row.get('item_sku'),
+                item_sku=get_value(row, 'item_sku'),
                 sold_price=row['sold_price'],
-                item_cost=row.get('item_cost'),
-                marketplace_fee=row.get('marketplace_fee', 0),
-                payment_processing_fee=row.get('payment_processing_fee', 0),
-                shipping_cost=row.get('shipping_cost', 0),
-                shipping_charged=row.get('shipping_charged', 0),
-                other_fees=row.get('other_fees', 0),
-                gross_profit=row.get('gross_profit'),
-                net_profit=row.get('net_profit'),
+                item_cost=get_value(row, 'item_cost'),
+                marketplace_fee=get_value(row, 'marketplace_fee', 0),
+                payment_processing_fee=get_value(row, 'payment_processing_fee', 0),
+                shipping_cost=get_value(row, 'shipping_cost', 0),
+                shipping_charged=get_value(row, 'shipping_charged', 0),
+                other_fees=get_value(row, 'other_fees', 0),
+                gross_profit=get_value(row, 'gross_profit'),
+                net_profit=get_value(row, 'net_profit'),
                 sold_at=row['sold_at'],
-                paid_at=row.get('paid_at'),
-                shipped_at=row.get('shipped_at'),
-                tracking_number=row.get('tracking_number'),
-                buyer_username=row.get('buyer_username'),
-                status=row.get('status', 'pending'),
-                return_reason=row.get('return_reason'),
-                returned_at=row.get('returned_at'),
-                refund_amount=row.get('refund_amount'),
-                refund_reason=row.get('refund_reason'),
-                ebay_transaction_id=row.get('ebay_transaction_id'),
-                ebay_buyer_username=row.get('ebay_buyer_username'),
-                notes=row.get('notes'),
+                paid_at=get_value(row, 'paid_at'),
+                shipped_at=get_value(row, 'shipped_at'),
+                tracking_number=get_value(row, 'tracking_number'),
+                buyer_username=get_value(row, 'buyer_username'),
+                status=get_value(row, 'status', 'pending'),
+                return_reason=get_value(row, 'return_reason'),
+                returned_at=get_value(row, 'returned_at'),
+                refund_amount=get_value(row, 'refund_amount'),
+                refund_reason=get_value(row, 'refund_reason'),
+                ebay_transaction_id=get_value(row, 'ebay_transaction_id'),
+                ebay_buyer_username=get_value(row, 'ebay_buyer_username'),
+                notes=get_value(row, 'notes'),
                 created_at=row['created_at'],
                 updated_at=row['updated_at']
             )
@@ -242,13 +250,13 @@ def migrate_data():
                 user_id=row['user_id'],
                 description=row['description'],
                 amount=row['amount'],
-                category=row.get('category'),
+                category=get_value(row, 'category'),
                 expense_date=row['expense_date'],
-                is_recurring=bool(row.get('is_recurring', False)),
-                recurring_frequency=row.get('recurring_frequency'),
-                recurring_day=row.get('recurring_day'),
-                recurring_until=row.get('recurring_until'),
-                notes=row.get('notes'),
+                is_recurring=bool(get_value(row, 'is_recurring', False)),
+                recurring_frequency=get_value(row, 'recurring_frequency'),
+                recurring_day=get_value(row, 'recurring_day'),
+                recurring_until=get_value(row, 'recurring_until'),
+                notes=get_value(row, 'notes'),
                 created_at=row['created_at'],
                 updated_at=row['updated_at']
             )
@@ -264,19 +272,19 @@ def migrate_data():
             job = ImportJob(
                 id=row['id'],
                 user_id=row['user_id'],
-                celery_task_id=row.get('celery_task_id'),
-                import_mode=row.get('import_mode'),
-                listing_status=row.get('listing_status'),
-                status=row.get('status', 'pending'),
-                total_items=row.get('total_items', 0),
-                processed_items=row.get('processed_items', 0),
-                imported_count=row.get('imported_count', 0),
-                updated_count=row.get('updated_count', 0),
-                skipped_count=row.get('skipped_count', 0),
-                error_count=row.get('error_count', 0),
-                error_message=row.get('error_message'),
-                started_at=row.get('started_at'),
-                completed_at=row.get('completed_at'),
+                celery_task_id=get_value(row, 'celery_task_id'),
+                import_mode=get_value(row, 'import_mode'),
+                listing_status=get_value(row, 'listing_status'),
+                status=get_value(row, 'status', 'pending'),
+                total_items=get_value(row, 'total_items', 0),
+                processed_items=get_value(row, 'processed_items', 0),
+                imported_count=get_value(row, 'imported_count', 0),
+                updated_count=get_value(row, 'updated_count', 0),
+                skipped_count=get_value(row, 'skipped_count', 0),
+                error_count=get_value(row, 'error_count', 0),
+                error_message=get_value(row, 'error_message'),
+                started_at=get_value(row, 'started_at'),
+                completed_at=get_value(row, 'completed_at'),
                 created_at=row['created_at']
             )
             db.session.add(job)
@@ -292,10 +300,10 @@ def migrate_data():
                 sub = Subscription(
                     id=row['id'],
                     user_id=row['user_id'],
-                    plan=row.get('plan', 'free'),
-                    status=row.get('status', 'active'),
-                    started_at=row.get('started_at'),
-                    ends_at=row.get('ends_at'),
+                    plan=get_value(row, 'plan', 'free'),
+                    status=get_value(row, 'status', 'active'),
+                    started_at=get_value(row, 'started_at'),
+                    ends_at=get_value(row, 'ends_at'),
                     created_at=row['created_at'],
                     updated_at=row['updated_at']
                 )
