@@ -1900,6 +1900,24 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   will-change: auto;
 }
 
+/* Utility wrapper for consistent alignment next to the sidebar */
+.page-shell {
+  width: 100%;
+  margin: 24px 0;
+}
+
+.page-shell--wide { max-width: 1600px; }
+.page-shell--large { max-width: 1400px; }
+.page-shell--medium { max-width: 1200px; }
+.page-shell--compact { max-width: 800px; }
+.page-shell--narrow { max-width: 640px; }
+
+@media (max-width: 768px) {
+  .page-shell {
+    margin: 16px 0;
+  }
+}
+
 /* ========== Flash Messages (New Layout) ========== */
 .flash-container {
   position: sticky;
