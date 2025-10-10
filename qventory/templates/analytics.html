@@ -268,7 +268,8 @@ new Chart(salesCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 1.6,
     scales: {
       y: {
         beginAtZero: true,
@@ -315,7 +316,8 @@ new Chart(marketplaceCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 1.4,
     plugins: {
       legend: {
         position: 'bottom',
@@ -359,7 +361,8 @@ new Chart(supplierCtx, {
   },
   options: {
     responsive: true,
-    maintainAspectRatio: false,
+    maintainAspectRatio: true,
+    aspectRatio: 1.5,
     plugins: {
       legend: {
         position: 'bottom',
@@ -442,7 +445,7 @@ new Chart(supplierCtx, {
   border-radius: 12px;
   padding: 20px;
   border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 12px 32px rgba(15, 23, 42, 0.25);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.02), 0 10px 24px rgba(15, 23, 42, 0.18);
 }
 
 .metric-label {
@@ -470,16 +473,17 @@ new Chart(supplierCtx, {
   background: var(--card);
   border-radius: 14px;
   border: 1px solid var(--border);
-  padding: 16px;
-  box-shadow: 0 14px 32px rgba(8, 13, 32, 0.25);
+  padding: 16px 16px 12px;
+  box-shadow: 0 14px 28px rgba(8, 13, 32, 0.22);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 260px;
 }
 
 .analytics-chart-card--single {
   max-width: 640px;
   margin: 0 auto 24px;
+  min-height: 280px;
 }
 
 .analytics-chart-card__title {
@@ -494,12 +498,7 @@ new Chart(supplierCtx, {
 
 .analytics-chart-canvas {
   width: 100%;
-  max-width: 100%;
-  height: clamp(220px, 26vw, 280px);
-}
-
-.analytics-chart-card--single .analytics-chart-canvas {
-  height: clamp(260px, 32vw, 340px);
+  height: 100%;
 }
 
 .analytics-modal {
@@ -605,11 +604,11 @@ new Chart(supplierCtx, {
 
 @media (max-width: 768px) {
   .analytics-chart-canvas {
-    height: 220px;
+    min-height: 220px;
   }
 
   .analytics-chart-card--single .analytics-chart-canvas {
-    height: 260px;
+    min-height: 240px;
   }
 }
 </style>
