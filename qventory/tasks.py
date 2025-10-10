@@ -548,8 +548,8 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             inventory_result = import_ebay_inventory.__wrapped__(
                 self,
                 user_id,
-                import_mode=import_mode,
-                listing_status=listing_status
+                import_mode,
+                listing_status
             )
 
             log_task(f"✅ Inventory imported:")
@@ -563,7 +563,7 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             sales_result = import_ebay_sales.__wrapped__(
                 self,
                 user_id,
-                days_back=days_back
+                days_back
             )
 
             log_task(f"✅ Sales imported:")
