@@ -120,15 +120,6 @@
       <img src="{{ url_for('static', filename='icons/icon-32.png') }}" alt="Qventory">
       <strong>Qventory</strong>
     </div>
-
-    <div class="mobile-actions">
-      <a href="{{ url_for('main.new_item') }}" class="mobile-icon-btn">
-        <i class="fas fa-plus"></i>
-      </a>
-      <a href="{{ url_for('main.settings') }}" class="mobile-icon-btn">
-        <i class="fas fa-cog"></i>
-      </a>
-    </div>
   </header>
 
   <!-- Main Content Area -->
@@ -360,7 +351,8 @@
     padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
     padding-top: env(safe-area-inset-top);
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 16px;
     position: fixed;
     top: 0;
     left: 0;
@@ -372,43 +364,33 @@
     background: none;
     border: none;
     color: var(--text);
-    font-size: 20px;
+    font-size: 22px;
     cursor: pointer;
     padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .mobile-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    flex: 1;
   }
 
   .mobile-brand img {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
   }
 
   .mobile-brand strong {
-    font-size: 16px;
+    font-size: 18px;
+    font-weight: 600;
     color: var(--text);
-  }
-
-  .mobile-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .mobile-icon-btn {
-    width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: rgba(96, 165, 250, 0.1);
-    color: #60a5fa;
-    text-decoration: none;
   }
 
   /* ========== Main Content ========== */

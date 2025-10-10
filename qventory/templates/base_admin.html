@@ -340,7 +340,8 @@
     padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
     padding-top: env(safe-area-inset-top);
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 16px;
     z-index: 999;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
@@ -349,25 +350,31 @@
     background: none;
     border: none;
     color: #fff;
-    font-size: 20px;
+    font-size: 22px;
     cursor: pointer;
     padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .admin-mobile-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    flex: 1;
   }
 
   .admin-mobile-brand img {
-    width: 24px;
-    height: 24px;
-    border-radius: 4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
   }
 
   .admin-mobile-brand strong {
-    font-size: 16px;
+    font-size: 18px;
     color: #ef4444;
     font-weight: 600;
   }
@@ -378,15 +385,16 @@
   }
 
   .admin-mobile-icon-btn {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 8px;
-    background: rgba(239, 68, 68, 0.1);
+    background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
     text-decoration: none;
+    font-size: 18px;
   }
 
   /* ========== Admin Main Content ========== */
