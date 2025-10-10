@@ -252,18 +252,39 @@ const chartColors = {
   teal: '#14b8a6'
 };
 
+const salesTrendLabels = {{ sales_trend_labels|tojson }};
+const salesTrendGross = {{ sales_trend_gross|tojson }};
+const salesTrendNet = {{ sales_trend_net|tojson }};
+const marketplaceNames = {{ marketplace_names|tojson }};
+const marketplaceSeries = {{ marketplace_series|tojson }};
+
 // Sales Overview Chart
 const salesCtx = document.getElementById('salesChart').getContext('2d');
 new Chart(salesCtx, {
-  type: 'bar',
+  type: 'line',
   data: {
-    labels: ['Gross Sales', 'Net Profit'],
+    labels: salesTrendLabels,
     datasets: [{
-      label: 'Amount ($)',
-      data: [{{ gross_sales }}, {{ net_sales }}],
-      backgroundColor: [chartColors.primary, chartColors.success],
-      borderRadius: 6,
-      borderSkipped: false
+      label: 'Gross Sales',
+      data: salesTrendGross,
+      borderColor: chartColors.primary,
+      backgroundColor: 'rgba(96, 165, 250, 0.18)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 3,
+      pointBackgroundColor: chartColors.primary
+    },
+    {
+      label: 'Net Profit',
+      data: salesTrendNet,
+      borderColor: chartColors.success,
+      backgroundColor: 'rgba(16, 185, 129, 0.18)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.35,
+      pointRadius: 3,
+      pointBackgroundColor: chartColors.success
     }]
   },
   options: {
@@ -278,11 +299,14 @@ new Chart(salesCtx, {
       },
       x: {
         ticks: { color: '#94a3b8', font: { size: 11 } },
-        grid: { display: false }
+        grid: { color: 'rgba(148,163,184,0.08)' }
       }
     },
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: true,
+        labels: { color: '#cbd5f5', usePointStyle: true, pointStyle: 'circle' }
+      },
       tooltip: {
         backgroundColor: 'rgba(17,24,52,0.92)',
         borderColor: 'rgba(255,255,255,0.08)',
@@ -300,19 +324,27 @@ new Chart(salesCtx, {
 });
 
 // Marketplace Chart
-const marketplaceLabels = {{ sales_by_marketplace.keys()|list|tojson }};
-const marketplaceCounts = {{ sales_by_marketplace.values()|map(attribute='count')|list|tojson }};
-
 const marketplaceCtx = document.getElementById('marketplaceChart').getContext('2d');
+const marketplaceDatasets = marketplaceNames.map((name, idx) => {
+  const palette = [chartColors.primary, chartColors.success, chartColors.warning, chartColors.purple, chartColors.teal, chartColors.danger];
+  const color = palette[idx % palette.length];
+  return {
+    label: name,
+    data: marketplaceSeries[name] || [],
+    borderColor: color,
+    backgroundColor: 'rgba(0,0,0,0)',
+    borderWidth: 2,
+    tension: 0.35,
+    pointRadius: 2,
+    pointBackgroundColor: color
+  };
+});
+
 new Chart(marketplaceCtx, {
-  type: 'doughnut',
+  type: 'line',
   data: {
-    labels: marketplaceLabels,
-    datasets: [{
-      data: marketplaceCounts,
-      backgroundColor: [chartColors.primary, chartColors.success, chartColors.warning, chartColors.purple, chartColors.teal],
-      borderWidth: 0
-    }]
+    labels: salesTrendLabels,
+    datasets: marketplaceDatasets
   },
   options: {
     responsive: true,
@@ -341,22 +373,19 @@ const supplierCounts = {{ listings_by_supplier.values()|map(attribute='count')|l
 
 const supplierCtx = document.getElementById('supplierChart').getContext('2d');
 new Chart(supplierCtx, {
-  type: 'pie',
+  type: 'line',
   data: {
     labels: supplierLabels,
     datasets: [{
+      label: 'Active Listings',
       data: supplierCounts,
-      backgroundColor: [
-        chartColors.primary,
-        chartColors.success,
-        chartColors.warning,
-        chartColors.danger,
-        chartColors.purple,
-        chartColors.teal,
-        '#f472b6',
-        '#fb923c'
-      ],
-      borderWidth: 0
+      borderColor: chartColors.primary,
+      backgroundColor: 'rgba(96, 165, 250, 0.15)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.25,
+      pointRadius: 3,
+      pointBackgroundColor: chartColors.primary
     }]
   },
   options: {

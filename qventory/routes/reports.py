@@ -316,6 +316,7 @@ def analytics():
     from qventory.models.listing import Listing
     from qventory.models.marketplace_credential import MarketplaceCredential
     from sqlalchemy import func
+    from collections import defaultdict
     from datetime import datetime, timedelta
 
     # Check if eBay is connected
@@ -418,6 +419,39 @@ def analytics():
         sales_by_marketplace[mp]['count'] += 1
         sales_by_marketplace[mp]['revenue'] += sale.sold_price
 
+    # Build daily trends
+    daily_totals = defaultdict(lambda: {'gross': 0.0, 'net': 0.0})
+    marketplace_daily = defaultdict(lambda: defaultdict(float))
+    marketplaces_seen = set()
+
+    for sale in sales:
+        if not sale.sold_at:
+            continue
+        date_key = sale.sold_at.strftime("%Y-%m-%d")
+        daily_totals[date_key]['gross'] += sale.sold_price or 0
+        daily_totals[date_key]['net'] += sale.net_profit or 0
+        marketplace_daily[date_key][sale.marketplace] += sale.sold_price or 0
+        marketplaces_seen.add(sale.marketplace)
+
+    sorted_dates = sorted(daily_totals.keys())
+    if not sorted_dates:
+        today_key = datetime.utcnow().strftime("%Y-%m-%d")
+        sorted_dates = [today_key]
+        daily_totals[today_key] = {'gross': 0.0, 'net': 0.0}
+
+    sales_trend_labels = sorted_dates
+    sales_trend_gross = [round(daily_totals[d]['gross'], 2) for d in sorted_dates]
+    sales_trend_net = [round(daily_totals[d]['net'], 2) for d in sorted_dates]
+
+    marketplace_names = sorted(marketplaces_seen) if marketplaces_seen else ['All']
+    marketplace_series = {}
+    for name in marketplace_names:
+        marketplace_series[name] = [
+            round(marketplace_daily[d].get(name, 0.0), 2) for d in sorted_dates
+        ]
+    if not marketplaces_seen:
+        marketplace_series['All'] = [round(daily_totals[d]['gross'], 2) for d in sorted_dates]
+
     return render_template("analytics.html",
                          range_param=range_param,
                          total_sales=total_sales,
@@ -431,7 +465,12 @@ def analytics():
                          sales=sales,
                          ebay_connected=ebay_connected,
                          custom_start=custom_start if range_param == 'custom' else '',
-                         custom_end=custom_end if range_param == 'custom' else '')
+                         custom_end=custom_end if range_param == 'custom' else '',
+                         sales_trend_labels=sales_trend_labels,
+                         sales_trend_gross=sales_trend_gross,
+                         sales_trend_net=sales_trend_net,
+                         marketplace_names=marketplace_names,
+                         marketplace_series=marketplace_series)
 
 
 @reports_bp.route("/api/reports/user-reports")
