@@ -19,7 +19,7 @@
       <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
         <i class="fas fa-receipt"></i> Business Expenses
       </h1>
-      <p style="color:var(--text-secondary);font-size:14px">
+      <p style="color:var(--sub);font-size:14px">
         Track your operational costs: supplies, rent, transportation, and more
       </p>
     </div>
@@ -60,7 +60,7 @@
   </div>
 
   <!-- Expenses Table -->
-  <div style="background:var(--card-bg);border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+  <div style="background:var(--card);border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
     <table class="table" style="width:100%">
       <thead>
         <tr>
@@ -80,7 +80,7 @@
             <td>
               <strong>{{ expense.description }}</strong>
               {% if expense.notes %}
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">{{ expense.notes[:50] }}...</div>
+              <div style="font-size:12px;color:var(--sub);margin-top:4px">{{ expense.notes[:50] }}...</div>
               {% endif %}
             </td>
             <td>
@@ -95,12 +95,12 @@
                   <i class="fas fa-sync-alt"></i> {{ expense.recurring_frequency|capitalize }}
                 </span>
               {% else %}
-                <span style="color:var(--text-secondary)">—</span>
+                <span style="color:var(--sub)">—</span>
               {% endif %}
             </td>
             <td style="text-align:center">
               <button class="btn btn-sm" onclick="editExpense({{ expense.id }})"
-                      style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:4px 8px">
+                      style="background:none;border:none;color:var(--sub);cursor:pointer;padding:4px 8px">
                 <i class="fas fa-edit"></i>
               </button>
               <button class="btn btn-sm" onclick="deleteExpense({{ expense.id }})"
@@ -112,7 +112,7 @@
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="6" style="text-align:center;padding:40px;color:var(--text-secondary)">
+            <td colspan="6" style="text-align:center;padding:40px;color:var(--sub)">
               <i class="fas fa-inbox" style="font-size:48px;opacity:0.3;margin-bottom:16px"></i>
               <p>No expenses recorded yet. Click "Add Expense" to get started.</p>
             </td>
@@ -173,7 +173,7 @@
           </label>
         </div>
 
-        <div id="recurringFields" style="display:none;padding:16px;background:var(--card-bg);border-radius:8px;margin-top:16px">
+        <div id="recurringFields" style="display:none;padding:16px;background:var(--card);border-radius:8px;margin-top:16px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
             <div class="form-group">
               <label>Frequency</label>
@@ -305,115 +305,5 @@ async function deleteExpense(expenseId) {
   }
 }
 </script>
-
-<style>
-.modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 9999;
-}
-
-.modal__backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0,0,0,0.5);
-}
-
-.modal__dialog {
-  position: relative;
-  background: var(--card-bg);
-  margin: 50px auto;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal__header {
-  padding: 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal__header h3 {
-  margin: 0;
-  color: var(--text);
-}
-
-.modal__close {
-  background: none;
-  border: none;
-  font-size: 28px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-}
-
-.modal__body {
-  padding: 20px;
-}
-
-.modal__footer {
-  padding: 20px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.form-control {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--text);
-  font-size: 14px;
-}
-
-.form-control:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-.table {
-  border-collapse: collapse;
-}
-
-.table th {
-  padding: 12px;
-  border-bottom: 2px solid var(--border);
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.table td {
-  padding: 16px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-</style>
 
 {% endblock %}
