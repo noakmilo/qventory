@@ -348,11 +348,12 @@
     height: 60px;
     background: var(--card);
     border-bottom: 1px solid var(--glass-border);
-    padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 0;
     padding-top: env(safe-area-inset-top);
+    padding-left: max(5px, env(safe-area-inset-left));
     align-items: center;
     justify-content: flex-start;
-    gap: 16px;
+    gap: 8px;
     position: fixed;
     top: 0;
     left: 0;
@@ -364,9 +365,10 @@
     background: none;
     border: none;
     color: var(--text);
-    font-size: 22px;
+    font-size: 24px;
     cursor: pointer;
-    padding: 8px;
+    padding: 0;
+    margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;

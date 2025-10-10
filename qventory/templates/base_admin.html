@@ -337,11 +337,12 @@
     height: 60px;
     background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
     border-bottom: 1px solid rgba(239, 68, 68, 0.2);
-    padding: 0 max(16px, env(safe-area-inset-left)) 0 max(16px, env(safe-area-inset-right));
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 0;
     padding-top: env(safe-area-inset-top);
+    padding-left: max(5px, env(safe-area-inset-left));
     align-items: center;
     justify-content: flex-start;
-    gap: 16px;
+    gap: 8px;
     z-index: 999;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
@@ -350,9 +351,10 @@
     background: none;
     border: none;
     color: #fff;
-    font-size: 22px;
+    font-size: 24px;
     cursor: pointer;
-    padding: 8px;
+    padding: 0;
+    margin: 0;
     display: flex;
     align-items: center;
     justify-content: center;
