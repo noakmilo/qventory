@@ -315,6 +315,27 @@ def import_ebay_sales(self, user_id, days_back=None):
                         # Get price for this line item
                         line_total = float(line_item.get('total', {}).get('value', 0))
 
+                        # Extract shipping details from order
+                        shipping_cost = 0.0
+                        shipping_charged = 0.0
+
+                        # Get what buyer paid for shipping (from line item)
+                        line_item_cost = line_item.get('lineItemCost', {})
+                        if line_item_cost:
+                            shipping_charged = float(line_item_cost.get('shippingCost', {}).get('value', 0))
+
+                        # Actual shipping cost seller paid (not always in API, may need to be manual)
+                        # For now, we'll leave it at 0 unless manually entered
+                        # In the future, this could come from shipping label APIs
+
+                        # Calculate eBay fees (approximate - eBay doesn't provide exact fees in Order API)
+                        # Final value fee: ~13.25% for most categories (can vary 10-15%)
+                        # This is an approximation - for exact fees, use eBay Finance API
+                        marketplace_fee = line_total * 0.1325  # ~13.25% eBay final value fee
+
+                        # Payment processing fee (eBay Managed Payments: ~2.9% + $0.30)
+                        payment_fee = line_total * 0.029 + 0.30
+
                         # Try to find matching item in Qventory
                         item = None
                         if sku:
@@ -335,9 +356,12 @@ def import_ebay_sales(self, user_id, days_back=None):
                             # Update existing sale
                             existing_sale.sold_price = line_total
                             existing_sale.status = 'completed' if order_status == 'FULFILLED' else 'shipped'
+                            existing_sale.marketplace_fee = marketplace_fee
+                            existing_sale.payment_processing_fee = payment_fee
+                            existing_sale.shipping_charged = shipping_charged
                             existing_sale.updated_at = datetime.utcnow()
 
-                            # Update fees if available
+                            # Update item cost if available
                             if item and item.item_cost:
                                 existing_sale.item_cost = item.item_cost
 
@@ -355,8 +379,10 @@ def import_ebay_sales(self, user_id, days_back=None):
                                 item_sku=sku,
                                 sold_price=line_total,
                                 item_cost=item.item_cost if item else None,
-                                marketplace_fee=line_total * 0.1325,  # eBay ~13.25% fee (approx)
-                                payment_processing_fee=line_total * 0.029 + 0.30,  # PayPal/payment fee (approx)
+                                marketplace_fee=marketplace_fee,
+                                payment_processing_fee=payment_fee,
+                                shipping_cost=shipping_cost,
+                                shipping_charged=shipping_charged,
                                 sold_at=sold_at,
                                 status='completed' if order_status == 'FULFILLED' else 'shipped',
                                 buyer_username=buyer_username,
@@ -367,7 +393,7 @@ def import_ebay_sales(self, user_id, days_back=None):
                             new_sale.calculate_profit()
                             db.session.add(new_sale)
                             imported_count += 1
-                            log_task(f"  Imported sale: {title[:50]} - ${line_total}")
+                            log_task(f"  Imported sale: {title[:50]} - ${line_total} (Est. fees: ${marketplace_fee + payment_fee:.2f})")
 
                 except Exception as item_error:
                     log_task(f"  ERROR processing line item: {str(item_error)}")

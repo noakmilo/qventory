@@ -66,20 +66,37 @@ class Sale(db.Model):
     item = db.relationship("Item", backref="sales")
 
     def calculate_profit(self):
-        """Calcula gross y net profit"""
+        """
+        Calcula gross y net profit
+
+        Gross Profit = Sold Price - Item Cost
+        Net Profit = Sold Price - Item Cost - Fees - Shipping + Shipping Charged
+
+        Si no hay item_cost:
+        - gross_profit = None
+        - net_profit = sold_price - fees (muestra pérdida/ganancia sin conocer costo)
+        """
+        # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
             self.gross_profit = self.sold_price - self.item_cost
         else:
             self.gross_profit = None
 
+        # Calculate total fees
+        total_fees = (
+            (self.marketplace_fee or 0) +
+            (self.payment_processing_fee or 0) +
+            (self.shipping_cost or 0) +
+            (self.other_fees or 0) -
+            (self.shipping_charged or 0)
+        )
+
+        # Calculate net profit
+        # If we have item_cost, use gross_profit - fees
+        # If we don't have item_cost, show sold_price - fees (partial profit)
         if self.gross_profit is not None:
-            total_fees = (
-                (self.marketplace_fee or 0) +
-                (self.payment_processing_fee or 0) +
-                (self.shipping_cost or 0) +
-                (self.other_fees or 0) -
-                (self.shipping_charged or 0)
-            )
             self.net_profit = self.gross_profit - total_fees
         else:
-            self.net_profit = None
+            # Even without item_cost, show what's left after fees
+            # This gives the seller visibility of actual payout
+            self.net_profit = self.sold_price - total_fees
