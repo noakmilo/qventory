@@ -93,10 +93,13 @@ def migrate_data():
                 enable_A=bool(row['enable_A']),
                 enable_B=bool(row['enable_B']),
                 enable_S=bool(row['enable_S']),
-                enable_C=bool(row['enable_C']),
-                created_at=row['created_at'],
-                updated_at=row['updated_at']
+                enable_C=bool(row['enable_C'])
             )
+            # created_at y updated_at pueden no existir en versiones antiguas
+            if 'created_at' in row.keys() and row['created_at']:
+                setting.created_at = row['created_at']
+            if 'updated_at' in row.keys() and row['updated_at']:
+                setting.updated_at = row['updated_at']
             db.session.add(setting)
         db.session.commit()
         print(f"✅ Migrados {len(settings_data)} settings")
