@@ -1660,6 +1660,8 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   position: fixed;
   left: 0;
   top: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   z-index: 1000;
   overflow-y: auto;
   transition: transform 0.3s ease;
