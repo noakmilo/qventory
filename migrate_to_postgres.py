@@ -308,11 +308,27 @@ def migrate_data():
                     user_id=row['user_id'],
                     plan=get_value(row, 'plan', 'free'),
                     status=get_value(row, 'status', 'active'),
-                    started_at=get_value(row, 'started_at'),
-                    ends_at=get_value(row, 'ends_at'),
                     created_at=row['created_at'],
                     updated_at=row['updated_at']
                 )
+                # Campos opcionales que pueden existir o no
+                if get_value(row, 'started_at'):
+                    sub.started_at = row['started_at']
+                if get_value(row, 'current_period_start'):
+                    sub.current_period_start = row['current_period_start']
+                if get_value(row, 'current_period_end'):
+                    sub.current_period_end = row['current_period_end']
+                # Mapear ends_at (antiguo) a ended_at (nuevo) si existe
+                if get_value(row, 'ends_at'):
+                    sub.ended_at = row['ends_at']
+                elif get_value(row, 'ended_at'):
+                    sub.ended_at = row['ended_at']
+                if get_value(row, 'cancelled_at'):
+                    sub.cancelled_at = row['cancelled_at']
+                if get_value(row, 'trial_ends_at'):
+                    sub.trial_ends_at = row['trial_ends_at']
+                if get_value(row, 'on_trial') is not None:
+                    sub.on_trial = bool(row['on_trial'])
                 db.session.add(sub)
             db.session.commit()
             print(f"✅ Migrados {len(subs_data)} suscripciones")
