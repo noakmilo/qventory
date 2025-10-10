@@ -55,7 +55,7 @@ def migrate_data():
         from qventory.models.sale import Sale
         from qventory.models.expense import Expense
         from qventory.models.marketplace_credential import MarketplaceCredential
-        from qventory.models.settings import Settings
+        from qventory.models.setting import Setting
         from qventory.models.listing import Listing
         from qventory.models.subscription import Subscription
         from qventory.models.import_job import ImportJob
@@ -83,7 +83,7 @@ def migrate_data():
         cursor.execute("SELECT * FROM settings ORDER BY id")
         settings_data = cursor.fetchall()
         for row in settings_data:
-            setting = Settings(
+            setting = Setting(
                 id=row['id'],
                 user_id=row['user_id'],
                 label_A=row['label_A'],
