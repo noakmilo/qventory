@@ -411,11 +411,13 @@ def analytics():
         listings_by_supplier[supplier]['value'] += item.item_price or 0
 
     # Expenses summary (based on sales)
+    # Note: other_fees now contains store subscription prorate
     expenses = {
         "inventory": sum(s.item_cost or 0 for s in sales),
-        "supplies": sum(s.other_fees or 0 for s in sales),
+        "supplies": 0,  # Reserved for future use (packaging, labels, etc.)
         "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
         "shipping": sum(s.shipping_cost or 0 for s in sales),
+        "store_subscription": sum(s.other_fees or 0 for s in sales),  # Store subscription prorated
     }
 
     # New listings created in range

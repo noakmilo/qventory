@@ -265,8 +265,10 @@ def import_ebay_sales(self, user_id, days_back=None):
     with app.app_context():
         from qventory.models.sale import Sale
         from qventory.models.item import Item
+        from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.helpers.ebay_inventory import get_ebay_orders
         from dateutil import parser as date_parser
+        from datetime import datetime, timedelta
 
         if days_back:
             log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
@@ -274,9 +276,20 @@ def import_ebay_sales(self, user_id, days_back=None):
             log_task(f"Starting eBay sales import for user {user_id}, ALL TIME (lifetime)")
 
         try:
+            # Get eBay credentials to check for store subscription
+            ebay_cred = MarketplaceCredential.query.filter_by(
+                user_id=user_id,
+                marketplace='ebay'
+            ).first()
+
+            ebay_store_monthly_fee = ebay_cred.ebay_store_subscription if ebay_cred else 0.0
+
             # Fetch orders from eBay
             orders = get_ebay_orders(user_id, days_back=days_back)
             log_task(f"Fetched {len(orders)} orders from eBay")
+
+            if ebay_store_monthly_fee > 0:
+                log_task(f"eBay Store Subscription detected: ${ebay_store_monthly_fee}/month")
 
             imported_count = 0
             updated_count = 0
@@ -324,9 +337,17 @@ def import_ebay_sales(self, user_id, days_back=None):
                         if line_item_cost:
                             shipping_charged = float(line_item_cost.get('shippingCost', {}).get('value', 0))
 
-                        # Actual shipping cost seller paid (not always in API, may need to be manual)
-                        # For now, we'll leave it at 0 unless manually entered
-                        # In the future, this could come from shipping label APIs
+                        # Alternative: try deliveryCost from line item
+                        if shipping_charged == 0.0:
+                            delivery_cost = line_item.get('deliveryCost', {})
+                            if delivery_cost:
+                                shipping_charged = float(delivery_cost.get('value', 0))
+
+                        # Actual shipping cost seller paid (not in Order API)
+                        # eBay Order API doesn't provide actual shipping label cost
+                        # This needs to come from Shipping Fulfillment API or manual entry
+                        # For now, estimate 70% of charged amount or leave at 0
+                        shipping_cost = 0.0  # User can edit manually
 
                         # Calculate eBay fees (approximate - eBay doesn't provide exact fees in Order API)
                         # Final value fee: ~13.25% for most categories (can vary 10-15%)
@@ -335,6 +356,14 @@ def import_ebay_sales(self, user_id, days_back=None):
 
                         # Payment processing fee (eBay Managed Payments: ~2.9% + $0.30)
                         payment_fee = line_total * 0.029 + 0.30
+
+                        # Calculate prorated store subscription fee (if any)
+                        # Distribute monthly fee across all sales in the month
+                        store_fee_per_sale = 0.0
+                        if ebay_store_monthly_fee > 0 and len(orders) > 0:
+                            # Simple approach: divide by total orders in this import
+                            # More accurate would be: monthly fee / sales in that month
+                            store_fee_per_sale = ebay_store_monthly_fee / len(orders)
 
                         # Try to find matching item in Qventory
                         item = None
@@ -359,6 +388,7 @@ def import_ebay_sales(self, user_id, days_back=None):
                             existing_sale.marketplace_fee = marketplace_fee
                             existing_sale.payment_processing_fee = payment_fee
                             existing_sale.shipping_charged = shipping_charged
+                            existing_sale.other_fees = store_fee_per_sale  # Store subscription prorate
                             existing_sale.updated_at = datetime.utcnow()
 
                             # Update item cost if available
@@ -383,6 +413,7 @@ def import_ebay_sales(self, user_id, days_back=None):
                                 payment_processing_fee=payment_fee,
                                 shipping_cost=shipping_cost,
                                 shipping_charged=shipping_charged,
+                                other_fees=store_fee_per_sale,  # Store subscription prorate
                                 sold_at=sold_at,
                                 status='completed' if order_status == 'FULFILLED' else 'shipped',
                                 buyer_username=buyer_username,
@@ -393,7 +424,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                             new_sale.calculate_profit()
                             db.session.add(new_sale)
                             imported_count += 1
-                            log_task(f"  Imported sale: {title[:50]} - ${line_total} (Est. fees: ${marketplace_fee + payment_fee:.2f})")
+                            total_fees = marketplace_fee + payment_fee + store_fee_per_sale
+                            log_task(f"  Imported sale: {title[:50]} - ${line_total} (Fees: ${total_fees:.2f}, Ship: ${shipping_charged:.2f})")
 
                 except Exception as item_error:
                     log_task(f"  ERROR processing line item: {str(item_error)}")

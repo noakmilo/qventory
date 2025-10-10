@@ -137,16 +137,20 @@
       <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['inventory']) }}</strong>
     </div>
     <div class="analytics-expense-card">
-      <span class="analytics-expense-label"><i class="fas fa-toolbox"></i> Supplies</span>
-      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['supplies']) }}</strong>
-    </div>
-    <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-receipt"></i> Marketplace Fees</span>
       <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['marketplace']) }}</strong>
     </div>
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-shipping-fast"></i> Shipping</span>
       <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['shipping']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fab fa-ebay"></i> Store Subscription</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['store_subscription']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-toolbox"></i> Other Fees</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['supplies']) }}</strong>
     </div>
   </div>
 
