@@ -120,22 +120,75 @@
       <canvas id="salesChart" class="analytics-chart-canvas"></canvas>
     </div>
 
-    <!-- Sales by Marketplace -->
+    <!-- New Listings Chart -->
     <div class="analytics-chart-card">
       <h3 class="analytics-chart-card__title">
-        <i class="fas fa-store"></i> Sales by Marketplace
+        <i class="fas fa-signal"></i> New Listings
       </h3>
-      <canvas id="marketplaceChart" class="analytics-chart-canvas"></canvas>
+      <canvas id="listingsChart" class="analytics-chart-canvas"></canvas>
     </div>
 
   </div>
 
-  <!-- Listings by Supplier Pie Chart -->
-  <div class="analytics-chart-card analytics-chart-card--single">
-    <h3 class="analytics-chart-card__title">
-      <i class="fas fa-chart-pie"></i> Active Listings by Supplier
-    </h3>
-    <canvas id="supplierChart" class="analytics-chart-canvas"></canvas>
+  <!-- Expenses -->
+  <div class="analytics-expenses">
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-box"></i> Inventory Spend</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['inventory']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-toolbox"></i> Supplies</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['supplies']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-receipt"></i> Marketplace Fees</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['marketplace']) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-shipping-fast"></i> Shipping</span>
+      <strong class="analytics-expense-value">${{ "%.2f"|format(expenses['shipping']) }}</strong>
+    </div>
+  </div>
+
+  <!-- Top products -->
+  <div class="analytics-top">
+    <div class="analytics-top__header">
+      <h3><i class="fas fa-trophy"></i> Top 10 Best Sellers</h3>
+    </div>
+    {% if top_sales %}
+    <table class="analytics-top__table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Marketplace</th>
+          <th>Sold Price</th>
+          <th>Net Profit</th>
+          <th>Sold At</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sale in top_sales %}
+        <tr>
+          <td>
+            <strong>{{ sale.item_title }}</strong>
+            {% if sale.item_sku %}<div class="analytics-top__sku">SKU: {{ sale.item_sku }}</div>{% endif %}
+          </td>
+          <td>{{ sale.marketplace|capitalize }}</td>
+          <td>${{ "%.2f"|format(sale.sold_price or 0) }}</td>
+          <td class="{{ 'positive' if (sale.net_profit or 0) >= 0 else 'negative' }}">
+            ${{ "%.2f"|format(sale.net_profit or 0) }}
+          </td>
+          <td>{{ sale.sold_at.strftime('%Y-%m-%d') if sale.sold_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="analytics-top__empty">
+      <i class="fas fa-info-circle"></i>
+      <p>No sales recorded for this range.</p>
+    </div>
+    {% endif %}
   </div>
 
 
@@ -255,8 +308,8 @@ const chartColors = {
 const salesTrendLabels = {{ sales_trend_labels|tojson }};
 const salesTrendGross = {{ sales_trend_gross|tojson }};
 const salesTrendNet = {{ sales_trend_net|tojson }};
-const marketplaceNames = {{ marketplace_names|tojson }};
-const marketplaceSeries = {{ marketplace_series|tojson }};
+const newListingsLabels = {{ new_listings_labels|tojson }};
+const newListingsCounts = {{ new_listings_counts|tojson }};
 
 // Sales Overview Chart
 const salesCtx = document.getElementById('salesChart').getContext('2d');
@@ -323,79 +376,42 @@ new Chart(salesCtx, {
   }
 });
 
-// Marketplace Chart
-const marketplaceCtx = document.getElementById('marketplaceChart').getContext('2d');
-const marketplaceDatasets = marketplaceNames.map((name, idx) => {
-  const palette = [chartColors.primary, chartColors.success, chartColors.warning, chartColors.purple, chartColors.teal, chartColors.danger];
-  const color = palette[idx % palette.length];
-  return {
-    label: name,
-    data: marketplaceSeries[name] || [],
-    borderColor: color,
-    backgroundColor: 'rgba(0,0,0,0)',
-    borderWidth: 2,
-    tension: 0.35,
-    pointRadius: 2,
-    pointBackgroundColor: color
-  };
-});
-
-new Chart(marketplaceCtx, {
+// New Listings Chart
+const listingsCtx = document.getElementById('listingsChart').getContext('2d');
+new Chart(listingsCtx, {
   type: 'line',
   data: {
-    labels: salesTrendLabels,
-    datasets: marketplaceDatasets
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: true,
-    aspectRatio: 1.4,
-    plugins: {
-      legend: {
-        position: 'bottom',
-        labels: { color: '#94a3b8', padding: 12, font: { size: 11 } }
-      },
-      tooltip: {
-        backgroundColor: 'rgba(17,24,52,0.92)',
-        borderColor: 'rgba(255,255,255,0.08)',
-        borderWidth: 1,
-        titleColor: '#e2e8f0',
-        bodyColor: '#cbd5f5',
-        padding: 10
-      }
-    }
-  }
-});
-
-// Supplier Chart
-const supplierLabels = {{ listings_by_supplier.keys()|list|tojson }};
-const supplierCounts = {{ listings_by_supplier.values()|map(attribute='count')|list|tojson }};
-
-const supplierCtx = document.getElementById('supplierChart').getContext('2d');
-new Chart(supplierCtx, {
-  type: 'line',
-  data: {
-    labels: supplierLabels,
+    labels: newListingsLabels,
     datasets: [{
-      label: 'Active Listings',
-      data: supplierCounts,
-      borderColor: chartColors.primary,
-      backgroundColor: 'rgba(96, 165, 250, 0.15)',
+      label: 'New Listings',
+      data: newListingsCounts,
+      borderColor: chartColors.purple,
+      backgroundColor: 'rgba(139, 92, 246, 0.18)',
       borderWidth: 2,
       fill: true,
-      tension: 0.25,
+      tension: 0.35,
       pointRadius: 3,
-      pointBackgroundColor: chartColors.primary
+      pointBackgroundColor: chartColors.purple
     }]
   },
   options: {
     responsive: true,
     maintainAspectRatio: true,
-    aspectRatio: 1.5,
+    aspectRatio: 1.6,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: { color: '#94a3b8', font: { size: 11 } },
+        grid: { color: 'rgba(148,163,184,0.12)' }
+      },
+      x: {
+        ticks: { color: '#94a3b8', font: { size: 11 } },
+        grid: { color: 'rgba(148,163,184,0.08)' }
+      }
+    },
     plugins: {
       legend: {
-        position: 'bottom',
-        labels: { color: '#94a3b8', padding: 12, font: { size: 11 } }
+        display: false
       },
       tooltip: {
         backgroundColor: 'rgba(17,24,52,0.92)',
@@ -405,9 +421,6 @@ new Chart(supplierCtx, {
         bodyColor: '#cbd5f5',
         padding: 10
       }
-    },
-    layout: {
-      padding: { top: 8, bottom: 8, left: 4, right: 4 }
     }
   }
 });
@@ -528,6 +541,108 @@ new Chart(supplierCtx, {
 .analytics-chart-canvas {
   width: 100%;
   height: 100%;
+}
+
+.analytics-expenses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin: 12px 0 28px;
+}
+
+.analytics-expense-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 12px 28px rgba(8, 13, 32, 0.2);
+}
+
+.analytics-expense-label {
+  color: var(--sub);
+  font-size: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.analytics-expense-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.analytics-top {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 16px 36px rgba(8, 13, 32, 0.28);
+}
+
+.analytics-top__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.analytics-top__header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.analytics-top__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.analytics-top__table th,
+.analytics-top__table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148,163,184,0.14);
+  text-align: left;
+}
+
+.analytics-top__table th {
+  color: var(--sub);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.analytics-top__table tr:last-child td {
+  border-bottom: none;
+}
+
+.analytics-top__sku {
+  font-size: 11px;
+  color: var(--sub);
+  margin-top: 4px;
+}
+
+.analytics-top__table td.positive {
+  color: #10b981;
+}
+
+.analytics-top__table td.negative {
+  color: #f97316;
+}
+
+.analytics-top__empty {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--sub);
+  font-size: 14px;
 }
 
 .analytics-modal {

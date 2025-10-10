@@ -410,14 +410,26 @@ def analytics():
         listings_by_supplier[supplier]['count'] += 1
         listings_by_supplier[supplier]['value'] += item.item_price or 0
 
-    # Sales by marketplace
-    sales_by_marketplace = {}
-    for sale in sales:
-        mp = sale.marketplace
-        if mp not in sales_by_marketplace:
-            sales_by_marketplace[mp] = {'count': 0, 'revenue': 0}
-        sales_by_marketplace[mp]['count'] += 1
-        sales_by_marketplace[mp]['revenue'] += sale.sold_price
+    # Expenses summary (based on sales)
+    expenses = {
+        "inventory": sum(s.item_cost or 0 for s in sales),
+        "supplies": sum(s.other_fees or 0 for s in sales),
+        "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
+        "shipping": sum(s.shipping_cost or 0 for s in sales),
+    }
+
+    # New listings created in range
+    listing_daily = defaultdict(int)
+    listing_start = start_date.date()
+    listing_end = (end_date - timedelta(days=1)).date()
+    new_items_query = Item.query.filter(
+        Item.user_id == current_user.id,
+        Item.listing_date.isnot(None),
+        Item.listing_date >= listing_start,
+        Item.listing_date <= listing_end
+    )
+    for item in new_items_query:
+        listing_daily[item.listing_date.strftime("%Y-%m-%d")] += 1
 
     # Build daily trends
     daily_totals = defaultdict(lambda: {'gross': 0.0, 'net': 0.0})
@@ -443,14 +455,12 @@ def analytics():
     sales_trend_gross = [round(daily_totals[d]['gross'], 2) for d in sorted_dates]
     sales_trend_net = [round(daily_totals[d]['net'], 2) for d in sorted_dates]
 
-    marketplace_names = sorted(marketplaces_seen) if marketplaces_seen else ['All']
-    marketplace_series = {}
-    for name in marketplace_names:
-        marketplace_series[name] = [
-            round(marketplace_daily[d].get(name, 0.0), 2) for d in sorted_dates
-        ]
-    if not marketplaces_seen:
-        marketplace_series['All'] = [round(daily_totals[d]['gross'], 2) for d in sorted_dates]
+    new_listing_dates = sorted(listing_daily.keys())
+    new_listings_labels = new_listing_dates if new_listing_dates else sales_trend_labels
+    new_listings_counts = [listing_daily.get(d, 0) for d in new_listings_labels]
+
+    # Top products by sale price
+    top_sales = sorted(sales, key=lambda s: s.sold_price or 0, reverse=True)[:10]
 
     return render_template("analytics.html",
                          range_param=range_param,
@@ -461,7 +471,6 @@ def analytics():
                          avg_net_per_sale=avg_net_per_sale,
                          npm=npm,
                          listings_by_supplier=listings_by_supplier,
-                         sales_by_marketplace=sales_by_marketplace,
                          sales=sales,
                          ebay_connected=ebay_connected,
                          custom_start=custom_start if range_param == 'custom' else '',
@@ -469,8 +478,10 @@ def analytics():
                          sales_trend_labels=sales_trend_labels,
                          sales_trend_gross=sales_trend_gross,
                          sales_trend_net=sales_trend_net,
-                         marketplace_names=marketplace_names,
-                         marketplace_series=marketplace_series)
+                         new_listings_labels=new_listings_labels,
+                         new_listings_counts=new_listings_counts,
+                         expenses=expenses,
+                         top_sales=top_sales)
 
 
 @reports_bp.route("/api/reports/user-reports")
