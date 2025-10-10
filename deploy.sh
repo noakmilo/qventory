@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # ============================================================================
-# Qventory Production Deploy Script with Flask-Migrate
+# Qventory Production Deploy Script with Flask-Migrate + PostgreSQL
 # ============================================================================
 # Este script:
-# 1. Hace backup automático de la DB (con -wal y -shm)
+# 1. Hace backup automático de PostgreSQL (pg_dump)
 # 2. Actualiza código (git pull)
 # 3. Instala dependencias
 # 4. Aplica migraciones de DB (flask db upgrade)
-# 5. Reinicia servicio
+# 5. Reinicia servicios
 #
 # IMPORTANTE: Con Flask-Migrate, la DB NO se mueve ni restaura.
 #             La DB persistente ES la fuente de verdad.
@@ -22,39 +22,37 @@ APP_DIR="/opt/qventory/qventory"
 VENV_BIN="/opt/qventory/qventory/qventory/bin"
 SERVICE_NAME="qventory"
 
-PERSIST_DIR="/opt/qventory/data"
-PERSIST_DB="${PERSIST_DIR}/app.db"
+# PostgreSQL settings
+PG_DATABASE="qventory_db"
+PG_USER="qventory_user"
 BACKUP_DIR="/opt/qventory/backups"
 
 # === Utilidades ===
 timestamp() { date +%Y%m%d-%H%M%S; }
 log() { printf "\n==> %s\n" "$*"; }
 
-backup_sqlite_trio() {
-  local src="$1" base dst ts
-  [ -f "$src" ] || return 0
+backup_postgresql() {
+  local ts dst
   ts="$(timestamp)"
-  base="$(basename "$src")"
-  dst="${BACKUP_DIR}/${base}.${ts}.bak"
-  cp -a "$src" "$dst"
-  [ -f "${src}-wal" ] && cp -a "${src}-wal" "${dst}-wal" || true
-  [ -f "${src}-shm" ] && cp -a "${src}-shm" "${dst}-shm" || true
-  log "Backup creado: ${dst}"
+  dst="${BACKUP_DIR}/qventory_db_${ts}.sql"
+
+  log "Haciendo backup de PostgreSQL: ${PG_DATABASE}"
+  sudo -u postgres pg_dump "${PG_DATABASE}" > "${dst}"
+
+  # Comprimir backup para ahorrar espacio
+  gzip "${dst}"
+  log "Backup creado: ${dst}.gz"
 }
 
 # === Prechecks ===
-mkdir -p "${PERSIST_DIR}" "${BACKUP_DIR}"
+mkdir -p "${BACKUP_DIR}"
 git config --global --add safe.directory "${APP_DIR}" || true
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 grep -q github.com ~/.ssh/known_hosts 2>/dev/null || ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-# === 1) Backup de DB persistente ===
-if [ -f "${PERSIST_DB}" ]; then
-  log "Haciendo backup de base de datos"
-  backup_sqlite_trio "${PERSIST_DB}"
-else
-  log "No existe DB persistente todavía (primer deploy)"
-fi
+# === 1) Backup de PostgreSQL ===
+log "Creando backup de base de datos PostgreSQL"
+backup_postgresql
 
 # === 2) Actualizar código ===
 cd "${APP_DIR}"
@@ -119,9 +117,7 @@ PY
 # === 6) Limpiar backups antiguos (mantener últimos 10) ===
 log "Limpiando backups antiguos (manteniendo últimos 10)"
 cd "${BACKUP_DIR}"
-ls -t app.db.*.bak 2>/dev/null | tail -n +11 | xargs -r rm -f
-ls -t app.db.*.bak-wal 2>/dev/null | tail -n +11 | xargs -r rm -f
-ls -t app.db.*.bak-shm 2>/dev/null | tail -n +11 | xargs -r rm -f
+ls -t qventory_db_*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 
 # === 7) Reiniciar servicios ===
 log "Reiniciando servicio ${SERVICE_NAME}"
@@ -142,15 +138,21 @@ log "
 ✅ Deploy completado exitosamente
 ============================================================================
 Backup guardado en: ${BACKUP_DIR}
-Base de datos: ${PERSIST_DB}
+Base de datos: PostgreSQL - ${PG_DATABASE}
 Migraciones aplicadas: $(${VENV_BIN}/flask db current 2>/dev/null || echo 'N/A')
 
 Para ver logs en vivo:
   sudo journalctl -u ${SERVICE_NAME} -f
 
-Para rollback en caso de emergencia:
-  sudo systemctl stop ${SERVICE_NAME}
-  cp ${BACKUP_DIR}/app.db.[timestamp].bak ${PERSIST_DB}
-  sudo systemctl start ${SERVICE_NAME}
+Para rollback de base de datos en caso de emergencia:
+  # Listar backups disponibles:
+  ls -lth ${BACKUP_DIR}/qventory_db_*.sql.gz | head -5
+
+  # Restaurar backup (reemplaza TIMESTAMP con la fecha del backup):
+  gunzip -c ${BACKUP_DIR}/qventory_db_TIMESTAMP.sql.gz | sudo -u postgres psql ${PG_DATABASE}
+
+  # Reiniciar servicios:
+  sudo systemctl restart ${SERVICE_NAME}
+  sudo systemctl restart celery-qventory
 ============================================================================
 "
