@@ -326,14 +326,18 @@ def analytics():
 
     # Get date range from query params (default: last 30 days)
     range_param = request.args.get('range', 'last_30_days')
+    custom_start = request.args.get('start')
+    custom_end = request.args.get('end')
 
     # Calculate date range
     now = datetime.utcnow()
+    end_date = now
+
     if range_param == 'today':
         start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
     elif range_param == 'yesterday':
-        start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = (end_date - timedelta(days=1))
     elif range_param == 'last_7_days':
         start_date = now - timedelta(days=7)
     elif range_param == 'last_30_days':
@@ -348,13 +352,37 @@ def analytics():
         start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     elif range_param == 'all_time':
         start_date = datetime(2000, 1, 1)
+    elif range_param == 'custom' and custom_start and custom_end:
+        try:
+            start_date = datetime.strptime(custom_start, "%Y-%m-%d")
+            parsed_end = datetime.strptime(custom_end, "%Y-%m-%d")
+            if parsed_end < start_date:
+                start_date, parsed_end = parsed_end, start_date
+            actual_end = parsed_end
+            # make end exclusive by adding one day
+            end_date = parsed_end + timedelta(days=1)
+        except ValueError:
+            range_param = 'last_30_days'
+            start_date = now - timedelta(days=30)
+            custom_start = ''
+            custom_end = ''
+        else:
+            # cap end_date to now to avoid future dates
+            if end_date > now + timedelta(days=1):
+                end_date = now + timedelta(days=1)
+                actual_end = now
+            custom_start = start_date.strftime("%Y-%m-%d")
+            custom_end = actual_end.strftime("%Y-%m-%d")
     else:
         start_date = now - timedelta(days=30)
+        custom_start = '' if range_param != 'custom' else custom_start
+        custom_end = '' if range_param != 'custom' else custom_end
 
     # Query sales in date range (only completed sales)
     sales_query = Sale.query.filter(
         Sale.user_id == current_user.id,
         Sale.sold_at >= start_date,
+        Sale.sold_at < end_date,
         Sale.status.in_(['completed', 'shipped', 'paid'])
     )
 
@@ -401,7 +429,9 @@ def analytics():
                          listings_by_supplier=listings_by_supplier,
                          sales_by_marketplace=sales_by_marketplace,
                          sales=sales,
-                         ebay_connected=ebay_connected)
+                         ebay_connected=ebay_connected,
+                         custom_start=custom_start if range_param == 'custom' else '',
+                         custom_end=custom_end if range_param == 'custom' else '')
 
 
 @reports_bp.route("/api/reports/user-reports")
