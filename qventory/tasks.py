@@ -502,3 +502,105 @@ def import_ebay_sales(self, user_id, days_back=None):
             log_task(f"Traceback: {traceback.format_exc()}")
             db.session.rollback()
             raise
+
+
+@celery.task(bind=True, name='qventory.tasks.import_ebay_complete')
+def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='ACTIVE', days_back=None):
+    """
+    Complete eBay import: Inventory + Sales in one task
+
+    This replaces the need to run two separate imports.
+
+    Args:
+        user_id: Qventory user ID
+        import_mode: 'new_only', 'update_existing', or 'sync_all' (for inventory)
+        listing_status: 'ACTIVE' or 'ALL' (for inventory)
+        days_back: How many days back to fetch sales (None = all time)
+
+    Returns:
+        dict with combined import results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.import_job import ImportJob
+
+        log_task(f"=== Starting COMPLETE eBay import for user {user_id} ===")
+        log_task(f"Inventory mode: {import_mode}, Status: {listing_status}")
+        log_task(f"Sales: last {days_back} days" if days_back else "Sales: ALL TIME")
+
+        # Create ImportJob to track overall progress
+        job = ImportJob(
+            user_id=user_id,
+            celery_task_id=self.request.id,
+            import_mode=import_mode,
+            listing_status=listing_status,
+            status='processing',
+            started_at=datetime.utcnow()
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        try:
+            # STEP 1: Import Inventory (Active Listings)
+            log_task("\n📦 STEP 1/2: Importing active inventory...")
+
+            inventory_result = import_ebay_inventory.__wrapped__(
+                self,
+                user_id,
+                import_mode=import_mode,
+                listing_status=listing_status
+            )
+
+            log_task(f"✅ Inventory imported:")
+            log_task(f"   - Imported: {inventory_result.get('imported', 0)}")
+            log_task(f"   - Updated: {inventory_result.get('updated', 0)}")
+            log_task(f"   - Skipped: {inventory_result.get('skipped', 0)}")
+
+            # STEP 2: Import Sales/Orders
+            log_task("\n💰 STEP 2/2: Importing sales/orders...")
+
+            sales_result = import_ebay_sales.__wrapped__(
+                self,
+                user_id,
+                days_back=days_back
+            )
+
+            log_task(f"✅ Sales imported:")
+            log_task(f"   - Imported: {sales_result.get('imported', 0)}")
+            log_task(f"   - Updated: {sales_result.get('updated', 0)}")
+            log_task(f"   - Skipped: {sales_result.get('skipped', 0)}")
+
+            # Update job with combined stats
+            job.status = 'completed'
+            job.completed_at = datetime.utcnow()
+            job.total_items = inventory_result.get('total', 0)
+            job.imported_count = inventory_result.get('imported', 0) + sales_result.get('imported', 0)
+            job.updated_count = inventory_result.get('updated', 0) + sales_result.get('updated', 0)
+            job.skipped_count = inventory_result.get('skipped', 0) + sales_result.get('skipped', 0)
+            db.session.commit()
+
+            log_task("\n🎉 === COMPLETE import finished successfully ===")
+
+            return {
+                'success': True,
+                'inventory': inventory_result,
+                'sales': sales_result,
+                'summary': {
+                    'total_imported': job.imported_count,
+                    'total_updated': job.updated_count,
+                    'total_skipped': job.skipped_count
+                }
+            }
+
+        except Exception as e:
+            log_task(f"\n✗ ERROR in complete import: {str(e)}")
+            import traceback
+            log_task(f"Traceback: {traceback.format_exc()}")
+
+            job.status = 'failed'
+            job.completed_at = datetime.utcnow()
+            job.error_message = str(e)
+            db.session.commit()
+
+            raise

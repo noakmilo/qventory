@@ -763,37 +763,37 @@ def import_ebay():
         return jsonify({"ok": False, "error": "eBay account not connected"}), 400
 
     try:
-        from qventory.models.import_job import ImportJob
-        from qventory.tasks import import_ebay_inventory as import_task
+        from qventory.tasks import import_ebay_complete as import_task
 
         import_mode = request.form.get('import_mode', 'new_only')
         listing_status = request.form.get('listing_status', 'ACTIVE')
+        days_back = request.form.get('days_back', None)  # For sales import (None = all time)
+
+        if days_back:
+            try:
+                days_back = int(days_back)
+            except:
+                days_back = None
 
         log_import(f"Import mode: {import_mode}")
         log_import(f"Listing status: {listing_status}")
+        log_import(f"Sales days back: {days_back if days_back else 'ALL TIME'}")
 
-        # Start Celery task
-        log_import("Dispatching Celery task...")
-        task = import_task.delay(current_user.id, import_mode, listing_status)
-
-        # Create ImportJob record
-        job = ImportJob(
-            user_id=current_user.id,
-            celery_task_id=task.id,
+        # Start COMPLETE Celery task (inventory + sales)
+        log_import("Dispatching COMPLETE import task (inventory + sales)...")
+        task = import_task.delay(
+            current_user.id,
             import_mode=import_mode,
             listing_status=listing_status,
-            status='pending'
+            days_back=days_back
         )
-        db.session.add(job)
-        db.session.commit()
 
-        log_import(f"Task dispatched: {task.id}, Job ID: {job.id}")
+        log_import(f"Task dispatched: {task.id}")
 
         return jsonify({
             "ok": True,
-            "job_id": job.id,
             "task_id": task.id,
-            "message": "Import started in background. You'll be notified when complete."
+            "message": "Complete import started (inventory + sales). You'll be notified when finished."
         })
 
     except Exception as e:

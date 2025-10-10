@@ -25,17 +25,16 @@
     </div>
 
     {% if ebay_connected %}
-    <div>
-      <form method="post" action="{{ url_for('reports.import_ebay_sales_route') }}" style="display:inline-block">
-        <input type="hidden" name="days_back" value="all">
-        <button type="submit" class="btn btn-primary" style="display:flex;align-items:center;gap:8px">
-          <i class="fab fa-ebay"></i>
-          <span>Import eBay Sales</span>
-        </button>
-      </form>
-      <p style="color:var(--sub);font-size:12px;margin-top:6px;text-align:right">
-        All Time (Lifetime)
-      </p>
+    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:12px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <i class="fas fa-info-circle" style="color:#3b82f6"></i>
+        <div style="font-size:13px">
+          <div style="color:var(--text);font-weight:600;margin-bottom:2px">Sales import automatically with inventory</div>
+          <div style="color:var(--sub)">
+            Go to <a href="{{ url_for('main.dashboard') }}" style="color:#3b82f6">Dashboard</a> → <strong>Import from eBay</strong> to sync both inventory and sales.
+          </div>
+        </div>
+      </div>
     </div>
     {% endif %}
   </div>
