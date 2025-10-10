@@ -545,7 +545,8 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             # STEP 1: Import Inventory (Active Listings)
             log_task("\n📦 STEP 1/2: Importing active inventory...")
 
-            inventory_result = import_ebay_inventory.__wrapped__(
+            # Call the wrapped function directly (pass self since it's bind=True)
+            inventory_result = import_ebay_inventory(
                 self,
                 user_id,
                 import_mode,
@@ -560,7 +561,7 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             # STEP 2: Import Sales/Orders
             log_task("\n💰 STEP 2/2: Importing sales/orders...")
 
-            sales_result = import_ebay_sales.__wrapped__(
+            sales_result = import_ebay_sales(
                 self,
                 user_id,
                 days_back
