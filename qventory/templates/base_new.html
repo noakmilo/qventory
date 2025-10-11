@@ -30,10 +30,13 @@
         <strong>Qventory</strong>
         <span class="beta-badge-sidebar">BETA</span>
       </div>
+      <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseToggle" aria-label="Toggle sidebar" aria-expanded="true">
+        <i class="fas fa-angles-left"></i>
+      </button>
     </div>
 
     <nav class="sidebar-nav">
-      <a href="{{ url_for('main.dashboard') }}" class="sidebar-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+      <a href="{{ url_for('main.dashboard') }}" class="sidebar-item {% if request.endpoint == 'main.dashboard' %}active{% endif %}" title="Dashboard">
         <i class="fas fa-home"></i>
         <span>Dashboard</span>
       </a>
@@ -41,51 +44,51 @@
       <!-- Inventory Section -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Inventory</div>
-        <a href="{{ url_for('main.inventory_active') }}" class="sidebar-item {% if 'inventory_active' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('main.inventory_active') }}" class="sidebar-item {% if 'inventory_active' in request.endpoint %}active{% endif %}" title="Active Inventory">
           <i class="fas fa-box"></i>
           <span>Active</span>
         </a>
-        <a href="{{ url_for('main.inventory_sold') }}" class="sidebar-item {% if 'inventory_sold' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('main.inventory_sold') }}" class="sidebar-item {% if 'inventory_sold' in request.endpoint %}active{% endif %}" title="Sold Inventory">
           <i class="fas fa-check-circle"></i>
           <span>Sold</span>
         </a>
-        <a href="{{ url_for('main.inventory_ended') }}" class="sidebar-item {% if 'inventory_ended' in request.endpoint %}active{% endif %}">
+        <a href="{{ url_for('main.inventory_ended') }}" class="sidebar-item {% if 'inventory_ended' in request.endpoint %}active{% endif %}" title="Ended Inventory">
           <i class="fas fa-times-circle"></i>
           <span>Ended</span>
         </a>
       </div>
 
-      <a href="{{ url_for('reports.analytics') }}" class="sidebar-item {% if 'analytics' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('reports.analytics') }}" class="sidebar-item {% if 'analytics' in request.endpoint %}active{% endif %}" title="Analytics">
         <i class="fas fa-chart-bar"></i>
         <span>Analytics</span>
       </a>
 
-      <a href="{{ url_for('expenses.expenses_page') }}" class="sidebar-item {% if 'expenses' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('expenses.expenses_page') }}" class="sidebar-item {% if 'expenses' in request.endpoint %}active{% endif %}" title="Expenses">
         <i class="fas fa-receipt"></i>
         <span>Expenses</span>
       </a>
 
-      <a href="{{ url_for('main.fulfillment') }}" class="sidebar-item {% if 'fulfillment' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('main.fulfillment') }}" class="sidebar-item {% if 'fulfillment' in request.endpoint %}active{% endif %}" title="Fulfillment">
         <i class="fas fa-shipping-fast"></i>
         <span>Fulfillment</span>
       </a>
 
-      <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}" title="Add Item">
         <i class="fas fa-plus-circle"></i>
         <span>Add Item</span>
       </a>
 
-      <a href="{{ url_for('main.ai_research') }}" class="sidebar-item {% if 'ai_research' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('main.ai_research') }}" class="sidebar-item {% if 'ai_research' in request.endpoint %}active{% endif %}" title="AI Research">
         <i class="fas fa-robot"></i>
         <span>AI Research</span>
       </a>
 
-      <a href="{{ url_for('main.qr_batch') }}" class="sidebar-item {% if 'qr_batch' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('main.qr_batch') }}" class="sidebar-item {% if 'qr_batch' in request.endpoint %}active{% endif %}" title="QR Batch">
         <i class="fas fa-qrcode"></i>
         <span>QR Batch</span>
       </a>
 
-      <a href="{{ url_for('main.settings') }}" class="sidebar-item {% if 'settings' in request.endpoint %}active{% endif %}">
+      <a href="{{ url_for('main.settings') }}" class="sidebar-item {% if 'settings' in request.endpoint %}active{% endif %}" title="Settings">
         <i class="fas fa-cog"></i>
         <span>Settings</span>
       </a>
@@ -94,7 +97,7 @@
       <!-- Admin Panel Access -->
       <div class="sidebar-section">
         <div class="sidebar-section-title">Admin</div>
-        <a href="{{ url_for('main.admin_dashboard') }}" class="sidebar-item">
+        <a href="{{ url_for('main.admin_dashboard') }}" class="sidebar-item" title="Admin Panel">
           <i class="fas fa-user-shield"></i>
           <span>Admin Panel</span>
         </a>
@@ -102,7 +105,7 @@
       {% endif %}
 
       {% if current_user.is_authenticated %}
-      <a href="{{ url_for('auth.logout') }}" class="sidebar-item">
+      <a href="{{ url_for('auth.logout') }}" class="sidebar-item" title="Logout">
         <i class="fas fa-sign-out-alt"></i>
         <span>Logout</span>
       </a>
@@ -170,6 +173,9 @@
   const toggle = document.getElementById('mobileMenuToggle');
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.getElementById('sidebarOverlay');
+  const collapseToggle = document.getElementById('sidebarCollapseToggle');
+  const layoutRoot = document.body;
+  const SIDEBAR_KEY = 'qventorySidebarCollapsed';
 
   if (toggle) {
     toggle.addEventListener('click', () => {
@@ -180,6 +186,38 @@
     overlay.addEventListener('click', () => {
       sidebar.classList.remove('show');
       overlay.classList.remove('show');
+    });
+  }
+
+  function applyCollapsedState(collapsed) {
+    layoutRoot.classList.toggle('sidebar-collapsed', collapsed);
+    if (collapseToggle) {
+      collapseToggle.setAttribute('aria-expanded', (!collapsed).toString());
+      const icon = collapseToggle.querySelector('i');
+      if (icon) {
+        icon.classList.toggle('fa-angles-left', !collapsed);
+        icon.classList.toggle('fa-angles-right', collapsed);
+      }
+    }
+  }
+
+  let savedState = null;
+  try {
+    savedState = window.localStorage.getItem(SIDEBAR_KEY);
+  } catch (err) {
+    savedState = null;
+  }
+  applyCollapsedState(savedState === '1');
+
+  if (collapseToggle) {
+    collapseToggle.addEventListener('click', () => {
+      const collapsed = !layoutRoot.classList.contains('sidebar-collapsed');
+      applyCollapsedState(collapsed);
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0');
+      } catch (err) {
+        // ignore
+      }
     });
   }
 
