@@ -47,13 +47,13 @@ def upgrade():
             sa.PrimaryKeyConstraint('id')
         )
 
-    existing_indexes = {index['name'] for index in inspector.get_indexes(table_name)} if table_name in existing_tables else set()
+        existing_indexes = {index['name'] for index in inspector.get_indexes(table_name)} if table_name in existing_tables else set()
 
-    if op.f('ix_import_jobs_celery_task_id') not in existing_indexes:
-        op.create_index(op.f('ix_import_jobs_celery_task_id'), table_name, ['celery_task_id'], unique=True)
+        if 'ix_import_jobs_celery_task_id' not in existing_indexes:
+            op.create_index(op.f('ix_import_jobs_celery_task_id'), table_name, ['celery_task_id'], unique=True)
 
-    if op.f('ix_import_jobs_status') not in existing_indexes:
-        op.create_index(op.f('ix_import_jobs_status'), table_name, ['status'], unique=False)
+        if 'ix_import_jobs_status' not in existing_indexes:
+            op.create_index(op.f('ix_import_jobs_status'), table_name, ['status'], unique=False)
 
 
 def downgrade():
