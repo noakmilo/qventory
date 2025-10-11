@@ -75,13 +75,12 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                 try:
                     log_task(f"Processing item {idx + 1}/{len(ebay_items)}")
 
-                    # Parse eBay item (with image processing)
-                    parsed = parse_ebay_inventory_item(ebay_item, process_images=True)
+                    # Parse eBay item WITHOUT image processing first (to avoid wasting Cloudinary quota)
+                    parsed = parse_ebay_inventory_item(ebay_item, process_images=False)
                     ebay_sku = parsed.get('ebay_sku', '')
                     ebay_title = parsed.get('title', '')
 
                     log_task(f"  Title: {ebay_title[:50]}")
-                    log_task(f"  Image processed: {parsed.get('item_thumb', 'N/A')[:80]}")
 
                     # Check if location was detected from eBay SKU
                     if parsed.get('location_code'):
@@ -126,47 +125,55 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         log_task(f"  ✓ Match found (method: {match_method}, Qventory ID: {existing_item.id}, mode: {import_mode})")
 
                         if import_mode in ['update_existing', 'sync_all']:
+                            # NOW process images since we're actually updating
+                            parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
+                            log_task(f"  Image processed: {parsed_with_images.get('item_thumb', 'N/A')[:80]}")
+
                             # Update eBay-specific fields
                             existing_item.synced_from_ebay = True
                             existing_item.last_ebay_sync = datetime.utcnow()
 
-                            if parsed.get('ebay_listing_id'):
-                                existing_item.ebay_listing_id = parsed['ebay_listing_id']
-                            if parsed.get('ebay_url'):
-                                existing_item.ebay_url = parsed['ebay_url']
-                            if parsed.get('item_price'):
-                                existing_item.item_price = parsed['item_price']
-                            if parsed.get('item_thumb'):
-                                existing_item.item_thumb = parsed['item_thumb']  # Update with Cloudinary URL
+                            if parsed_with_images.get('ebay_listing_id'):
+                                existing_item.ebay_listing_id = parsed_with_images['ebay_listing_id']
+                            if parsed_with_images.get('ebay_url'):
+                                existing_item.ebay_url = parsed_with_images['ebay_url']
+                            if parsed_with_images.get('item_price'):
+                                existing_item.item_price = parsed_with_images['item_price']
+                            if parsed_with_images.get('item_thumb'):
+                                existing_item.item_thumb = parsed_with_images['item_thumb']  # Update with Cloudinary URL
                             if ebay_sku and not existing_item.ebay_sku:
                                 existing_item.ebay_sku = ebay_sku
 
                             updated_count += 1
                             log_task(f"  → Updated existing item")
                         else:
-                            # new_only mode: skip items that already exist
+                            # new_only mode: skip items that already exist (NO image processing)
                             skipped_count += 1
-                            log_task(f"  → Skipped (already in Qventory)")
+                            log_task(f"  → Skipped (already in Qventory, no image uploaded)")
                     else:
                         log_task(f"  New item from eBay")
 
                         if import_mode in ['new_only', 'sync_all']:
+                            # NOW process images since we're importing a new item
+                            parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
+                            log_task(f"  Image processed: {parsed_with_images.get('item_thumb', 'N/A')[:80]}")
+
                             new_sku = generate_sku()
                             new_item = Item(
                                 user_id=user_id,
                                 sku=new_sku,
                                 title=ebay_title,
-                                item_thumb=parsed.get('item_thumb'),  # Cloudinary URL
+                                item_thumb=parsed_with_images.get('item_thumb'),  # Cloudinary URL
                                 ebay_sku=ebay_sku,
-                                ebay_listing_id=parsed.get('ebay_listing_id'),
-                                ebay_url=parsed.get('ebay_url'),
-                                item_price=parsed.get('item_price'),
+                                ebay_listing_id=parsed_with_images.get('ebay_listing_id'),
+                                ebay_url=parsed_with_images.get('ebay_url'),
+                                item_price=parsed_with_images.get('item_price'),
                                 # Import location from eBay Custom SKU if detected
-                                A=parsed.get('location_A'),
-                                B=parsed.get('location_B'),
-                                S=parsed.get('location_S'),
-                                C=parsed.get('location_C'),
-                                location_code=parsed.get('location_code'),
+                                A=parsed_with_images.get('location_A'),
+                                B=parsed_with_images.get('location_B'),
+                                S=parsed_with_images.get('location_S'),
+                                C=parsed_with_images.get('location_C'),
+                                location_code=parsed_with_images.get('location_code'),
                                 synced_from_ebay=True,
                                 last_ebay_sync=datetime.utcnow()
                             )
