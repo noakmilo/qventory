@@ -25,14 +25,14 @@
   <!-- Sidebar (Desktop Only) -->
   <aside class="sidebar">
     <div class="sidebar-header">
+      <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseToggle" aria-label="Toggle sidebar" aria-expanded="true">
+        <i class="fas fa-bars"></i>
+      </button>
       <img src="{{ url_for('static', filename='icons/icon-48.png') }}" alt="Qventory" class="sidebar-logo">
       <div class="sidebar-brand">
         <strong>Qventory</strong>
         <span class="beta-badge-sidebar">BETA</span>
       </div>
-      <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseToggle" aria-label="Toggle sidebar" aria-expanded="true">
-        <i class="fas fa-angles-left"></i>
-      </button>
     </div>
 
     <nav class="sidebar-nav">
@@ -195,7 +195,7 @@
       collapseToggle.setAttribute('aria-expanded', (!collapsed).toString());
       const icon = collapseToggle.querySelector('i');
       if (icon) {
-        icon.classList.toggle('fa-angles-left', !collapsed);
+        icon.classList.toggle('fa-bars', !collapsed);
         icon.classList.toggle('fa-angles-right', collapsed);
       }
     }

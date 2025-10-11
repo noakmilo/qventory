@@ -1798,13 +1798,13 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 }
 
 .sidebar-collapse-btn {
-  margin-left: auto;
+  margin-right: 12px;
   background: none;
   border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--sub);
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1972,7 +1972,7 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 }
 
 .new-layout.sidebar-collapsed .sidebar-header {
-  justify-content: center;
+  justify-content: flex-start;
   padding: 16px;
 }
 
@@ -1999,12 +1999,6 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 .new-layout.sidebar-collapsed .sidebar-item i {
   margin: 0;
   color: var(--text);
-}
-
-.new-layout.sidebar-collapsed .sidebar-collapse-btn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
 }
 
 .new-layout.sidebar-collapsed .sidebar-footer {
