@@ -31,7 +31,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
     with app.app_context():
         from qventory.models.import_job import ImportJob
         from qventory.models.item import Item
-        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item
+        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item, get_listing_time_details
         from qventory.helpers import generate_sku
 
         log_task(f"=== Starting eBay import for user {user_id} ===")
@@ -121,6 +121,19 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         if existing_item:
                             match_method = "title"
 
+                    start_time = None
+                    end_time = None
+                    if ebay_listing_id:
+                        listing_times = get_listing_time_details(user_id, ebay_listing_id)
+                        start_time = listing_times.get('start_time')
+                        end_time = listing_times.get('end_time')
+                        if start_time:
+                            parsed['listing_start_time'] = start_time
+                            ebay_item['listing_start_time'] = start_time
+                        if end_time:
+                            parsed['listing_end_time'] = end_time
+                            ebay_item['listing_end_time'] = end_time
+
                     if existing_item:
                         log_task(f"  ✓ Match found (method: {match_method}, Qventory ID: {existing_item.id}, mode: {import_mode})")
 
@@ -128,6 +141,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             # NOW process images since we're actually updating
                             parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
                             log_task(f"  Image processed: {parsed_with_images.get('item_thumb', 'N/A')[:80]}")
+                            if not start_time and parsed_with_images.get('listing_start_time'):
+                                start_time = parsed_with_images.get('listing_start_time')
+                            if not end_time and parsed_with_images.get('listing_end_time'):
+                                end_time = parsed_with_images.get('listing_end_time')
 
                             # Update eBay-specific fields
                             existing_item.synced_from_ebay = True
@@ -143,6 +160,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 existing_item.item_thumb = parsed_with_images['item_thumb']  # Update with Cloudinary URL
                             if ebay_sku and not existing_item.ebay_sku:
                                 existing_item.ebay_sku = ebay_sku
+                            if start_time:
+                                existing_item.listing_date = start_time.date()
 
                             updated_count += 1
                             log_task(f"  → Updated existing item")
@@ -157,6 +176,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             # NOW process images since we're importing a new item
                             parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
                             log_task(f"  Image processed: {parsed_with_images.get('item_thumb', 'N/A')[:80]}")
+                            if not start_time and parsed_with_images.get('listing_start_time'):
+                                start_time = parsed_with_images.get('listing_start_time')
+                            if not end_time and parsed_with_images.get('listing_end_time'):
+                                end_time = parsed_with_images.get('listing_end_time')
 
                             new_sku = generate_sku()
                             new_item = Item(
@@ -168,6 +191,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 ebay_listing_id=parsed_with_images.get('ebay_listing_id'),
                                 ebay_url=parsed_with_images.get('ebay_url'),
                                 item_price=parsed_with_images.get('item_price'),
+                                listing_date=start_time.date() if start_time else None,
                                 # Import location from eBay Custom SKU if detected
                                 A=parsed_with_images.get('location_A'),
                                 B=parsed_with_images.get('location_B'),

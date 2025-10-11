@@ -6,6 +6,8 @@ import os
 import sys
 import requests
 from datetime import datetime
+from collections import OrderedDict
+import xml.etree.ElementTree as ET
 from qventory.models.marketplace_credential import MarketplaceCredential
 
 def log_inv(msg):
@@ -18,6 +20,16 @@ if EBAY_ENV == 'production':
     EBAY_API_BASE = "https://api.ebay.com"
 else:
     EBAY_API_BASE = "https://api.sandbox.ebay.com"
+
+if EBAY_ENV == 'production':
+    TRADING_API_URL = "https://api.ebay.com/ws/api.dll"
+else:
+    TRADING_API_URL = "https://api.sandbox.ebay.com/ws/api.dll"
+
+TRADING_COMPAT_LEVEL = os.environ.get('EBAY_TRADING_COMPAT_LEVEL', '1145')
+_LISTING_TIME_CACHE = OrderedDict()
+_LISTING_TIME_CACHE_MAX = 512
+_XML_NS = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
 
 
 def get_user_access_token(user_id):
@@ -75,6 +87,102 @@ def get_user_access_token(user_id):
             return None
 
     return credential.get_access_token()
+
+
+def _parse_ebay_datetime(value):
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    log_inv(f"⚠️  Unable to parse eBay datetime: {value}")
+    return None
+
+
+def _set_listing_time_cache(key, value):
+    _LISTING_TIME_CACHE[key] = value
+    while len(_LISTING_TIME_CACHE) > _LISTING_TIME_CACHE_MAX:
+        _LISTING_TIME_CACHE.popitem(last=False)
+
+
+def get_listing_time_details(user_id, listing_id):
+    """
+    Fetch listing start/end time from Trading API GetItem call.
+    Results are cached per user/listing to reduce API calls.
+    """
+    if not listing_id:
+        return {}
+
+    cache_key = (user_id, listing_id)
+    if cache_key in _LISTING_TIME_CACHE:
+        return _LISTING_TIME_CACHE[cache_key]
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("Cannot fetch listing times: no access token")
+        return {}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+    if not app_id:
+        log_inv("Cannot fetch listing times: missing EBAY_CLIENT_ID")
+        return {}
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'GetItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'X-EBAY-API-IAF-TOKEN': access_token,
+        'Content-Type': 'text/xml'
+    }
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>{listing_id}</ItemID>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetItemRequest>'''
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"GetItem status for {listing_id}: {response.status_code}")
+        if response.status_code != 200:
+            log_inv(f"GetItem error body: {response.text[:500]}")
+            return {}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+        if ack is not None and ack.text in ['Failure', 'PartialFailure']:
+            error = root.find('.//ebay:Errors/ebay:LongMessage', _XML_NS)
+            if error is not None:
+                log_inv(f"GetItem error: {error.text}")
+            return {}
+
+        item_elem = root.find('ebay:Item', _XML_NS)
+        if item_elem is None:
+            log_inv("GetItem response missing Item element")
+            return {}
+
+        start_elem = item_elem.find('ebay:ListingDetails/ebay:StartTime', _XML_NS)
+        if start_elem is None:
+            start_elem = item_elem.find('ebay:StartTime', _XML_NS)
+        end_elem = item_elem.find('ebay:ListingDetails/ebay:EndTime', _XML_NS)
+        if end_elem is None:
+            end_elem = item_elem.find('ebay:EndTime', _XML_NS)
+
+        start_time = _parse_ebay_datetime(start_elem.text if start_elem is not None else None)
+        end_time = _parse_ebay_datetime(end_elem.text if end_elem is not None else None)
+
+        payload = {
+            'start_time': start_time,
+            'end_time': end_time
+        }
+        _set_listing_time_cache(cache_key, payload)
+        return payload
+    except Exception as exc:
+        log_inv(f"Exception calling GetItem for {listing_id}: {exc}")
+        return {}
 
 
 def get_inventory_items(user_id, limit=200, offset=0):
@@ -443,17 +551,9 @@ def get_active_listings_trading_api(user_id, max_items=1000):
         log_inv("No access token available")
         return []
 
-    import os
     app_id = os.environ.get('EBAY_CLIENT_ID')
 
-    # Trading API endpoint
-    if EBAY_ENV == 'production':
-        trading_url = "https://api.ebay.com/ws/api.dll"
-    else:
-        trading_url = "https://api.sandbox.ebay.com/ws/api.dll"
-
-    import xml.etree.ElementTree as ET
-    ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+    ns = _XML_NS
 
     all_items = []
     page_number = 1
@@ -482,14 +582,15 @@ def get_active_listings_trading_api(user_id, max_items=1000):
 
         headers = {
             'X-EBAY-API-SITEID': '0',  # 0 = US
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '967',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
             'X-EBAY-API-CALL-NAME': 'GetMyeBaySelling',
             'X-EBAY-API-APP-NAME': app_id,
+            'X-EBAY-API-IAF-TOKEN': access_token,
             'Content-Type': 'text/xml'
         }
 
-        log_inv(f"Calling Trading API: {trading_url}")
-        response = requests.post(trading_url, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"Calling Trading API: {TRADING_API_URL}")
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
         log_inv(f"Trading API response status: {response.status_code}")
 
         if response.status_code != 200:
@@ -557,6 +658,15 @@ def get_active_listings_trading_api(user_id, max_items=1000):
                         if gallery_url is not None:
                             image_url = gallery_url.text
 
+                    start_elem = item_elem.find('ebay:ListingDetails/ebay:StartTime', ns)
+                    if start_elem is None:
+                        start_elem = item_elem.find('ebay:StartTime', ns)
+                    end_elem = item_elem.find('ebay:ListingDetails/ebay:EndTime', ns)
+                    if end_elem is None:
+                        end_elem = item_elem.find('ebay:EndTime', ns)
+                    start_time = _parse_ebay_datetime(start_elem.text if start_elem is not None else None)
+                    end_time = _parse_ebay_datetime(end_elem.text if end_elem is not None else None)
+
                     # Build normalized item
                     normalized = {
                         'sku': sku,
@@ -574,6 +684,8 @@ def get_active_listings_trading_api(user_id, max_items=1000):
                         'ebay_listing_id': item_id.text if item_id is not None else '',
                         'item_price': price,
                         'ebay_url': f"https://www.ebay.com/itm/{item_id.text}" if item_id is not None else None,
+                        'listing_start_time': start_time,
+                        'listing_end_time': end_time,
                         'source': 'trading_api'
                     }
                     all_items.append(normalized)
@@ -749,7 +861,6 @@ def get_seller_listings_browse_api(user_id, max_items=1000):
         return []
 
     # Get application token (not user token) for Browse API
-    import os
     client_id = os.environ.get('EBAY_CLIENT_ID')
     client_secret = os.environ.get('EBAY_CLIENT_SECRET')
 
@@ -928,15 +1039,17 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'item_thumb': item_thumb,
             'ebay_sku': sku,
             'quantity': quantity,
-            'condition': condition,
-            'ebay_listing_id': ebay_listing_id,
-            'ebay_url': ebay_url,
-            'item_price': item_price,
-            'location_code': location_code,  # Parsed location code if valid
-            'location_A': location_components.get('A'),
-            'location_B': location_components.get('B'),
-            'location_S': location_components.get('S'),
-            'location_C': location_components.get('C'),
+        'condition': condition,
+        'ebay_listing_id': ebay_listing_id,
+        'ebay_url': ebay_url,
+        'item_price': item_price,
+        'listing_start_time': ebay_item.get('listing_start_time'),
+        'listing_end_time': ebay_item.get('listing_end_time'),
+        'location_code': location_code,  # Parsed location code if valid
+        'location_A': location_components.get('A'),
+        'location_B': location_components.get('B'),
+        'location_S': location_components.get('S'),
+        'location_C': location_components.get('C'),
             'ebay_item_data': ebay_item
         }
     else:
@@ -986,14 +1099,16 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'item_thumb': item_thumb,
             'ebay_sku': sku,
             'quantity': quantity,
-            'condition': condition,
-            'location_code': location_code,
-            'location_A': location_components.get('A'),
-            'location_B': location_components.get('B'),
-            'location_S': location_components.get('S'),
-            'location_C': location_components.get('C'),
-            'ebay_item_data': ebay_item
-        }
+        'condition': condition,
+        'location_code': location_code,
+        'location_A': location_components.get('A'),
+        'location_B': location_components.get('B'),
+        'location_S': location_components.get('S'),
+        'location_C': location_components.get('C'),
+        'listing_start_time': ebay_item.get('listing_start_time'),
+        'listing_end_time': ebay_item.get('listing_end_time'),
+        'ebay_item_data': ebay_item
+    }
 
 
 def sync_location_to_ebay_sku(user_id, ebay_listing_id, location_code):
@@ -1015,7 +1130,6 @@ def sync_location_to_ebay_sku(user_id, ebay_listing_id, location_code):
         log_inv("No access token available")
         return False
 
-    import os
     app_id = os.environ.get('EBAY_CLIENT_ID')
 
     # Trading API endpoint
