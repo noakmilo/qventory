@@ -328,6 +328,9 @@ def import_ebay_sales(self, user_id, days_back=None):
                         title = line_item.get('title', 'Unknown Item')
                         line_item_id = line_item.get('lineItemId', '')
 
+                        # Try to get eBay listing ID from lineItem
+                        ebay_listing_id = line_item.get('legacyItemId') or line_item.get('listingMarketplaceId')
+
                         # Get price for this line item
                         line_total = float(line_item.get('total', {}).get('value', 0))
 
@@ -403,13 +406,33 @@ def import_ebay_sales(self, user_id, days_back=None):
                             # More accurate would be: monthly fee / sales in that month
                             store_fee_per_sale = ebay_store_monthly_fee / len(orders)
 
-                        # Try to find matching item in Qventory
+                        # Try to find matching item in Qventory (multiple strategies)
                         item = None
-                        if sku:
-                            item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+                        match_method = None
 
+                        # Strategy 1: Match by eBay Listing ID (most reliable)
+                        if ebay_listing_id:
+                            item = Item.query.filter_by(
+                                user_id=user_id,
+                                ebay_listing_id=ebay_listing_id
+                            ).first()
+                            if item:
+                                match_method = "ebay_listing_id"
+
+                        # Strategy 2: Match by eBay SKU
+                        if not item and sku:
+                            item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+                            if item:
+                                match_method = "ebay_sku"
+
+                        # Strategy 3: Match by exact title
                         if not item and title:
                             item = Item.query.filter_by(user_id=user_id, title=title).first()
+                            if item:
+                                match_method = "exact_title"
+
+                        if item:
+                            log_task(f"  ✓ Matched item (method: {match_method}, item_id: {item.id})")
 
                         # Check if sale already exists
                         existing_sale = Sale.query.filter_by(
@@ -429,6 +452,11 @@ def import_ebay_sales(self, user_id, days_back=None):
                             existing_sale.shipping_charged = shipping_charged
                             existing_sale.other_fees = store_fee_per_sale  # Store subscription prorate
                             existing_sale.updated_at = datetime.utcnow()
+
+                            # Update item_id if we found a match and it wasn't set before
+                            if item and not existing_sale.item_id:
+                                existing_sale.item_id = item.id
+                                log_task(f"    → Linked sale to item {item.id}")
 
                             # Update fulfillment data
                             if tracking_number:
