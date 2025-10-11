@@ -439,7 +439,7 @@ def fetch_active_items(
         C=C,
         platform=platform,
     )
-    where_clause = f"{where_clause} AND { 'i.is_active IS TRUE' }"
+    where_clause = f"{where_clause} AND i.is_active IS TRUE"
 
     query_sql = ACTIVE_ITEMS_SQL.format(where_clause=where_clause)
     count_sql = ACTIVE_COUNT_SQL.format(where_clause=where_clause)
@@ -508,7 +508,7 @@ def fetch_ended_items(
         C=C,
         platform=platform,
     )
-    where_clause = f"{where_clause} AND COALESCE({ 'i.is_active' }, FALSE) = FALSE"
+    where_clause = f"{where_clause} AND COALESCE(i.is_active, FALSE) = FALSE"
 
     query_sql = ENDED_ITEMS_SQL.format(where_clause=where_clause)
     count_sql = ENDED_COUNT_SQL.format(where_clause=where_clause)
