@@ -1,9 +1,9 @@
 from flask import (
     render_template, request, redirect, url_for, send_file, flash, Response,
-    jsonify, send_from_directory, make_response
+    jsonify, send_from_directory, make_response, current_app
 )
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 import io
 import re
 import os
@@ -38,6 +38,14 @@ from ..helpers import (
     parse_location_code, parse_values, human_from_code, qr_label_image
 )
 from . import main_bp
+from ..helpers.inventory_queries import (
+    fetch_active_items,
+    fetch_sold_items,
+    fetch_ended_items,
+    fetch_fulfillment_orders,
+    detect_thumbnail_mismatches,
+    detect_sale_title_mismatches,
+)
 
 # ==================== Cloudinary ====================
 # pip install cloudinary
@@ -73,6 +81,24 @@ def landing():
 
 
 # ---------------------- Dashboard (protegido) ----------------------
+
+def _normalize_arg(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _get_inventory_filter_params():
+    return {
+        "search": _normalize_arg(request.args.get("q")),
+        "A": _normalize_arg(request.args.get("A")),
+        "B": _normalize_arg(request.args.get("B")),
+        "S": _normalize_arg(request.args.get("S")),
+        "C": _normalize_arg(request.args.get("C")),
+        "platform": _normalize_arg(request.args.get("platform")),
+    }
+
 
 @main_bp.route("/dashboard")
 @login_required
@@ -159,10 +185,23 @@ def inventory_active():
     """Show only active items (is_active=True)"""
     s = get_or_create_settings(current_user)
 
-    items_query = Item.query.filter_by(user_id=current_user.id, is_active=True)
-    items_query = items_query.order_by(Item.created_at.desc())
-    total_items = items_query.count()
-    items = items_query.limit(20).all()
+    filters = _get_inventory_filter_params()
+    items, total_items = fetch_active_items(
+        db.session,
+        user_id=current_user.id,
+        limit=20,
+        offset=0,
+        **filters,
+    )
+
+    mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
+    if mismatches:
+        sample = mismatches[:3]
+        current_app.logger.warning(
+            "Thumbnail slug collisions detected for user %s: %s",
+            current_user.id,
+            sample,
+        )
 
     def distinct(col):
         return [
@@ -193,21 +232,24 @@ def inventory_active():
 @login_required
 def inventory_sold():
     """Show items that have been sold (have sales records)"""
-    from ..models.sale import Sale
-
     s = get_or_create_settings(current_user)
 
-    # Get items that have at least one sale
-    sold_item_ids = db.session.query(Sale.item_id).filter(
-        Sale.user_id == current_user.id,
-        Sale.item_id.isnot(None)
-    ).distinct().all()
-    sold_item_ids = [sid[0] for sid in sold_item_ids]
+    filters = _get_inventory_filter_params()
+    items, total_items = fetch_sold_items(
+        db.session,
+        user_id=current_user.id,
+        limit=20,
+        offset=0,
+        **filters,
+    )
 
-    items_query = Item.query.filter(Item.id.in_(sold_item_ids))
-    items_query = items_query.order_by(Item.created_at.desc())
-    total_items = items_query.count()
-    items = items_query.limit(20).all()
+    sale_title_mismatches = detect_sale_title_mismatches(db.session, user_id=current_user.id)
+    if sale_title_mismatches:
+        current_app.logger.warning(
+            "Sale title mismatches detected for user %s (sample of %d)",
+            current_user.id,
+            len(sale_title_mismatches),
+        )
 
     def distinct(col):
         return [
@@ -240,10 +282,23 @@ def inventory_ended():
     """Show inactive/ended items (is_active=False)"""
     s = get_or_create_settings(current_user)
 
-    items_query = Item.query.filter_by(user_id=current_user.id, is_active=False)
-    items_query = items_query.order_by(Item.created_at.desc())
-    total_items = items_query.count()
-    items = items_query.limit(20).all()
+    filters = _get_inventory_filter_params()
+    items, total_items = fetch_ended_items(
+        db.session,
+        user_id=current_user.id,
+        limit=20,
+        offset=0,
+        **filters,
+    )
+
+    mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
+    if mismatches:
+        sample = mismatches[:3]
+        current_app.logger.warning(
+            "Thumbnail slug collisions detected for ended items user %s: %s",
+            current_user.id,
+            sample,
+        )
 
     def distinct(col):
         return [
@@ -278,27 +333,34 @@ def fulfillment():
     """Show shipped and delivered orders"""
     from ..models.sale import Sale
 
-    # Get shipped orders (shipped_at exists, delivered_at is None)
-    shipped_orders = Sale.query.filter(
+    orders, _ = fetch_fulfillment_orders(
+        db.session,
+        user_id=current_user.id,
+        limit=500,
+        offset=0,
+    )
+
+    for order in orders:
+        if getattr(order, "resolved_title", None):
+            order.item_title = order.resolved_title
+        if getattr(order, "resolved_sku", None):
+            order.item_sku = order.resolved_sku
+
+    shipped_orders = [o for o in orders if o.fulfillment_state == "shipped"]
+    delivered_orders = [o for o in orders if o.fulfillment_state == "delivered"]
+
+    shipped_count = db.session.query(func.count(Sale.id)).filter(
         Sale.user_id == current_user.id,
         Sale.shipped_at.isnot(None),
         Sale.delivered_at.is_(None)
-    ).order_by(Sale.shipped_at.desc()).all()
+    ).scalar()
 
-    # Get delivered orders (delivered_at exists)
-    delivered_orders = Sale.query.filter(
+    delivered_count = db.session.query(func.count(Sale.id)).filter(
         Sale.user_id == current_user.id,
         Sale.delivered_at.isnot(None)
-    ).order_by(Sale.delivered_at.desc()).limit(100).all()
+    ).scalar()
 
-    # Calculate stats
-    shipped_count = len(shipped_orders)
-    delivered_count = Sale.query.filter(
-        Sale.user_id == current_user.id,
-        Sale.delivered_at.isnot(None)
-    ).count()
-
-    total_value = sum(sale.sold_price for sale in shipped_orders + delivered_orders)
+    total_value = sum((order.sold_price or 0) for order in orders)
 
     return render_template(
         "fulfillment.html",
@@ -315,62 +377,47 @@ def fulfillment():
 @main_bp.route("/api/load-more-items")
 @login_required
 def api_load_more_items():
-    from ..models.sale import Sale
-
     s = get_or_create_settings(current_user)
 
     offset = int(request.args.get("offset", 0))
     limit = int(request.args.get("limit", 20))
     view_type = (request.args.get("view_type") or "").strip()  # active, sold, ended
+    filters = _get_inventory_filter_params()
+    user_id = current_user.id
 
-    q = (request.args.get("q") or "").strip()
-    fA = (request.args.get("A") or "").strip()
-    fB = (request.args.get("B") or "").strip()
-    fS = (request.args.get("S") or "").strip()
-    fC = (request.args.get("C") or "").strip()
-    fPlatform = (request.args.get("platform") or "").strip()
-
-    # Build query based on view type
     if view_type == "active":
-        items_query = Item.query.filter_by(user_id=current_user.id, is_active=True)
+        items, total_items = fetch_active_items(
+            db.session,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            **filters,
+        )
     elif view_type == "sold":
-        # Get items that have sales
-        sold_item_ids = db.session.query(Sale.item_id).filter(
-            Sale.user_id == current_user.id,
-            Sale.item_id.isnot(None)
-        ).distinct().all()
-        sold_item_ids = [sid[0] for sid in sold_item_ids]
-        items_query = Item.query.filter(Item.id.in_(sold_item_ids))
+        items, total_items = fetch_sold_items(
+            db.session,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            **filters,
+        )
     elif view_type == "ended":
-        items_query = Item.query.filter_by(user_id=current_user.id, is_active=False)
+        items, total_items = fetch_ended_items(
+            db.session,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            **filters,
+        )
     else:
-        # Default: all items (dashboard view)
-        items_query = Item.query.filter_by(user_id=current_user.id)
-
-    # Apply filters
-    if q:
-        like = f"%{q}%"
-        items_query = items_query.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
-
-    if s.enable_A and fA:
-        items_query = items_query.filter(Item.A == fA)
-    if s.enable_B and fB:
-        items_query = items_query.filter(Item.B == fB)
-    if s.enable_S and fS:
-        items_query = items_query.filter(Item.S == fS)
-    if s.enable_C and fC:
-        items_query = items_query.filter(Item.C == fC)
-
-    if fPlatform:
-        col = {
-            "web": Item.web_url, "ebay": Item.ebay_url, "amazon": Item.amazon_url,
-            "mercari": Item.mercari_url, "vinted": Item.vinted_url,
-            "poshmark": Item.poshmark_url, "depop": Item.depop_url
-        }.get(fPlatform)
-        if col is not None:
-            items_query = items_query.filter(col.isnot(None))
-
-    items = items_query.order_by(Item.created_at.desc()).offset(offset).limit(limit).all()
+        # Default fallback behaves as active inventory
+        items, total_items = fetch_active_items(
+            db.session,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
+            **filters,
+        )
 
     # Renderizar solo las filas de items
     items_html = []
@@ -382,7 +429,7 @@ def api_load_more_items():
     return jsonify({
         "ok": True,
         "items": items_html,
-        "has_more": len(items) == limit
+        "has_more": (offset + len(items)) < total_items
     })
 
 
