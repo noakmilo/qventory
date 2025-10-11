@@ -22,10 +22,10 @@ def _rows_to_objects(result: Result) -> List[SimpleNamespace]:
 STATS_30_DAYS_SQL = """
 WITH date_range AS (
     SELECT
-        NOW() - INTERVAL '30 days' AS start_date,
-        NOW() AS end_date,
-        NOW() - INTERVAL '60 days' AS prev_start_date,
-        NOW() - INTERVAL '30 days' AS prev_end_date
+        CURRENT_TIMESTAMP - INTERVAL '30 days' AS start_date,
+        CURRENT_TIMESTAMP AS end_date,
+        CURRENT_TIMESTAMP - INTERVAL '60 days' AS prev_start_date,
+        CURRENT_TIMESTAMP - INTERVAL '30 days' AS prev_end_date
 ),
 current_period AS (
     SELECT
