@@ -273,85 +273,35 @@ def api_update_item_inline(item_id):
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
+    """Dashboard home with stats, recent activity, and pending tasks"""
+    from qventory.helpers.dashboard_queries import (
+        fetch_dashboard_stats,
+        fetch_recent_sales,
+        fetch_recently_listed,
+        fetch_recently_sold_items,
+        fetch_recent_fulfillment,
+        fetch_pending_tasks
+    )
+
     s = get_or_create_settings(current_user)
 
-    q = (request.args.get("q") or "").strip()
-    fA = (request.args.get("A") or "").strip()
-    fB = (request.args.get("B") or "").strip()
-    fS = (request.args.get("S") or "").strip()
-    fC = (request.args.get("C") or "").strip()
-    fPlatform = (request.args.get("platform") or "").strip()
-
-    page, per_page, offset = _get_pagination_params()
-
-    items_query = Item.query.filter_by(user_id=current_user.id)
-
-    if q:
-        like = f"%{q}%"
-        items_query = items_query.filter(or_(Item.title.ilike(like), Item.sku.ilike(like)))
-
-    if s.enable_A and fA:
-        items_query = items_query.filter(Item.A == fA)
-    if s.enable_B and fB:
-        items_query = items_query.filter(Item.B == fB)
-    if s.enable_S and fS:
-        items_query = items_query.filter(Item.S == fS)
-    if s.enable_C and fC:
-        items_query = items_query.filter(Item.C == fC)
-
-    if fPlatform:
-        col = {
-            "web": Item.web_url, "ebay": Item.ebay_url, "amazon": Item.amazon_url,
-            "mercari": Item.mercari_url, "vinted": Item.vinted_url,
-            "poshmark": Item.poshmark_url, "depop": Item.depop_url
-        }.get(fPlatform)
-        if col is not None:
-            items_query = items_query.filter(col.isnot(None))
-
-    items_query = items_query.order_by(Item.created_at.desc())
-    total_items = items_query.count()
-
-    if total_items and offset >= total_items and page > 1:
-        total_pages = max(1, math.ceil(total_items / per_page))
-        page = total_pages
-        offset = (page - 1) * per_page
-
-    items = items_query.offset(offset).limit(per_page).all()
-    pagination = _build_pagination_metadata(total_items, page, per_page)
-
-    def distinct(col):
-        return [
-            r[0] for r in db.session.query(col)
-            .filter(col.isnot(None), Item.user_id == current_user.id)
-            .distinct().order_by(col.asc()).all()
-        ]
-
-    options = {
-        "A": distinct(Item.A) if s.enable_A else [],
-        "B": distinct(Item.B) if s.enable_B else [],
-        "S": distinct(Item.S) if s.enable_S else [],
-        "C": distinct(Item.C) if s.enable_C else [],
-    }
-
-    PLATFORMS = [
-        ("web", "Website"),
-        ("ebay", "eBay"),
-        ("amazon", "Amazon"),
-        ("mercari", "Mercari"),
-        ("vinted", "Vinted"),
-        ("poshmark", "Poshmark"),
-        ("depop", "Depop"),
-    ]
+    # Fetch all dashboard data
+    stats = fetch_dashboard_stats(db.session, user_id=current_user.id)
+    recent_sales = fetch_recent_sales(db.session, user_id=current_user.id, limit=5)
+    recently_listed = fetch_recently_listed(db.session, user_id=current_user.id, limit=5)
+    recently_sold = fetch_recently_sold_items(db.session, user_id=current_user.id, limit=5)
+    recent_fulfillment = fetch_recent_fulfillment(db.session, user_id=current_user.id, limit=10)
+    pending_tasks = fetch_pending_tasks(db.session, user_id=current_user.id)
 
     return render_template(
-        "dashboard.html",
-        items=items,
+        "dashboard_home.html",
         settings=s,
-        options=options,
-        total_items=total_items,
-        pagination=pagination,
-        q=q, fA=fA, fB=fB, fS=fS, fC=fC,
-        fPlatform=fPlatform, PLATFORMS=PLATFORMS
+        stats=stats,
+        recent_sales=recent_sales,
+        recently_listed=recently_listed,
+        recently_sold=recently_sold,
+        recent_fulfillment=recent_fulfillment,
+        pending_tasks=pending_tasks
     )
 
 

@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Qventory{% endblock %}
+
+{% block content %}
+<div class="dashboard-home">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <h1 class="page-title">
+      <i class="fas fa-home"></i> Dashboard
+    </h1>
+    <p class="page-subtitle">Your inventory at a glance</p>
+  </div>
+
+  <!-- Pending Tasks Section (Only show if there are tasks) -->
+  {% if pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
+  <section class="dashboard-section pending-tasks-section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="fas fa-exclamation-circle" style="color:#f59e0b"></i> Pending Tasks
+      </h2>
+      <p class="section-subtitle">Complete these to get the most out of Qventory</p>
+    </div>
+
+    <div class="task-cards">
+      <!-- eBay Connection Task -->
+      {% if pending_tasks.ebay_connected == 0 %}
+      <div class="task-card task-card--warning">
+        <div class="task-card__icon">
+          <i class="fab fa-ebay"></i>
+        </div>
+        <div class="task-card__content">
+          <h3 class="task-card__title">Connect eBay Account</h3>
+          <p class="task-card__description">Import your inventory automatically</p>
+        </div>
+        <a href="{{ url_for('main.settings') }}#ebay" class="task-card__action btn btn-primary">
+          <i class="fas fa-link"></i> Connect
+        </a>
+      </div>
+      {% endif %}
+
+      <!-- Missing Costs Task -->
+      {% if pending_tasks.items_missing_cost > 0 %}
+      <div class="task-card task-card--info">
+        <div class="task-card__icon">
+          <i class="fas fa-dollar-sign"></i>
+        </div>
+        <div class="task-card__content">
+          <h3 class="task-card__title">{{ pending_tasks.items_missing_cost }} items missing cost</h3>
+          <p class="task-card__description">Add costs to calculate profit margins</p>
+        </div>
+        <a href="{{ url_for('main.inventory_active') }}?missing_cost=1" class="task-card__action btn btn-secondary">
+          <i class="fas fa-edit"></i> Fix Costs
+        </a>
+      </div>
+      {% endif %}
+
+      <!-- Missing Supplier Task -->
+      {% if pending_tasks.items_missing_supplier > 0 %}
+      <div class="task-card task-card--info">
+        <div class="task-card__icon">
+          <i class="fas fa-store"></i>
+        </div>
+        <div class="task-card__content">
+          <h3 class="task-card__title">{{ pending_tasks.items_missing_supplier }} items missing supplier</h3>
+          <p class="task-card__description">Track your inventory sources</p>
+        </div>
+        <a href="{{ url_for('main.inventory_active') }}?missing_supplier=1" class="task-card__action btn btn-secondary">
+          <i class="fas fa-edit"></i> Add Suppliers
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Quick Stats Section -->
+  <section class="dashboard-section stats-section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="fas fa-chart-line"></i> Quick Stats
+      </h2>
+      <p class="section-subtitle">Last 30 days</p>
+    </div>
+
+    <div class="stats-grid">
+      <!-- Sales Count -->
+      <div class="stat-card">
+        <div class="stat-card__header">
+          <span class="stat-card__label">Sales</span>
+          <i class="fas fa-shopping-cart stat-card__icon" style="color:#8ab4ff"></i>
+        </div>
+        <div class="stat-card__value">{{ stats.sales_count }}</div>
+        {% if stats.sales_change_pct is not none %}
+        <div class="stat-card__change {% if stats.sales_change_pct >= 0 %}stat-card__change--positive{% else %}stat-card__change--negative{% endif %}">
+          <i class="fas fa-{% if stats.sales_change_pct >= 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+          {{ "%.1f"|format(stats.sales_change_pct|abs) }}%
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Revenue -->
+      <div class="stat-card">
+        <div class="stat-card__header">
+          <span class="stat-card__label">Revenue</span>
+          <i class="fas fa-dollar-sign stat-card__icon" style="color:#9ae6b4"></i>
+        </div>
+        <div class="stat-card__value">${{ "%.2f"|format(stats.total_revenue) }}</div>
+        {% if stats.revenue_change_pct is not none %}
+        <div class="stat-card__change {% if stats.revenue_change_pct >= 0 %}stat-card__change--positive{% else %}stat-card__change--negative{% endif %}">
+          <i class="fas fa-{% if stats.revenue_change_pct >= 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+          {{ "%.1f"|format(stats.revenue_change_pct|abs) }}%
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Shipped -->
+      <div class="stat-card">
+        <div class="stat-card__header">
+          <span class="stat-card__label">Shipped</span>
+          <i class="fas fa-shipping-fast stat-card__icon" style="color:#fbbf24"></i>
+        </div>
+        <div class="stat-card__value">{{ stats.shipped_count }}</div>
+        {% if stats.shipped_change_pct is not none %}
+        <div class="stat-card__change {% if stats.shipped_change_pct >= 0 %}stat-card__change--positive{% else %}stat-card__change--negative{% endif %}">
+          <i class="fas fa-{% if stats.shipped_change_pct >= 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+          {{ "%.1f"|format(stats.shipped_change_pct|abs) }}%
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Delivered -->
+      <div class="stat-card">
+        <div class="stat-card__header">
+          <span class="stat-card__label">Delivered</span>
+          <i class="fas fa-check-circle stat-card__icon" style="color:#34d399"></i>
+        </div>
+        <div class="stat-card__value">{{ stats.delivered_count }}</div>
+        {% if stats.delivered_change_pct is not none %}
+        <div class="stat-card__change {% if stats.delivered_change_pct >= 0 %}stat-card__change--positive{% else %}stat-card__change--negative{% endif %}">
+          <i class="fas fa-{% if stats.delivered_change_pct >= 0 %}arrow-up{% else %}arrow-down{% endif %}"></i>
+          {{ "%.1f"|format(stats.delivered_change_pct|abs) }}%
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Recent Sales Section -->
+  {% if recent_sales %}
+  <section class="dashboard-section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="fas fa-money-bill-wave"></i> Recent Sales
+      </h2>
+      <a href="{{ url_for('reports.analytics') }}" class="section-link">View All <i class="fas fa-arrow-right"></i></a>
+    </div>
+
+    <div class="activity-list">
+      {% for sale in recent_sales %}
+      <div class="activity-card sale-card">
+        <div class="activity-card__thumb">
+          {% if sale.item_thumb %}
+          <img src="{{ sale.item_thumb }}" alt="{{ sale.item_title or sale.current_title }}" referrerpolicy="no-referrer">
+          {% else %}
+          <div class="thumb-placeholder"><i class="fas fa-image"></i></div>
+          {% endif %}
+        </div>
+        <div class="activity-card__content">
+          <h3 class="activity-card__title">{{ sale.item_title or sale.current_title or 'Untitled' }}</h3>
+          <p class="activity-card__meta">
+            <span class="tag">{{ sale.item_sku or 'No SKU' }}</span>
+            {% if sale.marketplace %}
+            <span class="tag">{{ sale.marketplace }}</span>
+            {% endif %}
+          </p>
+        </div>
+        <div class="activity-card__details">
+          <div class="activity-card__price">${{ "%.2f"|format(sale.sold_price) }}</div>
+          <div class="activity-card__time">{{ sale.sold_at|timeago if sale.sold_at else '—' }}</div>
+          <div class="activity-card__status">
+            {% if sale.fulfillment_status == 'delivered' %}
+            <span class="status-badge status-badge--success"><i class="fas fa-check-circle"></i> Delivered</span>
+            {% elif sale.fulfillment_status == 'shipped' %}
+            <span class="status-badge status-badge--info"><i class="fas fa-shipping-fast"></i> Shipped</span>
+            {% else %}
+            <span class="status-badge status-badge--warning"><i class="fas fa-clock"></i> Awaiting Ship</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Recently Listed & Recently Sold (Side by Side) -->
+  <div class="dashboard-grid">
+    <!-- Recently Listed -->
+    {% if recently_listed %}
+    <section class="dashboard-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="fas fa-plus-circle"></i> Recently Listed
+        </h2>
+        <a href="{{ url_for('main.inventory_active') }}" class="section-link">View All <i class="fas fa-arrow-right"></i></a>
+      </div>
+
+      <div class="item-list">
+        {% for item in recently_listed %}
+        <div class="item-card">
+          <div class="item-card__thumb">
+            {% if item.item_thumb %}
+            <img src="{{ item.item_thumb }}" alt="{{ item.title }}" referrerpolicy="no-referrer">
+            {% else %}
+            <div class="thumb-placeholder"><i class="fas fa-image"></i></div>
+            {% endif %}
+          </div>
+          <div class="item-card__content">
+            <h3 class="item-card__title">{{ item.title }}</h3>
+            <p class="item-card__meta">
+              <span class="item-card__price">${{ "%.2f"|format(item.item_price) if item.item_price else '—' }}</span>
+              <span class="item-card__time">{{ item.listed_at|timeago if item.listed_at else '—' }}</span>
+            </p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    <!-- Recently Sold Items -->
+    {% if recently_sold %}
+    <section class="dashboard-section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <i class="fas fa-tags"></i> Recently Sold
+        </h2>
+        <a href="{{ url_for('main.inventory_sold') }}" class="section-link">View All <i class="fas fa-arrow-right"></i></a>
+      </div>
+
+      <div class="item-list">
+        {% for item in recently_sold %}
+        <div class="item-card">
+          <div class="item-card__thumb">
+            {% if item.item_thumb %}
+            <img src="{{ item.item_thumb }}" alt="{{ item.title }}" referrerpolicy="no-referrer">
+            {% else %}
+            <div class="thumb-placeholder"><i class="fas fa-image"></i></div>
+            {% endif %}
+          </div>
+          <div class="item-card__content">
+            <h3 class="item-card__title">{{ item.title }}</h3>
+            <p class="item-card__meta">
+              <span class="item-card__price">${{ "%.2f"|format(item.last_sold_price) if item.last_sold_price else '—' }}</span>
+              <span class="item-card__time">{{ item.last_sold_at|timeago if item.last_sold_at else '—' }}</span>
+            </p>
+            {% if item.sale_count > 1 %}
+            <span class="tag">{{ item.sale_count }}x sold</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  <!-- Recent Fulfillment -->
+  {% if recent_fulfillment %}
+  <section class="dashboard-section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="fas fa-truck"></i> Fulfillment Status
+      </h2>
+      <a href="{{ url_for('main.fulfillment') }}" class="section-link">View All <i class="fas fa-arrow-right"></i></a>
+    </div>
+
+    <div class="fulfillment-list">
+      {% for order in recent_fulfillment %}
+      <div class="fulfillment-card">
+        <div class="fulfillment-card__icon">
+          {% if order.fulfillment_status == 'delivered' %}
+          <i class="fas fa-check-circle" style="color:#34d399"></i>
+          {% else %}
+          <i class="fas fa-box" style="color:#fbbf24"></i>
+          {% endif %}
+        </div>
+        <div class="fulfillment-card__content">
+          <h3 class="fulfillment-card__title">{{ order.item_title or 'Untitled' }}</h3>
+          <p class="fulfillment-card__meta">
+            <span>${{ "%.2f"|format(order.sold_price) if order.sold_price else '—' }}</span>
+            <span>•</span>
+            {% if order.fulfillment_status == 'delivered' %}
+            <span>Delivered {{ order.delivered_at|timeago if order.delivered_at else '—' }}</span>
+            {% else %}
+            <span>Shipped {{ order.shipped_at|timeago if order.shipped_at else '—' }}</span>
+            {% endif %}
+            {% if order.carrier %}
+            <span>via {{ order.carrier }}</span>
+            {% endif %}
+          </p>
+        </div>
+        <div class="fulfillment-card__status">
+          {% if order.fulfillment_status == 'delivered' %}
+          <span class="status-badge status-badge--success">Delivered</span>
+          {% else %}
+          <span class="status-badge status-badge--info">Shipped</span>
+          {% endif %}
+          {% if order.tracking_number %}
+          <span class="tracking-badge">Track: {{ order.tracking_number[:10] }}...</span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Quick Actions -->
+  <section class="dashboard-section">
+    <div class="section-header">
+      <h2 class="section-title">
+        <i class="fas fa-bolt"></i> Quick Actions
+      </h2>
+    </div>
+
+    <div class="quick-actions">
+      <a href="{{ url_for('main.new_item') }}" class="quick-action-btn">
+        <i class="fas fa-plus-circle"></i>
+        <span>Add Item</span>
+      </a>
+      <a href="{{ url_for('reports.analytics') }}" class="quick-action-btn">
+        <i class="fas fa-chart-bar"></i>
+        <span>Analytics</span>
+      </a>
+      <a href="{{ url_for('main.ai_research') }}" class="quick-action-btn">
+        <i class="fas fa-robot"></i>
+        <span>AI Research</span>
+      </a>
+      <a href="{{ url_for('main.settings') }}" class="quick-action-btn">
+        <i class="fas fa-cog"></i>
+        <span>Settings</span>
+      </a>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

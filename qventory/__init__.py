@@ -66,6 +66,45 @@ def create_app():
     app.register_blueprint(ebay_auth_bp)
     app.register_blueprint(expenses_bp)
 
+    # Register template filters
+    @app.template_filter('timeago')
+    def timeago_filter(dt):
+        """Convert datetime to relative time (e.g., '2h ago', '3d ago')"""
+        if not dt:
+            return '—'
+
+        from datetime import datetime, timezone
+
+        # Ensure dt is timezone-aware
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+        diff = now - dt
+
+        seconds = diff.total_seconds()
+
+        if seconds < 60:
+            return 'just now'
+        elif seconds < 3600:
+            minutes = int(seconds / 60)
+            return f'{minutes}m ago' if minutes > 1 else '1m ago'
+        elif seconds < 86400:
+            hours = int(seconds / 3600)
+            return f'{hours}h ago' if hours > 1 else '1h ago'
+        elif seconds < 604800:
+            days = int(seconds / 86400)
+            return f'{days}d ago' if days > 1 else '1d ago'
+        elif seconds < 2592000:
+            weeks = int(seconds / 604800)
+            return f'{weeks}w ago' if weeks > 1 else '1w ago'
+        elif seconds < 31536000:
+            months = int(seconds / 2592000)
+            return f'{months}mo ago' if months > 1 else '1mo ago'
+        else:
+            years = int(seconds / 31536000)
+            return f'{years}y ago' if years > 1 else '1y ago'
+
     # Register error handlers
     @app.errorhandler(404)
     def not_found_error(error):
