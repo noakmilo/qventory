@@ -209,6 +209,7 @@ function initializeItemEventListeners() {
   });
 
   setupInlineEditors();
+  setupLocationButtons();
 }
 
 // Initialize on page load
@@ -318,7 +319,6 @@ function setupInlineEditors() {
 
     const display = container.querySelector('.inline-edit__display');
     const form = container.querySelector('.inline-edit__form');
-    const editBtn = container.querySelector('.inline-edit__toggle');
     const cancelBtn = form ? form.querySelector('.inline-edit__cancel') : null;
 
     if (!form) {
@@ -339,12 +339,13 @@ function setupInlineEditors() {
       }
     };
 
-    const triggers = [];
-    if (editBtn) {
-      triggers.push(editBtn);
-    }
     if (display) {
-      triggers.push(display);
+      display.addEventListener('click', (event) => {
+        if (event.target.closest('[data-inline-ignore]')) {
+          return;
+        }
+        openEditor();
+      });
       display.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
@@ -352,18 +353,6 @@ function setupInlineEditors() {
         }
       });
     }
-
-    triggers.forEach(element => {
-      if (!element) {
-        return;
-      }
-      element.addEventListener('click', (event) => {
-        if (event.target.closest('[data-inline-ignore]')) {
-          return;
-        }
-        openEditor();
-      });
-    });
 
     if (cancelBtn) {
       cancelBtn.addEventListener('click', () => {
@@ -374,6 +363,17 @@ function setupInlineEditors() {
         }
       });
     }
+
+    form.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        form.reset();
+        form.hidden = true;
+        if (display) {
+          display.hidden = false;
+        }
+      }
+    });
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -457,3 +457,175 @@ async function submitInlineForm(container, form, display) {
     }
   }
 }
+
+// ==================== LOCATION MODAL ====================
+
+const locationModal = document.getElementById('locationInlineModal');
+const locationModalForm = document.getElementById('locationModalForm');
+const locationModalFields = document.getElementById('locationModalFields');
+const locationModalClose = document.getElementById('locationModalClose');
+const locationModalCancel = document.getElementById('locationModalCancel');
+let locationModalItemId = null;
+
+function setupLocationButtons() {
+  document.querySelectorAll('.location-inline-button').forEach(button => {
+    if (button.dataset.inlineInitialized === '1') {
+      return;
+    }
+    button.dataset.inlineInitialized = '1';
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      openLocationModal(button);
+    });
+  });
+}
+
+function openLocationModal(button) {
+  if (!locationModal || !locationModalForm || !locationModalFields) {
+    return;
+  }
+
+  const locationContainer = button.closest('.inline-edit--location');
+  const locationDisplay = button.closest('.location-display');
+  if (!locationContainer || !locationDisplay) {
+    return;
+  }
+
+  locationModalItemId = locationContainer.dataset.itemId;
+  locationModalFields.innerHTML = '';
+
+  const components = [
+    { key: 'A', enabled: locationDisplay.dataset.enableA === '1', label: locationDisplay.dataset.labelA || 'A', value: locationDisplay.dataset.locationA || '' },
+    { key: 'B', enabled: locationDisplay.dataset.enableB === '1', label: locationDisplay.dataset.labelB || 'B', value: locationDisplay.dataset.locationB || '' },
+    { key: 'S', enabled: locationDisplay.dataset.enableS === '1', label: locationDisplay.dataset.labelS || 'S', value: locationDisplay.dataset.locationS || '' },
+    { key: 'C', enabled: locationDisplay.dataset.enableC === '1', label: locationDisplay.dataset.labelC || 'C', value: locationDisplay.dataset.locationC || '' },
+  ];
+
+  let firstInput = null;
+  components.forEach(component => {
+    if (!component.enabled) {
+      return;
+    }
+    const wrapper = document.createElement('label');
+    wrapper.textContent = component.label;
+    wrapper.className = 'location-modal__label';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = component.key;
+    input.value = component.value;
+    input.autocomplete = 'off';
+    input.dataset.component = component.key;
+    input.setAttribute('data-component', component.key);
+    wrapper.appendChild(input);
+    locationModalFields.appendChild(wrapper);
+    if (!firstInput) {
+      firstInput = input;
+    }
+  });
+
+  locationModal.classList.remove('hidden');
+  locationModal.removeAttribute('hidden');
+  locationModal.removeAttribute('aria-hidden');
+
+  if (firstInput) {
+    firstInput.focus();
+    firstInput.select();
+  }
+}
+
+function closeLocationModal() {
+  if (!locationModal) {
+    return;
+  }
+  locationModal.classList.add('hidden');
+  locationModal.setAttribute('hidden', '');
+  locationModal.setAttribute('aria-hidden', 'true');
+  locationModalItemId = null;
+  if (locationModalFields) {
+    locationModalFields.innerHTML = '';
+  }
+}
+
+async function submitLocationModal(event) {
+  event.preventDefault();
+  if (!locationModalItemId) {
+    return;
+  }
+
+  const payload = {
+    field: 'location',
+    components: {}
+  };
+
+  locationModalForm.querySelectorAll('[data-component]').forEach(input => {
+    const key = input.dataset.component;
+    payload.components[key] = input.value != null ? input.value.trim() : '';
+  });
+
+  const submitButton = locationModalForm.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = 'Saving…';
+  }
+
+  try {
+    const response = await fetch(`/api/items/${locationModalItemId}/inline`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to update location');
+    }
+
+    if (data.row_html) {
+      const row = document.querySelector(`tr[data-item-row="${locationModalItemId}"]`);
+      if (row) {
+        const temp = document.createElement('tbody');
+        temp.innerHTML = data.row_html.trim();
+        const newRow = temp.querySelector('tr');
+        if (newRow) {
+          row.replaceWith(newRow);
+          initializeItemEventListeners();
+        }
+      }
+    }
+  } catch (error) {
+    alert(error.message || 'Error updating location');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || 'Save';
+    }
+    closeLocationModal();
+  }
+}
+
+if (locationModalForm) {
+  locationModalForm.addEventListener('submit', submitLocationModal);
+}
+if (locationModalClose) {
+  locationModalClose.addEventListener('click', closeLocationModal);
+}
+if (locationModalCancel) {
+  locationModalCancel.addEventListener('click', closeLocationModal);
+}
+if (locationModal) {
+  locationModal.addEventListener('click', (event) => {
+    if (event.target === locationModal) {
+      closeLocationModal();
+    }
+  });
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && locationModal && !locationModal.classList.contains('hidden')) {
+    closeLocationModal();
+  }
+});

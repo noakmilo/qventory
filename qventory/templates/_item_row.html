@@ -3,7 +3,7 @@
 {% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set un = current_user.username %}
-<tr>
+<tr data-item-row="{{ it.id }}">
   <td style="text-align:center">
     <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
   </td>
@@ -29,12 +29,9 @@
         <span class="inline-edit__placeholder">Add supplier</span>
         {% endif %}
       </div>
-      <form class="inline-edit__form" hidden>
+      <form class="inline-edit__form inline-edit__form--compact" hidden>
         <input type="text" name="value" value="{{ it.supplier or '' }}" placeholder="Supplier" autocomplete="off">
-        <div class="inline-edit__actions">
-          <button type="submit" class="inline-edit__action">Save</button>
-          <button type="button" class="inline-edit__action inline-edit__cancel">Cancel</button>
-        </div>
+        <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
       </form>
     </div>
   </td>
@@ -47,12 +44,9 @@
         <span class="inline-edit__placeholder">Add cost</span>
         {% endif %}
       </div>
-      <form class="inline-edit__form" hidden>
+      <form class="inline-edit__form inline-edit__form--compact" hidden>
         <input type="number" name="value" step="0.01" min="0" value="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}" placeholder="0.00" inputmode="decimal">
-        <div class="inline-edit__actions">
-          <button type="submit" class="inline-edit__action">Save</button>
-          <button type="button" class="inline-edit__action inline-edit__cancel">Cancel</button>
-        </div>
+        <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
       </form>
     </div>
   </td>
@@ -61,10 +55,23 @@
 
   <!-- Location con QR -->
   <td>
-    <div class="inline-edit inline-edit--location" data-item-id="{{ it.id }}" data-field="location" data-type="location">
-      <div class="inline-edit__display inline-edit__display--location" tabindex="0" role="button">
-        {% if it.location_code %}
-        <div class="location-display">
+    <div class="inline-edit inline-edit--location" data-item-id="{{ it.id }}">
+      <div class="inline-edit__display inline-edit__display--location">
+        <div class="location-display"
+             data-location-code="{{ it.location_code or '' }}"
+             data-location-a="{{ it.A or '' }}"
+             data-location-b="{{ it.B or '' }}"
+             data-location-s="{{ it.S or '' }}"
+             data-location-c="{{ it.C or '' }}"
+             data-enable-a="{{ 1 if settings.enable_A else 0 }}"
+             data-enable-b="{{ 1 if settings.enable_B else 0 }}"
+             data-enable-s="{{ 1 if settings.enable_S else 0 }}"
+             data-enable-c="{{ 1 if settings.enable_C else 0 }}"
+             data-label-a="{{ settings.label_A }}"
+             data-label-b="{{ settings.label_B }}"
+             data-label-s="{{ settings.label_S }}"
+             data-label-c="{{ settings.label_C }}">
+          {% if it.location_code %}
           <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}" data-inline-ignore="true">{{ it.location_code }}</a>
           <a class="tag qr-link"
              href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
@@ -72,39 +79,18 @@
              data-inline-ignore="true">
             <i class="fas fa-qrcode"></i> QR
           </a>
+          {% else %}
+          <span class="inline-edit__placeholder">No location</span>
+          {% endif %}
+          <button type="button"
+                  class="location-inline-button"
+                  title="{{ 'Edit location' if it.location_code else 'Add location' }}"
+                  aria-label="{{ 'Edit location' if it.location_code else 'Add location' }}"
+                  data-inline-ignore="true">
+            <i class="fas fa-pen"></i>
+          </button>
         </div>
-        {% else %}
-        <span class="inline-edit__placeholder">No location</span>
-        {% endif %}
       </div>
-      <form class="inline-edit__form inline-edit__form--location" hidden>
-        <div class="inline-edit__grid">
-          {% if settings.enable_A %}
-          <label>{{ settings.label_A }}
-            <input type="text" data-component="A" name="A" value="{{ it.A or '' }}" autocomplete="off">
-          </label>
-          {% endif %}
-          {% if settings.enable_B %}
-          <label>{{ settings.label_B }}
-            <input type="text" data-component="B" name="B" value="{{ it.B or '' }}" autocomplete="off">
-          </label>
-          {% endif %}
-          {% if settings.enable_S %}
-          <label>{{ settings.label_S }}
-            <input type="text" data-component="S" name="S" value="{{ it.S or '' }}" autocomplete="off">
-          </label>
-          {% endif %}
-          {% if settings.enable_C %}
-          <label>{{ settings.label_C }}
-            <input type="text" data-component="C" name="C" value="{{ it.C or '' }}" autocomplete="off">
-          </label>
-          {% endif %}
-        </div>
-        <div class="inline-edit__actions">
-          <button type="submit" class="inline-edit__action">Save</button>
-          <button type="button" class="inline-edit__action inline-edit__cancel">Cancel</button>
-        </div>
-      </form>
     </div>
   </td>
 

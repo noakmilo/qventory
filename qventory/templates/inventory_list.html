@@ -286,5 +286,26 @@
   </div>
 </div>
 
+<!-- Location Modal -->
+<div id="locationInlineModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="Edit location">
+  <div class="qr-sheet location-modal">
+    <div class="qr-header">
+      <strong><i class="fas fa-map-marker-alt"></i> Edit Location</strong>
+      <div class="qr-actions">
+        <button type="button" id="locationModalClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <form id="locationModalForm" class="location-modal__body">
+      <div id="locationModalFields" class="inline-edit__grid"></div>
+      <div class="inline-edit__actions">
+        <button type="submit" class="inline-edit__action">Save</button>
+        <button type="button" class="inline-edit__action inline-edit__cancel" id="locationModalCancel">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 {% endblock %}

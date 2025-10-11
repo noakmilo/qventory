@@ -1431,13 +1431,29 @@ tbody tr:hover td{
   font-style: italic;
 }
 
-.inline-edit__toggle {
-  background: none;
-  border: 1px solid rgba(148,163,184,0.25);
-  border-radius: 10px;
-  color: var(--sub);
-  width: 30px;
-  height: 30px;
+.inline-edit__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inline-edit__form--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-edit__form--compact input {
+  flex: 1;
+}
+
+.inline-edit__save {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-strong);
+  color: var(--text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1445,16 +1461,9 @@ tbody tr:hover td{
   transition: all 0.2s ease;
 }
 
-.inline-edit__toggle:hover {
-  color: #60a5fa;
-  border-color: rgba(96,165,250,0.4);
-  background: rgba(96,165,250,0.1);
-}
-
-.inline-edit__form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.inline-edit__save:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .inline-edit__form input,
@@ -1502,6 +1511,11 @@ tbody tr:hover td{
   border-radius: 10px;
 }
 
+.inline-edit__display--location {
+  display: flex;
+  align-items: center;
+}
+
 .inline-edit__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -1529,6 +1543,43 @@ tbody tr:hover td{
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.location-inline-button {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(148,163,184,0.3);
+  background: rgba(15,23,42,0.6);
+  color: var(--sub);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.location-inline-button:hover {
+  border-color: rgba(96,165,250,0.5);
+  color: #60a5fa;
+  background: rgba(96,165,250,0.12);
+}
+
+.location-inline-button i {
+  font-size: 10px;
+}
+
+.location-modal {
+  width: min(420px, 92vw);
+}
+
+.location-modal__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .cookie-reject:hover{
   background:rgba(156,163,175,0.1);
