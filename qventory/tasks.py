@@ -149,6 +149,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             # Update eBay-specific fields
                             existing_item.synced_from_ebay = True
                             existing_item.last_ebay_sync = datetime.utcnow()
+                            if start_time:
+                                existing_item.listing_date = start_time.date()
 
                             if parsed_with_images.get('ebay_listing_id'):
                                 existing_item.ebay_listing_id = parsed_with_images['ebay_listing_id']

@@ -189,6 +189,87 @@ def _build_pagination_metadata(total_items: int, page: int, per_page: int):
     }
 
 
+@main_bp.route("/api/items/<int:item_id>/inline", methods=["PATCH"])
+@login_required
+def api_update_item_inline(item_id):
+    item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+    if not item:
+        return jsonify({"ok": False, "error": "Item not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    field = (data.get("field") or "").strip()
+
+    if not field:
+        return jsonify({"ok": False, "error": "Missing field parameter"}), 400
+
+    try:
+        if field == "supplier":
+            value = (data.get("value") or "").strip()
+            item.supplier = value or None
+        elif field == "item_cost":
+            raw_value = data.get("value")
+            if raw_value in (None, ""):
+                item.item_cost = None
+            else:
+                try:
+                    cost = float(raw_value)
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "Invalid cost value"}), 400
+                if cost < 0:
+                    return jsonify({"ok": False, "error": "Cost cannot be negative"}), 400
+                item.item_cost = cost
+        elif field == "location":
+            components = data.get("components") or {}
+            settings = get_or_create_settings(current_user)
+
+            def clean(value):
+                if value is None:
+                    return None
+                value = str(value).strip()
+                return value or None
+
+            A = clean(components.get("A")) if settings.enable_A else None
+            B = clean(components.get("B")) if settings.enable_B else None
+            S = clean(components.get("S")) if settings.enable_S else None
+            C = clean(components.get("C")) if settings.enable_C else None
+
+            enabled = tuple(settings.enabled_levels())
+            location_code = compose_location_code(A=A, B=B, S=S, C=C, enabled=enabled)
+
+            if settings.enable_A:
+                item.A = A
+            if settings.enable_B:
+                item.B = B
+            if settings.enable_S:
+                item.S = S
+            if settings.enable_C:
+                item.C = C
+
+            if not settings.enable_A:
+                item.A = None
+            if not settings.enable_B:
+                item.B = None
+            if not settings.enable_S:
+                item.S = None
+            if not settings.enable_C:
+                item.C = None
+
+            item.location_code = location_code or None
+        else:
+            return jsonify({"ok": False, "error": "Field not supported"}), 400
+
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        settings = get_or_create_settings(current_user)
+        row_html = render_template("_item_row.html", item=item, settings=settings)
+        return jsonify({"ok": True, "row_html": row_html})
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("Inline update failed")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():

@@ -207,6 +207,8 @@ function initializeItemEventListeners() {
       img.dataset.initialized = 'true';
     }
   });
+
+  setupInlineEditors();
 }
 
 // Initialize on page load
@@ -303,4 +305,129 @@ if (btnScanQR) {
       alert('Failed to access camera: ' + error.message);
     }
   });
+}
+
+// ==================== INLINE EDITORS ====================
+
+function setupInlineEditors() {
+  document.querySelectorAll('.inline-edit').forEach(container => {
+    if (container.dataset.inlineInitialized === '1') {
+      return;
+    }
+    container.dataset.inlineInitialized = '1';
+
+    const display = container.querySelector('.inline-edit__display');
+    const form = container.querySelector('.inline-edit__form');
+    const editBtn = container.querySelector('.inline-edit__toggle');
+    const cancelBtn = form ? form.querySelector('.inline-edit__cancel') : null;
+
+    if (!form || !editBtn) {
+      return;
+    }
+
+    editBtn.addEventListener('click', () => {
+      if (display) {
+        display.hidden = true;
+      }
+      form.hidden = false;
+      const firstInput = form.querySelector('input, textarea, select');
+      if (firstInput) {
+        firstInput.focus();
+        if (firstInput.select) {
+          firstInput.select();
+        }
+      }
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        form.reset();
+        form.hidden = true;
+        if (display) {
+          display.hidden = false;
+        }
+      });
+    }
+
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitInlineForm(container, form, display);
+    });
+  });
+}
+
+async function submitInlineForm(container, form, display) {
+  const itemId = container.dataset.itemId;
+  const field = container.dataset.field;
+  const type = container.dataset.type || 'text';
+
+  if (!itemId || !field) {
+    return;
+  }
+
+  const payload = { field };
+
+  if (type === 'location') {
+    const components = {};
+    form.querySelectorAll('[data-component]').forEach(input => {
+      const key = input.dataset.component;
+      if (!key) {
+        return;
+      }
+      components[key] = input.value != null ? input.value.trim() : '';
+    });
+    payload.components = components;
+  } else {
+    const input = form.querySelector('input, textarea, select');
+    if (!input) {
+      return;
+    }
+    payload.value = input.value != null ? input.value.trim() : '';
+  }
+
+  const submitButton = form.querySelector('.inline-edit__action:not(.inline-edit__cancel)');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.dataset.originalText = submitButton.textContent;
+    submitButton.textContent = 'Saving…';
+  }
+
+  try {
+    const response = await fetch(`/api/items/${itemId}/inline`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to update item');
+    }
+
+    if (data.row_html) {
+      const row = container.closest('tr');
+      if (row) {
+        const temp = document.createElement('tbody');
+        temp.innerHTML = data.row_html.trim();
+        const newRow = temp.querySelector('tr');
+        if (newRow) {
+          row.replaceWith(newRow);
+          initializeItemEventListeners();
+        }
+      }
+    }
+  } catch (error) {
+    alert(error.message || 'Error updating item');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || 'Save';
+    }
+    form.hidden = true;
+    if (display) {
+      display.hidden = false;
+    }
+  }
 }
