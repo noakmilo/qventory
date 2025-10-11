@@ -20,62 +20,49 @@ def _rows_to_objects(result: Result) -> List[SimpleNamespace]:
 # ==================== STATS QUERIES (30 DAYS) ====================
 
 STATS_30_DAYS_SQL = """
-WITH date_range AS (
-    SELECT
-        CURRENT_TIMESTAMP - INTERVAL '30 days' AS start_date,
-        CURRENT_TIMESTAMP AS end_date,
-        CURRENT_TIMESTAMP - INTERVAL '60 days' AS prev_start_date,
-        CURRENT_TIMESTAMP - INTERVAL '30 days' AS prev_end_date
-),
-current_period AS (
-    SELECT
-        COUNT(DISTINCT s.id) AS sales_count,
-        COALESCE(SUM(s.sold_price), 0) AS total_revenue,
-        COUNT(DISTINCT CASE WHEN s.shipped_at IS NOT NULL THEN s.id END) AS shipped_count,
-        COUNT(DISTINCT CASE WHEN s.delivered_at IS NOT NULL THEN s.id END) AS delivered_count
-    FROM sales AS s
-    CROSS JOIN date_range AS dr
-    WHERE s.user_id = :user_id
-      AND s.sold_at >= dr.start_date
-      AND s.sold_at <= dr.end_date
-      AND s.status IN ('paid', 'shipped', 'completed')
-),
-previous_period AS (
-    SELECT
-        COUNT(DISTINCT s.id) AS sales_count,
-        COALESCE(SUM(s.sold_price), 0) AS total_revenue,
-        COUNT(DISTINCT CASE WHEN s.shipped_at IS NOT NULL THEN s.id END) AS shipped_count,
-        COUNT(DISTINCT CASE WHEN s.delivered_at IS NOT NULL THEN s.id END) AS delivered_count
-    FROM sales AS s
-    CROSS JOIN date_range AS dr
-    WHERE s.user_id = :user_id
-      AND s.sold_at >= dr.prev_start_date
-      AND s.sold_at < dr.prev_end_date
-      AND s.status IN ('paid', 'shipped', 'completed')
-)
 SELECT
-    cp.sales_count,
-    cp.total_revenue,
-    cp.shipped_count,
-    cp.delivered_count,
-    CASE
-        WHEN pp.sales_count = 0 THEN NULL
-        ELSE ROUND(((cp.sales_count::numeric - pp.sales_count::numeric) / pp.sales_count::numeric) * 100, 1)
-    END AS sales_change_pct,
-    CASE
-        WHEN pp.total_revenue = 0 THEN NULL
-        ELSE ROUND(((cp.total_revenue - pp.total_revenue) / pp.total_revenue) * 100, 1)
-    END AS revenue_change_pct,
-    CASE
-        WHEN pp.shipped_count = 0 THEN NULL
-        ELSE ROUND(((cp.shipped_count::numeric - pp.shipped_count::numeric) / pp.shipped_count::numeric) * 100, 1)
-    END AS shipped_change_pct,
-    CASE
-        WHEN pp.delivered_count = 0 THEN NULL
-        ELSE ROUND(((cp.delivered_count::numeric - pp.delivered_count::numeric) / pp.delivered_count::numeric) * 100, 1)
-    END AS delivered_change_pct
-FROM current_period AS cp
-CROSS JOIN previous_period AS pp;
+    -- Current period (last 30 days)
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.sold_at <= CURRENT_TIMESTAMP
+        THEN s.id END) AS sales_count,
+    COALESCE(SUM(CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.sold_at <= CURRENT_TIMESTAMP
+        THEN s.sold_price ELSE 0 END), 0) AS total_revenue,
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.sold_at <= CURRENT_TIMESTAMP
+        AND s.shipped_at IS NOT NULL
+        THEN s.id END) AS shipped_count,
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.sold_at <= CURRENT_TIMESTAMP
+        AND s.delivered_at IS NOT NULL
+        THEN s.id END) AS delivered_count,
+
+    -- Previous period (30-60 days ago)
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '60 days'
+        AND s.sold_at < CURRENT_TIMESTAMP - INTERVAL '30 days'
+        THEN s.id END) AS prev_sales_count,
+    COALESCE(SUM(CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '60 days'
+        AND s.sold_at < CURRENT_TIMESTAMP - INTERVAL '30 days'
+        THEN s.sold_price ELSE 0 END), 0) AS prev_total_revenue,
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '60 days'
+        AND s.sold_at < CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.shipped_at IS NOT NULL
+        THEN s.id END) AS prev_shipped_count,
+    COUNT(DISTINCT CASE
+        WHEN s.sold_at >= CURRENT_TIMESTAMP - INTERVAL '60 days'
+        AND s.sold_at < CURRENT_TIMESTAMP - INTERVAL '30 days'
+        AND s.delivered_at IS NOT NULL
+        THEN s.id END) AS prev_delivered_count
+FROM sales AS s
+WHERE s.user_id = :user_id
+  AND s.status IN ('paid', 'shipped', 'completed');
 """
 
 
@@ -234,15 +221,36 @@ def fetch_dashboard_stats(session: Session, *, user_id: int) -> SimpleNamespace:
     """Fetch 30-day stats with percentage changes"""
     result = session.execute(text(STATS_30_DAYS_SQL), {"user_id": user_id})
     rows = _rows_to_objects(result)
-    return rows[0] if rows else SimpleNamespace(
-        sales_count=0,
-        total_revenue=0,
-        shipped_count=0,
-        delivered_count=0,
-        sales_change_pct=None,
-        revenue_change_pct=None,
-        shipped_change_pct=None,
-        delivered_change_pct=None
+
+    if not rows:
+        return SimpleNamespace(
+            sales_count=0,
+            total_revenue=0,
+            shipped_count=0,
+            delivered_count=0,
+            sales_change_pct=None,
+            revenue_change_pct=None,
+            shipped_change_pct=None,
+            delivered_change_pct=None
+        )
+
+    row = rows[0]
+
+    # Calculate percentage changes in Python
+    def calc_pct_change(current, previous):
+        if previous == 0:
+            return None
+        return round(((current - previous) / previous) * 100, 1)
+
+    return SimpleNamespace(
+        sales_count=row.sales_count or 0,
+        total_revenue=row.total_revenue or 0,
+        shipped_count=row.shipped_count or 0,
+        delivered_count=row.delivered_count or 0,
+        sales_change_pct=calc_pct_change(row.sales_count or 0, row.prev_sales_count or 0),
+        revenue_change_pct=calc_pct_change(row.total_revenue or 0, row.prev_total_revenue or 0),
+        shipped_change_pct=calc_pct_change(row.shipped_count or 0, row.prev_shipped_count or 0),
+        delivered_change_pct=calc_pct_change(row.delivered_count or 0, row.prev_delivered_count or 0)
     )
 
 
