@@ -46,6 +46,8 @@
     </div>
     <div id="filtersContent" class="filters-content">
       <form id="filterForm" method="get" action="{{ request.path }}" class="filters-grid">
+        <input type="hidden" name="page" value="1">
+        <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
         <div style="grid-column:1/-1">
           <div class="input-with-button" style="position:relative">
             <input class="input" type="text" id="q" name="q" placeholder="Search title / SKU / supplier…" autocomplete="off">
@@ -186,14 +188,57 @@
         </p>
       </div>
       {% endif %}
+    </div>
 
-      <!-- Spinner for loading more items -->
-      <div id="loadingSpinner" style="display:none;text-align:center;padding:20px;color:#888;">
-        <i class="fas fa-spinner fa-spin"></i> Loading more items...
+    <div class="pagination-bar">
+      <div class="pagination-info">
+        {% if pagination.total_items %}
+          Showing {{ pagination.start_index }}–{{ pagination.end_index }} of {{ pagination.total_items }} items
+        {% else %}
+          No items to display
+        {% endif %}
       </div>
+      <div class="pagination-controls">
+        <form method="get" class="pagination-size">
+          <input type="hidden" name="page" value="1">
+          {% for key, value in request.args.items() %}
+            {% if key not in ['per_page', 'page'] %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endif %}
+          {% endfor %}
+          <label for="perPageSelect">Per page:</label>
+          <select id="perPageSelect" name="per_page" onchange="this.form.submit()">
+            {% for option in pagination.per_page_links %}
+              <option value="{{ option.value }}" {% if option.active %}selected{% endif %}>{{ option.value }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <nav class="pagination-nav" aria-label="Inventory pagination">
+          {% if pagination.has_prev %}
+            <a class="pagination-link" href="{{ pagination.prev_url }}">&laquo; Prev</a>
+          {% else %}
+            <span class="pagination-link disabled">&laquo; Prev</span>
+          {% endif %}
 
-      <!-- Scroll sentinel for infinite loading -->
-      <div id="scrollSentinel" style="height:1px;"></div>
+          {% for link in pagination.page_links %}
+            {% if link.ellipsis %}
+              <span class="pagination-ellipsis">…</span>
+            {% else %}
+              {% if link.active %}
+                <span class="pagination-link active">{{ link.number }}</span>
+              {% else %}
+                <a class="pagination-link" href="{{ link.url }}">{{ link.number }}</a>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+
+          {% if pagination.has_next %}
+            <a class="pagination-link" href="{{ pagination.next_url }}">Next &raquo;</a>
+          {% else %}
+            <span class="pagination-link disabled">Next &raquo;</span>
+          {% endif %}
+        </nav>
+      </div>
     </div>
   </div>
 </div>
@@ -241,9 +286,5 @@
   </div>
 </div>
 
-<script>
-  // Pass view_type to dashboard.js
-  window.QVENTORY_VIEW_TYPE = "{{ view_type }}";
-</script>
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 {% endblock %}

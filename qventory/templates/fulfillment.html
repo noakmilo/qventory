@@ -234,5 +234,56 @@
     </div>
   </div>
 
+  <div class="pagination-bar">
+    <div class="pagination-info">
+      {% if pagination.total_items %}
+        Showing {{ pagination.start_index }}–{{ pagination.end_index }} of {{ pagination.total_items }} orders
+      {% else %}
+        No orders to display
+      {% endif %}
+    </div>
+    <div class="pagination-controls">
+      <form method="get" class="pagination-size">
+        <input type="hidden" name="page" value="1">
+        {% for key, value in request.args.items() %}
+          {% if key not in ['per_page', 'page'] %}
+            <input type="hidden" name="{{ key }}" value="{{ value }}">
+          {% endif %}
+        {% endfor %}
+        <label for="fulfillmentPerPage">Per page:</label>
+        <select id="fulfillmentPerPage" name="per_page" onchange="this.form.submit()">
+          {% for option in pagination.per_page_links %}
+            <option value="{{ option.value }}" {% if option.active %}selected{% endif %}>{{ option.value }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      <nav class="pagination-nav" aria-label="Fulfillment pagination">
+        {% if pagination.has_prev %}
+          <a class="pagination-link" href="{{ pagination.prev_url }}">&laquo; Prev</a>
+        {% else %}
+          <span class="pagination-link disabled">&laquo; Prev</span>
+        {% endif %}
+
+        {% for link in pagination.page_links %}
+          {% if link.ellipsis %}
+            <span class="pagination-ellipsis">…</span>
+          {% else %}
+            {% if link.active %}
+              <span class="pagination-link active">{{ link.number }}</span>
+            {% else %}
+              <a class="pagination-link" href="{{ link.url }}">{{ link.number }}</a>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+          <a class="pagination-link" href="{{ pagination.next_url }}">Next &raquo;</a>
+        {% else %}
+          <span class="pagination-link disabled">Next &raquo;</span>
+        {% endif %}
+      </nav>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

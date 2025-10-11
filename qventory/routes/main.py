@@ -4,7 +4,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
-from datetime import datetime
+import math
 import io
 import re
 import os
@@ -47,6 +47,8 @@ from ..helpers.inventory_queries import (
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
 )
+
+PAGE_SIZES = [10, 20, 50, 100, 500]
 
 # ==================== Cloudinary ====================
 # pip install cloudinary
@@ -101,6 +103,92 @@ def _get_inventory_filter_params():
     }
 
 
+def _get_pagination_params(default_per_page: int = 20):
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    page = max(page, 1)
+
+    try:
+        per_page = int(request.args.get("per_page", default_per_page))
+    except (TypeError, ValueError):
+        per_page = default_per_page
+    if per_page not in PAGE_SIZES:
+        per_page = default_per_page
+
+    offset = (page - 1) * per_page
+    return page, per_page, offset
+
+
+def _build_pagination_metadata(total_items: int, page: int, per_page: int):
+    total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
+    page = max(1, min(page, total_pages))
+
+    base_params = request.args.to_dict(flat=True)
+    base_view_args = dict(request.view_args or {})
+
+    def build_url(page_value: int | None = None, per_page_value: int | None = None):
+        params = dict(base_view_args)
+        params.update(base_params)
+        if page_value is not None:
+            params["page"] = page_value
+        else:
+            params.pop("page", None)
+        params["per_page"] = per_page_value if per_page_value is not None else per_page
+        return url_for(request.endpoint, **params)
+
+    page_links = []
+    if total_pages <= 7:
+        numbers = list(range(1, total_pages + 1))
+    else:
+        numbers = [1]
+        left = max(2, page - 2)
+        right = min(total_pages - 1, page + 2)
+        if left > 2:
+            numbers.append(None)
+        numbers.extend(range(left, right + 1))
+        if right < total_pages - 1:
+            numbers.append(None)
+        numbers.append(total_pages)
+
+    for num in numbers:
+        if num is None:
+            page_links.append({"ellipsis": True})
+        else:
+            page_links.append({
+                "number": num,
+                "url": build_url(page_value=num),
+                "active": num == page
+            })
+
+    per_page_links = [
+        {
+            "value": size,
+            "url": build_url(page_value=1, per_page_value=size),
+            "active": size == per_page
+        } for size in PAGE_SIZES
+    ]
+
+    start_index = ((page - 1) * per_page + 1) if total_items else 0
+    end_index = min(start_index + per_page - 1, total_items) if total_items else 0
+
+    return {
+        "page": page,
+        "per_page": per_page,
+        "total_items": total_items,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "prev_url": build_url(page_value=page - 1) if page > 1 else None,
+        "next_url": build_url(page_value=page + 1) if page < total_pages else None,
+        "page_links": page_links,
+        "per_page_links": per_page_links,
+        "start_index": start_index,
+        "end_index": end_index,
+    }
+
+
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
@@ -112,6 +200,8 @@ def dashboard():
     fS = (request.args.get("S") or "").strip()
     fC = (request.args.get("C") or "").strip()
     fPlatform = (request.args.get("platform") or "").strip()
+
+    page, per_page, offset = _get_pagination_params()
 
     items_query = Item.query.filter_by(user_id=current_user.id)
 
@@ -140,8 +230,13 @@ def dashboard():
     items_query = items_query.order_by(Item.created_at.desc())
     total_items = items_query.count()
 
-    # Solo cargar los primeros 20 items
-    items = items_query.limit(20).all()
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+
+    items = items_query.offset(offset).limit(per_page).all()
+    pagination = _build_pagination_metadata(total_items, page, per_page)
 
     def distinct(col):
         return [
@@ -173,6 +268,7 @@ def dashboard():
         settings=s,
         options=options,
         total_items=total_items,
+        pagination=pagination,
         q=q, fA=fA, fB=fB, fS=fS, fC=fC,
         fPlatform=fPlatform, PLATFORMS=PLATFORMS
     )
@@ -186,14 +282,29 @@ def inventory_active():
     """Show only active items (is_active=True)"""
     s = get_or_create_settings(current_user)
 
+    page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
     items, total_items = fetch_active_items(
         db.session,
         user_id=current_user.id,
-        limit=20,
-        offset=0,
+        limit=per_page,
+        offset=offset,
         **filters,
     )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        items, total_items = fetch_active_items(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            **filters,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
 
     mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
     if mismatches:
@@ -224,6 +335,7 @@ def inventory_active():
         settings=s,
         options=options,
         total_items=total_items,
+        pagination=pagination,
         view_type="active",
         page_title="Active Inventory"
     )
@@ -235,14 +347,29 @@ def inventory_sold():
     """Show items that have been sold (have sales records)"""
     s = get_or_create_settings(current_user)
 
+    page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
     items, total_items = fetch_sold_items(
         db.session,
         user_id=current_user.id,
-        limit=20,
-        offset=0,
+        limit=per_page,
+        offset=offset,
         **filters,
     )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        items, total_items = fetch_sold_items(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            **filters,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
 
     sale_title_mismatches = detect_sale_title_mismatches(db.session, user_id=current_user.id)
     if sale_title_mismatches:
@@ -272,6 +399,7 @@ def inventory_sold():
         settings=s,
         options=options,
         total_items=total_items,
+        pagination=pagination,
         view_type="sold",
         page_title="Sold Items"
     )
@@ -283,14 +411,29 @@ def inventory_ended():
     """Show inactive/ended items (is_active=False)"""
     s = get_or_create_settings(current_user)
 
+    page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
     items, total_items = fetch_ended_items(
         db.session,
         user_id=current_user.id,
-        limit=20,
-        offset=0,
+        limit=per_page,
+        offset=offset,
         **filters,
     )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        items, total_items = fetch_ended_items(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            **filters,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
 
     mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
     if mismatches:
@@ -321,6 +464,7 @@ def inventory_ended():
         settings=s,
         options=options,
         total_items=total_items,
+        pagination=pagination,
         view_type="ended",
         page_title="Ended Inventory"
     )
@@ -334,12 +478,27 @@ def fulfillment():
     """Show shipped and delivered orders"""
     from ..models.sale import Sale
 
-    orders, _ = fetch_fulfillment_orders(
+    page, per_page, offset = _get_pagination_params()
+
+    orders, total_items = fetch_fulfillment_orders(
         db.session,
         user_id=current_user.id,
-        limit=500,
-        offset=0,
+        limit=per_page,
+        offset=offset,
     )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        orders, total_items = fetch_fulfillment_orders(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
 
     for order in orders:
         if getattr(order, "resolved_title", None):
@@ -367,7 +526,10 @@ def fulfillment():
         Sale.delivered_at.isnot(None)
     ).scalar()
 
-    total_value = sum((order.sold_price or 0) for order in orders)
+    total_value = db.session.query(func.coalesce(func.sum(Sale.sold_price), 0)).filter(
+        Sale.user_id == current_user.id,
+        or_(Sale.shipped_at.isnot(None), Sale.delivered_at.isnot(None))
+    ).scalar()
 
     return render_template(
         "fulfillment.html",
@@ -375,69 +537,9 @@ def fulfillment():
         delivered_orders=delivered_orders,
         shipped_count=shipped_count,
         delivered_count=delivered_count,
-        total_value=total_value
+        total_value=total_value or 0,
+        pagination=pagination
     )
-
-
-# ---------------------- API: Load more items (infinite scroll) ----------------------
-
-@main_bp.route("/api/load-more-items")
-@login_required
-def api_load_more_items():
-    s = get_or_create_settings(current_user)
-
-    offset = int(request.args.get("offset", 0))
-    limit = int(request.args.get("limit", 20))
-    view_type = (request.args.get("view_type") or "").strip()  # active, sold, ended
-    filters = _get_inventory_filter_params()
-    user_id = current_user.id
-
-    if view_type == "active":
-        items, total_items = fetch_active_items(
-            db.session,
-            user_id=user_id,
-            limit=limit,
-            offset=offset,
-            **filters,
-        )
-    elif view_type == "sold":
-        items, total_items = fetch_sold_items(
-            db.session,
-            user_id=user_id,
-            limit=limit,
-            offset=offset,
-            **filters,
-        )
-    elif view_type == "ended":
-        items, total_items = fetch_ended_items(
-            db.session,
-            user_id=user_id,
-            limit=limit,
-            offset=offset,
-            **filters,
-        )
-    else:
-        # Default fallback behaves as active inventory
-        items, total_items = fetch_active_items(
-            db.session,
-            user_id=user_id,
-            limit=limit,
-            offset=offset,
-            **filters,
-        )
-
-    # Renderizar solo las filas de items
-    items_html = []
-    for it in items:
-        # Generar HTML para cada item (usando el mismo formato del dashboard)
-        item_html = render_template("_item_row.html", item=it, settings=s)
-        items_html.append(item_html)
-
-    return jsonify({
-        "ok": True,
-        "items": items_html,
-        "has_more": (offset + len(items)) < total_items
-    })
 
 
 # ---------------------- CSV Export/Import (protegido) ----------------------
