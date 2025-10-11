@@ -279,9 +279,10 @@
       {% if current_user.is_authenticated %}
       let lastKnownCount = 0;
       let hasShownInitialCount = false;
+      let lastCompletedImportId = null;
 
       // Show toast notification
-      function showToast(message, link) {
+      function showToast(message, link, linkText = 'View Report') {
         const toast = document.createElement('div');
         toast.className = 'report-toast';
         toast.innerHTML = `
@@ -290,7 +291,7 @@
             <div style="flex:1;">
               <div style="font-weight:600;margin-bottom:4px;">${message}</div>
               <a href="${link}" style="font-size:12px;color:#60a5fa;text-decoration:none;">
-                View Report <i class="fas fa-arrow-right"></i>
+                ${linkText} <i class="fas fa-arrow-right"></i>
               </a>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:20px;padding:0;width:24px;height:24px;">
@@ -325,7 +326,7 @@
                     const message = newReports === 1
                       ? 'AI Research report completed!'
                       : `${newReports} AI Research reports completed!`;
-                    showToast(message, '/reports');
+                    showToast(message, '/reports', 'View Report');
                   }
 
                   lastKnownCount = data.count;
@@ -340,11 +341,35 @@
           .catch(err => console.error('Badge update error:', err));
       }
 
+      // Poll for active/completed import jobs
+      function checkImportStatus() {
+        fetch('/api/import/active')
+          .then(r => r.json())
+          .then(data => {
+            if (data.ok && data.recent_completion) {
+              const job = data.recent_completion;
+              // Only show notification once per completed job
+              if (job.id !== lastCompletedImportId) {
+                lastCompletedImportId = job.id;
+                const totalItems = (job.imported_count || 0) + (job.updated_count || 0);
+                showToast(
+                  `eBay import completed! ${totalItems} items processed.`,
+                  '{{ url_for("main.dashboard") }}',
+                  'View Inventory'
+                );
+              }
+            }
+          })
+          .catch(err => console.error('Import status error:', err));
+      }
+
       // Update immediately on page load
       updateReportsBadge();
+      checkImportStatus();
 
       // Poll every 10 seconds (faster for better UX)
       setInterval(updateReportsBadge, 10000);
+      setInterval(checkImportStatus, 10000);
       {% endif %}
     })();
   </script>

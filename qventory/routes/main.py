@@ -817,6 +817,36 @@ def import_job_status(job_id):
     return jsonify({"ok": True, "job": job.to_dict()})
 
 
+# API endpoint to check for active import jobs (for global notifications)
+@main_bp.route("/api/import/active")
+@login_required
+def active_import_job():
+    """Get the most recent active import job for current user"""
+    from qventory.models.import_job import ImportJob
+
+    # Find the most recent job that's either pending or processing
+    job = ImportJob.query.filter_by(user_id=current_user.id).filter(
+        ImportJob.status.in_(['pending', 'processing'])
+    ).order_by(ImportJob.created_at.desc()).first()
+
+    if job:
+        return jsonify({"ok": True, "has_active": True, "job": job.to_dict()})
+
+    # Check for recently completed jobs (within last 30 seconds) that haven't been notified
+    from datetime import datetime, timedelta
+    recent_cutoff = datetime.utcnow() - timedelta(seconds=30)
+
+    recent_job = ImportJob.query.filter_by(user_id=current_user.id).filter(
+        ImportJob.status == 'completed',
+        ImportJob.completed_at >= recent_cutoff
+    ).order_by(ImportJob.completed_at.desc()).first()
+
+    if recent_job:
+        return jsonify({"ok": True, "has_active": False, "recent_completion": recent_job.to_dict()})
+
+    return jsonify({"ok": True, "has_active": False})
+
+
 # eBay import is now handled by Celery task
 # See tasks.py for implementation
 
