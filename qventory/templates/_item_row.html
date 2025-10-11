@@ -22,15 +22,12 @@
 
   <td class="mobile-hide">
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="supplier" data-type="text">
-      <div class="inline-edit__display">
+      <div class="inline-edit__display" tabindex="0" role="button">
         {% if it.supplier %}
-        <span class="tag">{{ it.supplier }}</span>
+        <span class="inline-edit__value tag">{{ it.supplier }}</span>
         {% else %}
         <span class="inline-edit__placeholder">Add supplier</span>
         {% endif %}
-        <button type="button" class="inline-edit__toggle" aria-label="Edit supplier">
-          <i class="fas fa-pen"></i>
-        </button>
       </div>
       <form class="inline-edit__form" hidden>
         <input type="text" name="value" value="{{ it.supplier or '' }}" placeholder="Supplier" autocomplete="off">
@@ -43,15 +40,12 @@
   </td>
   <td class="mobile-hide">
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
-      <div class="inline-edit__display">
+      <div class="inline-edit__display" tabindex="0" role="button">
         {% if it.item_cost %}
-        <span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+        <span class="inline-edit__value tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
         {% else %}
         <span class="inline-edit__placeholder">Add cost</span>
         {% endif %}
-        <button type="button" class="inline-edit__toggle" aria-label="Edit cost">
-          <i class="fas fa-pen"></i>
-        </button>
       </div>
       <form class="inline-edit__form" hidden>
         <input type="number" name="value" step="0.01" min="0" value="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}" placeholder="0.00" inputmode="decimal">
@@ -68,22 +62,20 @@
   <!-- Location con QR -->
   <td>
     <div class="inline-edit inline-edit--location" data-item-id="{{ it.id }}" data-field="location" data-type="location">
-      <div class="inline-edit__display">
+      <div class="inline-edit__display inline-edit__display--location" tabindex="0" role="button">
         {% if it.location_code %}
         <div class="location-display">
-          <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}">{{ it.location_code }}</a>
+          <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}" data-inline-ignore="true">{{ it.location_code }}</a>
           <a class="tag qr-link"
              href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-             data-caption="QR for {{ it.location_code }}">
+             data-caption="QR for {{ it.location_code }}"
+             data-inline-ignore="true">
             <i class="fas fa-qrcode"></i> QR
           </a>
         </div>
         {% else %}
         <span class="inline-edit__placeholder">No location</span>
         {% endif %}
-        <button type="button" class="inline-edit__toggle" aria-label="Edit location">
-          <i class="fas fa-pen"></i>
-        </button>
       </div>
       <form class="inline-edit__form inline-edit__form--location" hidden>
         <div class="inline-edit__grid">

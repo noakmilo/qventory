@@ -321,11 +321,11 @@ function setupInlineEditors() {
     const editBtn = container.querySelector('.inline-edit__toggle');
     const cancelBtn = form ? form.querySelector('.inline-edit__cancel') : null;
 
-    if (!form || !editBtn) {
+    if (!form) {
       return;
     }
 
-    editBtn.addEventListener('click', () => {
+    const openEditor = () => {
       if (display) {
         display.hidden = true;
       }
@@ -333,10 +333,36 @@ function setupInlineEditors() {
       const firstInput = form.querySelector('input, textarea, select');
       if (firstInput) {
         firstInput.focus();
-        if (firstInput.select) {
+        if (typeof firstInput.select === 'function') {
           firstInput.select();
         }
       }
+    };
+
+    const triggers = [];
+    if (editBtn) {
+      triggers.push(editBtn);
+    }
+    if (display) {
+      triggers.push(display);
+      display.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openEditor();
+        }
+      });
+    }
+
+    triggers.forEach(element => {
+      if (!element) {
+        return;
+      }
+      element.addEventListener('click', (event) => {
+        if (event.target.closest('[data-inline-ignore]')) {
+          return;
+        }
+        openEditor();
+      });
     });
 
     if (cancelBtn) {
