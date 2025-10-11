@@ -63,7 +63,16 @@ def _build_item_filters(
 
 
 ACTIVE_ITEMS_SQL = """
-WITH normalized AS (
+WITH listing_meta AS (
+    SELECT
+        l.item_id,
+        l.user_id,
+        MAX(l.listed_at)      AS latest_listed_at,
+        MAX(l.last_synced_at) AS latest_synced_at
+    FROM listings AS l
+    GROUP BY l.item_id, l.user_id
+),
+normalized AS (
     SELECT
         i.id,
         i.user_id,
@@ -84,10 +93,21 @@ WITH normalized AS (
         i.poshmark_url,
         i.depop_url,
         i.ebay_listing_id,
-        COALESCE(i.listing_date::timestamp, i.created_at) AS sort_ts,
         i.listing_date,
-        i.created_at
+        i.created_at,
+        i.last_ebay_sync,
+        lm.latest_listed_at,
+        lm.latest_synced_at,
+        COALESCE(
+            lm.latest_listed_at,
+            i.listing_date::timestamp,
+            i.last_ebay_sync,
+            i.created_at
+        ) AS sort_ts
     FROM items AS i
+    LEFT JOIN listing_meta AS lm
+      ON lm.item_id = i.id
+     AND lm.user_id = i.user_id
     WHERE {where_clause}
 )
 SELECT

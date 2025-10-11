@@ -4,6 +4,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
+from datetime import datetime
 import io
 import re
 import os
@@ -348,6 +349,12 @@ def fulfillment():
 
     shipped_orders = [o for o in orders if o.fulfillment_state == "shipped"]
     delivered_orders = [o for o in orders if o.fulfillment_state == "delivered"]
+
+    def _event_key(order):
+        return order.event_ts or datetime.min
+
+    shipped_orders.sort(key=_event_key, reverse=True)
+    delivered_orders.sort(key=_event_key, reverse=True)
 
     shipped_count = db.session.query(func.count(Sale.id)).filter(
         Sale.user_id == current_user.id,
