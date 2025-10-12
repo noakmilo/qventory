@@ -238,7 +238,7 @@ function setupActionButtons() {
       }
 
       // Open AI Research page for this item
-      window.location.href = `/ai_research?item_id=${itemId}&title=${encodeURIComponent(itemTitle)}`;
+      window.location.href = `/ai-research?item_id=${itemId}&title=${encodeURIComponent(itemTitle)}`;
     });
   });
 
@@ -270,7 +270,7 @@ function setupActionButtons() {
       if (itemPrice) params.append('price', itemPrice);
 
       // Open Profit Calculator page for this item
-      window.location.href = `/profit_calculator?${params.toString()}`;
+      window.location.href = `/profit-calculator?${params.toString()}`;
     });
   });
 
@@ -306,13 +306,11 @@ function setupActionButtons() {
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
       try {
-        const response = await fetch('/api/items/sync_location_to_ebay', {
+        const response = await fetch('/item/sync_to_ebay', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            item_id: itemId,
-            ebay_listing_id: ebayListingId,
-            location_code: locationCode
+            item_id: itemId
           })
         });
 

@@ -83,6 +83,11 @@
         <span>AI Research</span>
       </a>
 
+      <a href="{{ url_for('main.profit_calculator') }}" class="sidebar-item {% if 'profit_calculator' in request.endpoint %}active{% endif %}" title="Profit Calculator">
+        <i class="fas fa-calculator"></i>
+        <span>Profit Calculator</span>
+      </a>
+
       <a href="{{ url_for('main.qr_batch') }}" class="sidebar-item {% if 'qr_batch' in request.endpoint %}active{% endif %}" title="QR Batch">
         <i class="fas fa-qrcode"></i>
         <span>QR Batch</span>
