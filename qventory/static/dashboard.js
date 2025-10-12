@@ -210,12 +210,159 @@ function initializeItemEventListeners() {
 
   setupInlineEditors();
   setupLocationButtons();
+  setupActionButtons();
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   initializeItemEventListeners();
 });
+
+// ==================== ACTION BUTTONS ====================
+
+function setupActionButtons() {
+  // AI Research buttons
+  document.querySelectorAll('.ai-research-btn').forEach(btn => {
+    if (btn.dataset.initialized) return;
+    btn.dataset.initialized = 'true';
+    btn.style.cursor = 'pointer';
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const itemId = btn.dataset.itemId;
+      const itemTitle = btn.dataset.itemTitle;
+
+      if (!itemId) {
+        alert('Item ID not found');
+        return;
+      }
+
+      // Open AI Research page for this item
+      window.location.href = `/ai_research?item_id=${itemId}&title=${encodeURIComponent(itemTitle)}`;
+    });
+  });
+
+  // Profit Calculator buttons
+  document.querySelectorAll('.profit-calc-btn').forEach(btn => {
+    if (btn.dataset.initialized) return;
+    btn.dataset.initialized = 'true';
+    btn.style.cursor = 'pointer';
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const itemId = btn.dataset.itemId;
+      const itemTitle = btn.dataset.itemTitle;
+      const itemCost = btn.dataset.itemCost;
+      const itemPrice = btn.dataset.itemPrice;
+
+      if (!itemId) {
+        alert('Item ID not found');
+        return;
+      }
+
+      // Build query params
+      const params = new URLSearchParams({
+        item_id: itemId,
+        title: itemTitle || ''
+      });
+
+      if (itemCost) params.append('cost', itemCost);
+      if (itemPrice) params.append('price', itemPrice);
+
+      // Open Profit Calculator page for this item
+      window.location.href = `/profit_calculator?${params.toString()}`;
+    });
+  });
+
+  // Sync to eBay buttons
+  document.querySelectorAll('.sync-to-ebay-btn').forEach(btn => {
+    if (btn.dataset.initialized) return;
+    btn.dataset.initialized = 'true';
+    btn.style.cursor = 'pointer';
+
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const itemId = btn.dataset.itemId;
+      const ebayListingId = btn.dataset.ebayListingId;
+      const locationCode = btn.dataset.locationCode;
+
+      if (!itemId || !ebayListingId) {
+        alert('Item ID or eBay Listing ID not found');
+        return;
+      }
+
+      if (!locationCode) {
+        alert('No location code set for this item. Please add a location first.');
+        return;
+      }
+
+      if (!confirm(`Sync location "${locationCode}" to eBay listing ${ebayListingId}?`)) {
+        return;
+      }
+
+      // Disable button and show loading state
+      const originalHTML = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      try {
+        const response = await fetch('/api/items/sync_location_to_ebay', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            item_id: itemId,
+            ebay_listing_id: ebayListingId,
+            location_code: locationCode
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          alert(data.message || 'Location synced successfully!');
+        } else {
+          alert('Error: ' + (data.error || 'Failed to sync location'));
+        }
+      } catch (error) {
+        console.error('Sync to eBay error:', error);
+        alert('Failed to sync location to eBay');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+      }
+    });
+  });
+
+  // Thumb buttons (image preview)
+  document.querySelectorAll('.thumb-wrap').forEach(btn => {
+    if (btn.dataset.initialized) return;
+    btn.dataset.initialized = 'true';
+    btn.style.cursor = 'pointer';
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const fullImageUrl = btn.dataset.full;
+      if (fullImageUrl) {
+        openImageModal(fullImageUrl);
+      }
+    });
+  });
+
+  // QR links
+  document.querySelectorAll('.qr-link').forEach(link => {
+    if (link.dataset.initialized) return;
+    link.dataset.initialized = 'true';
+    link.style.cursor = 'pointer';
+
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const qrUrl = link.href;
+      const caption = link.dataset.caption || 'QR Code';
+      const publicLink = link.href.replace('/qr/', '/location/');
+      openQRModal(qrUrl, caption, publicLink);
+    });
+  });
+}
 
 // ==================== FILTERS TOGGLE ====================
 
