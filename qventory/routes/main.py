@@ -1913,11 +1913,17 @@ def check_admin_auth():
     """Check if admin is authenticated via session"""
     return request.cookies.get("admin_auth") == "authenticated"
 
-def require_admin():
+def require_admin(f):
     """Decorator to require admin authentication"""
-    if not check_admin_auth():
-        return redirect(url_for('main.admin_login'))
-    return None
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not check_admin_auth():
+            flash("Admin authentication required", "error")
+            return redirect(url_for('main.admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @main_bp.route("/admin")
@@ -1952,13 +1958,9 @@ def admin_logout():
 
 
 @main_bp.route("/admin/dashboard")
-@login_required
+@require_admin
 def admin_dashboard():
     """Admin dashboard - view all users and their inventory stats"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     # Get all users with item count
     users = User.query.all()
     user_stats = []
@@ -1978,12 +1980,9 @@ def admin_dashboard():
 
 
 @main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
+@require_admin
 def admin_delete_user(user_id):
     """Delete a user and all their items"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     user = User.query.get_or_404(user_id)
     username = user.username
 
@@ -2002,13 +2001,9 @@ def admin_delete_user(user_id):
 
 
 @main_bp.route("/admin/user/create", methods=["GET", "POST"])
-@login_required
+@require_admin
 def admin_create_user():
     """Create a new user from admin panel"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         email = request.form.get("email", "").strip().lower()
@@ -2044,13 +2039,9 @@ def admin_create_user():
 
 
 @main_bp.route("/admin/users/roles")
-@login_required
+@require_admin
 def admin_users_roles():
     """Manage user roles for AI Research token limits"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     # Get all users with their token stats
     from qventory.models.ai_token import AITokenUsage, AITokenConfig
 
@@ -2072,12 +2063,9 @@ def admin_users_roles():
 
 
 @main_bp.route("/admin/user/<int:user_id>/role", methods=["POST"])
+@require_admin
 def admin_change_user_role(user_id):
     """Change a user's role"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     user = User.query.get_or_404(user_id)
     new_role = request.form.get("role", "").strip().lower()
 
@@ -2095,13 +2083,9 @@ def admin_change_user_role(user_id):
 
 
 @main_bp.route("/admin/tokens/config")
-@login_required
+@require_admin
 def admin_token_config():
     """Manage AI token configurations per role"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     from qventory.models.ai_token import AITokenConfig
 
     configs = AITokenConfig.query.order_by(AITokenConfig.daily_tokens.desc()).all()
@@ -2110,12 +2094,9 @@ def admin_token_config():
 
 
 @main_bp.route("/admin/tokens/config/<string:role>", methods=["POST"])
+@require_admin
 def admin_update_token_config(role):
     """Update token limit for a role"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     from qventory.models.ai_token import AITokenConfig
 
     new_limit = request.form.get("daily_tokens", "").strip()
@@ -2144,13 +2125,9 @@ def admin_update_token_config(role):
 # ==================== PLAN LIMITS MANAGEMENT ====================
 
 @main_bp.route("/admin/plan-limits")
-@login_required
+@require_admin
 def admin_plan_limits():
     """Manage plan limits (items, features, etc.)"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     from qventory.models.subscription import PlanLimit
 
     plans = PlanLimit.query.order_by(PlanLimit.max_items.nullslast(), PlanLimit.max_items).all()
@@ -2159,12 +2136,9 @@ def admin_plan_limits():
 
 
 @main_bp.route("/admin/plan-limits/<string:plan>", methods=["POST"])
+@require_admin
 def admin_update_plan_limits(plan):
     """Update limits for a specific plan"""
-    auth_check = require_admin()
-    if auth_check:
-        return auth_check
-
     from qventory.models.subscription import PlanLimit
 
     plan_limit = PlanLimit.query.filter_by(plan=plan).first_or_404()
