@@ -190,64 +190,55 @@ WHERE s.user_id = :user_id
 """
 
 ENDED_ITEMS_SQL = """
-WITH ended AS (
-    SELECT
-        i.id,
-        i.user_id,
-        i.title,
-        i.sku,
-        i.item_thumb,
-        i.item_price,
-        i.item_cost,
-        i.supplier,
-        i.location_code,
-        i.web_url,
-        i.ebay_url,
-        i.amazon_url,
-        i.mercari_url,
-        i.vinted_url,
-        i.poshmark_url,
-        i.depop_url,
-        i.ebay_listing_id,
-        COALESCE(
-            MAX(CASE WHEN l.status IN ('ended','deleted') THEN l.ended_at END),
-            i.updated_at,
-            i.created_at
-        ) AS ended_ts
-    FROM items AS i
-    LEFT JOIN listings AS l
-      ON l.item_id = i.id
-     AND l.user_id = i.user_id
-    WHERE {where_clause}
-    GROUP BY i.id, i.user_id, i.title, i.sku, i.item_thumb, i.item_price, i.item_cost,
-             i.supplier, i.location_code, i.web_url, i.ebay_url, i.amazon_url, i.mercari_url,
-             i.vinted_url, i.poshmark_url, i.depop_url, i.ebay_listing_id, i.updated_at, i.created_at
-)
 SELECT
-    ended.*,
-    ls.marketplace,
-    ls.marketplace_url,
-    ls.status AS listing_status
-FROM ended
-LEFT JOIN LATERAL (
-    SELECT l.marketplace,
-           l.marketplace_url,
-           l.status,
-           l.ended_at
-    FROM listings AS l
-    WHERE l.item_id = ended.id
-      AND l.user_id = ended.user_id
-    ORDER BY l.ended_at DESC NULLS LAST, l.updated_at DESC NULLS LAST
-    LIMIT 1
-) AS ls ON TRUE
-ORDER BY ended.ended_ts DESC NULLS LAST, ended.id DESC
+    i.id,
+    i.user_id,
+    i.title,
+    i.sku,
+    i.item_thumb,
+    i.item_price,
+    i.item_cost,
+    i.supplier,
+    i.location_code,
+    i.web_url,
+    i.ebay_url,
+    i.amazon_url,
+    i.mercari_url,
+    i.vinted_url,
+    i.poshmark_url,
+    i.depop_url,
+    i.ebay_listing_id,
+    i.A,
+    i.B,
+    i.S,
+    i.C,
+    i.updated_at AS ended_ts,
+    NULL AS sold_at,
+    NULL AS shipped_at,
+    NULL AS delivered_at,
+    NULL AS marketplace,
+    NULL AS marketplace_order_id,
+    NULL AS status
+FROM items AS i
+LEFT JOIN sales AS s
+  ON s.item_id = i.id
+ AND s.user_id = i.user_id
+ AND s.status IN ('paid', 'shipped', 'completed')
+WHERE {where_clause}
+  AND s.id IS NULL
+ORDER BY i.updated_at DESC NULLS LAST, i.id DESC
 LIMIT :limit OFFSET :offset;
 """
 
 ENDED_COUNT_SQL = """
 SELECT COUNT(*)
 FROM items AS i
-WHERE {where_clause};
+LEFT JOIN sales AS s
+  ON s.item_id = i.id
+ AND s.user_id = i.user_id
+ AND s.status IN ('paid', 'shipped', 'completed')
+WHERE {where_clause}
+  AND s.id IS NULL;
 """
 
 FULFILLMENT_SQL = """
