@@ -952,7 +952,7 @@ def import_ebay():
     try:
         from qventory.tasks import import_ebay_complete as import_task
 
-        import_mode = request.form.get('import_mode', 'new_only')
+        import_mode = request.form.get('import_mode', 'sync_all')
         listing_status = request.form.get('listing_status', 'ACTIVE')
         days_back = request.form.get('days_back', None)  # For sales import (None = all time)
 
