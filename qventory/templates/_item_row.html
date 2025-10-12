@@ -5,7 +5,12 @@
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}">
   <td style="text-align:center">
-    <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
+    {% if view_type == 'sold' %}
+      {# No checkbox for sold items (no bulk actions) #}
+      <span style="color:var(--sub);font-size:12px">—</span>
+    {% else %}
+      <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
+    {% endif %}
   </td>
   <td>
     {% if it.item_thumb %}
@@ -21,27 +26,38 @@
   <td><span class="tag itsku">{{ it.sku }}</span></td>
 
   <td class="mobile-hide">
-    <div class="inline-edit" data-item-id="{{ it.id }}" data-field="supplier" data-type="text">
-      <div class="inline-edit__display" tabindex="0" role="button">
-        {% if it.supplier %}
-        <span class="inline-edit__value tag">{{ it.supplier }}</span>
-        {% else %}
-        <span class="inline-edit__placeholder">Add supplier</span>
-        {% endif %}
+    {% if view_type == 'sold' %}
+      {# Read-only supplier for sold items #}
+      {% if it.supplier %}
+      <span class="tag">{{ it.supplier }}</span>
+      {% else %}
+      <span style="color:var(--sub);font-size:12px">—</span>
+      {% endif %}
+    {% else %}
+      {# Editable supplier for active items #}
+      <div class="inline-edit" data-item-id="{{ it.id }}" data-field="supplier" data-type="text">
+        <div class="inline-edit__display" tabindex="0" role="button">
+          {% if it.supplier %}
+          <span class="inline-edit__value tag">{{ it.supplier }}</span>
+          {% else %}
+          <span class="inline-edit__placeholder">Add supplier</span>
+          {% endif %}
+        </div>
+        <form class="inline-edit__form inline-edit__form--compact" hidden>
+          <input type="text" name="value" value="{{ it.supplier or '' }}" placeholder="Supplier" autocomplete="off">
+          <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
+        </form>
       </div>
-      <form class="inline-edit__form inline-edit__form--compact" hidden>
-        <input type="text" name="value" value="{{ it.supplier or '' }}" placeholder="Supplier" autocomplete="off">
-        <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
-      </form>
-    </div>
+    {% endif %}
   </td>
   <td class="mobile-hide">
+    {# Cost is ALWAYS editable - even for sold items (for profit calculation) #}
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
       <div class="inline-edit__display" tabindex="0" role="button">
         {% if it.item_cost %}
         <span class="inline-edit__value tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
         {% else %}
-        <span class="inline-edit__placeholder">Add cost</span>
+        <span class="inline-edit__placeholder">{{ 'Add cost' if view_type == 'sold' else 'Add cost' }}</span>
         {% endif %}
       </div>
       <form class="inline-edit__form inline-edit__form--compact" hidden>
@@ -55,43 +71,55 @@
 
   <!-- Location con QR -->
   <td>
-    <div class="inline-edit inline-edit--location" data-item-id="{{ it.id }}">
-      <div class="inline-edit__display inline-edit__display--location">
-        <div class="location-display"
-             data-location-code="{{ it.location_code or '' }}"
-             data-location-a="{{ it.A or '' }}"
-             data-location-b="{{ it.B or '' }}"
-             data-location-s="{{ it.S or '' }}"
-             data-location-c="{{ it.C or '' }}"
-             data-enable-a="{{ 1 if settings.enable_A else 0 }}"
-             data-enable-b="{{ 1 if settings.enable_B else 0 }}"
-             data-enable-s="{{ 1 if settings.enable_S else 0 }}"
-             data-enable-c="{{ 1 if settings.enable_C else 0 }}"
-             data-label-a="{{ settings.label_A }}"
-             data-label-b="{{ settings.label_B }}"
-             data-label-s="{{ settings.label_S }}"
-             data-label-c="{{ settings.label_C }}">
-          {% if it.location_code %}
-          <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}" data-inline-ignore="true">{{ it.location_code }}</a>
-          <a class="tag qr-link"
-             href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
-             data-caption="QR for {{ it.location_code }}"
-             data-inline-ignore="true">
-            <i class="fas fa-qrcode"></i> QR
-          </a>
-          {% else %}
-          <span class="inline-edit__placeholder">No location</span>
-          {% endif %}
-          <button type="button"
-                  class="location-inline-button"
-                  title="{{ 'Edit location' if it.location_code else 'Add location' }}"
-                  aria-label="{{ 'Edit location' if it.location_code else 'Add location' }}"
-                  data-inline-ignore="true">
-            <i class="fas fa-pen"></i>
-          </button>
+    {% if view_type == 'sold' %}
+      {# Read-only location for sold items #}
+      {% if it.location_code %}
+      <span class="tag" style="display:inline-flex;align-items:center;gap:6px">
+        <i class="fas fa-map-marker-alt"></i> {{ it.location_code }}
+      </span>
+      {% else %}
+      <span style="color:var(--sub);font-size:12px">—</span>
+      {% endif %}
+    {% else %}
+      {# Editable location for active items #}
+      <div class="inline-edit inline-edit--location" data-item-id="{{ it.id }}">
+        <div class="inline-edit__display inline-edit__display--location">
+          <div class="location-display"
+               data-location-code="{{ it.location_code or '' }}"
+               data-location-a="{{ it.A or '' }}"
+               data-location-b="{{ it.B or '' }}"
+               data-location-s="{{ it.S or '' }}"
+               data-location-c="{{ it.C or '' }}"
+               data-enable-a="{{ 1 if settings.enable_A else 0 }}"
+               data-enable-b="{{ 1 if settings.enable_B else 0 }}"
+               data-enable-s="{{ 1 if settings.enable_S else 0 }}"
+               data-enable-c="{{ 1 if settings.enable_C else 0 }}"
+               data-label-a="{{ settings.label_A }}"
+               data-label-b="{{ settings.label_B }}"
+               data-label-s="{{ settings.label_S }}"
+               data-label-c="{{ settings.label_C }}">
+            {% if it.location_code %}
+            <a href="{{ url_for('main.public_view_location', username=un, code=it.location_code) }}" data-inline-ignore="true">{{ it.location_code }}</a>
+            <a class="tag qr-link"
+               href="{{ url_for('main.qr_for_location', username=un, code=it.location_code) }}"
+               data-caption="QR for {{ it.location_code }}"
+               data-inline-ignore="true">
+              <i class="fas fa-qrcode"></i> QR
+            </a>
+            {% else %}
+            <span class="inline-edit__placeholder">No location</span>
+            {% endif %}
+            <button type="button"
+                    class="location-inline-button"
+                    title="{{ 'Edit location' if it.location_code else 'Add location' }}"
+                    aria-label="{{ 'Edit location' if it.location_code else 'Add location' }}"
+                    data-inline-ignore="true">
+              <i class="fas fa-pen"></i>
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    {% endif %}
   </td>
 
   <td class="mobile-hide">
@@ -108,37 +136,58 @@
 
   <td>
     {% if current_user.is_authenticated %}
-    <button class="btn settingsbtn ai-research-btn"
-            data-item-id="{{ it.id }}"
-            data-item-title="{{ it.title }}"
-            title="AI Market Research">
-      <i class="fas fa-robot"></i>
-    </button>
-    <button class="btn settingsbtn profit-calc-btn"
-            data-item-id="{{ it.id }}"
-            data-item-title="{{ it.title }}"
-            data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
-            data-item-price="{{ it.item_price if it.item_price else '' }}"
-            title="Profit Calculator">
-      <i class="fas fa-calculator"></i>
-    </button>
-    {% if it.ebay_listing_id %}
-    <button class="btn settingsbtn sync-to-ebay-btn"
-            data-item-id="{{ it.id }}"
-            data-ebay-listing-id="{{ it.ebay_listing_id }}"
-            data-location-code="{{ it.location_code if it.location_code else '' }}"
-            title="Sync location to eBay Custom SKU"
-            style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
-      <i class="fab fa-ebay"></i>
-    </button>
-    {% endif %}
-    <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
-    <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-      <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>
-    </form>
-    <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-      <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
-    </form>
+      {% if view_type == 'sold' %}
+        {# Sold items: Only show view/info buttons, no edit/delete #}
+        <button class="btn settingsbtn profit-calc-btn"
+                data-item-id="{{ it.id }}"
+                data-item-title="{{ it.title }}"
+                data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
+                data-item-price="{{ it.item_price if it.item_price else '' }}"
+                title="View Profit Details">
+          <i class="fas fa-calculator"></i>
+        </button>
+        {% if it.ebay_url %}
+        <a class="btn settingsbtn" href="{{ it.ebay_url }}" target="_blank" title="View on eBay" style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
+          <i class="fab fa-ebay"></i>
+        </a>
+        {% endif %}
+        <span class="tag" style="background:rgba(156,163,175,0.05);color:var(--sub);font-size:11px;padding:4px 8px">
+          <i class="fas fa-lock"></i> Sold (Read-only)
+        </span>
+      {% else %}
+        {# Active items: Show all action buttons #}
+        <button class="btn settingsbtn ai-research-btn"
+                data-item-id="{{ it.id }}"
+                data-item-title="{{ it.title }}"
+                title="AI Market Research">
+          <i class="fas fa-robot"></i>
+        </button>
+        <button class="btn settingsbtn profit-calc-btn"
+                data-item-id="{{ it.id }}"
+                data-item-title="{{ it.title }}"
+                data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
+                data-item-price="{{ it.item_price if it.item_price else '' }}"
+                title="Profit Calculator">
+          <i class="fas fa-calculator"></i>
+        </button>
+        {% if it.ebay_listing_id %}
+        <button class="btn settingsbtn sync-to-ebay-btn"
+                data-item-id="{{ it.id }}"
+                data-ebay-listing-id="{{ it.ebay_listing_id }}"
+                data-location-code="{{ it.location_code if it.location_code else '' }}"
+                title="Sync location to eBay Custom SKU"
+                style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
+          <i class="fab fa-ebay"></i>
+        </button>
+        {% endif %}
+        <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
+        <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
+          <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>
+        </form>
+        <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
+          <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
+        </form>
+      {% endif %}
     {% else %}
     <span class="tag">Login to edit</span>
     {% endif %}
