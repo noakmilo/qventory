@@ -144,103 +144,49 @@ WHERE {where_clause};
 """
 
 SOLD_ITEMS_SQL = """
-WITH filtered AS (
-    SELECT
-        s.user_id,
-        s.item_id,
-        i.id AS item_pk,
-        i.title,
-        i.sku,
-        i.item_thumb,
-        i.item_price,
-        i.item_cost,
-        i.supplier,
-        i.location_code,
-        i.web_url,
-        i.ebay_url,
-        i.amazon_url,
-        i.mercari_url,
-        i.vinted_url,
-        i.poshmark_url,
-        i.depop_url,
-        i.ebay_listing_id,
-        s.sold_at,
-        s.shipped_at,
-        s.delivered_at,
-        s.sold_price
-    FROM sales AS s
-    JOIN items AS i
-      ON i.id = s.item_id
-     AND i.user_id = s.user_id
-    WHERE s.item_id IS NOT NULL
-      AND s.status IN ('paid','shipped','completed')
-      AND {item_filters}
-      AND s.user_id = :user_id
-),
-sold AS (
-    SELECT
-        f.item_pk AS id,
-        f.user_id,
-        MAX(f.sold_at)      AS last_sold_at,
-        MAX(f.shipped_at)   AS last_shipped_at,
-        MAX(f.delivered_at) AS last_delivered_at,
-        COUNT(*)            AS sale_count,
-        SUM(f.sold_price)   AS total_revenue,
-        MAX(f.title)        AS title,
-        MAX(f.sku)          AS sku,
-        MAX(f.item_thumb)   AS item_thumb,
-        MAX(f.item_price)   AS item_price,
-        MAX(f.item_cost)    AS item_cost,
-        MAX(f.supplier)     AS supplier,
-        MAX(f.location_code) AS location_code,
-        MAX(f.web_url)      AS web_url,
-        MAX(f.ebay_url)     AS ebay_url,
-        MAX(f.amazon_url)   AS amazon_url,
-        MAX(f.mercari_url)  AS mercari_url,
-        MAX(f.vinted_url)   AS vinted_url,
-        MAX(f.poshmark_url) AS poshmark_url,
-        MAX(f.depop_url)    AS depop_url,
-        MAX(f.ebay_listing_id) AS ebay_listing_id
-    FROM filtered AS f
-    GROUP BY f.item_pk, f.user_id
-)
 SELECT
-    sold.*,
-    ls.marketplace,
-    ls.marketplace_url,
-    ls.status AS listing_status,
-    ls.ended_at
-FROM sold
-LEFT JOIN LATERAL (
-    SELECT l.marketplace,
-           l.marketplace_url,
-           l.status,
-           l.ended_at
-    FROM listings AS l
-    WHERE l.item_id = sold.id
-      AND l.user_id = sold.user_id
-    ORDER BY l.ended_at DESC NULLS LAST, l.listed_at DESC NULLS LAST
-    LIMIT 1
-) AS ls ON TRUE
-ORDER BY sold.last_sold_at DESC NULLS LAST, sold.id DESC
+    s.id,
+    s.user_id,
+    s.item_title AS title,
+    s.item_sku AS sku,
+    COALESCE(i.item_thumb, NULL) AS item_thumb,
+    s.sold_price AS item_price,
+    s.item_cost,
+    COALESCE(i.supplier, NULL) AS supplier,
+    COALESCE(i.location_code, NULL) AS location_code,
+    COALESCE(i.web_url, NULL) AS web_url,
+    COALESCE(i.ebay_url, NULL) AS ebay_url,
+    COALESCE(i.amazon_url, NULL) AS amazon_url,
+    COALESCE(i.mercari_url, NULL) AS mercari_url,
+    COALESCE(i.vinted_url, NULL) AS vinted_url,
+    COALESCE(i.poshmark_url, NULL) AS poshmark_url,
+    COALESCE(i.depop_url, NULL) AS depop_url,
+    COALESCE(i.ebay_listing_id, NULL) AS ebay_listing_id,
+    s.sold_at,
+    s.shipped_at,
+    s.delivered_at,
+    s.marketplace,
+    s.marketplace_order_id,
+    s.status,
+    NULL AS A,
+    NULL AS B,
+    NULL AS S,
+    NULL AS C
+FROM sales AS s
+LEFT JOIN items AS i
+  ON i.id = s.item_id
+ AND i.user_id = s.user_id
+WHERE s.user_id = :user_id
+  AND s.status IN ('paid','shipped','completed')
+ORDER BY s.sold_at DESC NULLS LAST, s.id DESC
 LIMIT :limit OFFSET :offset;
 """
 
 SOLD_COUNT_SQL = """
-WITH filtered AS (
-    SELECT
-        s.item_id,
-        i.id AS item_pk
-    FROM sales AS s
-    JOIN items AS i
-      ON i.id = s.item_id
-     AND i.user_id = s.user_id
-    WHERE s.item_id IS NOT NULL
-      AND s.status IN ('paid','shipped','completed')
-      AND {item_filters}
-      AND s.user_id = :user_id
-)
-SELECT COUNT(DISTINCT filtered.item_pk) FROM filtered;
+SELECT COUNT(*)
+FROM sales AS s
+WHERE s.user_id = :user_id
+  AND s.status IN ('paid','shipped','completed');
 """
 
 ENDED_ITEMS_SQL = """
@@ -468,24 +414,15 @@ def fetch_sold_items(
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
-    item_filters, params = _build_item_filters(
-        user_id,
-        search=search,
-        A=A,
-        B=B,
-        S=S,
-        C=C,
-        platform=platform,
-    )
+    """
+    Fetch sold items (sales records) for a user.
+    NOTE: This returns SALES, not items from inventory.
+    Filters are currently ignored but kept for API compatibility.
+    """
+    query_params = {"user_id": user_id, "limit": limit, "offset": offset}
 
-    query_sql = SOLD_ITEMS_SQL.format(item_filters=item_filters)
-    count_sql = SOLD_COUNT_SQL.format(item_filters=item_filters)
-
-    query_params = dict(params)
-    query_params.update({"limit": limit, "offset": offset})
-
-    items = _rows_to_objects(session.execute(text(query_sql), query_params))
-    total = session.execute(text(count_sql), params).scalar_one()
+    items = _rows_to_objects(session.execute(text(SOLD_ITEMS_SQL), query_params))
+    total = session.execute(text(SOLD_COUNT_SQL), {"user_id": user_id}).scalar_one()
     return items, total
 
 
