@@ -41,16 +41,16 @@ def _build_item_filters(
         params["search"] = f"%{search}%"
 
     if A:
-        clauses.append(f"{alias}.A = :A")
+        clauses.append(f'{alias}."A" = :A')
         params["A"] = A
     if B:
-        clauses.append(f"{alias}.B = :B")
+        clauses.append(f'{alias}."B" = :B')
         params["B"] = B
     if S:
-        clauses.append(f"{alias}.S = :S")
+        clauses.append(f'{alias}."S" = :S')
         params["S"] = S
     if C:
-        clauses.append(f"{alias}.C = :C")
+        clauses.append(f'{alias}."C" = :C')
         params["C"] = C
 
     if platform:
@@ -208,10 +208,10 @@ SELECT
     i.poshmark_url,
     i.depop_url,
     i.ebay_listing_id,
-    i.A,
-    i.B,
-    i.S,
-    i.C,
+    i."A",
+    i."B",
+    i."S",
+    i."C",
     i.updated_at AS ended_ts,
     NULL AS sold_at,
     NULL AS shipped_at,
