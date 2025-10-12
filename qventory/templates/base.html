@@ -352,10 +352,17 @@
               if (job.id !== lastCompletedImportId) {
                 lastCompletedImportId = job.id;
                 const totalItems = (job.imported_count || 0) + (job.updated_count || 0);
+                const errorCount = job.error_count || 0;
+
+                let message = `eBay import completed! ${totalItems} items processed.`;
+                if (errorCount > 0) {
+                  message += ` (${errorCount} failed)`;
+                }
+
                 showToast(
-                  `eBay import completed! ${totalItems} items processed.`,
-                  '{{ url_for("main.dashboard") }}',
-                  'View Inventory'
+                  message,
+                  errorCount > 0 ? '{{ url_for("main.failed_imports") }}' : '{{ url_for("main.dashboard") }}',
+                  errorCount > 0 ? 'View Failed Items' : 'View Inventory'
                 );
               }
             }

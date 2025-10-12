@@ -424,10 +424,11 @@ def get_all_inventory(user_id, max_items=1000):
             # Fourth fallback: Try Trading API GetMyeBaySelling for active listings
             log_inv("Browse API failed, trying Trading API GetMyeBaySelling...")
             try:
-                trading_items = get_active_listings_trading_api(user_id, max_items=max_items)
-                if trading_items:
-                    log_inv(f"Trading API returned {len(trading_items)} active listings")
-                    return trading_items
+                result = get_active_listings_trading_api(user_id, max_items=max_items, collect_failures=False)
+                # Result is just items list when collect_failures=False
+                if result:
+                    log_inv(f"Trading API returned {len(result)} active listings")
+                    return result
             except Exception as trading_error:
                 log_inv(f"ERROR in Trading API fallback: {str(trading_error)}")
 
@@ -532,7 +533,7 @@ def get_ebay_orders(user_id, days_back=None, max_orders=5000):
     return all_orders[:max_orders]
 
 
-def get_active_listings_trading_api(user_id, max_items=1000):
+def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True):
     """
     Get active listings using Trading API (legacy but reliable)
     Uses GetMyeBaySelling call which works with all listing types
@@ -540,22 +541,25 @@ def get_active_listings_trading_api(user_id, max_items=1000):
     Args:
         user_id: Qventory user ID
         max_items: Maximum items to fetch (supports pagination for 200+)
+        collect_failures: If True, return tuple (items, failed_items). If False, return only items list.
 
     Returns:
-        list of items in normalized format
+        If collect_failures=True: tuple (list of items, list of failed items dicts)
+        If collect_failures=False: list of items in normalized format
     """
     log_inv(f"Attempting Trading API GetMyeBaySelling for user {user_id}")
 
     access_token = get_user_access_token(user_id)
     if not access_token:
         log_inv("No access token available")
-        return []
+        return ([], []) if collect_failures else []
 
     app_id = os.environ.get('EBAY_CLIENT_ID')
 
     ns = _XML_NS
 
     all_items = []
+    failed_items = []  # Track items that failed to parse
     page_number = 1
     entries_per_page = 200  # Max allowed by eBay
     total_pages = 1  # Will be updated from first response
@@ -692,13 +696,43 @@ def get_active_listings_trading_api(user_id, max_items=1000):
                     items_in_page += 1
 
                 except Exception as e:
-                    # Log which item failed
+                    # Collect failed item details
                     try:
-                        failed_id = item_elem.find('ebay:ItemID', ns)
-                        failed_title = item_elem.find('ebay:Title', ns)
-                        log_inv(f"❌ Error parsing item ID={failed_id.text if failed_id is not None else 'Unknown'}, Title={failed_title.text[:50] if failed_title is not None else 'Unknown'}: {str(e)}")
-                    except:
+                        failed_id_elem = item_elem.find('ebay:ItemID', ns)
+                        failed_title_elem = item_elem.find('ebay:Title', ns)
+                        failed_sku_elem = item_elem.find('ebay:SKU', ns)
+
+                        failed_id = failed_id_elem.text if failed_id_elem is not None else None
+                        failed_title = failed_title_elem.text if failed_title_elem is not None else None
+                        failed_sku = failed_sku_elem.text if failed_sku_elem is not None else None
+
+                        log_inv(f"❌ Error parsing item ID={failed_id or 'Unknown'}, Title={failed_title[:50] if failed_title else 'Unknown'}: {str(e)}")
+
+                        # Collect failed item data
+                        if collect_failures:
+                            import traceback
+                            failed_items.append({
+                                'ebay_listing_id': failed_id,
+                                'ebay_title': failed_title,
+                                'ebay_sku': failed_sku,
+                                'error_type': 'parsing_error',
+                                'error_message': str(e),
+                                'raw_data': ET.tostring(item_elem, encoding='unicode')[:5000],  # Store raw XML (limit to 5KB)
+                                'traceback': traceback.format_exc()[:2000]
+                            })
+                    except Exception as inner_e:
                         log_inv(f"❌ Error parsing item (couldn't extract ID/title): {str(e)}")
+                        log_inv(f"❌ Additional error during failure collection: {str(inner_e)}")
+                        if collect_failures:
+                            failed_items.append({
+                                'ebay_listing_id': None,
+                                'ebay_title': None,
+                                'ebay_sku': None,
+                                'error_type': 'critical_parsing_error',
+                                'error_message': f"Primary: {str(e)}, Secondary: {str(inner_e)}",
+                                'raw_data': None,
+                                'traceback': None
+                            })
                     continue
 
             log_inv(f"✓ Parsed {items_in_page} items from page {page_number}")
@@ -719,16 +753,27 @@ def get_active_listings_trading_api(user_id, max_items=1000):
     log_inv(f"Trading API Summary:")
     log_inv(f"  eBay reported: {total_entries if 'total_entries' in locals() else 'Unknown'} total active listings")
     log_inv(f"  Successfully fetched: {len(all_items)} items")
-    if 'total_entries' in locals() and len(all_items) < total_entries:
-        missing = total_entries - len(all_items)
-        log_inv(f"  ⚠️  MISSING {missing} items ({missing/total_entries*100:.1f}%)")
-        log_inv(f"  Possible causes:")
-        log_inv(f"    - Items failed to parse (check ❌ errors above)")
-        log_inv(f"    - eBay API returned incomplete data")
-        log_inv(f"    - Items don't meet API filter criteria")
+    log_inv(f"  Failed to parse: {len(failed_items)} items")
+
+    if 'total_entries' in locals():
+        expected_total = total_entries
+        actual_total = len(all_items) + len(failed_items)
+
+        if actual_total < expected_total:
+            still_missing = expected_total - actual_total
+            log_inv(f"  ⚠️  STILL MISSING {still_missing} items ({still_missing/expected_total*100:.1f}%)")
+            log_inv(f"  Possible causes:")
+            log_inv(f"    - eBay API returned incomplete data")
+            log_inv(f"    - Items don't meet API filter criteria")
+
+        if len(failed_items) > 0:
+            log_inv(f"  ⚠️  {len(failed_items)} items failed to parse and will be stored for retry")
     log_inv(f"=" * 60)
 
-    return all_items[:max_items]
+    if collect_failures:
+        return all_items[:max_items], failed_items
+    else:
+        return all_items[:max_items]
 
 
 def get_listings_from_fulfillment_api(user_id, max_items=1000):

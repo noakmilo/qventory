@@ -8,6 +8,7 @@ from .subscription import Subscription, PlanLimit
 from .report import Report
 from .ai_token import AITokenConfig, AITokenUsage
 from .import_job import ImportJob
+from .failed_import import FailedImport
 from .expense import Expense
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     'AITokenConfig',
     'AITokenUsage',
     'ImportJob',
+    'FailedImport',
     'Expense'
 ]

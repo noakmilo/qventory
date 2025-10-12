@@ -31,7 +31,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
     with app.app_context():
         from qventory.models.import_job import ImportJob
         from qventory.models.item import Item
-        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item, get_listing_time_details
+        from qventory.models.failed_import import FailedImport
+        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item, get_listing_time_details, get_active_listings_trading_api
         from qventory.helpers import generate_sku
 
         log_task(f"=== Starting eBay import for user {user_id} ===")
@@ -58,10 +59,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             job.started_at = datetime.utcnow()
             db.session.commit()
 
-            # Fetch inventory from eBay
+            # Fetch inventory from eBay using Trading API with failure collection
             log_task("Fetching inventory from eBay API...")
-            ebay_items = get_all_inventory(user_id, max_items=1000)
+            ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
             log_task(f"Fetched {len(ebay_items)} items from eBay")
+            log_task(f"Failed to parse: {len(failed_items)} items")
 
             job.total_items = len(ebay_items)
             db.session.commit()
@@ -246,6 +248,50 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             # Final commit
             db.session.commit()
 
+            # Store failed items in database for retry
+            log_task(f"Storing {len(failed_items)} failed items for retry...")
+            failed_stored = 0
+            for failed_item in failed_items:
+                try:
+                    # Check if this failed item already exists (avoid duplicates)
+                    existing_failed = None
+                    if failed_item.get('ebay_listing_id'):
+                        existing_failed = FailedImport.query.filter_by(
+                            user_id=user_id,
+                            ebay_listing_id=failed_item['ebay_listing_id'],
+                            resolved=False
+                        ).first()
+
+                    if existing_failed:
+                        # Update existing failed import
+                        existing_failed.retry_count += 1
+                        existing_failed.last_retry_at = datetime.utcnow()
+                        existing_failed.error_message = failed_item.get('error_message')
+                        existing_failed.raw_data = failed_item.get('raw_data')
+                        existing_failed.updated_at = datetime.utcnow()
+                        log_task(f"  Updated existing failed import for listing {failed_item.get('ebay_listing_id')}")
+                    else:
+                        # Create new failed import record
+                        failed_record = FailedImport(
+                            user_id=user_id,
+                            import_job_id=job.id,
+                            ebay_listing_id=failed_item.get('ebay_listing_id'),
+                            ebay_title=failed_item.get('ebay_title'),
+                            ebay_sku=failed_item.get('ebay_sku'),
+                            error_type=failed_item.get('error_type', 'parsing_error'),
+                            error_message=failed_item.get('error_message'),
+                            raw_data=failed_item.get('raw_data'),
+                            retry_count=0,
+                            resolved=False
+                        )
+                        db.session.add(failed_record)
+                        failed_stored += 1
+                except Exception as e:
+                    log_task(f"  ERROR storing failed item: {str(e)}")
+
+            db.session.commit()
+            log_task(f"✓ Stored {failed_stored} new failed items (total with updates: {len(failed_items)})")
+
             # Mark job as completed
             job.status = 'completed'
             job.completed_at = datetime.utcnow()
@@ -253,11 +299,12 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             job.imported_count = imported_count
             job.updated_count = updated_count
             job.skipped_count = skipped_count
-            job.error_count = error_count
+            job.error_count = error_count + len(failed_items)  # Include parsing failures
             db.session.commit()
 
             log_task(f"=== Import completed ===")
             log_task(f"Imported: {imported_count}, Updated: {updated_count}, Skipped: {skipped_count}, Errors: {error_count}")
+            log_task(f"Failed to parse: {len(failed_items)} (stored for retry)")
 
             return {
                 'status': 'completed',
@@ -265,6 +312,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                 'updated': updated_count,
                 'skipped': skipped_count,
                 'errors': error_count,
+                'failed_items': len(failed_items),
                 'total': len(ebay_items)
             }
 
@@ -665,3 +713,173 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             db.session.commit()
 
             raise
+
+
+@celery.task(bind=True, name='qventory.tasks.retry_failed_imports')
+def retry_failed_imports(self, user_id, failed_import_ids=None):
+    """
+    Retry importing items that previously failed to parse
+
+    Args:
+        user_id: Qventory user ID
+        failed_import_ids: List of specific FailedImport IDs to retry (None = retry all unresolved)
+
+    Returns:
+        dict with retry results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.failed_import import FailedImport
+        from qventory.models.item import Item
+        from qventory.helpers import generate_sku
+        from qventory.helpers.ebay_inventory import get_listing_time_details
+        import xml.etree.ElementTree as ET
+
+        log_task(f"=== Starting retry of failed imports for user {user_id} ===")
+
+        # Get failed imports to retry
+        if failed_import_ids:
+            failed_imports = FailedImport.query.filter(
+                FailedImport.id.in_(failed_import_ids),
+                FailedImport.user_id == user_id,
+                FailedImport.resolved == False
+            ).all()
+            log_task(f"Retrying {len(failed_imports)} specific failed imports")
+        else:
+            failed_imports = FailedImport.get_unresolved_for_user(user_id)
+            log_task(f"Retrying all {len(failed_imports)} unresolved failed imports")
+
+        if not failed_imports:
+            log_task("No failed imports to retry")
+            return {
+                'success': True,
+                'retried': 0,
+                'resolved': 0,
+                'still_failed': 0
+            }
+
+        resolved_count = 0
+        still_failed_count = 0
+
+        for failed_import in failed_imports:
+            try:
+                log_task(f"Retrying listing {failed_import.ebay_listing_id}: {failed_import.ebay_title[:50] if failed_import.ebay_title else 'N/A'}")
+
+                # Try to parse the raw XML data again
+                if not failed_import.raw_data:
+                    log_task(f"  No raw data available, skipping")
+                    still_failed_count += 1
+                    continue
+
+                # Parse the XML
+                ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+                item_elem = ET.fromstring(failed_import.raw_data)
+
+                # Extract item data (same logic as in get_active_listings_trading_api)
+                item_id = item_elem.find('ebay:ItemID', ns)
+                title = item_elem.find('ebay:Title', ns)
+
+                # Price
+                selling_status = item_elem.find('ebay:SellingStatus', ns)
+                current_price = selling_status.find('ebay:CurrentPrice', ns) if selling_status is not None else None
+                price = float(current_price.text) if current_price is not None else 0
+
+                # Quantity
+                quantity_elem = item_elem.find('ebay:Quantity', ns)
+                quantity = int(quantity_elem.text) if quantity_elem is not None else 1
+
+                # SKU
+                sku_elem = item_elem.find('ebay:SKU', ns)
+                sku = sku_elem.text if sku_elem is not None else ''
+
+                # Image
+                picture_details = item_elem.find('ebay:PictureDetails', ns)
+                image_url = None
+                if picture_details is not None:
+                    gallery_url = picture_details.find('ebay:GalleryURL', ns)
+                    if gallery_url is not None:
+                        image_url = gallery_url.text
+
+                # Listing times
+                start_elem = item_elem.find('ebay:ListingDetails/ebay:StartTime', ns)
+                if start_elem is None:
+                    start_elem = item_elem.find('ebay:StartTime', ns)
+                end_elem = item_elem.find('ebay:ListingDetails/ebay:EndTime', ns)
+                if end_elem is None:
+                    end_elem = item_elem.find('ebay:EndTime', ns)
+
+                from qventory.helpers.ebay_inventory import _parse_ebay_datetime
+                start_time = _parse_ebay_datetime(start_elem.text if start_elem is not None else None)
+                end_time = _parse_ebay_datetime(end_elem.text if end_elem is not None else None)
+
+                # Check if item already exists
+                existing_item = None
+                if failed_import.ebay_listing_id:
+                    existing_item = Item.query.filter_by(
+                        user_id=user_id,
+                        ebay_listing_id=failed_import.ebay_listing_id
+                    ).first()
+
+                if existing_item:
+                    log_task(f"  Item already exists in database (ID: {existing_item.id}), marking as resolved")
+                    failed_import.resolved = True
+                    failed_import.resolved_at = datetime.utcnow()
+                    resolved_count += 1
+                else:
+                    # Create new item
+                    from qventory.helpers.image_processor import download_and_upload_image
+                    item_thumb = None
+                    if image_url:
+                        log_task(f"  Processing image...")
+                        item_thumb = download_and_upload_image(image_url, target_size_kb=2, max_dimension=400)
+                        if not item_thumb:
+                            item_thumb = image_url  # Fallback to original
+
+                    new_sku = generate_sku()
+                    new_item = Item(
+                        user_id=user_id,
+                        sku=new_sku,
+                        title=title.text if title is not None else 'Unknown',
+                        item_thumb=item_thumb,
+                        ebay_sku=sku,
+                        ebay_listing_id=item_id.text if item_id is not None else '',
+                        ebay_url=f"https://www.ebay.com/itm/{item_id.text}" if item_id is not None else None,
+                        item_price=price,
+                        listing_date=start_time.date() if start_time else None,
+                        synced_from_ebay=True,
+                        last_ebay_sync=datetime.utcnow()
+                    )
+                    db.session.add(new_item)
+
+                    # Mark as resolved
+                    failed_import.resolved = True
+                    failed_import.resolved_at = datetime.utcnow()
+                    resolved_count += 1
+
+                    log_task(f"  ✓ Successfully imported item (SKU: {new_sku})")
+
+                # Update retry count
+                failed_import.retry_count += 1
+                failed_import.last_retry_at = datetime.utcnow()
+
+                # Commit every item
+                db.session.commit()
+
+            except Exception as e:
+                log_task(f"  ✗ Still failed: {str(e)}")
+                failed_import.retry_count += 1
+                failed_import.last_retry_at = datetime.utcnow()
+                failed_import.error_message = f"Retry {failed_import.retry_count}: {str(e)}"
+                db.session.commit()
+                still_failed_count += 1
+
+        log_task(f"=== Retry completed ===")
+        log_task(f"Resolved: {resolved_count}, Still failed: {still_failed_count}")
+
+        return {
+            'success': True,
+            'retried': len(failed_imports),
+            'resolved': resolved_count,
+            'still_failed': still_failed_count
+        }

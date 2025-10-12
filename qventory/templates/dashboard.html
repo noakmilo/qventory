@@ -139,6 +139,11 @@
         <a class="btn backup-btn" href="{{ url_for('main.import_ebay') }}" title="Import inventory from eBay">
           <i class="fab fa-ebay"></i> Import from eBay
         </a>
+        {% if current_user.is_authenticated %}
+        <a class="btn backup-btn" href="{{ url_for('main.failed_imports') }}" title="View failed imports">
+          <i class="fas fa-exclamation-triangle"></i> Failed Imports
+        </a>
+        {% endif %}
       </div>
     </div>
     

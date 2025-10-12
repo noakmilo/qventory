@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Failed Imports - Qventory{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+    <div>
+      <h1>Failed Import Items</h1>
+      <p style="color:#666; margin-top:0.5rem;">
+        These items failed to import from eBay. You can retry them or mark as resolved.
+      </p>
+    </div>
+    {% if failed_imports %}
+    <button id="retry-all-btn" class="btn" style="background:#2ecc71; border-color:#27ae60; color:white;">
+      <i class="fas fa-redo"></i> Retry All
+    </button>
+    {% endif %}
+  </div>
+
+  {% if not failed_imports %}
+  <div style="background:rgba(46,204,113,0.1); border:1px solid rgba(46,204,113,0.3); border-radius:8px; padding:2rem; text-align:center;">
+    <i class="fas fa-check-circle" style="font-size:3rem; color:#2ecc71; margin-bottom:1rem;"></i>
+    <h2 style="margin:0 0 0.5rem 0; color:#2ecc71;">All items imported successfully!</h2>
+    <p style="color:#666; margin:0;">No failed imports to show.</p>
+  </div>
+  {% else %}
+  <div style="background:rgba(231,76,60,0.1); border:1px solid rgba(231,76,60,0.3); border-radius:8px; padding:1rem; margin-bottom:1.5rem;">
+    <strong style="color:#e74c3c;">
+      <i class="fas fa-exclamation-triangle"></i> {{ failed_imports|length }} items failed to import
+    </strong>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>eBay ID</th>
+        <th>Title</th>
+        <th>SKU</th>
+        <th>Error Type</th>
+        <th>Error Message</th>
+        <th>Retries</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in failed_imports %}
+      <tr data-failed-id="{{ item.id }}">
+        <td>
+          {% if item.ebay_listing_id %}
+          <a href="https://www.ebay.com/itm/{{ item.ebay_listing_id }}" target="_blank" class="tag">
+            {{ item.ebay_listing_id }}
+          </a>
+          {% else %}
+          <span style="color:#999;">Unknown</span>
+          {% endif %}
+        </td>
+        <td>{{ item.ebay_title[:60] if item.ebay_title else '—' }}</td>
+        <td>
+          {% if item.ebay_sku %}
+          <span class="tag itsku">{{ item.ebay_sku }}</span>
+          {% else %}
+          <span style="color:#999;">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="tag" style="background:rgba(231,76,60,0.1); border-color:rgba(231,76,60,0.3); color:#e74c3c;">
+            {{ item.error_type }}
+          </span>
+        </td>
+        <td style="max-width:300px;">
+          <details>
+            <summary style="cursor:pointer; color:#3498db;">View error</summary>
+            <pre style="font-size:11px; background:#f8f9fa; padding:0.5rem; border-radius:4px; margin-top:0.5rem; overflow-x:auto;">{{ item.error_message }}</pre>
+          </details>
+        </td>
+        <td style="text-align:center;">
+          <span class="tag">{{ item.retry_count }}</span>
+        </td>
+        <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '—' }}</td>
+        <td>
+          <button class="btn settingsbtn retry-one-btn" data-failed-id="{{ item.id }}" title="Retry this item">
+            <i class="fas fa-redo"></i>
+          </button>
+          <button class="btn settingsbtn resolve-btn" data-failed-id="{{ item.id }}" title="Mark as resolved">
+            <i class="fas fa-check"></i>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<script>
+// Retry all failed imports
+document.getElementById('retry-all-btn')?.addEventListener('click', async () => {
+  if (!confirm('Retry importing all failed items?')) return;
+
+  const btn = document.getElementById('retry-all-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Retrying...';
+
+  try {
+    const response = await fetch('/api/import/retry', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      alert(data.message);
+      // Reload page after a delay to show results
+      setTimeout(() => window.location.reload(), 3000);
+    } else {
+      alert('Error: ' + (data.error || 'Unknown error'));
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-redo"></i> Retry All';
+    }
+  } catch (error) {
+    alert('Network error: ' + error.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-redo"></i> Retry All';
+  }
+});
+
+// Retry individual item
+document.querySelectorAll('.retry-one-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const failedId = parseInt(this.dataset.failedId);
+
+    if (!confirm('Retry importing this item?')) return;
+
+    this.disabled = true;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+      const response = await fetch('/api/import/retry', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ failed_import_ids: [failedId] })
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        alert(data.message);
+        // Reload page after a delay
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        alert('Error: ' + (data.error || 'Unknown error'));
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-redo"></i>';
+      }
+    } catch (error) {
+      alert('Network error: ' + error.message);
+      this.disabled = false;
+      this.innerHTML = '<i class="fas fa-redo"></i>';
+    }
+  });
+});
+
+// Mark as resolved
+document.querySelectorAll('.resolve-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const failedId = parseInt(this.dataset.failedId);
+
+    if (!confirm('Mark this item as resolved? It will be removed from this list.')) return;
+
+    this.disabled = true;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+      const response = await fetch(`/api/import/failed/${failedId}/resolve`, {
+        method: 'POST'
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        // Remove row from table
+        const row = document.querySelector(`tr[data-failed-id="${failedId}"]`);
+        row.style.opacity = '0';
+        setTimeout(() => {
+          row.remove();
+          // Check if table is empty
+          const tbody = document.querySelector('tbody');
+          if (tbody.children.length === 0) {
+            window.location.reload();
+          }
+        }, 300);
+      } else {
+        alert('Error: ' + (data.error || 'Unknown error'));
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-check"></i>';
+      }
+    } catch (error) {
+      alert('Network error: ' + error.message);
+      this.disabled = false;
+      this.innerHTML = '<i class="fas fa-check"></i>';
+    }
+  });
+});
+</script>
+
+<style>
+tr {
+  transition: opacity 0.3s;
+}
+
+details summary {
+  user-select: none;
+}
+
+details[open] summary {
+  margin-bottom: 0.5rem;
+}
+</style>
+{% endblock %}

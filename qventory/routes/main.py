@@ -1004,6 +1004,60 @@ def import_job_status(job_id):
     return jsonify({"ok": True, "job": job.to_dict()})
 
 
+# Failed imports management
+@main_bp.route("/import/failed")
+@login_required
+def failed_imports():
+    """View failed import items"""
+    from qventory.models.failed_import import FailedImport
+
+    # Get all unresolved failed imports
+    failed = FailedImport.get_unresolved_for_user(current_user.id)
+
+    return render_template("failed_imports.html", failed_imports=failed)
+
+
+@main_bp.route("/api/import/retry", methods=["POST"])
+@login_required
+def retry_failed_imports_api():
+    """API endpoint to retry failed imports"""
+    from qventory.tasks import retry_failed_imports
+
+    # Get optional list of specific IDs to retry
+    data = request.get_json() or {}
+    failed_import_ids = data.get('failed_import_ids')  # None = retry all
+
+    # Start retry task
+    task = retry_failed_imports.delay(current_user.id, failed_import_ids)
+
+    return jsonify({
+        "ok": True,
+        "task_id": task.id,
+        "message": "Retry task started. Refresh the page in a moment to see results."
+    })
+
+
+@main_bp.route("/api/import/failed/<int:failed_id>/resolve", methods=["POST"])
+@login_required
+def resolve_failed_import(failed_id):
+    """Mark a failed import as manually resolved"""
+    from qventory.models.failed_import import FailedImport
+
+    failed = FailedImport.query.filter_by(
+        id=failed_id,
+        user_id=current_user.id
+    ).first()
+
+    if not failed:
+        return jsonify({"ok": False, "error": "Failed import not found"}), 404
+
+    failed.resolved = True
+    failed.resolved_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"ok": True, "message": "Marked as resolved"})
+
+
 # API endpoint to check for active import jobs (for global notifications)
 @main_bp.route("/api/import/active")
 @login_required
