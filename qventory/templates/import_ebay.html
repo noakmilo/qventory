@@ -128,15 +128,32 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:12px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
         <button type="submit" class="btn btn-primary" id="importBtn">
           <i class="fab fa-ebay"></i> Start Import
+        </button>
+        <button type="button" class="btn" id="rematchBtn" style="background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.3);color:#a78bfa">
+          <i class="fas fa-link"></i> Re-Match Sales to Items
         </button>
         <a href="{{ url_for('main.dashboard') }}" class="btn">
           <i class="fas fa-arrow-left"></i> Back to Dashboard
         </a>
       </div>
     </form>
+
+    <!-- Rematch Explanation -->
+    <div style="margin-top:24px;padding:16px;background:rgba(139,92,246,0.05);border:1px solid rgba(139,92,246,0.2);border-radius:8px">
+      <div style="display:flex;align-items:start;gap:12px">
+        <i class="fas fa-lightbulb" style="color:#a78bfa;font-size:20px;margin-top:2px"></i>
+        <div style="font-size:13px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px">💡 Re-Match Sales to Items</div>
+          <div style="color:var(--sub);line-height:1.5">
+            If you imported sales before importing inventory, some sales might not be linked to items.
+            Click <strong style="color:#a78bfa">"Re-Match Sales to Items"</strong> to automatically match your historical sales to items in your inventory.
+          </div>
+        </div>
+      </div>
+    </div>
   {% endif %}
 </div>
 
@@ -352,6 +369,46 @@ function showFinalResult(job) {
   // Hide spinner
   document.querySelector('.spinner').style.display = 'none';
 }
+
+// Rematch sales to items button
+document.getElementById('rematchBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('rematchBtn');
+
+  if (!confirm('This will attempt to match all unlinked sales to items in your inventory. Continue?')) {
+    return;
+  }
+
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Matching...';
+
+  try {
+    const response = await fetch('/api/import/rematch_sales', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      alert('✓ Re-match task started!\n\nThis will run in the background and match your historical sales to items. Check /inventory/sold in a few minutes to see the results.');
+      btn.innerHTML = '<i class="fas fa-check"></i> Task Started';
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+      }, 3000);
+    } else {
+      alert('Error: ' + (data.error || 'Failed to start rematch task'));
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  } catch (error) {
+    console.error('Rematch error:', error);
+    alert('Failed to start rematch task');
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+  }
+});
 
 // Check for existing running jobs on page load
 window.addEventListener('DOMContentLoaded', async () => {

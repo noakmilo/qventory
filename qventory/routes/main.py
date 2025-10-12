@@ -1037,6 +1037,22 @@ def retry_failed_imports_api():
     })
 
 
+@main_bp.route("/api/import/rematch_sales", methods=["POST"])
+@login_required
+def rematch_sales_api():
+    """API endpoint to rematch unlinked sales to items"""
+    from qventory.tasks import rematch_sales_to_items
+
+    # Start rematch task
+    task = rematch_sales_to_items.delay(current_user.id)
+
+    return jsonify({
+        "ok": True,
+        "task_id": task.id,
+        "message": "Rematch task started. This will match historical sales to items in your inventory."
+    })
+
+
 @main_bp.route("/api/import/failed/<int:failed_id>/resolve", methods=["POST"])
 @login_required
 def resolve_failed_import(failed_id):

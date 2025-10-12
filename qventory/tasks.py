@@ -514,6 +514,8 @@ def import_ebay_sales(self, user_id, days_back=None):
 
                         if item:
                             log_task(f"  ✓ Matched item (method: {match_method}, item_id: {item.id})")
+                        else:
+                            log_task(f"  ⚠️  No match found for: listing_id={ebay_listing_id}, sku={sku}, title={title[:40]}")
 
                         # Check if sale already exists
                         existing_sale = Sale.query.filter_by(
@@ -882,4 +884,119 @@ def retry_failed_imports(self, user_id, failed_import_ids=None):
             'retried': len(failed_imports),
             'resolved': resolved_count,
             'still_failed': still_failed_count
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.rematch_sales_to_items')
+def rematch_sales_to_items(self, user_id):
+    """
+    Re-attempt matching sales without item_id to items in inventory
+    This is useful for historical sales that couldn't be matched initially
+
+    Args:
+        user_id: Qventory user ID
+
+    Returns:
+        dict with rematch results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.sale import Sale
+        from qventory.models.item import Item
+
+        log_task(f"=== Starting rematch of unlinked sales for user {user_id} ===")
+
+        # Get all sales without item_id
+        unlinked_sales = Sale.query.filter_by(
+            user_id=user_id,
+            item_id=None
+        ).all()
+
+        log_task(f"Found {len(unlinked_sales)} unlinked sales")
+
+        matched_count = 0
+        still_unmatched = 0
+
+        for sale in unlinked_sales:
+            try:
+                # Try to find matching item (same strategies as import)
+                item = None
+                match_method = None
+
+                # Extract identifiers from sale
+                ebay_listing_id = None
+                if sale.marketplace == 'ebay' and sale.marketplace_order_id:
+                    # Try to extract listing ID from eBay transaction
+                    # Note: This might not be available in older sales
+                    pass
+
+                sku = sale.item_sku
+                title = sale.item_title
+
+                # Strategy 1: Match by eBay Listing ID (if available)
+                # We don't have this in Sale model, so skip
+
+                # Strategy 2: Match by SKU
+                if not item and sku:
+                    # Try eBay SKU first
+                    item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+                    if item:
+                        match_method = "ebay_sku"
+                    else:
+                        # Try Qventory SKU
+                        item = Item.query.filter_by(user_id=user_id, sku=sku).first()
+                        if item:
+                            match_method = "qventory_sku"
+
+                # Strategy 3: Match by exact title
+                if not item and title:
+                    item = Item.query.filter_by(user_id=user_id, title=title).first()
+                    if item:
+                        match_method = "exact_title"
+
+                # Strategy 4: Fuzzy title match (last resort)
+                if not item and title and len(title) > 10:
+                    # Try to find items with similar titles
+                    similar_items = Item.query.filter(
+                        Item.user_id == user_id,
+                        Item.title.ilike(f"%{title[:20]}%")  # Match first 20 chars
+                    ).all()
+
+                    if len(similar_items) == 1:
+                        # Only auto-match if there's exactly one similar item
+                        item = similar_items[0]
+                        match_method = "fuzzy_title"
+
+                if item:
+                    sale.item_id = item.id
+                    if item.item_cost:
+                        sale.item_cost = item.item_cost
+                    sale.calculate_profit()
+                    matched_count += 1
+                    log_task(f"  ✓ Matched sale #{sale.id} to item #{item.id} (method: {match_method})")
+                else:
+                    still_unmatched += 1
+                    log_task(f"  ✗ Could not match sale #{sale.id}: sku={sku}, title={title[:40]}")
+
+                # Commit every 50 sales
+                if (matched_count + still_unmatched) % 50 == 0:
+                    db.session.commit()
+                    log_task(f"Progress: processed {matched_count + still_unmatched}/{len(unlinked_sales)}")
+
+            except Exception as e:
+                log_task(f"  ERROR processing sale #{sale.id}: {str(e)}")
+                continue
+
+        # Final commit
+        db.session.commit()
+
+        log_task(f"=== Rematch completed ===")
+        log_task(f"Matched: {matched_count}, Still unmatched: {still_unmatched}")
+
+        return {
+            'success': True,
+            'total_processed': len(unlinked_sales),
+            'matched': matched_count,
+            'still_unmatched': still_unmatched
         }
