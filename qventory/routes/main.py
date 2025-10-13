@@ -582,9 +582,9 @@ def sync_ebay_orders():
     from ..models.sale import Sale
 
     try:
-        # Fetch orders from eBay (get all orders, we'll filter which ones to sync)
-        # TODO: Once we know the correct orderFulfillmentStatus values, we can filter
-        result = fetch_ebay_orders(current_user.id, filter_status=None, limit=200)
+        # Fetch orders from eBay
+        # Filter for FULFILLED orders (completed/delivered) and NOT_STARTED (may have tracking)
+        result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=200)
 
         if not result['success']:
             return jsonify({
@@ -614,6 +614,7 @@ def sync_ebay_orders():
                 sale_data = parse_ebay_order_to_sale(order_data)
 
                 if not sale_data:
+                    print(f"[FULFILLMENT_SYNC] Failed to parse order {order_data.get('orderId', 'UNKNOWN')}", file=sys.stderr)
                     continue
 
                 # Check if order already exists
@@ -671,6 +672,8 @@ def sync_ebay_orders():
 
         # Commit all changes
         db.session.commit()
+
+        print(f"[FULFILLMENT_SYNC] Completed: {orders_created} created, {orders_updated} updated", file=sys.stderr)
 
         return jsonify({
             'success': True,
