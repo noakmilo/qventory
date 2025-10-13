@@ -347,14 +347,15 @@ def upgrade():
     ).all()
 
     # Get current user's plan info
-    current_plan = current_user.get_plan_limits()
+    subscription = current_user.get_subscription()
+    current_plan_limits = current_user.get_plan_limits()
     items_remaining = current_user.items_remaining()
 
     return render_template(
         "upgrade.html",
         plans=plans,
-        current_plan=current_plan,
-        current_user_plan=current_user.plan,
+        current_plan=current_plan_limits,
+        current_user_plan=subscription.plan if subscription else None,
         items_remaining=items_remaining
     )
 
