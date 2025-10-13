@@ -1260,7 +1260,6 @@ def sync_ebay_inventory():
         # Get all items with eBay listing IDs
         items_to_sync = Item.query.filter(
             Item.user_id == current_user.id,
-            Item.is_active == True,
             Item.ebay_listing_id.isnot(None)
         ).all()
 
