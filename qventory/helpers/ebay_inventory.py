@@ -1406,13 +1406,6 @@ def parse_ebay_order_to_sale(order_data):
         # For now, handle first line item (you can extend this to handle multiple)
         line_item = line_items[0]
 
-        # DEBUG: Log line item structure for first order
-        if log_inv:
-            import json
-            log_inv(f"DEBUG Order {order_id} lineItem keys: {list(line_item.keys())}")
-            if 'fulfillments' in line_item:
-                log_inv(f"DEBUG Order {order_id} fulfillments: {json.dumps(line_item['fulfillments'], indent=2)}")
-
         # Extract basic info
         title = line_item.get('title', 'Unknown Item')
         sku = line_item.get('sku', '')
@@ -1435,33 +1428,35 @@ def parse_ebay_order_to_sale(order_data):
         buyer = order_data.get('buyer', {})
         buyer_username = buyer.get('username', '')
 
-        # Extract tracking
-        fulfillments = line_item.get('fulfillments', [])
+        # Extract tracking - eBay provides this in fulfillmentHrefs, not in lineItems
         tracking_number = None
-        carrier = None
+        carrier = shipping_step.get('shippingCarrierCode', '')  # Already extracted above
         shipped_at = None
         delivered_at = None
 
-        if fulfillments:
-            fulfillment = fulfillments[0]
-            tracking_info = fulfillment.get('shipmentTracking', {})
-            tracking_number = tracking_info.get('trackingNumber', '')
-            carrier = tracking_info.get('shippingCarrierCode', '')
-
-            # Get shipped date
-            shipped_date_str = fulfillment.get('shippedDate', '')
-            if shipped_date_str:
-                shipped_at = _parse_ebay_datetime(shipped_date_str)
-
-            # Get delivered date
-            delivered_date_str = tracking_info.get('deliveryDate', '')
-            if delivered_date_str:
-                delivered_at = _parse_ebay_datetime(delivered_date_str)
-
-        # Determine order status
+        # Determine order status and extract tracking
         order_fulfillment_status = order_data.get('orderFulfillmentStatus', '')
+
         if order_fulfillment_status == 'FULFILLED':
             status = 'completed'
+
+            # Use lastModifiedDate as approximate shipped date
+            modified_date_str = order_data.get('lastModifiedDate', '')
+            if modified_date_str:
+                shipped_at = _parse_ebay_datetime(modified_date_str)
+
+            # Try to extract tracking from fulfillmentHrefs
+            # Example: .../shipping_fulfillment/9405508106245362443883
+            fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
+            if fulfillment_hrefs:
+                href = fulfillment_hrefs[0]
+                parts = href.split('/')
+                if len(parts) > 0:
+                    potential_tracking = parts[-1]
+                    # USPS tracking is typically 20-22 digits
+                    if potential_tracking.isdigit() and len(potential_tracking) >= 18:
+                        tracking_number = potential_tracking
+
         elif order_fulfillment_status == 'IN_PROGRESS':
             status = 'shipped'
         else:
