@@ -1982,21 +1982,63 @@ def admin_dashboard():
 @main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
 @require_admin
 def admin_delete_user(user_id):
-    """Delete a user and all their items"""
+    """Delete a user and all their data"""
+    from qventory.models.sale import Sale
+    from qventory.models.import_job import ImportJob, FailedImport
+    from qventory.models.listing import Listing
+    from qventory.models.report import Report
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.models.ai_token import AITokenUsage
+    from qventory.models.subscription import Subscription
+    from qventory.models.expense import Expense
+
     user = User.query.get_or_404(user_id)
     username = user.username
 
-    # Delete all items belonging to this user
-    Item.query.filter_by(user_id=user_id).delete()
+    try:
+        # Delete in order to respect foreign key constraints
+        # 1. Delete failed imports (references import_jobs)
+        FailedImport.query.filter_by(user_id=user_id).delete()
 
-    # Delete user settings
-    Setting.query.filter_by(user_id=user_id).delete()
+        # 2. Delete import jobs
+        ImportJob.query.filter_by(user_id=user_id).delete()
 
-    # Delete the user
-    db.session.delete(user)
-    db.session.commit()
+        # 3. Delete listings (references items)
+        Listing.query.filter_by(user_id=user_id).delete()
 
-    flash(f"User '{username}' and all their data deleted successfully", "ok")
+        # 4. Delete sales (references items via item_id)
+        Sale.query.filter_by(user_id=user_id).delete()
+
+        # 5. Delete expenses
+        Expense.query.filter_by(user_id=user_id).delete()
+
+        # 6. Delete all items belonging to this user
+        Item.query.filter_by(user_id=user_id).delete()
+
+        # 7. Delete reports
+        Report.query.filter_by(user_id=user_id).delete()
+
+        # 8. Delete AI token usage
+        AITokenUsage.query.filter_by(user_id=user_id).delete()
+
+        # 9. Delete marketplace credentials
+        MarketplaceCredential.query.filter_by(user_id=user_id).delete()
+
+        # 10. Delete subscription
+        Subscription.query.filter_by(user_id=user_id).delete()
+
+        # 11. Delete user settings
+        Setting.query.filter_by(user_id=user_id).delete()
+
+        # 12. Delete the user
+        db.session.delete(user)
+        db.session.commit()
+
+        flash(f"User '{username}' and all their data deleted successfully", "ok")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting user '{username}': {str(e)}", "error")
+
     return redirect(url_for('main.admin_dashboard'))
 
 
