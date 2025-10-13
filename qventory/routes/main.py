@@ -582,8 +582,9 @@ def sync_ebay_orders():
     from ..models.sale import Sale
 
     try:
-        # Fetch orders from eBay
-        result = fetch_ebay_orders(current_user.id, filter_status='IN_PROGRESS,FULFILLED', limit=200)
+        # Fetch orders from eBay (get all orders, we'll filter which ones to sync)
+        # TODO: Once we know the correct orderFulfillmentStatus values, we can filter
+        result = fetch_ebay_orders(current_user.id, filter_status=None, limit=200)
 
         if not result['success']:
             return jsonify({
@@ -599,6 +600,10 @@ def sync_ebay_orders():
                 'message': 'No new orders to sync',
                 'orders_synced': 0
             })
+
+        # Log unique orderFulfillmentStatus values for debugging
+        statuses = set(order.get('orderFulfillmentStatus', 'UNKNOWN') for order in orders)
+        print(f"[FULFILLMENT_SYNC] Found {len(orders)} orders with statuses: {statuses}", file=sys.stderr)
 
         # Process each order
         orders_created = 0

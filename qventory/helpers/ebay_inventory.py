@@ -1273,13 +1273,13 @@ def parse_ebay_offer(ebay_offer):
     }
 
 
-def fetch_ebay_orders(user_id, filter_status='IN_PROGRESS,FULFILLED', limit=100):
+def fetch_ebay_orders(user_id, filter_status=None, limit=100):
     """
     Fetch orders from eBay Fulfillment API
 
     Args:
         user_id: Qventory user ID
-        filter_status: Order statuses to fetch (IN_PROGRESS for in transit, FULFILLED for delivered)
+        filter_status: Optional. Order statuses to filter locally (NOT_STARTED, IN_PROGRESS, FULFILLED)
         limit: Maximum number of orders to fetch per request
 
     Returns:
@@ -1308,17 +1308,14 @@ def fetch_ebay_orders(user_id, filter_status='IN_PROGRESS,FULFILLED', limit=100)
 
     try:
         while True:
-            # Build URL with filter and pagination
+            # Build URL with pagination (no filter in API call - we'll filter locally)
             url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order"
             params = {
                 'limit': min(limit, 200),  # eBay max is 200
                 'offset': offset
             }
 
-            if filter_status:
-                params['filter'] = f'orderfulfillmentstatus:{filter_status}'
-
-            log_inv(f"Fetching eBay orders: {url} with filter={filter_status}, offset={offset}")
+            log_inv(f"Fetching eBay orders: {url}, offset={offset}")
 
             response = requests.get(url, headers=headers, params=params, timeout=30)
 
@@ -1353,6 +1350,16 @@ def fetch_ebay_orders(user_id, filter_status='IN_PROGRESS,FULFILLED', limit=100)
             offset += len(orders)
 
         log_inv(f"Successfully fetched {len(all_orders)} orders from eBay")
+
+        # Apply local filtering if requested
+        if filter_status:
+            statuses = [s.strip() for s in filter_status.split(',')]
+            filtered_orders = [
+                order for order in all_orders
+                if order.get('orderFulfillmentStatus') in statuses
+            ]
+            log_inv(f"Filtered to {len(filtered_orders)} orders with status {filter_status}")
+            all_orders = filtered_orders
 
         return {
             'success': True,
