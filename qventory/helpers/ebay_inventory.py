@@ -1316,7 +1316,7 @@ def fetch_ebay_orders(user_id, filter_status='IN_PROGRESS,FULFILLED', limit=100)
             }
 
             if filter_status:
-                params['filter'] = f'orderfulfillmentstatus:{{{filter_status}}}'
+                params['filter'] = f'orderfulfillmentstatus:{filter_status}'
 
             log_inv(f"Fetching eBay orders: {url} with filter={filter_status}, offset={offset}")
 
