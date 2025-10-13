@@ -192,6 +192,25 @@ document.getElementById('importForm')?.addEventListener('submit', async (e) => {
 
     const result = await response.json();
 
+    // Check for upgrade required (403)
+    if (response.status === 403 && result.upgrade_required) {
+      importStatus.innerHTML = `
+        <div style="color:#ef4444;font-weight:600">✗ Plan Limit Reached</div>
+        <div style="margin-top:8px;padding:12px;background:rgba(239,68,68,0.05);border-radius:6px">
+          <div style="font-size:13px;color:var(--sub)">
+            ${result.error}
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn">
+            <i class="fas fa-arrow-up"></i> Upgrade Plan
+          </a>
+        </div>
+      `;
+      importBtn.disabled = false;
+      return;
+    }
+
     if (result.ok) {
       currentJobId = result.job_id;
 

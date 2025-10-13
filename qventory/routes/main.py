@@ -306,6 +306,38 @@ def dashboard():
     )
 
 
+@main_bp.route("/upgrade")
+@login_required
+def upgrade():
+    """Show upgrade page with plan comparison (non-functional placeholder)"""
+    from qventory.models.subscription import PlanLimit
+
+    # Get all plan limits
+    plans = PlanLimit.query.order_by(
+        # Order: free, early_adopter, premium, pro, god
+        db.case(
+            (PlanLimit.plan == 'free', 1),
+            (PlanLimit.plan == 'early_adopter', 2),
+            (PlanLimit.plan == 'premium', 3),
+            (PlanLimit.plan == 'pro', 4),
+            (PlanLimit.plan == 'god', 5),
+            else_=99
+        )
+    ).all()
+
+    # Get current user's plan info
+    current_plan = current_user.get_plan_limits()
+    items_remaining = current_user.items_remaining()
+
+    return render_template(
+        "upgrade.html",
+        plans=plans,
+        current_plan=current_plan,
+        current_user_plan=current_user.plan,
+        items_remaining=items_remaining
+    )
+
+
 # ---------------------- Inventory Views ----------------------
 
 @main_bp.route("/inventory/active")
@@ -1090,6 +1122,18 @@ def import_ebay():
         log_import("ERROR: eBay account not connected")
         return jsonify({"ok": False, "error": "eBay account not connected"}), 400
 
+    # Check if user can import (check limits)
+    items_remaining = current_user.items_remaining()
+    log_import(f"User items remaining: {items_remaining}")
+
+    if items_remaining is not None and items_remaining == 0:
+        log_import("ERROR: User has reached item limit")
+        return jsonify({
+            "ok": False,
+            "error": f"You have reached your plan limit. Upgrade to import more items.",
+            "upgrade_required": True
+        }), 403
+
     try:
         from qventory.tasks import import_ebay_complete as import_task
 
@@ -1152,6 +1196,15 @@ def sync_ebay_inventory():
             'success': False,
             'error': 'eBay account not connected'
         }), 400
+
+    # Check if user has reached their limit
+    items_remaining = current_user.items_remaining()
+    if items_remaining is not None and items_remaining == 0:
+        return jsonify({
+            'success': False,
+            'error': 'You have reached your plan limit. Upgrade to sync more items.',
+            'upgrade_required': True
+        }), 403
 
     try:
         # Get all items with eBay listing IDs
@@ -1251,6 +1304,15 @@ def sync_ebay_sold():
             'success': False,
             'error': 'eBay account not connected'
         }), 400
+
+    # Check plan limits before syncing
+    items_remaining = current_user.items_remaining()
+    if items_remaining is not None and items_remaining == 0:
+        return jsonify({
+            'success': False,
+            'error': 'You have reached your plan limit. Upgrade to sync more items.',
+            'upgrade_required': True
+        }), 403
 
     try:
         # Fetch sold orders from eBay (last 90 days)

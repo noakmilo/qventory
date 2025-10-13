@@ -463,7 +463,53 @@ document.addEventListener('DOMContentLoaded', function() {
         'Content-Type': 'application/json',
       }
     })
-    .then(response => response.json())
+    .then(response => {
+      // Check for 403 (upgrade required)
+      if (response.status === 403) {
+        return response.json().then(data => {
+          if (data.upgrade_required) {
+            btn.innerHTML = originalHTML;
+            btn.disabled = false;
+
+            // Show upgrade notification
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+              position: fixed;
+              top: 20px;
+              right: 20px;
+              z-index: 9999;
+              padding: 20px 24px;
+              border-radius: 8px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+              font-size: 14px;
+              max-width: 400px;
+              background: #fee2e2;
+              color: #991b1b;
+              border: 1px solid #f87171;
+            `;
+
+            notification.innerHTML = `
+              <i class="fas fa-exclamation-circle"></i>
+              <strong>${data.error}</strong>
+              <div style="margin-top: 12px;">
+                <a href="/upgrade" class="btn submitbtn" style="display: inline-block; padding: 8px 16px; text-decoration: none;">
+                  <i class="fas fa-arrow-up"></i> Upgrade Plan
+                </a>
+              </div>
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+              notification.remove();
+            }, 8000);
+
+            throw new Error('Upgrade required');
+          }
+        });
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.success) {
         btn.innerHTML = '<i class="fas fa-check"></i> Synced!';

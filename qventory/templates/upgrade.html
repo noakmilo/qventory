@@ -1,0 +1,185 @@
+{% extends "base_new.html" %}
+{% block title %}Upgrade Plan – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Upgrade</span>
+{% endblock %}
+
+{% block content %}
+<div style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+  <div style="text-align: center; margin-bottom: 40px;">
+    <h1 style="margin-bottom: 8px; font-size: 2.5rem;">Choose Your Plan</h1>
+    <p style="color: var(--sub); font-size: 1.1rem;">
+      Select the plan that best fits your inventory needs
+    </p>
+
+    {% if items_remaining is not none %}
+    <div style="margin-top: 20px; padding: 16px; background: var(--warning-bg, #fff3cd); border: 1px solid var(--warning-border, #ffc107); border-radius: var(--radius); max-width: 600px; margin-left: auto; margin-right: auto;">
+      <i class="fas fa-exclamation-triangle" style="color: var(--warning, #856404);"></i>
+      <strong style="color: var(--warning, #856404);">
+        You have {{ items_remaining }} items remaining in your current plan.
+      </strong>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Current Plan Badge -->
+  {% if current_user_plan %}
+  <div style="text-align: center; margin-bottom: 24px;">
+    <span style="display: inline-block; padding: 8px 16px; background: var(--accent); color: white; border-radius: 20px; font-size: var(--fs-sm); font-weight: 600;">
+      Current Plan: {{ current_user_plan.replace('_', ' ').title() }}
+    </span>
+  </div>
+  {% endif %}
+
+  <!-- Plans Grid -->
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 40px;">
+    {% for plan in plans %}
+    <div class="glass" style="padding: 24px; border-radius: var(--radius); {% if plan.plan == current_user_plan %}border: 2px solid var(--accent); box-shadow: 0 0 20px rgba(var(--accent-rgb, 59, 130, 246), 0.3);{% else %}border: 1px solid var(--border);{% endif %} display: flex; flex-direction: column;">
+
+      <!-- Plan Header -->
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 1.8rem; text-transform: capitalize; color: var(--accent);">
+          {{ plan.plan.replace('_', ' ').title() }}
+        </h2>
+
+        {% if plan.plan == current_user_plan %}
+        <span style="display: inline-block; padding: 4px 12px; background: var(--accent); color: white; border-radius: 12px; font-size: var(--fs-xs); font-weight: 600; margin-bottom: 12px;">
+          Current Plan
+        </span>
+        {% endif %}
+
+        <!-- Pricing Placeholder -->
+        <div style="margin-top: 12px;">
+          <span style="font-size: 2.5rem; font-weight: 700; color: var(--text);">
+            {% if plan.plan == 'free' %}
+            $0
+            {% elif plan.plan == 'early_adopter' %}
+            $9.99
+            {% elif plan.plan == 'premium' %}
+            $29.99
+            {% elif plan.plan == 'pro' %}
+            $49.99
+            {% elif plan.plan == 'god' %}
+            Custom
+            {% else %}
+            TBD
+            {% endif %}
+          </span>
+          {% if plan.plan != 'god' %}
+          <span style="color: var(--sub); font-size: var(--fs-sm);">/month</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Items Limit -->
+      <div style="padding: 16px; background: var(--muted); border-radius: 8px; margin-bottom: 16px; text-align: center;">
+        <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">
+          {% if plan.max_items is none %}
+          ∞
+          {% else %}
+          {{ plan.max_items }}
+          {% endif %}
+        </div>
+        <div style="color: var(--sub); font-size: var(--fs-sm); margin-top: 4px;">
+          {% if plan.max_items is none %}
+          Unlimited Items
+          {% else %}
+          Max Items
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Features List -->
+      <div style="flex: 1; margin-bottom: 20px;">
+        <ul style="list-style: none; padding: 0; margin: 0; color: var(--text);">
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-images" style="width: 20px; color: var(--accent);"></i>
+            <span>{{ plan.max_images_per_item }} images per item</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-store" style="width: 20px; color: var(--accent);"></i>
+            <span>{{ plan.max_marketplace_integrations }} marketplace{{ 's' if plan.max_marketplace_integrations != 1 else '' }}</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_use_ai_research %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_use_ai_research %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_use_ai_research %}color: var(--sub); text-decoration: line-through;{% endif %}">AI Research</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_bulk_operations %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_bulk_operations %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_bulk_operations %}color: var(--sub); text-decoration: line-through;{% endif %}">Bulk Operations</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_export_csv %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_export_csv %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_export_csv %}color: var(--sub); text-decoration: line-through;{% endif %}">Export CSV</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_import_csv %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_import_csv %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_import_csv %}color: var(--sub); text-decoration: line-through;{% endif %}">Import CSV</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_use_analytics %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_use_analytics %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_use_analytics %}color: var(--sub); text-decoration: line-through;{% endif %}">Analytics</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if plan.can_create_listings %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_create_listings %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not plan.can_create_listings %}color: var(--sub); text-decoration: line-through;{% endif %}">Create Listings (API)</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0;">
+            <i class="fas fa-headset" style="width: 20px; color: var(--accent);"></i>
+            <span style="text-transform: capitalize;">{{ plan.support_level }} Support</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Action Button -->
+      <div style="text-align: center;">
+        {% if plan.plan == current_user_plan %}
+        <button class="btn" disabled style="width: 100%; opacity: 0.6; cursor: not-allowed;">
+          Current Plan
+        </button>
+        {% else %}
+        <button class="btn submitbtn" onclick="handleUpgrade('{{ plan.plan }}')" style="width: 100%;">
+          {% if plan.plan == 'free' %}
+          Downgrade
+          {% else %}
+          Upgrade Now
+          {% endif %}
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Notice -->
+  <div style="text-align: center; padding: 24px; background: var(--muted); border-radius: var(--radius); max-width: 800px; margin: 0 auto;">
+    <i class="fas fa-info-circle" style="color: var(--accent); font-size: 1.5rem; margin-bottom: 12px;"></i>
+    <h3 style="margin: 0 0 8px 0; color: var(--text);">Upgrade Feature Coming Soon</h3>
+    <p style="color: var(--sub); margin: 0; line-height: 1.6;">
+      Payment processing and automatic plan upgrades are currently under development.
+      For now, please contact support to upgrade your plan. We'll have self-service upgrades available soon!
+    </p>
+    <a href="mailto:support@qventory.com" class="btn" style="margin-top: 16px; display: inline-block;">
+      <i class="fas fa-envelope"></i> Contact Support
+    </a>
+  </div>
+</div>
+
+<script>
+function handleUpgrade(planName) {
+  // Placeholder for future upgrade functionality
+  alert('Upgrade to ' + planName.replace('_', ' ').toUpperCase() + ' plan coming soon!\n\nPlease contact support at support@qventory.com to upgrade your plan.');
+}
+</script>
+
+{% endblock %}
