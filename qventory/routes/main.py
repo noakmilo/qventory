@@ -2403,20 +2403,20 @@ def admin_delete_user(user_id):
         # 2. Delete import jobs
         ImportJob.query.filter_by(user_id=user_id).delete()
 
-        # 3. Delete listings (references items)
+        # 3. Delete reports (references items, so must be deleted before items)
+        Report.query.filter_by(user_id=user_id).delete()
+
+        # 4. Delete listings (references items)
         Listing.query.filter_by(user_id=user_id).delete()
 
-        # 4. Delete sales (references items via item_id)
+        # 5. Delete sales (references items via item_id)
         Sale.query.filter_by(user_id=user_id).delete()
 
-        # 5. Delete expenses
+        # 6. Delete expenses
         Expense.query.filter_by(user_id=user_id).delete()
 
-        # 6. Delete all items belonging to this user
+        # 7. Delete all items belonging to this user
         Item.query.filter_by(user_id=user_id).delete()
-
-        # 7. Delete reports
-        Report.query.filter_by(user_id=user_id).delete()
 
         # 8. Delete AI token usage
         AITokenUsage.query.filter_by(user_id=user_id).delete()
