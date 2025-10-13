@@ -334,14 +334,13 @@ def upgrade():
     from qventory.models.subscription import PlanLimit
 
     # Get all plan limits
-    plans = PlanLimit.query.order_by(
-        # Order: free, early_adopter, premium, pro, god
+    plans = PlanLimit.query.filter(
+        ~PlanLimit.plan.in_(["early_adopter", "god"])
+    ).order_by(
         db.case(
             (PlanLimit.plan == 'free', 1),
-            (PlanLimit.plan == 'early_adopter', 2),
-            (PlanLimit.plan == 'premium', 3),
-            (PlanLimit.plan == 'pro', 4),
-            (PlanLimit.plan == 'god', 5),
+            (PlanLimit.plan == 'premium', 2),
+            (PlanLimit.plan == 'pro', 3),
             else_=99
         )
     ).all()
