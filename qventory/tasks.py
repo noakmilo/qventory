@@ -312,6 +312,19 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             db.session.commit()
             log_task(f"✓ Stored {failed_stored} new failed items (total with updates: {len(failed_items)})")
 
+            # Check if plan limit was reached before committing job updates
+            plan_limit_reached = (max_new_items_allowed is not None and
+                                imported_count >= max_new_items_allowed and
+                                skipped_count > 0)
+
+            if plan_limit_reached:
+                log_task(f"⚠️  PLAN LIMIT REACHED: Imported {imported_count} items (limit: {max_new_items_allowed})")
+                job.error_message = f"Plan limit reached. Imported {imported_count}/{max_new_items_allowed} items. Upgrade to import more."
+            else:
+                # Clear previous plan-limit warning if this run completed under the limit
+                if job.error_message and 'Plan limit reached' in job.error_message:
+                    job.error_message = None
+
             # Mark job as completed
             job.status = 'completed'
             job.completed_at = datetime.utcnow()
@@ -325,15 +338,6 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             log_task(f"=== Import completed ===")
             log_task(f"Imported: {imported_count}, Updated: {updated_count}, Skipped: {skipped_count}, Errors: {error_count}")
             log_task(f"Failed to parse: {len(failed_items)} (stored for retry)")
-
-            # Check if plan limit was reached
-            plan_limit_reached = (max_new_items_allowed is not None and
-                                imported_count >= max_new_items_allowed and
-                                skipped_count > 0)
-
-            if plan_limit_reached:
-                log_task(f"⚠️  PLAN LIMIT REACHED: Imported {imported_count} items (limit: {max_new_items_allowed})")
-                job.error_message = f"Plan limit reached. Imported {imported_count}/{max_new_items_allowed} items. Upgrade to import more."
 
             return {
                 'status': 'completed',
