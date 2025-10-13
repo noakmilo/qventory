@@ -9,6 +9,8 @@ __pycache__/
 
 # Virtualenv
 .env
+.env.local
+.env.development
 .venv
 venv/
 ENV/
@@ -35,4 +37,10 @@ Thumbs.db
 # Cache
 .cache/
 
-DROPLET_SETUP.md
+# Local development files (NO SUBIR A GITHUB)
+start_dev.sh
+start_celery.sh
+reset_db.sh
+LOCAL_DEVELOPMENT_SETUP.md
+GIT_WORKFLOW.md
+QUICK_START.md
