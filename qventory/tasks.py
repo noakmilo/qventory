@@ -387,6 +387,15 @@ def import_ebay_sales(self, user_id, days_back=None):
         from dateutil import parser as date_parser
         from datetime import datetime, timedelta
 
+        # Ensure days_back is properly typed (can arrive as string from Celery serialization)
+        if days_back is not None:
+            try:
+                days_back = int(days_back)
+                if days_back <= 0:
+                    days_back = None
+            except (ValueError, TypeError):
+                days_back = None
+
         if days_back:
             log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
         else:

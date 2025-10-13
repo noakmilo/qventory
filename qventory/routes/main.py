@@ -1191,11 +1191,16 @@ def import_ebay():
         listing_status = request.form.get('listing_status', 'ACTIVE')
         days_back = request.form.get('days_back', None)  # For sales import (None = all time)
 
+        # Convert to int or None (empty string should be None)
         if days_back:
             try:
                 days_back = int(days_back)
-            except:
+                if days_back <= 0:
+                    days_back = None
+            except (ValueError, TypeError):
                 days_back = None
+        else:
+            days_back = None
 
         log_import(f"Import mode: {import_mode}")
         log_import(f"Listing status: {listing_status}")

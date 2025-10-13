@@ -1688,6 +1688,13 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
     """
     from datetime import datetime, timedelta
 
+    # Convert days_back to int if it's a string (can happen from form data)
+    if days_back is not None:
+        try:
+            days_back = int(days_back)
+        except (TypeError, ValueError):
+            days_back = None
+
     chunk_days = 90  # eBay Fulfillment API comfortably supports 90-day windows
     window_end = datetime.utcnow()
 
