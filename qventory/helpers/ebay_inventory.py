@@ -1341,14 +1341,47 @@ def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
         }
     except Exception as exc:
         log_inv(f"ERROR fetching offers: {exc}")
-        return {
-            'success': False,
-            'error': str(exc),
-            'offers': [],
-            'total': 0,
-            'limit': limit,
-            'offset': offset
-        }
+        # Fallback to Trading API (GetMyeBaySelling) which is more permissive
+        try:
+            log_inv("Falling back to Trading API for active listings...")
+            trading_items = get_active_listings_trading_api(
+                user_id,
+                max_items=limit,
+                collect_failures=False
+            ) or []
+
+            parsed_offers = []
+            for item in trading_items:
+                parsed_offers.append({
+                    'item_price': item.get('item_price'),
+                    'ebay_url': item.get('ebay_url'),
+                    'ebay_listing_id': item.get('ebay_listing_id') or item.get('listing_id'),
+                    'ebay_offer_id': item.get('ebay_offer_id'),
+                    'listing_status': item.get('listing_status', 'UNKNOWN'),
+                    'ebay_sku': item.get('ebay_sku') or item.get('sku'),
+                    'title': item.get('title'),
+                    'description': item.get('description'),
+                    'item_quantity': item.get('quantity', 0),
+                    'raw_offer': item
+                })
+
+            return {
+                'success': True,
+                'offers': parsed_offers,
+                'total': len(parsed_offers),
+                'limit': limit,
+                'offset': offset
+            }
+        except Exception as fallback_exc:
+            log_inv(f"Trading API fallback failed: {fallback_exc}")
+            return {
+                'success': False,
+                'error': str(exc),
+                'offers': [],
+                'total': 0,
+                'limit': limit,
+                'offset': offset
+            }
 
 
 def fetch_shipping_fulfillment_details(user_id, fulfillment_href):
