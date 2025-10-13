@@ -32,12 +32,26 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         from qventory.models.import_job import ImportJob
         from qventory.models.item import Item
         from qventory.models.failed_import import FailedImport
+        from qventory.models.user import User
         from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item, get_listing_time_details, get_active_listings_trading_api
         from qventory.helpers import generate_sku
 
         log_task(f"=== Starting eBay import for user {user_id} ===")
         log_task(f"Mode: {import_mode}, Status: {listing_status}")
         log_task(f"Task ID: {self.request.id}")
+
+        # Check user's plan limits
+        user = User.query.get(user_id)
+        if not user:
+            raise Exception(f"User {user_id} not found")
+
+        items_remaining = user.items_remaining()
+        log_task(f"User plan limits - Items remaining: {items_remaining}")
+
+        if items_remaining is not None and items_remaining <= 0:
+            raise Exception(f"Cannot import: User has reached plan limit (0 items remaining)")
+
+        max_new_items_allowed = items_remaining  # Track how many NEW items we can import
 
         # Get or create ImportJob
         job = ImportJob.query.filter_by(celery_task_id=self.request.id).first()
@@ -177,6 +191,12 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         log_task(f"  New item from eBay")
 
                         if import_mode in ['new_only', 'sync_all']:
+                            # Check if user has reached their quota for NEW items
+                            if max_new_items_allowed is not None and imported_count >= max_new_items_allowed:
+                                skipped_count += 1
+                                log_task(f"  → Skipped (plan limit reached: {max_new_items_allowed} items)")
+                                continue
+
                             # NOW process images since we're importing a new item
                             parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
                             log_task(f"  Image processed: {parsed_with_images.get('item_thumb', 'N/A')[:80]}")
@@ -207,7 +227,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             )
                             db.session.add(new_item)
                             imported_count += 1
-                            log_task(f"  → Created new item (SKU: {new_sku})")
+                            log_task(f"  → Created new item (SKU: {new_sku}) [{imported_count}/{max_new_items_allowed if max_new_items_allowed is not None else 'unlimited'}]")
                         else:
                             # update_existing mode: skip new items
                             skipped_count += 1
@@ -306,12 +326,23 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             log_task(f"Imported: {imported_count}, Updated: {updated_count}, Skipped: {skipped_count}, Errors: {error_count}")
             log_task(f"Failed to parse: {len(failed_items)} (stored for retry)")
 
+            # Check if plan limit was reached
+            plan_limit_reached = (max_new_items_allowed is not None and
+                                imported_count >= max_new_items_allowed and
+                                skipped_count > 0)
+
+            if plan_limit_reached:
+                log_task(f"⚠️  PLAN LIMIT REACHED: Imported {imported_count} items (limit: {max_new_items_allowed})")
+                job.error_message = f"Plan limit reached. Imported {imported_count}/{max_new_items_allowed} items. Upgrade to import more."
+
             return {
                 'status': 'completed',
                 'imported': imported_count,
                 'updated': updated_count,
                 'skipped': skipped_count,
                 'errors': error_count,
+                'plan_limit_reached': plan_limit_reached,
+                'max_items_allowed': max_new_items_allowed,
                 'failed_items': len(failed_items),
                 'total': len(ebay_items)
             }

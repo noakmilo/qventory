@@ -344,11 +344,18 @@ function showFinalResult(job) {
   const importStatus = document.getElementById('importStatus');
 
   if (job.status === 'completed') {
+    // Check if plan limit was reached
+    const planLimitReached = job.error_message && job.error_message.includes('Plan limit reached');
+
     // Show toast notification
     const totalItems = (job.imported_count || 0) + (job.updated_count || 0);
-    showToast(`eBay import completed! ${totalItems} items processed.`, 'success');
+    if (planLimitReached) {
+      showToast(`Import stopped - Plan limit reached! ${job.imported_count} items imported.`, 'error');
+    } else {
+      showToast(`eBay import completed! ${totalItems} items processed.`, 'success');
+    }
 
-    importStatus.innerHTML = `
+    let statusHTML = `
       <div style="color:#10b981;font-weight:600;font-size:16px;margin-bottom:12px">✓ Import Completed Successfully!</div>
       <div style="background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:16px">
         <div style="font-size:14px;color:var(--text);margin-bottom:8px">
@@ -360,12 +367,39 @@ function showFinalResult(job) {
           • <strong>${job.skipped_count || 0}</strong> items skipped
         </div>
       </div>
+    `;
+
+    // Show upgrade warning if plan limit reached
+    if (planLimitReached) {
+      statusHTML += `
+        <div style="margin-top:16px;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:16px">
+          <div style="display:flex;align-items:start;gap:12px">
+            <i class="fas fa-exclamation-triangle" style="color:#ef4444;font-size:20px;margin-top:2px"></i>
+            <div style="flex:1">
+              <div style="font-weight:600;color:#ef4444;margin-bottom:6px">Plan Limit Reached</div>
+              <div style="font-size:13px;color:var(--sub);line-height:1.5">
+                ${job.error_message}
+              </div>
+              <div style="margin-top:12px">
+                <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn" style="display:inline-block;">
+                  <i class="fas fa-arrow-up"></i> Upgrade Plan
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    statusHTML += `
       <div style="margin-top:16px">
         <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
           <i class="fas fa-th-large"></i> View Inventory
         </a>
       </div>
     `;
+
+    importStatus.innerHTML = statusHTML;
   } else if (job.status === 'failed') {
     // Show error toast notification
     showToast('eBay import failed. Please try again.', 'error');
