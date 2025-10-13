@@ -256,6 +256,21 @@ const AIResearch = {
   currentItemId: null,
 
   init() {
+    // Check URL parameters for pre-filled data
+    const urlParams = new URLSearchParams(window.location.search);
+    const itemId = urlParams.get('item_id');
+    const title = urlParams.get('title');
+
+    // If item_id is provided, set it
+    if (itemId) {
+      this.currentItemId = parseInt(itemId);
+    }
+
+    // If title is provided, pre-fill the input
+    if (title) {
+      document.getElementById('itemTitle').value = decodeURIComponent(title);
+    }
+
     // Load token stats
     this.loadTokenStats();
 
