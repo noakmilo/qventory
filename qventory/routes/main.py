@@ -1130,6 +1130,202 @@ def import_ebay():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@main_bp.route("/sync-ebay-inventory", methods=["POST"])
+@login_required
+def sync_ebay_inventory():
+    """
+    Sync existing active inventory with eBay
+    Updates prices, status, and other details for items already in database
+    """
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.helpers.ebay_inventory import fetch_ebay_inventory_offers, parse_offer_to_item_data
+
+    # Check eBay connection
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    if not ebay_cred:
+        return jsonify({
+            'success': False,
+            'error': 'eBay account not connected'
+        }), 400
+
+    try:
+        # Get all items with eBay listing IDs
+        items_to_sync = Item.query.filter(
+            Item.user_id == current_user.id,
+            Item.is_active == True,
+            Item.ebay_listing_id.isnot(None)
+        ).all()
+
+        if not items_to_sync:
+            return jsonify({
+                'success': True,
+                'message': 'No items with eBay listings to sync',
+                'updated': 0
+            })
+
+        print(f"[SYNC_INVENTORY] Found {len(items_to_sync)} items to sync", file=sys.stderr)
+
+        # Fetch current data from eBay
+        result = fetch_ebay_inventory_offers(current_user.id)
+
+        if not result['success']:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Failed to fetch eBay data')
+            }), 400
+
+        ebay_offers = {offer['ebay_listing_id']: offer for offer in result['offers']}
+
+        # Update each item
+        updated_count = 0
+        for item in items_to_sync:
+            if item.ebay_listing_id in ebay_offers:
+                offer_data = ebay_offers[item.ebay_listing_id]
+
+                # Update price if changed
+                if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
+                    item.item_price = offer_data['item_price']
+                    updated_count += 1
+
+                # Update eBay URL if needed
+                if offer_data.get('ebay_url') and not item.ebay_url:
+                    item.ebay_url = offer_data['ebay_url']
+
+                # Update offer ID if needed
+                if offer_data.get('ebay_offer_id'):
+                    item.ebay_offer_id = offer_data['ebay_offer_id']
+
+                # Update listing status
+                if offer_data.get('listing_status'):
+                    listing_status = offer_data['listing_status']
+                    # If listing is not PUBLISHED, mark item as inactive
+                    if listing_status != 'PUBLISHED':
+                        item.is_active = False
+                        updated_count += 1
+
+        db.session.commit()
+
+        print(f"[SYNC_INVENTORY] Updated {updated_count} items", file=sys.stderr)
+
+        return jsonify({
+            'success': True,
+            'message': f'Synced {len(items_to_sync)} items, {updated_count} updated',
+            'total': len(items_to_sync),
+            'updated': updated_count
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[SYNC_INVENTORY] Error: {str(e)}", file=sys.stderr)
+        return jsonify({
+            'success': False,
+            'error': f'Sync failed: {str(e)}'
+        }), 500
+
+
+@main_bp.route("/sync-ebay-sold", methods=["POST"])
+@login_required
+def sync_ebay_sold():
+    """
+    Sync sold items with eBay
+    Fetches recent sold orders and updates existing sales or creates new ones
+    """
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
+    from qventory.models.sale import Sale
+
+    # Check eBay connection
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    if not ebay_cred:
+        return jsonify({
+            'success': False,
+            'error': 'eBay account not connected'
+        }), 400
+
+    try:
+        # Fetch sold orders from eBay (last 90 days)
+        result = fetch_ebay_sold_orders(current_user.id, days_back=90)
+
+        if not result['success']:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Failed to fetch eBay sales data')
+            }), 400
+
+        sold_orders = result['orders']
+
+        if not sold_orders:
+            return jsonify({
+                'success': True,
+                'message': 'No sold orders to sync',
+                'created': 0,
+                'updated': 0
+            })
+
+        print(f"[SYNC_SOLD] Found {len(sold_orders)} sold orders", file=sys.stderr)
+
+        created_count = 0
+        updated_count = 0
+
+        for order in sold_orders:
+            # Check if sale already exists
+            existing_sale = Sale.query.filter_by(
+                user_id=current_user.id,
+                marketplace_order_id=order.get('marketplace_order_id')
+            ).first()
+
+            if existing_sale:
+                # Update existing sale
+                if order.get('sold_price'):
+                    existing_sale.sold_price = order['sold_price']
+                if order.get('marketplace_fee'):
+                    existing_sale.marketplace_fee = order['marketplace_fee']
+                if order.get('payment_processing_fee'):
+                    existing_sale.payment_processing_fee = order['payment_processing_fee']
+
+                existing_sale.updated_at = datetime.utcnow()
+                existing_sale.calculate_profit()
+                updated_count += 1
+            else:
+                # Create new sale
+                new_sale = Sale(
+                    user_id=current_user.id,
+                    **order
+                )
+                new_sale.calculate_profit()
+                db.session.add(new_sale)
+                created_count += 1
+
+        db.session.commit()
+
+        print(f"[SYNC_SOLD] Created: {created_count}, Updated: {updated_count}", file=sys.stderr)
+
+        return jsonify({
+            'success': True,
+            'message': f'Synced {created_count + updated_count} sales ({created_count} new, {updated_count} updated)',
+            'created': created_count,
+            'updated': updated_count
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[SYNC_SOLD] Error: {str(e)}", file=sys.stderr)
+        return jsonify({
+            'success': False,
+            'error': f'Sync failed: {str(e)}'
+        }), 500
+
+
 # API endpoint to check import job status
 @main_bp.route("/api/import/status/<int:job_id>")
 @login_required
@@ -2382,16 +2578,35 @@ def profit_calculator():
 @main_bp.route("/api/autocomplete-items")
 @login_required
 def api_autocomplete_items():
-    """Autocomplete items by title for profit calculator"""
+    """Autocomplete items by title, SKU, or supplier"""
     q = (request.args.get("q") or "").strip()
+    view_type = request.args.get("view_type", "active")  # active, sold, ended
+
     if not q or len(q) < 2:
         return jsonify({"ok": True, "items": []})
 
     like = f"%{q}%"
-    items = Item.query.filter_by(user_id=current_user.id)\
-        .filter(Item.title.ilike(like))\
-        .order_by(Item.created_at.desc())\
-        .limit(10).all()
+
+    # Build query based on view_type
+    query = Item.query.filter_by(user_id=current_user.id)
+
+    # Filter by view type
+    if view_type == "active":
+        query = query.filter(Item.is_active == True)
+    elif view_type == "ended":
+        query = query.filter(Item.is_active == False)
+    # sold items are handled separately via Sales table
+
+    # Search in title, SKU, or supplier
+    query = query.filter(
+        or_(
+            Item.title.ilike(like),
+            Item.sku.ilike(like),
+            Item.supplier.ilike(like)
+        )
+    )
+
+    items = query.order_by(Item.updated_at.desc()).limit(10).all()
 
     results = []
     for it in items:
@@ -2401,7 +2616,8 @@ def api_autocomplete_items():
             "sku": it.sku,
             "cost": float(it.item_cost) if it.item_cost is not None else None,
             "price": float(it.item_price) if it.item_price is not None else None,
-            "supplier": it.supplier
+            "supplier": it.supplier,
+            "location_code": it.location_code
         })
 
     return jsonify({"ok": True, "items": results})

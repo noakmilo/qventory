@@ -142,6 +142,13 @@
         <a class="btn backup-btn" href="{{ url_for('main.import_ebay') }}" title="Import inventory from eBay">
           <i class="fab fa-ebay"></i> Import from eBay
         </a>
+        <button id="syncEbayActiveBtn" class="btn backup-btn" title="Sync existing inventory with eBay">
+          <i class="fas fa-sync-alt"></i> Sync eBay
+        </button>
+        {% elif view_type == 'sold' %}
+        <button id="syncEbaySoldBtn" class="btn backup-btn" title="Sync sold items with eBay">
+          <i class="fas fa-sync-alt"></i> Sync eBay Sales
+        </button>
         {% endif %}
       </div>
     </div>
@@ -308,4 +315,214 @@
 </div>
 
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+
+<script>
+// ==================== AUTOCOMPLETE ====================
+(function() {
+  const searchInput = document.getElementById('q');
+  const autocompleteList = document.getElementById('dashboardAutocompleteList');
+  const viewType = '{{ view_type }}'; // active, sold, or ended
+
+  if (!searchInput || !autocompleteList) return;
+
+  let debounceTimer;
+
+  searchInput.addEventListener('input', function(e) {
+    const query = e.target.value.trim();
+
+    clearTimeout(debounceTimer);
+
+    if (query.length < 2) {
+      autocompleteList.classList.remove('show');
+      autocompleteList.innerHTML = '';
+      return;
+    }
+
+    debounceTimer = setTimeout(() => fetchAutocomplete(query), 300);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !autocompleteList.contains(e.target)) {
+      autocompleteList.classList.remove('show');
+    }
+  });
+
+  searchInput.addEventListener('keydown', function(e) {
+    const items = autocompleteList.querySelectorAll('.autocomplete-item');
+    const activeItem = autocompleteList.querySelector('.autocomplete-item.active');
+    let index = Array.from(items).indexOf(activeItem);
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      index = Math.min(index + 1, items.length - 1);
+      setActiveItem(items, index);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      index = Math.max(index - 1, 0);
+      setActiveItem(items, index);
+    } else if (e.key === 'Enter' && activeItem) {
+      e.preventDefault();
+      activeItem.click();
+    } else if (e.key === 'Escape') {
+      autocompleteList.classList.remove('show');
+    }
+  });
+
+  function fetchAutocomplete(query) {
+    fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}&view_type=${viewType}`)
+      .then(response => response.json())
+      .then(data => {
+        if (data.ok && data.items) {
+          displayResults(data.items);
+        }
+      })
+      .catch(error => console.error('Autocomplete error:', error));
+  }
+
+  function displayResults(items) {
+    autocompleteList.innerHTML = '';
+
+    if (items.length === 0) {
+      autocompleteList.classList.remove('show');
+      return;
+    }
+
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'autocomplete-item';
+      div.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <strong style="color:var(--text)">${highlightMatch(item.title, searchInput.value)}</strong>
+          <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:12px;flex-wrap:wrap">
+            ${item.sku ? `<span>SKU: ${highlightMatch(item.sku, searchInput.value)}</span>` : ''}
+            ${item.supplier ? `<span>Supplier: ${highlightMatch(item.supplier, searchInput.value)}</span>` : ''}
+            ${item.location_code ? `<span>📍 ${item.location_code}</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      div.addEventListener('click', () => {
+        searchInput.value = item.title;
+        autocompleteList.classList.remove('show');
+        document.getElementById('filterForm').submit();
+      });
+
+      autocompleteList.appendChild(div);
+    });
+
+    autocompleteList.classList.add('show');
+  }
+
+  function highlightMatch(text, query) {
+    if (!text || !query) return text || '';
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<mark style="background:#fbbf24;color:#000;padding:0 2px">$1</mark>');
+  }
+
+  function setActiveItem(items, index) {
+    items.forEach((item, i) => {
+      if (i === index) {
+        item.classList.add('active');
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+})();
+
+// ==================== EBAY SYNC ====================
+document.addEventListener('DOMContentLoaded', function() {
+  const syncActiveBtn = document.getElementById('syncEbayActiveBtn');
+  const syncSoldBtn = document.getElementById('syncEbaySoldBtn');
+
+  if (syncActiveBtn) {
+    syncActiveBtn.addEventListener('click', function() {
+      syncEbayInventory('active');
+    });
+  }
+
+  if (syncSoldBtn) {
+    syncSoldBtn.addEventListener('click', function() {
+      syncEbayInventory('sold');
+    });
+  }
+
+  function syncEbayInventory(type) {
+    const btn = type === 'active' ? syncActiveBtn : syncSoldBtn;
+    const originalHTML = btn.innerHTML;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+
+    const endpoint = type === 'active' ? '/sync-ebay-inventory' : '/sync-ebay-sold';
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        btn.innerHTML = '<i class="fas fa-check"></i> Synced!';
+
+        // Show success message
+        showNotification(
+          'success',
+          data.message || `Successfully synced ${data.updated || 0} items`
+        );
+
+        // Reload page after 2 seconds
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        btn.innerHTML = originalHTML;
+        btn.disabled = false;
+
+        showNotification('error', data.error || 'Sync failed');
+      }
+    })
+    .catch(error => {
+      console.error('Sync error:', error);
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+
+      showNotification('error', 'Network error. Please try again.');
+    });
+  }
+
+  function showNotification(type, message) {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-size: 14px;
+      max-width: 400px;
+      ${type === 'success'
+        ? 'background: #d1fae5; color: #065f46; border: 1px solid #34d399;'
+        : 'background: #fee2e2; color: #991b1b; border: 1px solid #f87171;'}
+    `;
+
+    notification.innerHTML = `
+      <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+      ${message}
+    `;
+
+    document.body.appendChild(notification);
+
+    setTimeout(() => {
+      notification.remove();
+    }, 5000);
+  }
+});
+</script>
+
 {% endblock %}

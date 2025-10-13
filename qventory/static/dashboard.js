@@ -375,26 +375,30 @@ if (filtersToggle && filtersContent) {
   });
 }
 
-// ==================== QR SCANNER ====================
+// ==================== QR SCANNER (jsQR Implementation) ====================
 
 const btnScanQR = document.getElementById('btnScanQR');
 
 if (btnScanQR) {
   btnScanQR.addEventListener('click', async () => {
-    if (!('BarcodeDetector' in window)) {
-      alert('QR scanning not supported in this browser. Use Chrome on Android/Desktop or Safari 14+ on iOS.');
+    // Check if getUserMedia is supported
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      alert('Camera access not supported in this browser.');
+      return;
+    }
+
+    // Check if jsQR is loaded
+    if (typeof jsQR === 'undefined') {
+      alert('QR scanner library not loaded. Please refresh the page.');
       return;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.play();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      });
 
-      const barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] });
-
-      // Create a simple modal for the camera feed
+      // Create modal with video and canvas
       const scanModal = document.createElement('div');
       scanModal.className = 'qr-modal';
       scanModal.innerHTML = `
@@ -404,51 +408,91 @@ if (btnScanQR) {
             <button type="button" id="closeScan" class="qr-icon"><i class="fas fa-times"></i></button>
           </div>
           <div class="qr-body">
-            <video id="scanVideo" style="width:100%;max-width:400px;border-radius:8px;"></video>
+            <video id="scanVideo" playsinline style="width:100%;max-width:400px;border-radius:8px;"></video>
+            <canvas id="scanCanvas" style="display:none;"></canvas>
+            <p style="margin-top:12px;font-size:13px;color:var(--text-secondary);text-align:center;">
+              Point your camera at a QR code
+            </p>
           </div>
         </div>
       `;
       document.body.appendChild(scanModal);
 
-      const scanVideo = scanModal.querySelector('#scanVideo');
-      scanVideo.srcObject = stream;
-      scanVideo.play();
+      const video = scanModal.querySelector('#scanVideo');
+      const canvas = scanModal.querySelector('#scanCanvas');
+      const context = canvas.getContext('2d');
+
+      video.srcObject = stream;
+      video.setAttribute('playsinline', true); // Required for iOS
+      video.play();
 
       const closeScan = scanModal.querySelector('#closeScan');
+      let scanning = true;
+
       closeScan.addEventListener('click', () => {
+        scanning = false;
         stream.getTracks().forEach(track => track.stop());
         scanModal.remove();
       });
 
-      // Scan for QR codes
-      const scanInterval = setInterval(async () => {
-        try {
-          const barcodes = await barcodeDetector.detect(scanVideo);
-          if (barcodes.length > 0) {
-            const code = barcodes[0].rawValue;
-            clearInterval(scanInterval);
+      // Start scanning when video is ready
+      video.addEventListener('loadedmetadata', () => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        requestAnimationFrame(tick);
+      });
+
+      function tick() {
+        if (!scanning) return;
+
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: "dontInvert",
+          });
+
+          if (code) {
+            // QR code detected!
+            scanning = false;
             stream.getTracks().forEach(track => track.stop());
             scanModal.remove();
 
+            const qrData = code.data;
+
             // Navigate to the scanned URL or fill search box
-            if (code.startsWith('http')) {
-              window.location.href = code;
+            if (qrData.startsWith('http')) {
+              window.location.href = qrData;
             } else {
               const searchInput = document.getElementById('q');
               if (searchInput) {
-                searchInput.value = code;
+                searchInput.value = qrData;
                 searchInput.form.submit();
               }
             }
+            return;
           }
-        } catch (err) {
-          console.error('Barcode detection error:', err);
         }
-      }, 100);
+
+        requestAnimationFrame(tick);
+      }
 
     } catch (error) {
       console.error('Camera error:', error);
-      alert('Failed to access camera: ' + error.message);
+      let errorMsg = 'Failed to access camera.';
+
+      if (error.name === 'NotAllowedError') {
+        errorMsg = 'Camera access denied. Please allow camera access in your browser settings.';
+      } else if (error.name === 'NotFoundError') {
+        errorMsg = 'No camera found on this device.';
+      } else if (error.name === 'NotReadableError') {
+        errorMsg = 'Camera is already in use by another app.';
+      }
+
+      alert(errorMsg);
     }
   });
 }
