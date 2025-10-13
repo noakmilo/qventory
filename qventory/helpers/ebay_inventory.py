@@ -279,9 +279,12 @@ def get_active_listings(user_id, limit=200, offset=0):
         'Accept': 'application/json'
     }
 
+    marketplace_id = os.environ.get('EBAY_MARKETPLACE_ID', 'EBAY_US')
+
     params = {
         'limit': min(limit, 200),
-        'offset': offset
+        'offset': offset,
+        'marketplace_ids': marketplace_id
     }
 
     log_inv(f"Making request to eBay Offers API...")
