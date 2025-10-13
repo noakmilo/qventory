@@ -1659,3 +1659,59 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
     except Exception as e:
         log_inv(f"Error parsing eBay order: {str(e)}")
         return None
+
+
+def fetch_ebay_sold_orders(user_id, days_back=90, fulfillment_statuses=None, max_orders=1000):
+    """
+    Fetch sold orders from eBay and convert them into sale-friendly payloads.
+
+    Args:
+        user_id (int): Qventory user ID.
+        days_back (int): How many days back to look for orders.
+        fulfillment_statuses (Iterable[str] or None): Optional list of eBay fulfillment statuses to keep.
+        max_orders (int): Max number of orders to fetch.
+
+    Returns:
+        dict: {
+            'success': bool,
+            'orders': list[dict],
+            'error': str (optional),
+            'fetched': int,
+            'filtered': int
+        }
+    """
+    try:
+        raw_orders = get_ebay_orders(user_id, days_back=days_back, max_orders=max_orders)
+    except Exception as exc:
+        log_inv(f"ERROR pulling sold orders: {exc}")
+        return {
+            'success': False,
+            'orders': [],
+            'error': str(exc),
+            'fetched': 0,
+            'filtered': 0
+        }
+
+    allowed_statuses = None
+    if fulfillment_statuses:
+        allowed_statuses = {status.upper() for status in fulfillment_statuses}
+
+    parsed_orders = []
+    for order in raw_orders:
+        order_status = (order.get('orderFulfillmentStatus') or '').upper()
+        if allowed_statuses and order_status not in allowed_statuses:
+            continue
+
+        sale_payload = parse_ebay_order_to_sale(order, user_id=user_id)
+        if sale_payload:
+            parsed_orders.append(sale_payload)
+
+    log_inv(f"Prepared {len(parsed_orders)} sold orders from {len(raw_orders)} raw records")
+
+    return {
+        'success': True,
+        'orders': parsed_orders,
+        'error': None,
+        'fetched': len(raw_orders),
+        'filtered': len(parsed_orders)
+    }
