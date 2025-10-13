@@ -1984,7 +1984,8 @@ def admin_dashboard():
 def admin_delete_user(user_id):
     """Delete a user and all their data"""
     from qventory.models.sale import Sale
-    from qventory.models.import_job import ImportJob, FailedImport
+    from qventory.models.import_job import ImportJob
+    from qventory.models.failed_import import FailedImport
     from qventory.models.listing import Listing
     from qventory.models.report import Report
     from qventory.models.marketplace_credential import MarketplaceCredential
