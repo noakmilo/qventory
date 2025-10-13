@@ -1260,7 +1260,10 @@ def sync_ebay_inventory():
         # Get all items with eBay listing IDs
         items_to_sync = Item.query.filter(
             Item.user_id == current_user.id,
-            Item.ebay_listing_id.isnot(None)
+            or_(
+                Item.ebay_listing_id.isnot(None),
+                Item.ebay_sku.isnot(None)
+            )
         ).all()
 
         if not items_to_sync:
@@ -1390,8 +1393,15 @@ def sync_ebay_sold():
         }), 403
 
     try:
-        # Fetch sold orders from eBay (last 90 days)
-        result = fetch_ebay_sold_orders(current_user.id, days_back=90)
+        # Determine historical range (None = full history up to safety window)
+        days_back_param = request.form.get('days_back') or request.args.get('days_back')
+        try:
+            sync_days_back = int(days_back_param) if days_back_param else None
+        except (TypeError, ValueError):
+            sync_days_back = None
+
+        # Fetch sold orders from eBay
+        result = fetch_ebay_sold_orders(current_user.id, days_back=sync_days_back)
 
         if not result['success']:
             return jsonify({

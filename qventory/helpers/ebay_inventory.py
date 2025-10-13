@@ -441,24 +441,42 @@ def get_all_inventory(user_id, max_items=1000):
     return all_items[:max_items]
 
 
-def get_ebay_orders(user_id, days_back=None, max_orders=5000):
+def get_ebay_orders(user_id, days_back=None, max_orders=5000, start_date=None, end_date=None):
     """
     Get completed orders from eBay Fulfillment API with pagination
 
     Args:
         user_id: Qventory user ID
-        days_back: How many days back to fetch orders (None = lifetime, all orders)
+        days_back: How many days back to fetch orders (ignored if start_date provided)
         max_orders: Maximum orders to fetch (default 5000)
+        start_date: Optional datetime to bound range (inclusive)
+        end_date: Optional datetime to bound range (inclusive, defaults to now)
 
     Returns:
         list of order dicts with sale information
     """
     from datetime import datetime, timedelta
 
-    if days_back:
+    if end_date is None:
+        end_date = datetime.utcnow()
+
+    if start_date and start_date > end_date:
+        raise ValueError("start_date cannot be after end_date")
+
+    if start_date:
+        date_from = start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        log_inv(f"Getting eBay orders for user {user_id} between {date_from} and {date_to}")
+        filter_param = f'creationdate:[{date_from}..{date_to}]'
+    elif days_back:
         log_inv(f"Getting eBay orders for user {user_id} (last {days_back} days)")
+        start_dt = end_date - timedelta(days=days_back)
+        date_from = start_dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        filter_param = f'creationdate:[{date_from}..{date_to}]'
     else:
         log_inv(f"Getting ALL eBay orders for user {user_id} (lifetime)")
+        filter_param = None
 
     access_token = get_user_access_token(user_id)
     if not access_token:
@@ -471,19 +489,6 @@ def get_ebay_orders(user_id, days_back=None, max_orders=5000):
         'Content-Type': 'application/json',
         'Accept': 'application/json'
     }
-
-    # Build filter
-    if days_back:
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=days_back)
-        date_from = start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-        date_to = end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z')
-        filter_param = f'creationdate:[{date_from}..{date_to}]'
-        log_inv(f"Fetching orders from {date_from} to {date_to}")
-    else:
-        # No date filter = all orders lifetime
-        filter_param = None
-        log_inv(f"Fetching ALL orders (no date filter)")
 
     all_orders = []
     offset = 0
@@ -1661,15 +1666,16 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         return None
 
 
-def fetch_ebay_sold_orders(user_id, days_back=90, fulfillment_statuses=None, max_orders=1000):
+def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, max_orders=5000, max_history_days=3650):
     """
     Fetch sold orders from eBay and convert them into sale-friendly payloads.
 
     Args:
         user_id (int): Qventory user ID.
-        days_back (int): How many days back to look for orders.
+        days_back (int | None): How many days back to look for orders.
         fulfillment_statuses (Iterable[str] or None): Optional list of eBay fulfillment statuses to keep.
-        max_orders (int): Max number of orders to fetch.
+        max_orders (int): Max number of orders to fetch per window.
+        max_history_days (int): Maximum historical days to scan when days_back is None (default ≈10 años).
 
     Returns:
         dict: {
@@ -1680,24 +1686,76 @@ def fetch_ebay_sold_orders(user_id, days_back=90, fulfillment_statuses=None, max
             'filtered': int
         }
     """
-    try:
-        raw_orders = get_ebay_orders(user_id, days_back=days_back, max_orders=max_orders)
-    except Exception as exc:
-        log_inv(f"ERROR pulling sold orders: {exc}")
-        return {
-            'success': False,
-            'orders': [],
-            'error': str(exc),
-            'fetched': 0,
-            'filtered': 0
-        }
+    from datetime import datetime, timedelta
+
+    chunk_days = 90  # eBay Fulfillment API comfortably supports 90-day windows
+    window_end = datetime.utcnow()
+
+    if days_back is not None and days_back <= 0:
+        return {'success': True, 'orders': [], 'error': None, 'fetched': 0, 'filtered': 0}
+
+    max_history = days_back if days_back is not None else max_history_days
+    earliest_allowed = window_end - timedelta(days=max_history)
+
+    aggregated_orders = []
+    seen_order_ids = set()
+    iterations = 0
+    empty_windows = 0
+
+    while window_end > earliest_allowed and iterations < 200:
+        window_start = max(earliest_allowed, window_end - timedelta(days=chunk_days))
+
+        try:
+            window_orders = get_ebay_orders(
+                user_id,
+                max_orders=max_orders,
+                start_date=window_start,
+                end_date=window_end
+            )
+        except Exception as exc:
+            log_inv(f"ERROR pulling sold orders window {window_start} -> {window_end}: {exc}")
+            return {
+                'success': False,
+                'orders': [],
+                'error': str(exc),
+                'fetched': len(aggregated_orders),
+                'filtered': 0
+            }
+
+        new_added = 0
+        for order in window_orders:
+            order_id = order.get('orderId')
+            if order_id and order_id in seen_order_ids:
+                continue
+            if order_id:
+                seen_order_ids.add(order_id)
+            aggregated_orders.append(order)
+            new_added += 1
+
+        if new_added == 0:
+            empty_windows += 1
+        else:
+            empty_windows = 0
+
+        iterations += 1
+        window_end = window_start - timedelta(seconds=1)
+
+        if empty_windows >= 2:
+            log_inv("No additional orders found in previous windows; stopping pagination.")
+            break
+
+    # Sort orders chronologically (newest first) for deterministic processing
+    aggregated_orders.sort(
+        key=lambda order: order.get('creationDate') or order.get('lastModifiedDate') or '',
+        reverse=False
+    )
 
     allowed_statuses = None
     if fulfillment_statuses:
         allowed_statuses = {status.upper() for status in fulfillment_statuses}
 
     parsed_orders = []
-    for order in raw_orders:
+    for order in aggregated_orders:
         order_status = (order.get('orderFulfillmentStatus') or '').upper()
         if allowed_statuses and order_status not in allowed_statuses:
             continue
@@ -1706,12 +1764,12 @@ def fetch_ebay_sold_orders(user_id, days_back=90, fulfillment_statuses=None, max
         if sale_payload:
             parsed_orders.append(sale_payload)
 
-    log_inv(f"Prepared {len(parsed_orders)} sold orders from {len(raw_orders)} raw records")
+    log_inv(f"Prepared {len(parsed_orders)} sold orders from {len(aggregated_orders)} raw records")
 
     return {
         'success': True,
         'orders': parsed_orders,
         'error': None,
-        'fetched': len(raw_orders),
+        'fetched': len(aggregated_orders),
         'filtered': len(parsed_orders)
     }
