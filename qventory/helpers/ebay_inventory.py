@@ -1400,10 +1400,18 @@ def parse_ebay_order_to_sale(order_data):
         # Get line items (eBay orders can have multiple items)
         line_items = order_data.get('lineItems', [])
         if not line_items:
+            log_inv(f"⚠️  Order {order_id}: No line items found")
             return None
 
         # For now, handle first line item (you can extend this to handle multiple)
         line_item = line_items[0]
+
+        # DEBUG: Log line item structure for first order
+        if log_inv:
+            import json
+            log_inv(f"DEBUG Order {order_id} lineItem keys: {list(line_item.keys())}")
+            if 'fulfillments' in line_item:
+                log_inv(f"DEBUG Order {order_id} fulfillments: {json.dumps(line_item['fulfillments'], indent=2)}")
 
         # Extract basic info
         title = line_item.get('title', 'Unknown Item')
