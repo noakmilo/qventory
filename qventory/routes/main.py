@@ -632,7 +632,8 @@ def sync_ebay_orders():
 
         for order_data in orders:
             try:
-                sale_data = parse_ebay_order_to_sale(order_data)
+                # Pass user_id to get detailed fulfillment info
+                sale_data = parse_ebay_order_to_sale(order_data, user_id=current_user.id)
 
                 if not sale_data:
                     print(f"[FULFILLMENT_SYNC] Failed to parse order {order_data.get('orderId', 'UNKNOWN')}", file=sys.stderr)

@@ -1273,6 +1273,41 @@ def parse_ebay_offer(ebay_offer):
     }
 
 
+def fetch_shipping_fulfillment_details(user_id, fulfillment_href):
+    """
+    Fetch detailed shipping/tracking info from a fulfillment href
+
+    Args:
+        user_id: Qventory user ID
+        fulfillment_href: Full URL to shipping_fulfillment endpoint
+
+    Returns:
+        dict: Fulfillment details including tracking, shipped date, delivery date
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return None
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    try:
+        response = requests.get(fulfillment_href, headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            log_inv(f"Failed to fetch fulfillment details: {response.status_code}")
+            return None
+
+    except Exception as e:
+        log_inv(f"Error fetching fulfillment details: {str(e)}")
+        return None
+
+
 def fetch_ebay_orders(user_id, filter_status=None, limit=100):
     """
     Fetch orders from eBay Fulfillment API
@@ -1383,12 +1418,13 @@ def fetch_ebay_orders(user_id, filter_status=None, limit=100):
         }
 
 
-def parse_ebay_order_to_sale(order_data):
+def parse_ebay_order_to_sale(order_data, user_id=None):
     """
     Parse eBay Fulfillment API order data into Sale model format
 
     Args:
         order_data: Raw order dict from eBay API
+        user_id: Optional user ID to fetch detailed fulfillment info
 
     Returns:
         dict: Sale model compatible dict
@@ -1445,10 +1481,35 @@ def parse_ebay_order_to_sale(order_data):
             if modified_date_str:
                 shipped_at = _parse_ebay_datetime(modified_date_str)
 
-            # Try to extract tracking from fulfillmentHrefs
-            # Example: .../shipping_fulfillment/9405508106245362443883
+            # Try to get detailed fulfillment info if user_id provided
             fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
-            if fulfillment_hrefs:
+            if fulfillment_hrefs and user_id:
+                href = fulfillment_hrefs[0]
+                fulfillment_details = fetch_shipping_fulfillment_details(user_id, href)
+
+                if fulfillment_details:
+                    # Extract tracking info from fulfillment details
+                    line_items = fulfillment_details.get('lineItems', [])
+                    if line_items:
+                        shipment_tracking = line_items[0].get('shipmentTracking', {})
+                        tracking_number = shipment_tracking.get('trackingNumber', '')
+
+                        # Get actual shipped date
+                        shipped_date_str = fulfillment_details.get('shippedDate', '')
+                        if shipped_date_str:
+                            shipped_at = _parse_ebay_datetime(shipped_date_str)
+
+                        # Get delivery date
+                        delivered_date_str = shipment_tracking.get('actualDeliveryDate', '')
+                        if delivered_date_str:
+                            delivered_at = _parse_ebay_datetime(delivered_date_str)
+                        else:
+                            # Some orders show as fulfilled but no delivery date yet
+                            # Keep delivered_at as None, it will show in "In Transit"
+                            pass
+
+            # Fallback: extract tracking from href if API call failed
+            if not tracking_number and fulfillment_hrefs:
                 href = fulfillment_hrefs[0]
                 parts = href.split('/')
                 if len(parts) > 0:
