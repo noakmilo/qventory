@@ -1273,6 +1273,81 @@ def parse_ebay_offer(ebay_offer):
     }
 
 
+def parse_offer_to_item_data(ebay_offer):
+    """
+    Convert an eBay offer payload into a normalized structure consumed by sync flows.
+
+    Args:
+        ebay_offer (dict): Raw offer returned by eBay's Inventory API.
+
+    Returns:
+        dict: Flattened offer metadata (price, URL, quantity, raw payload).
+    """
+    parsed_offer = parse_ebay_offer(ebay_offer)
+
+    product = ebay_offer.get('product') or {}
+    quantity = ebay_offer.get('availableQuantity')
+    if isinstance(quantity, dict):
+        quantity = quantity.get('quantity')
+    if quantity is None:
+        quantity = ebay_offer.get('quantityLimitPerBuyer')
+    if quantity is None:
+        availability = ebay_offer.get('listingPolicies', {}).get('fulfillmentPolicies', {})
+        if isinstance(availability, dict):
+            quantity = availability.get('quantity', 0)
+
+    parsed_offer.update({
+        'title': product.get('title'),
+        'description': product.get('description'),
+        'item_quantity': quantity if quantity is not None else 0,
+        'raw_offer': ebay_offer
+    })
+    return parsed_offer
+
+
+def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
+    """
+    Wrapper around get_active_listings that returns a friendly payload with parsed offers.
+
+    Args:
+        user_id (int): Qventory user ID.
+        limit (int): Max records per request.
+        offset (int): Pagination offset.
+
+    Returns:
+        dict: {
+            'success': bool,
+            'offers': list[dict],
+            'total': int,
+            'limit': int,
+            'offset': int,
+            'error': str (optional)
+        }
+    """
+    try:
+        listings = get_active_listings(user_id, limit=limit, offset=offset)
+        raw_offers = listings.get('offers', []) or []
+        parsed_offers = [parse_offer_to_item_data(offer) for offer in raw_offers]
+
+        return {
+            'success': True,
+            'offers': parsed_offers,
+            'total': listings.get('total', len(parsed_offers)),
+            'limit': listings.get('limit', limit),
+            'offset': listings.get('offset', offset)
+        }
+    except Exception as exc:
+        log_inv(f"ERROR fetching offers: {exc}")
+        return {
+            'success': False,
+            'error': str(exc),
+            'offers': [],
+            'total': 0,
+            'limit': limit,
+            'offset': offset
+        }
+
+
 def fetch_shipping_fulfillment_details(user_id, fulfillment_href):
     """
     Fetch detailed shipping/tracking info from a fulfillment href
