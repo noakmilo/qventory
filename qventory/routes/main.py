@@ -1281,13 +1281,28 @@ def sync_ebay_inventory():
                 'error': result.get('error', 'Failed to fetch eBay data')
             }), 400
 
-        ebay_offers = {offer['ebay_listing_id']: offer for offer in result['offers']}
+        offers_by_listing = {
+            offer.get('ebay_listing_id'): offer
+            for offer in result['offers']
+            if offer.get('ebay_listing_id')
+        }
+        offers_by_sku = {
+            offer.get('ebay_sku'): offer
+            for offer in result['offers']
+            if offer.get('ebay_sku')
+        }
 
         # Update each item
         updated_count = 0
         for item in items_to_sync:
-            if item.ebay_listing_id in ebay_offers:
-                offer_data = ebay_offers[item.ebay_listing_id]
+            offer_data = None
+
+            if item.ebay_listing_id and item.ebay_listing_id in offers_by_listing:
+                offer_data = offers_by_listing[item.ebay_listing_id]
+            elif item.ebay_sku and item.ebay_sku in offers_by_sku:
+                offer_data = offers_by_sku[item.ebay_sku]
+
+            if offer_data:
 
                 # Update price if changed
                 if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
@@ -1301,6 +1316,12 @@ def sync_ebay_inventory():
                 # Update offer ID if needed
                 if offer_data.get('ebay_offer_id'):
                     item.ebay_offer_id = offer_data['ebay_offer_id']
+
+                # Backfill listing ID / SKU when missing locally
+                if not item.ebay_listing_id and offer_data.get('ebay_listing_id'):
+                    item.ebay_listing_id = offer_data['ebay_listing_id']
+                if not item.ebay_sku and offer_data.get('ebay_sku'):
+                    item.ebay_sku = offer_data['ebay_sku']
 
                 # Update listing status
                 listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
