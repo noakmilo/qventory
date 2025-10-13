@@ -383,14 +383,14 @@ def import_ebay_sales(self, user_id, days_back=None):
         from qventory.models.sale import Sale
         from qventory.models.item import Item
         from qventory.models.marketplace_credential import MarketplaceCredential
-        from qventory.helpers.ebay_inventory import get_ebay_orders
+        from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
         from dateutil import parser as date_parser
         from datetime import datetime, timedelta
 
         if days_back:
             log_task(f"Starting eBay sales import for user {user_id}, last {days_back} days")
         else:
-            log_task(f"Starting eBay sales import for user {user_id}, ALL TIME (lifetime)")
+            log_task(f"Starting eBay sales import for user {user_id}, ALL TIME (full history)")
 
         try:
             # Get eBay credentials to check for store subscription
@@ -403,9 +403,15 @@ def import_ebay_sales(self, user_id, days_back=None):
             # In case migration hasn't been applied yet
             ebay_store_monthly_fee = getattr(ebay_cred, 'ebay_store_subscription', 0.0) if ebay_cred else 0.0
 
-            # Fetch orders from eBay
-            orders = get_ebay_orders(user_id, days_back=days_back)
-            log_task(f"Fetched {len(orders)} orders from eBay")
+            # Fetch orders from eBay using the improved function that handles full history
+            # This function automatically iterates in 90-day windows when days_back=None
+            result = fetch_ebay_sold_orders(user_id, days_back=days_back)
+
+            if not result['success']:
+                raise Exception(result.get('error', 'Failed to fetch eBay orders'))
+
+            orders = result['orders']
+            log_task(f"Fetched {len(orders)} orders from eBay (scanned {result.get('fetched', 0)} total records)")
 
             if ebay_store_monthly_fee > 0:
                 log_task(f"eBay Store Subscription detected: ${ebay_store_monthly_fee}/month")
@@ -414,220 +420,134 @@ def import_ebay_sales(self, user_id, days_back=None):
             updated_count = 0
             skipped_count = 0
 
-            for order in orders:
+            # Orders are already parsed by fetch_ebay_sold_orders into sale-ready format
+            for sale_data in orders:
                 try:
-                    order_id = order.get('orderId')
-                    order_status = order.get('orderFulfillmentStatus', 'UNKNOWN')
-
-                    # Only process completed/paid orders
-                    if order_status not in ['FULFILLED', 'IN_PROGRESS']:
+                    if not sale_data:
                         skipped_count += 1
                         continue
 
-                    # Get order pricing
-                    pricing_summary = order.get('pricingSummary', {})
-                    total_price = float(pricing_summary.get('total', {}).get('value', 0))
+                    # Extract data from parsed order (already in normalized format)
+                    order_id = sale_data.get('marketplace_order_id')
+                    title = sale_data.get('item_title', 'Unknown Item')
+                    sku = sale_data.get('item_sku', '')
+                    sold_price = sale_data.get('sold_price', 0)
+                    shipping_cost = sale_data.get('shipping_cost', 0)
+                    buyer_username = sale_data.get('buyer_username', '')
+                    tracking_number = sale_data.get('tracking_number')
+                    carrier = sale_data.get('carrier')
+                    shipped_at = sale_data.get('shipped_at')
+                    delivered_at = sale_data.get('delivered_at')
+                    sold_at = sale_data.get('sold_at', datetime.utcnow())
+                    status = sale_data.get('status', 'pending')
+                    ebay_transaction_id = sale_data.get('ebay_transaction_id')
 
-                    # Get order creation date
-                    creation_date_str = order.get('creationDate', '')
-                    sold_at = date_parser.parse(creation_date_str) if creation_date_str else datetime.utcnow()
+                    # Calculate eBay fees (approximate)
+                    marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
+                    payment_fee = sold_price * 0.029 + 0.30  # Payment processing
 
-                    # Get buyer info
-                    buyer = order.get('buyer', {})
-                    buyer_username = buyer.get('username', '')
+                    # Calculate prorated store subscription fee
+                    store_fee_per_sale = 0.0
+                    if ebay_store_monthly_fee > 0 and len(orders) > 0:
+                        store_fee_per_sale = ebay_store_monthly_fee / len(orders)
 
-                    # Process each line item in the order
-                    line_items = order.get('lineItems', [])
+                    # Try to find matching item in Qventory (multiple strategies)
+                    item = None
+                    match_method = None
 
-                    for line_item in line_items:
-                        sku = line_item.get('sku', '')
-                        title = line_item.get('title', 'Unknown Item')
-                        line_item_id = line_item.get('lineItemId', '')
-
-                        # Try to get eBay listing ID from lineItem
-                        ebay_listing_id = line_item.get('legacyItemId') or line_item.get('listingMarketplaceId')
-
-                        # Get price for this line item
-                        line_total = float(line_item.get('total', {}).get('value', 0))
-
-                        # Extract shipping details from order
-                        shipping_cost = 0.0
-                        shipping_charged = 0.0
-
-                        # Get what buyer paid for shipping (from line item)
-                        line_item_cost = line_item.get('lineItemCost', {})
-                        if line_item_cost:
-                            shipping_charged = float(line_item_cost.get('shippingCost', {}).get('value', 0))
-
-                        # Alternative: try deliveryCost from line item
-                        if shipping_charged == 0.0:
-                            delivery_cost = line_item.get('deliveryCost', {})
-                            if delivery_cost:
-                                shipping_charged = float(delivery_cost.get('value', 0))
-
-                        # Extract ACTUAL shipping cost and fulfillment data (what seller paid for label)
-                        # This is available when seller buys shipping label through eBay
-                        shipping_cost = 0.0
-                        tracking_number = None
-                        carrier = None
-                        shipped_at = None
-                        delivered_at = None
-
-                        fulfillment_instructions = order.get('fulfillmentStartInstructions', [])
-                        if fulfillment_instructions:
-                            shipping_step = fulfillment_instructions[0].get('shippingStep', {})
-                            shipment_details = shipping_step.get('shipmentDetails', {})
-
-                            # Get actual shipping cost
-                            actual_shipping = shipment_details.get('actualShippingCost', {})
-                            if actual_shipping:
-                                shipping_cost = float(actual_shipping.get('value', 0))
-                                log_task(f"    Actual shipping cost from eBay: ${shipping_cost}")
-
-                            # Get tracking number and carrier
-                            tracking_number = shipment_details.get('trackingNumber')
-                            carrier = shipment_details.get('shippingCarrierCode')
-
-                            # Get shipped date
-                            shipped_date_str = shipment_details.get('shippedDate') or shipment_details.get('actualShipDate')
-                            if shipped_date_str:
-                                try:
-                                    shipped_at = date_parser.parse(shipped_date_str)
-                                    log_task(f"    Shipped: {shipped_at}")
-                                except:
-                                    pass
-
-                            # Get delivery date (if available)
-                            delivery_date_str = shipment_details.get('deliveredDate') or shipment_details.get('actualDeliveryDate')
-                            if delivery_date_str:
-                                try:
-                                    delivered_at = date_parser.parse(delivery_date_str)
-                                    log_task(f"    Delivered: {delivered_at}")
-                                except:
-                                    pass
-
-                        # Calculate eBay fees (approximate - eBay doesn't provide exact fees in Order API)
-                        # Final value fee: ~13.25% for most categories (can vary 10-15%)
-                        # This is an approximation - for exact fees, use eBay Finance API
-                        marketplace_fee = line_total * 0.1325  # ~13.25% eBay final value fee
-
-                        # Payment processing fee (eBay Managed Payments: ~2.9% + $0.30)
-                        payment_fee = line_total * 0.029 + 0.30
-
-                        # Calculate prorated store subscription fee (if any)
-                        # Distribute monthly fee across all sales in the month
-                        store_fee_per_sale = 0.0
-                        if ebay_store_monthly_fee > 0 and len(orders) > 0:
-                            # Simple approach: divide by total orders in this import
-                            # More accurate would be: monthly fee / sales in that month
-                            store_fee_per_sale = ebay_store_monthly_fee / len(orders)
-
-                        # Try to find matching item in Qventory (multiple strategies)
-                        item = None
-                        match_method = None
-
-                        # Strategy 1: Match by eBay Listing ID (most reliable)
-                        if ebay_listing_id:
-                            item = Item.query.filter_by(
-                                user_id=user_id,
-                                ebay_listing_id=ebay_listing_id
-                            ).first()
-                            if item:
-                                match_method = "ebay_listing_id"
-
-                        # Strategy 2: Match by eBay SKU
-                        if not item and sku:
-                            item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
-                            if item:
-                                match_method = "ebay_sku"
-
-                        # Strategy 3: Match by exact title
-                        if not item and title:
-                            item = Item.query.filter_by(user_id=user_id, title=title).first()
-                            if item:
-                                match_method = "exact_title"
-
+                    # Strategy 1: Match by SKU
+                    if sku:
+                        item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
                         if item:
-                            log_task(f"  ✓ Matched item (method: {match_method}, item_id: {item.id})")
-                        else:
-                            log_task(f"  ⚠️  No match found for: listing_id={ebay_listing_id}, sku={sku}, title={title[:40]}")
+                            match_method = "ebay_sku"
 
-                        # Check if sale already exists
-                        existing_sale = Sale.query.filter_by(
+                    # Strategy 2: Match by exact title
+                    if not item and title:
+                        item = Item.query.filter_by(user_id=user_id, title=title).first()
+                        if item:
+                            match_method = "exact_title"
+
+                    if item:
+                        log_task(f"  ✓ Matched item (method: {match_method}, item_id: {item.id})")
+                    else:
+                        log_task(f"  ⚠️  No match found for: sku={sku}, title={title[:40]}")
+
+                    # Check if sale already exists
+                    existing_sale = Sale.query.filter_by(
+                        user_id=user_id,
+                        marketplace='ebay',
+                        marketplace_order_id=order_id,
+                        item_sku=sku
+                    ).first()
+
+                    if existing_sale:
+                        # Update existing sale
+                        existing_sale.sold_price = sold_price
+                        existing_sale.status = status
+                        existing_sale.marketplace_fee = marketplace_fee
+                        existing_sale.payment_processing_fee = payment_fee
+                        existing_sale.shipping_cost = shipping_cost
+                        existing_sale.other_fees = store_fee_per_sale
+                        existing_sale.updated_at = datetime.utcnow()
+
+                        # Update item_id if we found a match and it wasn't set before
+                        if item and not existing_sale.item_id:
+                            existing_sale.item_id = item.id
+                            log_task(f"    → Linked sale to item {item.id}")
+
+                        # Update fulfillment data
+                        if tracking_number:
+                            existing_sale.tracking_number = tracking_number
+                        if carrier:
+                            existing_sale.carrier = carrier
+                        if shipped_at:
+                            existing_sale.shipped_at = shipped_at
+                        if delivered_at:
+                            existing_sale.delivered_at = delivered_at
+
+                        # Update item cost if available
+                        if item and item.item_cost:
+                            existing_sale.item_cost = item.item_cost
+
+                        existing_sale.calculate_profit()
+                        updated_count += 1
+                        log_task(f"  Updated sale: {title[:50]}")
+                    else:
+                        # Create new sale
+                        new_sale = Sale(
                             user_id=user_id,
+                            item_id=item.id if item else None,
                             marketplace='ebay',
                             marketplace_order_id=order_id,
-                            item_sku=sku
-                        ).first()
+                            item_title=title,
+                            item_sku=sku,
+                            sold_price=sold_price,
+                            item_cost=item.item_cost if item else None,
+                            marketplace_fee=marketplace_fee,
+                            payment_processing_fee=payment_fee,
+                            shipping_cost=shipping_cost,
+                            other_fees=store_fee_per_sale,
+                            sold_at=sold_at,
+                            shipped_at=shipped_at,
+                            delivered_at=delivered_at,
+                            tracking_number=tracking_number,
+                            carrier=carrier,
+                            status=status,
+                            buyer_username=buyer_username,
+                            ebay_transaction_id=ebay_transaction_id,
+                            ebay_buyer_username=buyer_username
+                        )
 
-                        if existing_sale:
-                            # Update existing sale
-                            existing_sale.sold_price = line_total
-                            existing_sale.status = 'completed' if order_status == 'FULFILLED' else 'shipped'
-                            existing_sale.marketplace_fee = marketplace_fee
-                            existing_sale.payment_processing_fee = payment_fee
-                            existing_sale.shipping_cost = shipping_cost
-                            existing_sale.shipping_charged = shipping_charged
-                            existing_sale.other_fees = store_fee_per_sale  # Store subscription prorate
-                            existing_sale.updated_at = datetime.utcnow()
-
-                            # Update item_id if we found a match and it wasn't set before
-                            if item and not existing_sale.item_id:
-                                existing_sale.item_id = item.id
-                                log_task(f"    → Linked sale to item {item.id}")
-
-                            # Update fulfillment data
-                            if tracking_number:
-                                existing_sale.tracking_number = tracking_number
-                            if carrier:
-                                existing_sale.carrier = carrier
-                            if shipped_at:
-                                existing_sale.shipped_at = shipped_at
-                            if delivered_at:
-                                existing_sale.delivered_at = delivered_at
-
-                            # Update item cost if available
-                            if item and item.item_cost:
-                                existing_sale.item_cost = item.item_cost
-
-                            existing_sale.calculate_profit()
-                            updated_count += 1
-                            log_task(f"  Updated sale: {title[:50]}")
-                        else:
-                            # Create new sale
-                            new_sale = Sale(
-                                user_id=user_id,
-                                item_id=item.id if item else None,
-                                marketplace='ebay',
-                                marketplace_order_id=order_id,
-                                item_title=title,
-                                item_sku=sku,
-                                sold_price=line_total,
-                                item_cost=item.item_cost if item else None,
-                                marketplace_fee=marketplace_fee,
-                                payment_processing_fee=payment_fee,
-                                shipping_cost=shipping_cost,
-                                shipping_charged=shipping_charged,
-                                other_fees=store_fee_per_sale,  # Store subscription prorate
-                                sold_at=sold_at,
-                                shipped_at=shipped_at,
-                                delivered_at=delivered_at,
-                                tracking_number=tracking_number,
-                                carrier=carrier,
-                                status='completed' if order_status == 'FULFILLED' else 'shipped',
-                                buyer_username=buyer_username,
-                                ebay_transaction_id=line_item_id,
-                                ebay_buyer_username=buyer_username
-                            )
-
-                            new_sale.calculate_profit()
-                            db.session.add(new_sale)
-                            imported_count += 1
-                            total_fees = marketplace_fee + payment_fee + store_fee_per_sale
-                            log_task(f"  Imported sale: {title[:50]} - ${line_total} (Fees: ${total_fees:.2f}, Ship: ${shipping_charged:.2f})")
+                        new_sale.calculate_profit()
+                        db.session.add(new_sale)
+                        imported_count += 1
+                        total_fees = marketplace_fee + payment_fee + store_fee_per_sale
+                        log_task(f"  Imported sale: {title[:50]} - ${sold_price} (Fees: ${total_fees:.2f})")
 
                 except Exception as item_error:
-                    log_task(f"  ERROR processing line item: {str(item_error)}")
+                    log_task(f"  ERROR processing sale: {str(item_error)}")
+                    import traceback
+                    log_task(f"  Traceback: {traceback.format_exc()}")
                     continue
 
             # Commit all sales

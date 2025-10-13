@@ -1666,7 +1666,7 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         return None
 
 
-def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, max_orders=5000, max_history_days=3650):
+def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, max_orders=10000, max_history_days=7300):
     """
     Fetch sold orders from eBay and convert them into sale-friendly payloads.
 
@@ -1675,7 +1675,7 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
         days_back (int | None): How many days back to look for orders.
         fulfillment_statuses (Iterable[str] or None): Optional list of eBay fulfillment statuses to keep.
         max_orders (int): Max number of orders to fetch per window.
-        max_history_days (int): Maximum historical days to scan when days_back is None (default ≈10 años).
+        max_history_days (int): Maximum historical days to scan when days_back is None (default ≈20 years).
 
     Returns:
         dict: {
@@ -1702,8 +1702,14 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
     iterations = 0
     empty_windows = 0
 
-    while window_end > earliest_allowed and iterations < 200:
+    while window_end > earliest_allowed and iterations < 500:
         window_start = max(earliest_allowed, window_end - timedelta(days=chunk_days))
+
+        # Log progress every 5 iterations (approximately every 450 days / 15 months)
+        if iterations % 5 == 0:
+            years_back = (datetime.utcnow() - window_end).days / 365.25
+            log_inv(f"📅 Scanning historical window: {window_start.strftime('%Y-%m-%d')} to {window_end.strftime('%Y-%m-%d')} (≈{years_back:.1f} years back)")
+            log_inv(f"   Progress: {len(aggregated_orders)} orders collected so far, iteration {iterations}/500")
 
         try:
             window_orders = get_ebay_orders(
