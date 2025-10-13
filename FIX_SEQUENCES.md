@@ -25,11 +25,17 @@ Run the sequence fix script to reset all sequences to the correct values.
 
 ### Option 1: Python Script (Recommended)
 
+**Requirements:** Python 3 with `psycopg2` or `psycopg2-binary`
+
 ```bash
-# On the server (as root or qventory user)
+# On the server (as root)
 cd /opt/qventory/qventory
-source qventory/bin/activate
-python fix_sequences.py
+
+# Install psycopg2-binary if not installed
+pip3 install psycopg2-binary
+
+# Run the fix script (it will read DATABASE_URL from .env)
+python3 fix_sequences.py
 ```
 
 **Output:**
@@ -38,17 +44,23 @@ python fix_sequences.py
 🔧 FIXING POSTGRESQL SEQUENCES
 ================================================================================
 
+📡 Connecting to: localhost/qventory_db
+✅ Connected to PostgreSQL
+
   ✅ settings                        | max_id:     2 | seq_was:     1 | seq_now:     3
   ✅ users                           | max_id:     3 | seq_was:     2 | seq_now:     4
   ✅ items                           | max_id:  1730 | seq_was:  1500 | seq_now:  1731
   ✅ sales                           | max_id:   198 | seq_was:   150 | seq_now:   199
-  ...
+  ⚠️  ai_token_config                | Skipped: relation "ai_token_config" does not exist
 
 ================================================================================
-✅ Fixed: 14 sequences
+✅ Fixed: 12 sequences
+⚠️  Skipped: 2 sequences (table doesn't exist or no sequence)
 ================================================================================
 
 🎉 All sequences fixed successfully!
+
+You can now create new users from the admin dashboard.
 ```
 
 ### Option 2: Direct SQL (Alternative)
