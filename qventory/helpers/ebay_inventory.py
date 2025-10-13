@@ -1357,7 +1357,7 @@ def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
                     'ebay_url': item.get('ebay_url'),
                     'ebay_listing_id': item.get('ebay_listing_id') or item.get('listing_id'),
                     'ebay_offer_id': item.get('ebay_offer_id'),
-                    'listing_status': item.get('listing_status', 'UNKNOWN'),
+                    'listing_status': item.get('listing_status', 'PUBLISHED'),
                     'ebay_sku': item.get('ebay_sku') or item.get('sku'),
                     'title': item.get('title'),
                     'description': item.get('description'),

@@ -1305,11 +1305,16 @@ def sync_ebay_inventory():
 
                 # Update listing status
                 if offer_data.get('listing_status'):
-                    listing_status = offer_data['listing_status']
-                    # If listing is not PUBLISHED, mark item as inactive
-                    if listing_status != 'PUBLISHED':
-                        item.is_active = False
-                        updated_count += 1
+                    listing_status = str(offer_data['listing_status']).upper()
+                    ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED'}
+
+                    if listing_status in ended_statuses:
+                        if item.is_active:
+                            item.is_active = False
+                            updated_count += 1
+                    elif listing_status == 'PUBLISHED':
+                        if not item.is_active:
+                            item.is_active = True
 
         db.session.commit()
 
