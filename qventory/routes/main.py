@@ -574,6 +574,27 @@ def fulfillment():
     )
 
 
+@main_bp.route("/fulfillment/debug-order", methods=["GET"])
+@login_required
+def debug_ebay_order():
+    """Debug: Show raw eBay order structure"""
+    from ..helpers.ebay_inventory import fetch_ebay_orders
+
+    result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=1)
+
+    if result['success'] and result['orders']:
+        order = result['orders'][0]
+        return jsonify({
+            'success': True,
+            'order': order
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': result.get('error', 'No orders found')
+        })
+
+
 @main_bp.route("/fulfillment/sync-ebay-orders", methods=["POST"])
 @login_required
 def sync_ebay_orders():
