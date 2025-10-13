@@ -282,8 +282,15 @@ def fetch_pending_tasks(session: Session, *, user_id: int) -> SimpleNamespace:
     """Fetch pending tasks count"""
     result = session.execute(text(PENDING_TASKS_SQL), {"user_id": user_id})
     rows = _rows_to_objects(result)
-    return rows[0] if rows else SimpleNamespace(
+    if rows:
+        return rows[0]
+
+    return SimpleNamespace(
         items_missing_cost=0,
         items_missing_supplier=0,
-        ebay_connected=0
+        ebay_connected=0,
+        upgrade_recommendation=False,
+        plan_max_items=None,
+        items_remaining=None,
+        upgrade_threshold=0
     )

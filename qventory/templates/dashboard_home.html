@@ -13,7 +13,7 @@
   </div>
 
   <!-- Pending Tasks Section (Only show if there are tasks) -->
-  {% if pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
+  {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
   <section class="dashboard-section pending-tasks-section">
     <div class="section-header">
       <h2 class="section-title">
@@ -23,6 +23,30 @@
     </div>
 
     <div class="task-cards">
+      {% if pending_tasks.upgrade_recommendation %}
+      <div class="task-card task-card--warning" id="upgradeTaskCard" data-dismiss-key="{{ upgrade_task_dismiss_key }}" style="position:relative;display:none;">
+        <button type="button" class="task-card__dismiss" data-dismiss-button aria-label="Dismiss upgrade reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
+        <div class="task-card__icon">
+          <i class="fas fa-arrow-up"></i>
+        </div>
+        <div class="task-card__content">
+          <h3 class="task-card__title">Upgrade Plan</h3>
+          {% set remaining = pending_tasks.items_remaining %}
+          {% set max_items = pending_tasks.plan_max_items %}
+          <p class="task-card__description">
+            {% if remaining is not none and remaining <= 0 %}
+              You have reached the inventory limit for your current plan.
+            {% else %}
+              Only {{ remaining }} slot{{ '' if remaining == 1 else 's' }} left out of {{ max_items }}.
+            {% endif %}
+          </p>
+        </div>
+        <a href="{{ url_for('main.upgrade') }}" class="task-card__action btn btn-primary">
+          <i class="fas fa-arrow-up"></i> Upgrade
+        </a>
+      </div>
+      {% endif %}
+
       <!-- eBay Connection Task -->
       {% if pending_tasks.ebay_connected == 0 %}
       <div class="task-card task-card--warning">
@@ -346,4 +370,48 @@
   </section>
 
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const upgradeTaskCard = document.getElementById('upgradeTaskCard');
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch (_err) {
+      return null;
+    }
+  })();
+
+  if (upgradeTaskCard) {
+    const storageKey = upgradeTaskCard.dataset.dismissKey;
+    const closeBtn = upgradeTaskCard.querySelector('[data-dismiss-button]');
+
+    if (storageKey && storage && storage.getItem(storageKey) === 'dismissed') {
+      upgradeTaskCard.remove();
+    } else {
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          if (storageKey && storage) {
+            storage.setItem(storageKey, 'dismissed');
+          }
+          upgradeTaskCard.remove();
+          pruneEmptyTaskSection();
+        });
+      }
+      upgradeTaskCard.style.display = 'flex';
+    }
+  }
+
+  pruneEmptyTaskSection();
+
+  function pruneEmptyTaskSection() {
+    const section = document.querySelector('.pending-tasks-section');
+    if (!section) return;
+    const hasCards = section.querySelector('.task-card');
+    if (!hasCards) {
+      section.remove();
+    }
+  }
+});
+</script>
 {% endblock %}

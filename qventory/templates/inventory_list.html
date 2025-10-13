@@ -36,6 +36,31 @@
     </p>
   </div>
 
+  {% if view_type == 'active' and show_upgrade_banner|default(False) %}
+  <div id="upgradePlanBanner" class="plan-upgrade-banner" data-dismiss-key="{{ upgrade_banner_dismiss_key|default('upgrade_banner_dismissed') }}" style="display:none;margin-bottom:16px;padding:16px 20px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);position:relative;overflow:hidden;">
+    <button type="button" class="plan-upgrade-banner__close" data-dismiss-button aria-label="Dismiss upgrade reminder" style="position:absolute;top:12px;right:12px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
+    <div style="display:flex;gap:16px;align-items:flex-start;">
+      <div style="color:#dc2626;font-size:22px;"><i class="fas fa-exclamation-triangle"></i></div>
+      <div style="flex:1;">
+        <div style="font-weight:600;color:#dc2626;margin-bottom:4px;">Inventory limit reached</div>
+        <div style="color:var(--sub);font-size:14px;line-height:1.5;">
+          {% if items_remaining is not none and items_remaining <= 0 %}
+            You cannot add more inventory items on the current plan.
+          {% else %}
+            You are close to your inventory limit. Only {{ items_remaining }} slot{{ '' if items_remaining == 1 else 's' }} remain out of {{ plan_max_items }}.
+          {% endif %}
+          Upgrade to unlock additional capacity.
+        </div>
+        <div style="margin-top:12px;">
+          <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn" style="display:inline-block;">
+            <i class="fas fa-arrow-up"></i> Upgrade Plan
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Filters Card -->
   <div id="filtersShell" class="card cardfilters filters-shell" style="margin-bottom:20px;">
     <div class="filters-bar">
@@ -317,6 +342,39 @@
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 
 <script>
+document.addEventListener('DOMContentLoaded', () => {
+  const upgradeBanner = document.getElementById('upgradePlanBanner');
+  if (!upgradeBanner) {
+    return;
+  }
+
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch (_err) {
+      return null;
+    }
+  })();
+
+  const storageKey = upgradeBanner.dataset.dismissKey;
+  if (storageKey && storage && storage.getItem(storageKey) === 'dismissed') {
+    upgradeBanner.remove();
+    return;
+  }
+
+  upgradeBanner.style.display = 'flex';
+
+  const closeBtn = upgradeBanner.querySelector('[data-dismiss-button]');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (storageKey && storage) {
+        storage.setItem(storageKey, 'dismissed');
+      }
+      upgradeBanner.remove();
+    });
+  }
+});
+
 // ==================== AUTOCOMPLETE ====================
 (function() {
   const searchInput = document.getElementById('q');

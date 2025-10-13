@@ -294,6 +294,23 @@ def dashboard():
     recent_fulfillment = fetch_recent_fulfillment(db.session, user_id=current_user.id, limit=10)
     pending_tasks = fetch_pending_tasks(db.session, user_id=current_user.id)
 
+    # Plan usage info
+    plan_limits = current_user.get_plan_limits()
+    items_remaining = current_user.items_remaining()
+    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+    upgrade_threshold = current_app.config.get("DASHBOARD_UPGRADE_THRESHOLD", 10)
+    upgrade_recommendation = (
+        plan_max_items is not None
+        and items_remaining is not None
+        and items_remaining <= upgrade_threshold
+    )
+
+    # Attach plan metadata to pending tasks namespace for template access
+    setattr(pending_tasks, "upgrade_recommendation", upgrade_recommendation)
+    setattr(pending_tasks, "items_remaining", items_remaining)
+    setattr(pending_tasks, "plan_max_items", plan_max_items)
+    setattr(pending_tasks, "upgrade_threshold", upgrade_threshold)
+
     return render_template(
         "dashboard_home.html",
         settings=s,
@@ -302,7 +319,11 @@ def dashboard():
         recently_listed=recently_listed,
         recently_sold=recently_sold,
         recent_fulfillment=recent_fulfillment,
-        pending_tasks=pending_tasks
+        pending_tasks=pending_tasks,
+        items_remaining=items_remaining,
+        plan_max_items=plan_max_items,
+        upgrade_task_dismiss_key=f"upgrade_task_dismissed_{current_user.id}",
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
 
@@ -393,6 +414,15 @@ def inventory_active():
         "C": distinct(Item.C) if s.enable_C else [],
     }
 
+    plan_limits = current_user.get_plan_limits()
+    items_remaining = current_user.items_remaining()
+    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+    show_upgrade_banner = (
+        plan_max_items is not None
+        and items_remaining is not None
+        and items_remaining <= 0
+    )
+
     return render_template(
         "inventory_list.html",
         items=items,
@@ -401,7 +431,11 @@ def inventory_active():
         total_items=total_items,
         pagination=pagination,
         view_type="active",
-        page_title="Active Inventory"
+        page_title="Active Inventory",
+        items_remaining=items_remaining,
+        plan_max_items=plan_max_items,
+        show_upgrade_banner=show_upgrade_banner,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
 
@@ -457,6 +491,10 @@ def inventory_sold():
         "C": distinct(Item.C) if s.enable_C else [],
     }
 
+    plan_limits = current_user.get_plan_limits()
+    items_remaining = current_user.items_remaining()
+    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+
     return render_template(
         "inventory_list.html",
         items=items,
@@ -465,7 +503,11 @@ def inventory_sold():
         total_items=total_items,
         pagination=pagination,
         view_type="sold",
-        page_title="Sold Items"
+        page_title="Sold Items",
+        items_remaining=items_remaining,
+        plan_max_items=plan_max_items,
+        show_upgrade_banner=False,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
 
@@ -522,6 +564,10 @@ def inventory_ended():
         "C": distinct(Item.C) if s.enable_C else [],
     }
 
+    plan_limits = current_user.get_plan_limits()
+    items_remaining = current_user.items_remaining()
+    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+
     return render_template(
         "inventory_list.html",
         items=items,
@@ -530,7 +576,11 @@ def inventory_ended():
         total_items=total_items,
         pagination=pagination,
         view_type="ended",
-        page_title="Ended Inventory"
+        page_title="Ended Inventory",
+        items_remaining=items_remaining,
+        plan_max_items=plan_max_items,
+        show_upgrade_banner=False,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
 
