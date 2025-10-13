@@ -1303,17 +1303,17 @@ def sync_ebay_inventory():
                     item.ebay_offer_id = offer_data['ebay_offer_id']
 
                 # Update listing status
-                if offer_data.get('listing_status'):
-                    listing_status = str(offer_data['listing_status']).upper()
-                    ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED'}
+                listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
+                ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED', 'CANCELED'}
+                active_statuses = {'PUBLISHED', 'ACTIVE', 'IN_PROGRESS', 'SCHEDULED', 'ON_HOLD', 'LIVE'}
 
-                    if listing_status in ended_statuses:
-                        if item.is_active:
-                            item.is_active = False
-                            updated_count += 1
-                    elif listing_status == 'PUBLISHED':
-                        if not item.is_active:
-                            item.is_active = True
+                if listing_status in ended_statuses:
+                    if item.is_active:
+                        item.is_active = False
+                        updated_count += 1
+                elif listing_status in active_statuses or not listing_status:
+                    if not item.is_active:
+                        item.is_active = True
 
         db.session.commit()
 
