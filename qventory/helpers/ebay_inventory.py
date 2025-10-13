@@ -1271,3 +1271,209 @@ def parse_ebay_offer(ebay_offer):
         'listing_status': status,
         'ebay_sku': sku
     }
+
+
+def fetch_ebay_orders(user_id, filter_status='IN_PROGRESS,FULFILLED', limit=100):
+    """
+    Fetch orders from eBay Fulfillment API
+
+    Args:
+        user_id: Qventory user ID
+        filter_status: Order statuses to fetch (IN_PROGRESS for in transit, FULFILLED for delivered)
+        limit: Maximum number of orders to fetch per request
+
+    Returns:
+        dict: {
+            'success': bool,
+            'orders': list of order dicts,
+            'error': str (if success=False)
+        }
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {
+            'success': False,
+            'error': 'No eBay access token available. Please connect your eBay account.',
+            'orders': []
+        }
+
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    all_orders = []
+    offset = 0
+
+    try:
+        while True:
+            # Build URL with filter and pagination
+            url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order"
+            params = {
+                'limit': min(limit, 200),  # eBay max is 200
+                'offset': offset
+            }
+
+            if filter_status:
+                params['filter'] = f'orderfulfillmentstatus:{{{filter_status}}}'
+
+            log_inv(f"Fetching eBay orders: {url} with filter={filter_status}, offset={offset}")
+
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+
+            if response.status_code == 401:
+                return {
+                    'success': False,
+                    'error': 'eBay authentication expired. Please reconnect your eBay account.',
+                    'orders': []
+                }
+
+            if response.status_code != 200:
+                log_inv(f"eBay API error: {response.status_code} - {response.text}")
+                return {
+                    'success': False,
+                    'error': f'eBay API error: {response.status_code}',
+                    'orders': all_orders  # Return what we got so far
+                }
+
+            data = response.json()
+            orders = data.get('orders', [])
+
+            if not orders:
+                break
+
+            all_orders.extend(orders)
+
+            # Check if there are more pages
+            total = data.get('total', 0)
+            if offset + len(orders) >= total or len(orders) < params['limit']:
+                break
+
+            offset += len(orders)
+
+        log_inv(f"Successfully fetched {len(all_orders)} orders from eBay")
+
+        return {
+            'success': True,
+            'orders': all_orders,
+            'error': None
+        }
+
+    except requests.exceptions.Timeout:
+        log_inv("eBay API request timed out")
+        return {
+            'success': False,
+            'error': 'Request timed out. Please try again.',
+            'orders': all_orders
+        }
+    except Exception as e:
+        log_inv(f"Error fetching eBay orders: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Error: {str(e)}',
+            'orders': all_orders
+        }
+
+
+def parse_ebay_order_to_sale(order_data):
+    """
+    Parse eBay Fulfillment API order data into Sale model format
+
+    Args:
+        order_data: Raw order dict from eBay API
+
+    Returns:
+        dict: Sale model compatible dict
+    """
+    try:
+        # Extract order ID
+        order_id = order_data.get('orderId', '')
+
+        # Get line items (eBay orders can have multiple items)
+        line_items = order_data.get('lineItems', [])
+        if not line_items:
+            return None
+
+        # For now, handle first line item (you can extend this to handle multiple)
+        line_item = line_items[0]
+
+        # Extract basic info
+        title = line_item.get('title', 'Unknown Item')
+        sku = line_item.get('sku', '')
+        line_item_id = line_item.get('lineItemId', '')
+
+        # Extract prices
+        total = line_item.get('total', {})
+        sold_price = float(total.get('value', 0)) if total else 0
+
+        # Extract shipping info
+        shipping_detail = line_item.get('deliveryCost', {})
+        shipping_cost = float(shipping_detail.get('shippingCost', {}).get('value', 0)) if shipping_detail else 0
+
+        # Extract fulfillment info
+        fulfillment_start = order_data.get('fulfillmentStartInstructions', [{}])[0]
+        shipping_step = fulfillment_start.get('shippingStep', {})
+        shipment = shipping_step.get('shipTo', {})
+
+        # Extract buyer info
+        buyer = order_data.get('buyer', {})
+        buyer_username = buyer.get('username', '')
+
+        # Extract tracking
+        fulfillments = line_item.get('fulfillments', [])
+        tracking_number = None
+        carrier = None
+        shipped_at = None
+        delivered_at = None
+
+        if fulfillments:
+            fulfillment = fulfillments[0]
+            tracking_info = fulfillment.get('shipmentTracking', {})
+            tracking_number = tracking_info.get('trackingNumber', '')
+            carrier = tracking_info.get('shippingCarrierCode', '')
+
+            # Get shipped date
+            shipped_date_str = fulfillment.get('shippedDate', '')
+            if shipped_date_str:
+                shipped_at = _parse_ebay_datetime(shipped_date_str)
+
+            # Get delivered date
+            delivered_date_str = tracking_info.get('deliveryDate', '')
+            if delivered_date_str:
+                delivered_at = _parse_ebay_datetime(delivered_date_str)
+
+        # Determine order status
+        order_fulfillment_status = order_data.get('orderFulfillmentStatus', '')
+        if order_fulfillment_status == 'FULFILLED':
+            status = 'completed'
+        elif order_fulfillment_status == 'IN_PROGRESS':
+            status = 'shipped'
+        else:
+            status = 'pending'
+
+        # Get order creation date
+        creation_date_str = order_data.get('creationDate', '')
+        sold_at = _parse_ebay_datetime(creation_date_str) if creation_date_str else datetime.utcnow()
+
+        return {
+            'marketplace': 'ebay',
+            'marketplace_order_id': order_id,
+            'item_title': title,
+            'item_sku': sku,
+            'sold_price': sold_price,
+            'shipping_cost': shipping_cost,
+            'buyer_username': buyer_username,
+            'ebay_buyer_username': buyer_username,
+            'tracking_number': tracking_number,
+            'carrier': carrier,
+            'shipped_at': shipped_at,
+            'delivered_at': delivered_at,
+            'status': status,
+            'sold_at': sold_at,
+            'ebay_transaction_id': line_item_id
+        }
+
+    except Exception as e:
+        log_inv(f"Error parsing eBay order: {str(e)}")
+        return None

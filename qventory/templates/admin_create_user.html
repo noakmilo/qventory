@@ -26,7 +26,11 @@
 
       <div>
         <label class="label" for="password">Password</label>
-        <input type="password" class="input" id="password" name="password" required>
+        <div style="display:flex;gap:var(--space-2);">
+          <input type="password" class="input" id="password" name="password" required style="flex:1;">
+          <button type="button" class="btn" id="generatePassword" style="white-space:nowrap;">Generate</button>
+          <button type="button" class="btn" id="togglePassword" style="white-space:nowrap;">Show</button>
+        </div>
         <small class="form-hint">Minimum 6 characters recommended</small>
       </div>
 
@@ -37,4 +41,61 @@
     </form>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const passwordInput = document.getElementById('password');
+  const generateBtn = document.getElementById('generatePassword');
+  const toggleBtn = document.getElementById('togglePassword');
+
+  // Generate strong 8-character password
+  generateBtn.addEventListener('click', function() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+    let password = '';
+
+    // Ensure at least: 1 uppercase, 1 lowercase, 1 number, 1 special char
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lower = 'abcdefghijkmnopqrstuvwxyz';
+    const numbers = '23456789';
+    const special = '!@#$%&*';
+
+    password += upper[Math.floor(Math.random() * upper.length)];
+    password += lower[Math.floor(Math.random() * lower.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += special[Math.floor(Math.random() * special.length)];
+
+    // Fill remaining 4 characters randomly
+    for (let i = 4; i < 8; i++) {
+      password += chars[Math.floor(Math.random() * chars.length)];
+    }
+
+    // Shuffle the password
+    password = password.split('').sort(() => Math.random() - 0.5).join('');
+
+    passwordInput.value = password;
+    passwordInput.type = 'text';
+    toggleBtn.textContent = 'Hide';
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(password).then(() => {
+      const originalText = generateBtn.textContent;
+      generateBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        generateBtn.textContent = originalText;
+      }, 2000);
+    });
+  });
+
+  // Toggle password visibility
+  toggleBtn.addEventListener('click', function() {
+    if (passwordInput.type === 'password') {
+      passwordInput.type = 'text';
+      toggleBtn.textContent = 'Hide';
+    } else {
+      passwordInput.type = 'password';
+      toggleBtn.textContent = 'Show';
+    }
+  });
+});
+</script>
 {% endblock %}

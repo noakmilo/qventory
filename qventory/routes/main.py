@@ -8,6 +8,7 @@ import math
 import io
 import re
 import os
+import sys
 import base64
 import time
 import requests
@@ -571,6 +572,116 @@ def fulfillment():
         total_value=total_value or 0,
         pagination=pagination
     )
+
+
+@main_bp.route("/fulfillment/sync-ebay-orders", methods=["POST"])
+@login_required
+def sync_ebay_orders():
+    """Sync orders from eBay Fulfillment API"""
+    from ..helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
+    from ..models.sale import Sale
+
+    try:
+        # Fetch orders from eBay
+        result = fetch_ebay_orders(current_user.id, filter_status='IN_PROGRESS,FULFILLED', limit=200)
+
+        if not result['success']:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 400
+
+        orders = result['orders']
+
+        if not orders:
+            return jsonify({
+                'success': True,
+                'message': 'No new orders to sync',
+                'orders_synced': 0
+            })
+
+        # Process each order
+        orders_created = 0
+        orders_updated = 0
+
+        for order_data in orders:
+            try:
+                sale_data = parse_ebay_order_to_sale(order_data)
+
+                if not sale_data:
+                    continue
+
+                # Check if order already exists
+                existing_sale = Sale.query.filter_by(
+                    user_id=current_user.id,
+                    marketplace_order_id=sale_data['marketplace_order_id']
+                ).first()
+
+                if existing_sale:
+                    # Update existing sale with latest fulfillment data
+                    if sale_data.get('tracking_number'):
+                        existing_sale.tracking_number = sale_data['tracking_number']
+                    if sale_data.get('carrier'):
+                        existing_sale.carrier = sale_data['carrier']
+                    if sale_data.get('shipped_at'):
+                        existing_sale.shipped_at = sale_data['shipped_at']
+                    if sale_data.get('delivered_at'):
+                        existing_sale.delivered_at = sale_data['delivered_at']
+                    if sale_data.get('status'):
+                        existing_sale.status = sale_data['status']
+
+                    existing_sale.updated_at = datetime.utcnow()
+                    orders_updated += 1
+                else:
+                    # Try to match with existing item by SKU
+                    item_id = None
+                    if sale_data.get('item_sku'):
+                        from ..models.item import Item
+                        item = Item.query.filter_by(
+                            user_id=current_user.id,
+                            sku=sale_data['item_sku']
+                        ).first()
+                        if item:
+                            item_id = item.id
+                            # Update sale data with item cost if available
+                            if item.item_cost:
+                                sale_data['item_cost'] = item.item_cost
+
+                    # Create new sale
+                    new_sale = Sale(
+                        user_id=current_user.id,
+                        item_id=item_id,
+                        **sale_data
+                    )
+
+                    # Calculate profit
+                    new_sale.calculate_profit()
+
+                    db.session.add(new_sale)
+                    orders_created += 1
+
+            except Exception as e:
+                print(f"[FULFILLMENT_SYNC] Error processing order: {str(e)}", file=sys.stderr)
+                continue
+
+        # Commit all changes
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Synced {orders_created} new and updated {orders_updated} existing orders',
+            'orders_synced': orders_created + orders_updated,
+            'orders_created': orders_created,
+            'orders_updated': orders_updated
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[FULFILLMENT_SYNC] Error: {str(e)}", file=sys.stderr)
+        return jsonify({
+            'success': False,
+            'error': f'Sync failed: {str(e)}'
+        }), 500
 
 
 # ---------------------- CSV Export/Import (protegido) ----------------------
