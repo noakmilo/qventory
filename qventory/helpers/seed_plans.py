@@ -84,11 +84,21 @@ def seed_plan_limits():
         existing = PlanLimit.query.filter_by(plan=plan_name).first()
 
         if existing:
-            # Update existing plan limits
+            # Only fill in missing values so admin overrides persist
+            updated = False
             for key, value in plan_data.items():
-                if key != 'plan':  # Don't update the plan name itself
+                if key == 'plan':
+                    continue
+
+                current = getattr(existing, key, None)
+                if current is None:
                     setattr(existing, key, value)
-            print(f"Updated plan limits for: {plan_name}")
+                    updated = True
+
+            if updated:
+                print(f"Seeded missing defaults for: {plan_name}")
+            else:
+                print(f"Preserved custom plan limits for: {plan_name}")
         else:
             # Create new plan
             new_plan = PlanLimit(**plan_data)
