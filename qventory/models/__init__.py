@@ -10,6 +10,7 @@ from .ai_token import AITokenConfig, AITokenUsage
 from .import_job import ImportJob
 from .failed_import import FailedImport
 from .expense import Expense
+from .auto_relist_rule import AutoRelistRule, AutoRelistHistory
 
 __all__ = [
     'User',
@@ -25,5 +26,7 @@ __all__ = [
     'AITokenUsage',
     'ImportJob',
     'FailedImport',
-    'Expense'
+    'Expense',
+    'AutoRelistRule',
+    'AutoRelistHistory'
 ]
