@@ -357,7 +357,15 @@ def relist_now(rule_id):
             user_id=current_user.id
         ).first_or_404()
 
-        data = request.get_json() or {}
+        # Handle both JSON and form data, and handle missing body
+        try:
+            data = request.get_json(force=True, silent=True) or {}
+        except Exception:
+            data = {}
+
+        # Fallback to form data if JSON parsing failed
+        if not data:
+            data = request.form.to_dict()
 
         # Check if changes were requested
         changes = {}

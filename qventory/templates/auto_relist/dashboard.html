@@ -386,7 +386,8 @@ document.addEventListener('DOMContentLoaded', function() {
       try {
         const response = await fetch(`/auto-relist/${ruleId}/relist-now`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
         });
 
         const data = await response.json();
