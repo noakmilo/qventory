@@ -75,6 +75,11 @@
         <span>Fulfillment</span>
       </a>
 
+      <a href="{{ url_for('auto_relist.dashboard') }}" class="sidebar-item {% if 'auto_relist' in request.endpoint %}active{% endif %}" title="Auto Relist">
+        <i class="fas fa-sync-alt"></i>
+        <span>Auto Relist</span>
+      </a>
+
       <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}" title="Add Item">
         <i class="fas fa-plus-circle"></i>
         <span>Add Item</span>

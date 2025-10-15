@@ -1,0 +1,458 @@
+{% extends "base_new.html" %}
+
+{% block title %}Auto Relist - Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Auto Relist</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell page-shell--wide">
+
+  <!-- Header -->
+  <div style="margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+    <div>
+      <h1 style="color:var(--text);font-size:28px;margin-bottom:8px;">
+        <i class="fas fa-sync-alt"></i> Auto Relist
+      </h1>
+      <p style="color:var(--text-secondary);font-size:14px;">
+        Automatically refresh your eBay listings with new Item IDs
+      </p>
+    </div>
+    <div style="display:flex;gap:12px;">
+      <a href="{{ url_for('auto_relist.history') }}" class="btn btn-secondary">
+        <i class="fas fa-history"></i> View History
+      </a>
+      <a href="{{ url_for('auto_relist.create_rule') }}" class="btn btn-primary">
+        <i class="fas fa-plus"></i> New Rule
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats Cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--text-secondary);font-size:13px;">Total Rules</span>
+        <span style="color:var(--primary);font-size:24px;font-weight:700;">{{ stats.total_rules }}</span>
+      </div>
+      <p style="color:var(--text-tertiary);font-size:11px;">{{ stats.active_rules }} active</p>
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--text-secondary);font-size:13px;">Auto Rules</span>
+        <span style="color:#60a5fa;font-size:24px;font-weight:700;">{{ stats.auto_rules }}</span>
+      </div>
+      <p style="color:var(--text-tertiary);font-size:11px;">Scheduled</p>
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--text-secondary);font-size:13px;">Manual Rules</span>
+        <span style="color:#fbbf24;font-size:24px;font-weight:700;">{{ stats.manual_rules }}</span>
+      </div>
+      <p style="color:var(--text-tertiary);font-size:11px;">On-demand</p>
+    </div>
+
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--text-secondary);font-size:13px;">Success Rate</span>
+        <span style="color:#34d399;font-size:24px;font-weight:700;">{{ "%.1f"|format(stats.success_rate) }}%</span>
+      </div>
+      <p style="color:var(--text-tertiary);font-size:11px;">{{ stats.total_success }}/{{ stats.total_runs }} runs</p>
+    </div>
+  </div>
+
+  <!-- Rules Table -->
+  <div class="card" style="margin-bottom:24px;">
+    <div style="padding:20px;border-bottom:1px solid var(--border);">
+      <h2 style="color:var(--text);font-size:18px;">Active Rules</h2>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px;"></th>
+            <th>Item</th>
+            <th>Mode</th>
+            <th>Frequency</th>
+            <th>Next Run</th>
+            <th>Status</th>
+            <th>Stats</th>
+            <th style="width:150px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if rules|length == 0 %}
+          <tr>
+            <td colspan="8" style="text-align:center;padding:40px;color:var(--text-secondary);">
+              <i class="fas fa-sync-alt" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;"></i>
+              <p>No auto-relist rules yet</p>
+              <a href="{{ url_for('auto_relist.create_rule') }}" class="btn btn-primary" style="margin-top:16px;">
+                <i class="fas fa-plus"></i> Create First Rule
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          {% for rule in rules %}
+          <tr data-rule-id="{{ rule.id }}">
+            <!-- Status Indicator -->
+            <td style="text-align:center;">
+              {% if rule.enabled %}
+              <span style="color:#34d399;font-size:18px;" title="Enabled">
+                <i class="fas fa-circle"></i>
+              </span>
+              {% else %}
+              <span style="color:var(--text-tertiary);font-size:18px;" title="Disabled">
+                <i class="far fa-circle"></i>
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Item Info -->
+            <td>
+              <div style="font-weight:500;color:var(--text);">
+                {{ rule.item_title or rule.sku or 'Unknown' }}
+              </div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">
+                {% if rule.sku %}SKU: {{ rule.sku }}{% endif %}
+                {% if rule.listing_id %} | Listing: {{ rule.listing_id }}{% endif %}
+              </div>
+            </td>
+
+            <!-- Mode -->
+            <td>
+              {% if rule.mode == 'auto' %}
+              <span style="background:#dbeafe;color:#1e40af;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+                AUTO
+              </span>
+              {% else %}
+              <span style="background:#fef3c7;color:#92400e;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+                MANUAL
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Frequency -->
+            <td style="color:var(--text-secondary);font-size:13px;">
+              {% if rule.mode == 'auto' %}
+                {{ rule.frequency.replace('_', ' ').title() }}
+                {% if rule.frequency == 'custom' and rule.custom_interval_days %}
+                  ({{ rule.custom_interval_days }} days)
+                {% endif %}
+              {% else %}
+                On-demand
+              {% endif %}
+            </td>
+
+            <!-- Next Run -->
+            <td style="color:var(--text-secondary);font-size:13px;">
+              {% if rule.next_run_at and rule.enabled %}
+                <span title="{{ rule.next_run_at }}">
+                  {{ rule.next_run_at|timeago }}
+                </span>
+              {% elif not rule.enabled %}
+                <span style="color:var(--text-tertiary);">—</span>
+              {% elif rule.mode == 'manual' %}
+                <span style="color:var(--text-tertiary);">Waiting</span>
+              {% else %}
+                <span style="color:var(--text-tertiary);">Not scheduled</span>
+              {% endif %}
+            </td>
+
+            <!-- Last Status -->
+            <td>
+              {% if rule.last_run_status == 'success' %}
+                <span style="color:#34d399;font-size:12px;">
+                  <i class="fas fa-check-circle"></i> Success
+                </span>
+              {% elif rule.last_run_status == 'error' %}
+                <span style="color:#ef4444;font-size:12px;" title="{{ rule.last_error_message }}">
+                  <i class="fas fa-exclamation-circle"></i> Error
+                </span>
+              {% elif rule.last_run_status == 'skipped' %}
+                <span style="color:#fbbf24;font-size:12px;" title="{{ rule.last_error_message }}">
+                  <i class="fas fa-minus-circle"></i> Skipped
+                </span>
+              {% else %}
+                <span style="color:var(--text-tertiary);font-size:12px;">
+                  <i class="fas fa-clock"></i> Pending
+                </span>
+              {% endif %}
+            </td>
+
+            <!-- Stats -->
+            <td style="font-size:12px;color:var(--text-secondary);">
+              <div>{{ rule.success_count }}/{{ rule.run_count }} runs</div>
+              <div style="color:var(--text-tertiary);font-size:11px;">
+                {{ "%.0f"|format(rule.success_rate) }}% success
+              </div>
+            </td>
+
+            <!-- Actions -->
+            <td>
+              <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <!-- Toggle Enable/Disable -->
+                <button class="btn-icon toggle-rule-btn" data-rule-id="{{ rule.id }}" title="{% if rule.enabled %}Disable{% else %}Enable{% endif %}">
+                  {% if rule.enabled %}
+                  <i class="fas fa-pause"></i>
+                  {% else %}
+                  <i class="fas fa-play"></i>
+                  {% endif %}
+                </button>
+
+                <!-- Relist Now -->
+                <button class="btn-icon relist-now-btn" data-rule-id="{{ rule.id }}" title="Relist Now">
+                  <i class="fas fa-sync"></i>
+                </button>
+
+                <!-- Edit -->
+                <a href="{{ url_for('auto_relist.edit_rule', rule_id=rule.id) }}" class="btn-icon" title="Edit">
+                  <i class="fas fa-edit"></i>
+                </a>
+
+                <!-- Delete -->
+                <button class="btn-icon delete-rule-btn" data-rule-id="{{ rule.id }}" title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent History -->
+  {% if history|length > 0 %}
+  <div class="card">
+    <div style="padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <h2 style="color:var(--text);font-size:18px;">Recent Executions</h2>
+      <a href="{{ url_for('auto_relist.history') }}" style="color:var(--primary);font-size:13px;text-decoration:none;">
+        View All <i class="fas fa-arrow-right"></i>
+      </a>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Rule</th>
+            <th>Mode</th>
+            <th>Old Listing</th>
+            <th>New Listing</th>
+            <th>Duration</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in history[:10] %}
+          <tr>
+            <td style="font-size:12px;color:var(--text-secondary);">
+              {{ h.started_at.strftime('%b %d, %I:%M %p') }}
+            </td>
+            <td style="font-size:13px;color:var(--text);">
+              Rule #{{ h.rule_id }}
+            </td>
+            <td>
+              {% if h.mode == 'auto' %}
+              <span style="color:#60a5fa;font-size:11px;">AUTO</span>
+              {% else %}
+              <span style="color:#fbbf24;font-size:11px;">MANUAL</span>
+              {% endif %}
+            </td>
+            <td style="font-family:monospace;font-size:11px;color:var(--text-secondary);">
+              {{ h.old_listing_id or '—' }}
+            </td>
+            <td style="font-family:monospace;font-size:11px;color:var(--text);">
+              {% if h.new_listing_id %}
+              <a href="https://www.ebay.com/itm/{{ h.new_listing_id }}" target="_blank" style="color:var(--primary);text-decoration:none;">
+                {{ h.new_listing_id }} <i class="fas fa-external-link-alt" style="font-size:9px;"></i>
+              </a>
+              {% else %}
+              —
+              {% endif %}
+            </td>
+            <td style="font-size:12px;color:var(--text-secondary);">
+              {% if h.duration_seconds %}
+                {{ h.duration_seconds }}s
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if h.status == 'success' %}
+              <span style="color:#34d399;font-size:12px;">
+                <i class="fas fa-check-circle"></i> Success
+              </span>
+              {% elif h.status == 'error' %}
+              <span style="color:#ef4444;font-size:12px;" title="{{ h.error_message }}">
+                <i class="fas fa-exclamation-circle"></i> Error
+              </span>
+              {% elif h.status == 'skipped' %}
+              <span style="color:#fbbf24;font-size:12px;" title="{{ h.skip_reason }}">
+                <i class="fas fa-minus-circle"></i> Skipped
+              </span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<style>
+.btn-icon {
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  color:var(--text-secondary);
+  padding:6px 10px;
+  border-radius:4px;
+  cursor:pointer;
+  font-size:12px;
+  transition:all 0.2s;
+}
+
+.btn-icon:hover {
+  background:var(--primary);
+  color:white;
+  border-color:var(--primary);
+}
+
+.btn-icon:disabled {
+  opacity:0.5;
+  cursor:not-allowed;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Toggle Enable/Disable
+  document.querySelectorAll('.toggle-rule-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const ruleId = this.dataset.ruleId;
+      const icon = this.querySelector('i');
+
+      try {
+        const response = await fetch(`/auto-relist/${ruleId}/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // Update icon
+          icon.className = data.enabled ? 'fas fa-pause' : 'fas fa-play';
+          this.title = data.enabled ? 'Disable' : 'Enable';
+
+          // Update status indicator
+          const row = document.querySelector(`tr[data-rule-id="${ruleId}"]`);
+          const indicator = row.querySelector('td:first-child i');
+          indicator.className = data.enabled ? 'fas fa-circle' : 'far fa-circle';
+          indicator.parentElement.style.color = data.enabled ? '#34d399' : 'var(--text-tertiary)';
+
+          // Show toast
+          showToast(data.enabled ? 'Rule enabled' : 'Rule disabled', 'success');
+        } else {
+          showToast('Error: ' + data.error, 'error');
+        }
+      } catch (error) {
+        showToast('Network error', 'error');
+      }
+    });
+  });
+
+  // Relist Now
+  document.querySelectorAll('.relist-now-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const ruleId = this.dataset.ruleId;
+
+      if (!confirm('Relist this item now?')) return;
+
+      this.disabled = true;
+      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      try {
+        const response = await fetch(`/auto-relist/${ruleId}/relist-now`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast(data.message, 'success');
+          setTimeout(() => window.location.reload(), 2000);
+        } else {
+          showToast('Error: ' + data.error, 'error');
+          this.disabled = false;
+          this.innerHTML = '<i class="fas fa-sync"></i>';
+        }
+      } catch (error) {
+        showToast('Network error', 'error');
+        this.disabled = false;
+        this.innerHTML = '<i class="fas fa-sync"></i>';
+      }
+    });
+  });
+
+  // Delete Rule
+  document.querySelectorAll('.delete-rule-btn').forEach(btn => {
+    btn.addEventListener('click', async function() {
+      const ruleId = this.dataset.ruleId;
+
+      if (!confirm('Delete this rule? This action cannot be undone.')) return;
+
+      try {
+        const response = await fetch(`/auto-relist/${ruleId}/delete`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Rule deleted', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+        } else {
+          showToast('Error: ' + data.error, 'error');
+        }
+      } catch (error) {
+        showToast('Network error', 'error');
+      }
+    });
+  });
+
+  function showToast(message, type) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position:fixed;
+      top:20px;
+      right:20px;
+      z-index:9999;
+      background:${type === 'success' ? '#d1fae5' : '#fee2e2'};
+      color:${type === 'success' ? '#065f46' : '#991b1b'};
+      padding:16px 24px;
+      border-radius:8px;
+      box-shadow:0 4px 12px rgba(0,0,0,0.15);
+      font-size:14px;
+      font-weight:500;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.remove(), 3000);
+  }
+});
+</script>
+{% endblock %}

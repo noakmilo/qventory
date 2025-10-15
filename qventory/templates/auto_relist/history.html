@@ -1,0 +1,338 @@
+{% extends "base_new.html" %}
+
+{% block title %}Auto-Relist History - Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('auto_relist.dashboard') }}" class="breadcrumb-link">Auto Relist</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">History</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell page-shell--wide">
+
+  <div style="margin-bottom:24px;display:flex;justify-content:space-between;align-items:center;">
+    <div>
+      <h1 style="color:var(--text);font-size:28px;margin-bottom:8px;">
+        <i class="fas fa-history"></i> Execution History
+      </h1>
+      <p style="color:var(--text-secondary);font-size:14px;">
+        Complete history of all auto-relist executions
+      </p>
+    </div>
+    <a href="{{ url_for('auto_relist.dashboard') }}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Back to Dashboard
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Rule ID</th>
+            <th>Mode</th>
+            <th>Old Listing</th>
+            <th>New Listing</th>
+            <th>Changes</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if history|length == 0 %}
+          <tr>
+            <td colspan="9" style="text-align:center;padding:40px;color:var(--text-secondary);">
+              <i class="fas fa-history" style="font-size:48px;opacity:0.3;display:block;margin-bottom:12px;"></i>
+              <p>No execution history yet</p>
+            </td>
+          </tr>
+          {% else %}
+          {% for h in history %}
+          <tr>
+            <!-- Time -->
+            <td style="white-space:nowrap;">
+              <div style="font-size:13px;color:var(--text);">
+                {{ h.started_at.strftime('%b %d, %Y') }}
+              </div>
+              <div style="font-size:11px;color:var(--text-tertiary);">
+                {{ h.started_at.strftime('%I:%M:%S %p') }}
+              </div>
+            </td>
+
+            <!-- Rule ID -->
+            <td>
+              <a href="{{ url_for('auto_relist.dashboard') }}" style="color:var(--primary);text-decoration:none;">
+                Rule #{{ h.rule_id }}
+              </a>
+            </td>
+
+            <!-- Mode -->
+            <td>
+              {% if h.mode == 'auto' %}
+              <span style="background:#dbeafe;color:#1e40af;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+                AUTO
+              </span>
+              {% else %}
+              <span style="background:#fef3c7;color:#92400e;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;">
+                MANUAL
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Old Listing -->
+            <td style="font-family:monospace;font-size:11px;color:var(--text-secondary);">
+              {% if h.old_listing_id %}
+              <a href="https://www.ebay.com/itm/{{ h.old_listing_id }}" target="_blank" style="color:var(--text-secondary);text-decoration:none;">
+                {{ h.old_listing_id }} <i class="fas fa-external-link-alt" style="font-size:9px;"></i>
+              </a>
+              {% else %}
+              —
+              {% endif %}
+            </td>
+
+            <!-- New Listing -->
+            <td style="font-family:monospace;font-size:11px;">
+              {% if h.new_listing_id %}
+              <a href="https://www.ebay.com/itm/{{ h.new_listing_id }}" target="_blank" style="color:var(--primary);text-decoration:none;">
+                {{ h.new_listing_id }} <i class="fas fa-external-link-alt" style="font-size:9px;"></i>
+              </a>
+              {% else %}
+              <span style="color:var(--text-tertiary);">—</span>
+              {% endif %}
+            </td>
+
+            <!-- Changes Applied -->
+            <td style="font-size:12px;">
+              {% if h.changes_applied %}
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                {% if 'price' in h.changes_applied %}
+                <span style="color:var(--text);">
+                  <i class="fas fa-dollar-sign"></i> ${{ h.changes_applied.price }}
+                </span>
+                {% endif %}
+                {% if 'title' in h.changes_applied %}
+                <span style="color:var(--text-secondary);">
+                  <i class="fas fa-edit"></i> Title
+                </span>
+                {% endif %}
+                {% if 'description' in h.changes_applied %}
+                <span style="color:var(--text-secondary);">
+                  <i class="fas fa-align-left"></i> Desc
+                </span>
+                {% endif %}
+                {% if 'quantity' in h.changes_applied %}
+                <span style="color:var(--text-secondary);">
+                  <i class="fas fa-boxes"></i> Qty: {{ h.changes_applied.quantity }}
+                </span>
+                {% endif %}
+              </div>
+              {% else %}
+              <span style="color:var(--text-tertiary);">None</span>
+              {% endif %}
+            </td>
+
+            <!-- Duration -->
+            <td style="font-size:12px;color:var(--text-secondary);">
+              {% if h.duration_seconds %}
+                {% if h.duration_seconds < 60 %}
+                  {{ h.duration_seconds }}s
+                {% else %}
+                  {{ (h.duration_seconds / 60)|round(1) }}m
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <!-- Status -->
+            <td>
+              {% if h.status == 'success' %}
+              <span style="color:#34d399;font-size:12px;font-weight:500;">
+                <i class="fas fa-check-circle"></i> Success
+              </span>
+              {% elif h.status == 'error' %}
+              <span style="color:#ef4444;font-size:12px;font-weight:500;">
+                <i class="fas fa-exclamation-circle"></i> Error
+              </span>
+              {% elif h.status == 'skipped' %}
+              <span style="color:#fbbf24;font-size:12px;font-weight:500;">
+                <i class="fas fa-minus-circle"></i> Skipped
+              </span>
+              {% else %}
+              <span style="color:var(--text-tertiary);font-size:12px;">
+                <i class="fas fa-clock"></i> {{ h.status|title }}
+              </span>
+              {% endif %}
+            </td>
+
+            <!-- Details -->
+            <td>
+              <button class="btn-icon" onclick="showDetails({{ h.id }})" title="View Details">
+                <i class="fas fa-info-circle"></i>
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <div style="padding:20px;border-top:1px solid var(--border);display:flex;justify-content:center;gap:8px;">
+      {% if pagination.has_prev %}
+      <a href="{{ url_for('auto_relist.history', page=pagination.prev_num) }}" class="btn btn-secondary">
+        <i class="fas fa-chevron-left"></i> Previous
+      </a>
+      {% endif %}
+
+      <span style="padding:10px 16px;color:var(--text-secondary);">
+        Page {{ pagination.page }} of {{ pagination.pages }}
+      </span>
+
+      {% if pagination.has_next %}
+      <a href="{{ url_for('auto_relist.history', page=pagination.next_num) }}" class="btn btn-secondary">
+        Next <i class="fas fa-chevron-right"></i>
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Details Modal -->
+<div id="detailsModal" class="modal" style="display:none;">
+  <div class="modal-overlay" onclick="closeDetails()"></div>
+  <div class="modal-content" style="max-width:800px;">
+    <div class="modal-header">
+      <h2>Execution Details</h2>
+      <button onclick="closeDetails()" class="modal-close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <div class="modal-body" id="detailsContent">
+      <div style="text-align:center;padding:40px;">
+        <i class="fas fa-spinner fa-spin" style="font-size:32px;color:var(--text-tertiary);"></i>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.btn-icon {
+  background:var(--card-bg);
+  border:1px solid var(--border);
+  color:var(--text-secondary);
+  padding:6px 10px;
+  border-radius:4px;
+  cursor:pointer;
+  font-size:12px;
+  transition:all 0.2s;
+}
+
+.btn-icon:hover {
+  background:var(--primary);
+  color:white;
+  border-color:var(--primary);
+}
+
+.modal {
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal-overlay {
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:rgba(0,0,0,0.5);
+}
+
+.modal-content {
+  position:relative;
+  background:var(--card-bg);
+  border-radius:8px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  max-height:80vh;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  width:90%;
+}
+
+.modal-header {
+  padding:20px 24px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.modal-header h2 {
+  font-size:18px;
+  color:var(--text);
+  margin:0;
+}
+
+.modal-close {
+  background:none;
+  border:none;
+  color:var(--text-secondary);
+  font-size:20px;
+  cursor:pointer;
+  padding:4px 8px;
+}
+
+.modal-close:hover {
+  color:var(--text);
+}
+
+.modal-body {
+  padding:24px;
+  overflow-y:auto;
+}
+</style>
+
+<script>
+function showDetails(historyId) {
+  const modal = document.getElementById('detailsModal');
+  const content = document.getElementById('detailsContent');
+
+  modal.style.display = 'flex';
+
+  // Fetch details (simplified - in real app would fetch from API)
+  content.innerHTML = `
+    <div style="text-align:center;padding:40px;color:var(--text-secondary);">
+      <p>Detailed execution logs would appear here</p>
+      <p style="font-size:12px;margin-top:8px;">History ID: ${historyId}</p>
+    </div>
+  `;
+}
+
+function closeDetails() {
+  document.getElementById('detailsModal').style.display = 'none';
+}
+
+// Close modal on ESC key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeDetails();
+  }
+});
+</script>
+{% endblock %}

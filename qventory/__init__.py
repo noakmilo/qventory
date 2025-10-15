@@ -1,7 +1,7 @@
 from flask import Flask
 from .config import Config
 from .extensions import db, login_manager, migrate
-from .routes import main_bp, auth_bp
+from .routes import main_bp, auth_bp, auto_relist_bp
 from .routes.reports import reports_bp
 from .routes.ebay_auth import ebay_auth_bp
 from .routes.expenses import expenses_bp
@@ -65,6 +65,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(ebay_auth_bp)
     app.register_blueprint(expenses_bp)
+    app.register_blueprint(auto_relist_bp)
 
     # Register template filters
     @app.template_filter('timeago')

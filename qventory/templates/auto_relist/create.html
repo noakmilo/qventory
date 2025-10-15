@@ -1,0 +1,407 @@
+{% extends "base_new.html" %}
+
+{% block title %}Create Auto-Relist Rule - Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('auto_relist.dashboard') }}" class="breadcrumb-link">Auto Relist</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Create Rule</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell">
+
+  <div style="margin-bottom:24px;">
+    <h1 style="color:var(--text);font-size:28px;margin-bottom:8px;">
+      <i class="fas fa-plus-circle"></i> Create Auto-Relist Rule
+    </h1>
+    <p style="color:var(--text-secondary);font-size:14px;">
+      Set up automatic or manual relisting for your eBay offers
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('auto_relist.create_rule') }}">
+    <!-- Mode Selection -->
+    <div class="card" style="margin-bottom:24px;">
+      <div style="padding:20px;border-bottom:1px solid var(--border);">
+        <h2 style="color:var(--text);font-size:18px;">1. Choose Mode</h2>
+      </div>
+      <div style="padding:24px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+
+          <!-- AUTO Mode -->
+          <label class="mode-card" for="mode_auto">
+            <input type="radio" name="mode" value="auto" id="mode_auto" checked required>
+            <div class="mode-card-content">
+              <i class="fas fa-robot" style="font-size:32px;color:#60a5fa;margin-bottom:12px;"></i>
+              <h3 style="font-size:16px;margin-bottom:4px;">Automatic</h3>
+              <p style="color:var(--text-secondary);font-size:12px;">
+                Scheduled relist every N days
+              </p>
+            </div>
+          </label>
+
+          <!-- MANUAL Mode -->
+          <label class="mode-card" for="mode_manual">
+            <input type="radio" name="mode" value="manual" id="mode_manual" required>
+            <div class="mode-card-content">
+              <i class="fas fa-hand-pointer" style="font-size:32px;color:#fbbf24;margin-bottom:12px;"></i>
+              <h3 style="font-size:16px;margin-bottom:4px;">Manual</h3>
+              <p style="color:var(--text-secondary);font-size:12px;">
+                One-time relist with optional changes
+              </p>
+            </div>
+          </label>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Select Offer -->
+    <div class="card" style="margin-bottom:24px;">
+      <div style="padding:20px;border-bottom:1px solid var(--border);">
+        <h2 style="color:var(--text);font-size:18px;">2. Select eBay Offer</h2>
+      </div>
+      <div style="padding:24px;">
+        {% if offers|length == 0 %}
+        <div style="text-align:center;padding:40px;color:var(--text-secondary);">
+          <i class="fas fa-box-open" style="font-size:48px;opacity:0.3;"></i>
+          <p style="margin-top:16px;">No active eBay offers found</p>
+          <p style="font-size:12px;margin-top:8px;">
+            Make sure you've connected your eBay account in Settings
+          </p>
+        </div>
+        {% else %}
+        <div class="form-group">
+          <label for="offer_select">Choose Offer *</label>
+          <select id="offer_select" name="offer_id" required class="form-control">
+            <option value="">-- Select an offer --</option>
+            {% for offer in offers %}
+            <option
+              value="{{ offer.offerId }}"
+              data-sku="{{ offer.sku or '' }}"
+              data-title="{{ offer.product.title if offer.product else 'Unknown' }}"
+              data-price="{{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else '0' }}"
+              data-listing-id="{{ offer.listingId or '' }}"
+            >
+              {% if offer.product and offer.product.title %}
+                {{ offer.product.title[:60] }}{% if offer.product.title|length > 60 %}...{% endif %}
+              {% else %}
+                Offer {{ offer.offerId }}
+              {% endif %}
+              - ${{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else 'N/A' }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Hidden fields populated by JS -->
+        <input type="hidden" name="sku" id="hidden_sku">
+        <input type="hidden" name="item_title" id="hidden_title">
+        <input type="hidden" name="current_price" id="hidden_price">
+        <input type="hidden" name="listing_id" id="hidden_listing_id">
+        <input type="hidden" name="marketplace_id" value="EBAY_US">
+
+        <div id="offer_preview" style="display:none;margin-top:16px;padding:16px;background:var(--bg-secondary);border-radius:8px;">
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Selected Offer:</div>
+          <div style="font-weight:500;color:var(--text);" id="preview_title"></div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+            <span id="preview_sku"></span> |
+            Price: <span id="preview_price"></span> |
+            Listing: <span id="preview_listing"></span>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- AUTO Mode Settings -->
+    <div class="card auto-settings" style="margin-bottom:24px;display:none;">
+      <div style="padding:20px;border-bottom:1px solid var(--border);">
+        <h2 style="color:var(--text);font-size:18px;">3. Configure Schedule</h2>
+      </div>
+      <div style="padding:24px;">
+
+        <!-- Frequency -->
+        <div class="form-group">
+          <label for="frequency">Relist Frequency *</label>
+          <select name="frequency" id="frequency" class="form-control">
+            <option value="daily">Every Day</option>
+            <option value="every_3_days">Every 3 Days</option>
+            <option value="weekly" selected>Every Week (7 days)</option>
+            <option value="every_10_days">Every 10 Days</option>
+            <option value="biweekly">Every 2 Weeks (14 days)</option>
+            <option value="every_20_days">Every 20 Days</option>
+            <option value="monthly">Every Month (30 days)</option>
+            <option value="custom">Custom Interval</option>
+          </select>
+        </div>
+
+        <!-- Custom Interval -->
+        <div class="form-group" id="custom_interval_group" style="display:none;">
+          <label for="custom_interval_days">Custom Interval (days) *</label>
+          <input type="number" name="custom_interval_days" id="custom_interval_days" class="form-control" min="1" max="365" value="7">
+        </div>
+
+        <!-- Quiet Hours -->
+        <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
+          <h3 style="font-size:14px;margin-bottom:16px;color:var(--text);">
+            <i class="fas fa-moon"></i> Quiet Hours (Optional)
+          </h3>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">
+            Relists will only run during this time window
+          </p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="form-group">
+              <label for="quiet_hours_start">Start Time</label>
+              <input type="time" name="quiet_hours_start" id="quiet_hours_start" class="form-control" value="02:00">
+            </div>
+            <div class="form-group">
+              <label for="quiet_hours_end">End Time</label>
+              <input type="time" name="quiet_hours_end" id="quiet_hours_end" class="form-control" value="05:00">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="timezone">Timezone</label>
+            <select name="timezone" id="timezone" class="form-control">
+              <option value="America/Los_Angeles" selected>Pacific (Los Angeles)</option>
+              <option value="America/Denver">Mountain (Denver)</option>
+              <option value="America/Chicago">Central (Chicago)</option>
+              <option value="America/New_York">Eastern (New York)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Safety Rules -->
+        <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
+          <h3 style="font-size:14px;margin-bottom:16px;color:var(--text);">
+            <i class="fas fa-shield-alt"></i> Safety Rules
+          </h3>
+
+          <div style="display:grid;gap:12px;">
+            <label class="checkbox-label">
+              <input type="checkbox" name="require_positive_quantity" checked>
+              <span>Skip if quantity is zero</span>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="check_active_returns" checked>
+              <span>Skip if there are active returns</span>
+            </label>
+
+            <label class="checkbox-label">
+              <input type="checkbox" name="pause_on_error" checked>
+              <span>Pause rule after 3 consecutive errors</span>
+            </label>
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label for="min_hours_since_last_order">Skip if orders in last (hours)</label>
+            <input type="number" name="min_hours_since_last_order" id="min_hours_since_last_order" class="form-control" value="48" min="0">
+            <small style="color:var(--text-tertiary);font-size:11px;">
+              Set to 0 to disable this check
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="max_consecutive_errors">Max consecutive errors before pause</label>
+            <input type="number" name="max_consecutive_errors" id="max_consecutive_errors" class="form-control" value="3" min="1" max="10">
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Common Settings -->
+    <div class="card" style="margin-bottom:24px;">
+      <div style="padding:20px;border-bottom:1px solid var(--border);">
+        <h2 style="color:var(--text);font-size:18px;">4. Additional Options</h2>
+      </div>
+      <div style="padding:24px;">
+
+        <div class="form-group">
+          <label for="withdraw_publish_delay_seconds">Delay between withdraw and publish (seconds)</label>
+          <input type="number" name="withdraw_publish_delay_seconds" id="withdraw_publish_delay_seconds" class="form-control" value="30" min="5" max="120">
+          <small style="color:var(--text-tertiary);font-size:11px;">
+            Recommended: 30 seconds to avoid eBay API issues
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="notes">Notes (optional)</label>
+          <textarea name="notes" id="notes" class="form-control" rows="3" placeholder="Add any notes about this rule..."></textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div style="display:flex;justify-content:space-between;gap:12px;">
+      <a href="{{ url_for('auto_relist.dashboard') }}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Cancel
+      </a>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-check"></i> Create Rule
+      </button>
+    </div>
+
+  </form>
+
+</div>
+
+<style>
+.mode-card {
+  cursor:pointer;
+  display:block;
+  position:relative;
+}
+
+.mode-card input[type="radio"] {
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.mode-card-content {
+  padding:24px;
+  border:2px solid var(--border);
+  border-radius:8px;
+  text-align:center;
+  transition:all 0.2s;
+}
+
+.mode-card input[type="radio"]:checked + .mode-card-content {
+  border-color:var(--primary);
+  background:rgba(59, 130, 246, 0.05);
+}
+
+.mode-card:hover .mode-card-content {
+  border-color:var(--primary);
+}
+
+.checkbox-label {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:pointer;
+  padding:8px;
+  border-radius:4px;
+  transition:background 0.2s;
+}
+
+.checkbox-label:hover {
+  background:var(--bg-secondary);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width:18px;
+  height:18px;
+  cursor:pointer;
+}
+
+.form-group {
+  margin-bottom:16px;
+}
+
+.form-group label {
+  display:block;
+  font-size:13px;
+  font-weight:500;
+  color:var(--text);
+  margin-bottom:6px;
+}
+
+.form-control {
+  width:100%;
+  padding:10px 12px;
+  font-size:14px;
+  border:1px solid var(--border);
+  border-radius:6px;
+  background:var(--bg);
+  color:var(--text);
+  font-family:inherit;
+}
+
+.form-control:focus {
+  outline:none;
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+select.form-control {
+  cursor:pointer;
+}
+
+textarea.form-control {
+  resize:vertical;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const modeAuto = document.getElementById('mode_auto');
+  const modeManual = document.getElementById('mode_manual');
+  const autoSettings = document.querySelector('.auto-settings');
+  const frequencySelect = document.getElementById('frequency');
+  const customIntervalGroup = document.getElementById('custom_interval_group');
+  const offerSelect = document.getElementById('offer_select');
+  const offerPreview = document.getElementById('offer_preview');
+
+  // Handle mode change
+  function updateMode() {
+    if (modeAuto.checked) {
+      autoSettings.style.display = 'block';
+    } else {
+      autoSettings.style.display = 'none';
+    }
+  }
+
+  modeAuto.addEventListener('change', updateMode);
+  modeManual.addEventListener('change', updateMode);
+  updateMode();
+
+  // Handle frequency change
+  frequencySelect.addEventListener('change', function() {
+    if (this.value === 'custom') {
+      customIntervalGroup.style.display = 'block';
+      document.getElementById('custom_interval_days').required = true;
+    } else {
+      customIntervalGroup.style.display = 'none';
+      document.getElementById('custom_interval_days').required = false;
+    }
+  });
+
+  // Handle offer selection
+  offerSelect.addEventListener('change', function() {
+    const selected = this.options[this.selectedIndex];
+
+    if (!selected.value) {
+      offerPreview.style.display = 'none';
+      return;
+    }
+
+    const sku = selected.dataset.sku;
+    const title = selected.dataset.title;
+    const price = selected.dataset.price;
+    const listingId = selected.dataset.listingId;
+
+    // Populate hidden fields
+    document.getElementById('hidden_sku').value = sku;
+    document.getElementById('hidden_title').value = title;
+    document.getElementById('hidden_price').value = price;
+    document.getElementById('hidden_listing_id').value = listingId;
+
+    // Show preview
+    document.getElementById('preview_title').textContent = title;
+    document.getElementById('preview_sku').textContent = sku ? `SKU: ${sku}` : 'No SKU';
+    document.getElementById('preview_price').textContent = `$${price}`;
+    document.getElementById('preview_listing').textContent = listingId || 'N/A';
+
+    offerPreview.style.display = 'block';
+  });
+});
+</script>
+{% endblock %}
