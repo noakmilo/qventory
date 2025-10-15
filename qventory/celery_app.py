@@ -4,6 +4,7 @@ Background task processing with Redis broker
 """
 import os
 from celery import Celery
+from celery.schedules import crontab
 
 # Get Redis URL from environment or use local default
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
@@ -34,6 +35,18 @@ celery.conf.update(
 celery.conf.task_routes = {
     'qventory.tasks.import_ebay_inventory': {'queue': 'imports'},
     'qventory.tasks.process_ai_research': {'queue': 'ai'},
+    'qventory.tasks.auto_relist_offers': {'queue': 'default'},
+}
+
+# Celery Beat Schedule (Periodic Tasks)
+celery.conf.beat_schedule = {
+    'auto-relist-every-15-minutes': {
+        'task': 'qventory.tasks.auto_relist_offers',
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'options': {
+            'expires': 60 * 10,  # Expire after 10 minutes if not picked up
+        }
+    },
 }
 
 if __name__ == '__main__':

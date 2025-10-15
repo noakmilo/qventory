@@ -964,3 +964,179 @@ def rematch_sales_to_items(self, user_id):
             'matched': matched_count,
             'still_unmatched': still_unmatched
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.auto_relist_offers')
+def auto_relist_offers(self):
+    """
+    Scheduled task to process auto-relist rules
+    Runs periodically (every 15 minutes) to check for pending relists
+
+    Handles both:
+    - AUTO mode: Scheduled relists based on frequency
+    - MANUAL mode: User-triggered relists with optional changes
+
+    Returns:
+        dict with execution results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.auto_relist_rule import AutoRelistRule, AutoRelistHistory
+        from qventory.helpers.ebay_relist import execute_relist
+        from datetime import datetime
+
+        log_task("=== Starting auto-relist task ===")
+
+        # Find rules that are due to run
+        now = datetime.utcnow()
+
+        # Query both auto rules (by schedule) and manual rules (by trigger flag)
+        auto_rules = AutoRelistRule.query.filter(
+            AutoRelistRule.enabled == True,
+            AutoRelistRule.mode == 'auto',
+            AutoRelistRule.next_run_at <= now
+        ).all()
+
+        manual_rules = AutoRelistRule.query.filter(
+            AutoRelistRule.enabled == True,
+            AutoRelistRule.mode == 'manual',
+            AutoRelistRule.manual_trigger_requested == True
+        ).all()
+
+        all_rules = auto_rules + manual_rules
+
+        log_task(f"Found {len(auto_rules)} auto rules and {len(manual_rules)} manual rules ready to execute")
+
+        if not all_rules:
+            log_task("No rules to process")
+            return {
+                'success': True,
+                'processed': 0,
+                'succeeded': 0,
+                'failed': 0,
+                'skipped': 0
+            }
+
+        processed_count = 0
+        succeeded_count = 0
+        failed_count = 0
+        skipped_count = 0
+
+        for rule in all_rules:
+            log_task(f"\n--- Processing rule {rule.id} ({rule.mode} mode) ---")
+            log_task(f"User: {rule.user_id}, Offer: {rule.offer_id}")
+            log_task(f"Item: {rule.item_title or rule.sku}")
+
+            # Create history record
+            history = AutoRelistHistory(
+                rule_id=rule.id,
+                user_id=rule.user_id,
+                mode=rule.mode,
+                started_at=datetime.utcnow(),
+                status='pending'
+            )
+            db.session.add(history)
+            db.session.commit()
+
+            try:
+                # Capture old price if available
+                if rule.current_price:
+                    history.old_price = rule.current_price
+
+                # Execute relist (with or without changes)
+                apply_changes = rule.mode == 'manual' and rule.has_pending_changes
+
+                if apply_changes:
+                    log_task(f"Applying changes: {list(rule.pending_changes.keys())}")
+                    history.changes_applied = rule.pending_changes.copy()
+
+                    # Capture new price if changed
+                    if 'price' in rule.pending_changes:
+                        history.new_price = rule.pending_changes['price']
+
+                log_task("Executing relist cycle...")
+                result = execute_relist(rule.user_id, rule, apply_changes=apply_changes)
+
+                # Check result
+                if 'skip_reason' in result:
+                    # Skipped due to safety check
+                    log_task(f"✗ Skipped: {result['skip_reason']}")
+
+                    rule.mark_skipped(result['skip_reason'])
+
+                    history.status = 'skipped'
+                    history.skip_reason = result['skip_reason']
+                    history.old_listing_id = result.get('old_listing_id')
+                    history.mark_completed()
+
+                    skipped_count += 1
+
+                elif not result['success']:
+                    # Failed
+                    error_msg = result.get('error', 'Unknown error')
+                    log_task(f"✗ Failed: {error_msg}")
+
+                    rule.mark_error(error_msg)
+
+                    history.status = 'error'
+                    history.error_message = error_msg
+                    history.old_listing_id = result.get('old_listing_id')
+                    history.withdraw_response = result.get('details', {}).get('withdraw')
+                    history.update_response = result.get('details', {}).get('update_offer') or result.get('details', {}).get('update_inventory')
+                    history.publish_response = result.get('details', {}).get('publish')
+                    history.mark_completed()
+
+                    failed_count += 1
+
+                else:
+                    # Success!
+                    new_listing_id = result['new_listing_id']
+                    log_task(f"✓ Success! New listing ID: {new_listing_id}")
+
+                    rule.mark_success(new_listing_id)
+
+                    # Update current price if it was changed
+                    if apply_changes and 'price' in rule.pending_changes:
+                        rule.current_price = rule.pending_changes['price']
+
+                    history.status = 'success'
+                    history.old_listing_id = result.get('old_listing_id')
+                    history.new_listing_id = new_listing_id
+                    history.withdraw_response = result.get('details', {}).get('withdraw')
+                    history.update_response = result.get('details', {}).get('update_offer') or result.get('details', {}).get('update_inventory')
+                    history.publish_response = result.get('details', {}).get('publish')
+                    history.mark_completed()
+
+                    succeeded_count += 1
+
+                # Commit after each rule
+                db.session.commit()
+                processed_count += 1
+
+            except Exception as e:
+                log_task(f"✗ Exception during relist: {str(e)}")
+                import traceback
+                log_task(f"Traceback: {traceback.format_exc()}")
+
+                rule.mark_error(f"Exception: {str(e)}")
+
+                history.status = 'error'
+                history.error_message = str(e)
+                history.mark_completed()
+
+                db.session.commit()
+
+                failed_count += 1
+                processed_count += 1
+
+        log_task(f"\n=== Auto-relist task completed ===")
+        log_task(f"Processed: {processed_count}, Succeeded: {succeeded_count}, Failed: {failed_count}, Skipped: {skipped_count}")
+
+        return {
+            'success': True,
+            'processed': processed_count,
+            'succeeded': succeeded_count,
+            'failed': failed_count,
+            'skipped': skipped_count
+        }
