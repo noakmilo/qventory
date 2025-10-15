@@ -10,7 +10,7 @@ import sys
 
 from ..extensions import db
 from ..models.auto_relist_rule import AutoRelistRule, AutoRelistHistory
-from ..helpers.ebay_inventory import get_active_listings
+from ..helpers.ebay_inventory import fetch_ebay_inventory_offers
 
 auto_relist_bp = Blueprint('auto_relist', __name__, url_prefix='/auto-relist')
 
@@ -77,15 +77,51 @@ def create_rule():
     POST: Create rule
     """
     if request.method == 'GET':
-        # Fetch user's active eBay offers
+        # Fetch user's active eBay offers using robust wrapper with fallback
         try:
-            offers_result = get_active_listings(current_user.id, limit=200)
-            offers = offers_result.get('offers', [])
+            offers_result = fetch_ebay_inventory_offers(current_user.id, limit=200)
 
-            log_relist_route(f"Fetched {len(offers)} active offers for user {current_user.id}")
+            if offers_result.get('success'):
+                parsed_offers = offers_result.get('offers', [])
+                log_relist_route(f"Successfully fetched {len(parsed_offers)} active offers for user {current_user.id}")
+
+                # Extract raw offers for template (template expects raw eBay API format)
+                # The parsed offers contain 'raw_offer' field with original data
+                offers = []
+                for parsed in parsed_offers:
+                    raw = parsed.get('raw_offer')
+                    if raw:
+                        # Ensure we have the required fields for display
+                        if not raw.get('offerId'):
+                            raw['offerId'] = parsed.get('ebay_offer_id', '')
+                        if not raw.get('listingId'):
+                            raw['listingId'] = parsed.get('ebay_listing_id', '')
+                        offers.append(raw)
+                    else:
+                        # Fallback: construct a minimal offer object from parsed data
+                        offers.append({
+                            'offerId': parsed.get('ebay_offer_id', ''),
+                            'sku': parsed.get('ebay_sku', ''),
+                            'listingId': parsed.get('ebay_listing_id', ''),
+                            'product': {
+                                'title': parsed.get('title', 'Unknown')
+                            },
+                            'pricingSummary': {
+                                'price': {
+                                    'value': parsed.get('item_price', 0)
+                                }
+                            }
+                        })
+
+                log_relist_route(f"Prepared {len(offers)} offers for template")
+            else:
+                error_msg = offers_result.get('error', 'Unknown error')
+                log_relist_route(f"Error fetching offers: {error_msg}")
+                offers = []
+                flash(f'Error loading eBay offers: {error_msg}', 'error')
 
         except Exception as e:
-            log_relist_route(f"Error fetching offers: {str(e)}")
+            log_relist_route(f"Exception fetching offers: {str(e)}")
             offers = []
             flash(f'Error loading eBay offers: {str(e)}', 'error')
 
