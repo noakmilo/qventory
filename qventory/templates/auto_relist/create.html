@@ -74,26 +74,33 @@
         </div>
         {% else %}
         <div class="form-group">
-          <label for="offer_select">Choose Offer *</label>
+          <label for="offer_select">Choose Listing *</label>
           <select id="offer_select" name="offer_id" required class="form-control">
-            <option value="">-- Select an offer --</option>
+            <option value="">-- Select a listing --</option>
             {% for offer in offers %}
             <option
-              value="{{ offer.offerId }}"
+              value="{{ offer.offerId or offer.listingId }}"
               data-sku="{{ offer.sku or '' }}"
               data-title="{{ offer.product.title if offer.product else 'Unknown' }}"
               data-price="{{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else '0' }}"
               data-listing-id="{{ offer.listingId or '' }}"
+              data-legacy="{{ 'true' if offer._legacy else 'false' }}"
             >
               {% if offer.product and offer.product.title %}
                 {{ offer.product.title[:60] }}{% if offer.product.title|length > 60 %}...{% endif %}
               {% else %}
-                Offer {{ offer.offerId }}
+                Listing {{ offer.listingId or offer.offerId }}
               {% endif %}
               - ${{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else 'N/A' }}
+              {% if offer._legacy %}
+                <span style="color:#f59e0b;"> (Traditional)</span>
+              {% endif %}
             </option>
             {% endfor %}
           </select>
+          <small style="color:var(--text-tertiary);font-size:11px;margin-top:4px;display:block;">
+            Traditional listings use Trading API and may have limited functionality
+          </small>
         </div>
 
         <!-- Hidden fields populated by JS -->

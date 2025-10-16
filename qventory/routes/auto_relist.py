@@ -77,49 +77,99 @@ def create_rule():
     POST: Create rule
     """
     if request.method == 'GET':
-        # Fetch user's active eBay offers - MUST use Offers API (not Trading API fallback)
-        # Trading API doesn't return offerId which is required for relist operations
+        # Fetch user's active eBay listings
+        # Supports both Inventory API (modern) and Trading API (legacy) listings
         try:
-            from ..helpers.ebay_inventory import get_active_listings
+            from ..helpers.ebay_inventory import get_active_listings, get_active_listings_trading_api
 
-            log_relist_route(f"Fetching active offers for user {current_user.id}")
-            offers_result = get_active_listings(current_user.id, limit=200)
+            log_relist_route(f"Fetching active listings for user {current_user.id}")
 
-            raw_offers = offers_result.get('offers', [])
-            log_relist_route(f"Successfully fetched {len(raw_offers)} active offers from eBay Offers API")
-
-            # Filter offers to only include those with valid offerId
             offers = []
-            skipped_count = 0
 
-            for offer in raw_offers:
-                offer_id = offer.get('offerId')
+            # Try Inventory API first (modern, has offerId)
+            try:
+                offers_result = get_active_listings(current_user.id, limit=200)
+                raw_offers = offers_result.get('offers', [])
+                log_relist_route(f"Inventory API: Fetched {len(raw_offers)} offers")
 
-                if not offer_id or offer_id == 'None':
-                    # Skip offers without valid offerId
-                    listing_id = offer.get('listingId', 'unknown')
-                    sku = offer.get('sku', 'unknown')
-                    log_relist_route(f"Skipping offer without offerId: listingId={listing_id}, sku={sku}")
-                    skipped_count += 1
-                    continue
+                # Filter offers to only include those with valid offerId
+                for offer in raw_offers:
+                    offer_id = offer.get('offerId')
 
-                offers.append(offer)
+                    if offer_id and offer_id != 'None':
+                        offers.append(offer)
+                    else:
+                        log_relist_route(f"Skipping offer without offerId: {offer.get('listingId', 'unknown')}")
 
-            log_relist_route(f"Prepared {len(offers)} valid offers for template (skipped {skipped_count} offers without offerId)")
+                log_relist_route(f"Inventory API: {len(offers)} valid offers with offerId")
 
-            # Debug: Log first 3 offers to see their structure
+            except Exception as inv_error:
+                log_relist_route(f"Inventory API failed: {str(inv_error)}")
+
+                # Fallback to Trading API (legacy, no offerId but we can use ItemID)
+                try:
+                    log_relist_route("Falling back to Trading API for legacy listings...")
+                    trading_items = get_active_listings_trading_api(current_user.id, max_items=200, collect_failures=False)
+                    log_relist_route(f"Trading API: Fetched {len(trading_items)} active listings")
+
+                    # Convert Trading API items to offer-like format
+                    # Note: These won't have offerId, we'll use listing_id as the primary key
+                    for item in trading_items:
+                        listing_id = item.get('ebay_listing_id')
+                        if not listing_id:
+                            continue
+
+                        # Create pseudo-offer from Trading API data
+                        # We'll use listing_id as the "offer_id" and mark it as legacy
+                        offers.append({
+                            'offerId': None,  # Trading API doesn't have this
+                            'listingId': listing_id,
+                            'sku': item.get('sku', ''),
+                            'product': {
+                                'title': item.get('product', {}).get('title', 'Unknown')
+                            },
+                            'pricingSummary': {
+                                'price': {
+                                    'value': item.get('item_price', 0)
+                                }
+                            },
+                            'availableQuantity': item.get('availability', {}).get('shipToLocationAvailability', {}).get('quantity', 1),
+                            '_legacy': True  # Flag to indicate this is a Trading API listing
+                        })
+
+                    log_relist_route(f"Trading API: Converted {len(offers)} legacy listings")
+
+                    if len(offers) > 0:
+                        flash(
+                            'Loaded traditional eBay listings. Note: Auto-relist for traditional listings '
+                            'uses listing_id instead of offer_id. Some features may be limited.',
+                            'info'
+                        )
+
+                except Exception as trading_error:
+                    log_relist_route(f"Trading API also failed: {str(trading_error)}")
+                    flash(f'Unable to load eBay listings: {str(trading_error)}', 'error')
+                    offers = []
+
+            # Debug: Log first 3 offers
             for i, offer in enumerate(offers[:3]):
-                log_relist_route(f"Offer {i}: offerId={offer.get('offerId')}, sku={offer.get('sku')}, listingId={offer.get('listingId')}")
+                is_legacy = offer.get('_legacy', False)
+                log_relist_route(
+                    f"Offer {i}: offerId={offer.get('offerId') or 'N/A'}, "
+                    f"listingId={offer.get('listingId')}, "
+                    f"sku={offer.get('sku')}, "
+                    f"legacy={is_legacy}"
+                )
 
             if len(offers) == 0:
-                flash('No eBay offers found with valid offer IDs. Please ensure you have active listings on eBay.', 'warning')
+                flash('No active eBay listings found. Please create listings on eBay first.', 'warning')
 
         except Exception as e:
-            log_relist_route(f"Exception fetching offers: {str(e)}")
+            log_relist_route(f"Exception fetching listings: {str(e)}")
             import traceback
             log_relist_route(f"Traceback: {traceback.format_exc()}")
             offers = []
-            flash(f'Error loading eBay offers: {str(e)}', 'error')
+            flash(f'Unexpected error loading eBay listings: {str(e)}', 'error')
 
         return render_template(
             'auto_relist/create.html',
@@ -134,15 +184,17 @@ def create_rule():
         log_relist_route(f"Creating rule - Full form data: {dict(data)}")
 
         # Basic validation
+        # offer_id can be either an actual offerId (Inventory API) or listingId (Trading API legacy)
         offer_id = data.get('offer_id')
         mode = data.get('mode', 'auto')
 
         log_relist_route(f"Extracted: offer_id='{offer_id}' (type: {type(offer_id)}), mode={mode}")
 
         # Validate offer_id - must not be empty, 'None', or None
+        # Note: For legacy listings, this will be the listingId
         if not offer_id or offer_id == 'None' or offer_id.strip() == '':
-            log_relist_route(f"ERROR: Invalid offer_id provided: '{offer_id}'")
-            flash('Offer ID is required. Please select a valid offer from the list.', 'error')
+            log_relist_route(f"ERROR: Invalid offer_id/listing_id provided: '{offer_id}'")
+            flash('Listing ID is required. Please select a valid listing from the list.', 'error')
             return redirect(url_for('auto_relist.create_rule'))
 
         # Check if rule already exists
