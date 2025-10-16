@@ -96,22 +96,33 @@ def create_rule():
                             raw['offerId'] = parsed.get('ebay_offer_id', '')
                         if not raw.get('listingId'):
                             raw['listingId'] = parsed.get('ebay_listing_id', '')
-                        offers.append(raw)
+
+                        # ONLY add offers that have a valid offerId
+                        if raw.get('offerId'):
+                            offers.append(raw)
+                        else:
+                            log_relist_route(f"Skipping offer without offerId: {raw.get('listingId', 'unknown')}")
                     else:
                         # Fallback: construct a minimal offer object from parsed data
-                        offers.append({
-                            'offerId': parsed.get('ebay_offer_id', ''),
-                            'sku': parsed.get('ebay_sku', ''),
-                            'listingId': parsed.get('ebay_listing_id', ''),
-                            'product': {
-                                'title': parsed.get('title', 'Unknown')
-                            },
-                            'pricingSummary': {
-                                'price': {
-                                    'value': parsed.get('item_price', 0)
+                        offer_id = parsed.get('ebay_offer_id', '')
+
+                        # ONLY add offers that have a valid offerId
+                        if offer_id:
+                            offers.append({
+                                'offerId': offer_id,
+                                'sku': parsed.get('ebay_sku', ''),
+                                'listingId': parsed.get('ebay_listing_id', ''),
+                                'product': {
+                                    'title': parsed.get('title', 'Unknown')
+                                },
+                                'pricingSummary': {
+                                    'price': {
+                                        'value': parsed.get('item_price', 0)
+                                    }
                                 }
-                            }
-                        })
+                            })
+                        else:
+                            log_relist_route(f"Skipping parsed offer without ebay_offer_id: {parsed.get('ebay_listing_id', 'unknown')}")
 
                 log_relist_route(f"Prepared {len(offers)} offers for template")
 
@@ -147,9 +158,10 @@ def create_rule():
 
         log_relist_route(f"Extracted: offer_id='{offer_id}' (type: {type(offer_id)}), mode={mode}")
 
-        if not offer_id:
-            log_relist_route(f"ERROR: No offer_id provided in form data")
-            flash('Offer ID is required', 'error')
+        # Validate offer_id - must not be empty, 'None', or None
+        if not offer_id or offer_id == 'None' or offer_id.strip() == '':
+            log_relist_route(f"ERROR: Invalid offer_id provided: '{offer_id}'")
+            flash('Offer ID is required. Please select a valid offer from the list.', 'error')
             return redirect(url_for('auto_relist.create_rule'))
 
         # Check if rule already exists
