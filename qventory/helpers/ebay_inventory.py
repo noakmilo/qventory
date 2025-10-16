@@ -283,8 +283,9 @@ def get_active_listings(user_id, limit=200, offset=0):
 
     params = {
         'limit': min(limit, 200),
-        'offset': offset,
-        'marketplace_ids': marketplace_id
+        'offset': offset
+        # Note: marketplace_id filter removed - was causing 400 errors
+        # eBay will return all offers for the authenticated user
     }
 
     log_inv(f"Making request to eBay Offers API...")
