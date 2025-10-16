@@ -987,16 +987,22 @@ def auto_relist_offers(self):
         from datetime import datetime
 
         log_task("=== Starting auto-relist task ===")
+        log_task(f"Task ID: {self.request.id}")
+        log_task(f"Current time: {datetime.utcnow()}")
 
         # Find rules that are due to run
         now = datetime.utcnow()
 
         # Query both auto rules (by schedule) and manual rules (by trigger flag)
+        log_task("Querying database for eligible rules...")
+
         auto_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
             AutoRelistRule.mode == 'auto',
             AutoRelistRule.next_run_at <= now
         ).all()
+
+        log_task(f"Auto rules query returned {len(auto_rules)} results")
 
         manual_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
@@ -1004,9 +1010,12 @@ def auto_relist_offers(self):
             AutoRelistRule.manual_trigger_requested == True
         ).all()
 
+        log_task(f"Manual rules query returned {len(manual_rules)} results")
+
         all_rules = auto_rules + manual_rules
 
         log_task(f"Found {len(auto_rules)} auto rules and {len(manual_rules)} manual rules ready to execute")
+        log_task(f"Total rules to process: {len(all_rules)}")
 
         if not all_rules:
             log_task("No rules to process")
@@ -1024,11 +1033,18 @@ def auto_relist_offers(self):
         skipped_count = 0
 
         for rule in all_rules:
-            log_task(f"\n--- Processing rule {rule.id} ({rule.mode} mode) ---")
+            log_task(f"\n{'='*60}")
+            log_task(f"--- Processing rule {rule.id} ({rule.mode} mode) ---")
             log_task(f"User: {rule.user_id}, Offer: {rule.offer_id}")
             log_task(f"Item: {rule.item_title or rule.sku}")
+            log_task(f"Enabled: {rule.enabled}")
+            log_task(f"Manual trigger requested: {rule.manual_trigger_requested}")
+            log_task(f"Has pending changes: {rule.has_pending_changes if hasattr(rule, 'has_pending_changes') else 'N/A'}")
+            if rule.pending_changes:
+                log_task(f"Pending changes: {rule.pending_changes}")
 
             # Create history record
+            log_task(f"Creating history record...")
             history = AutoRelistHistory(
                 rule_id=rule.id,
                 user_id=rule.user_id,
@@ -1038,14 +1054,18 @@ def auto_relist_offers(self):
             )
             db.session.add(history)
             db.session.commit()
+            log_task(f"History record created: ID={history.id}")
 
             try:
                 # Capture old price if available
                 if rule.current_price:
                     history.old_price = rule.current_price
+                    log_task(f"Old price captured: ${rule.current_price}")
 
                 # Execute relist (with or without changes)
                 apply_changes = rule.mode == 'manual' and rule.has_pending_changes
+
+                log_task(f"Apply changes: {apply_changes}")
 
                 if apply_changes:
                     log_task(f"Applying changes: {list(rule.pending_changes.keys())}")
@@ -1054,9 +1074,11 @@ def auto_relist_offers(self):
                     # Capture new price if changed
                     if 'price' in rule.pending_changes:
                         history.new_price = rule.pending_changes['price']
+                        log_task(f"New price will be: ${history.new_price}")
 
-                log_task("Executing relist cycle...")
+                log_task("Calling execute_relist()...")
                 result = execute_relist(rule.user_id, rule, apply_changes=apply_changes)
+                log_task(f"execute_relist() returned: success={result.get('success')}, keys={list(result.keys())}")
 
                 # Check result
                 if 'skip_reason' in result:
@@ -1117,7 +1139,7 @@ def auto_relist_offers(self):
             except Exception as e:
                 log_task(f"✗ Exception during relist: {str(e)}")
                 import traceback
-                log_task(f"Traceback: {traceback.format_exc()}")
+                log_task(f"Traceback:\n{traceback.format_exc()}")
 
                 rule.mark_error(f"Exception: {str(e)}")
 

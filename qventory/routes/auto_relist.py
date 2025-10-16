@@ -352,20 +352,29 @@ def relist_now(rule_id):
     Can optionally include changes to price/title/description
     """
     try:
+        log_relist_route(f"Received relist-now request for rule {rule_id}")
+        log_relist_route(f"Request Content-Type: {request.content_type}")
+        log_relist_route(f"Request data: {request.data[:200] if request.data else 'empty'}")
+
         rule = AutoRelistRule.query.filter_by(
             id=rule_id,
             user_id=current_user.id
         ).first_or_404()
 
+        log_relist_route(f"Found rule: ID={rule.id}, Mode={rule.mode}, Offer={rule.offer_id}")
+
         # Handle both JSON and form data, and handle missing body
         try:
             data = request.get_json(force=True, silent=True) or {}
-        except Exception:
+            log_relist_route(f"Parsed JSON data: {data}")
+        except Exception as e:
+            log_relist_route(f"JSON parsing failed: {e}")
             data = {}
 
         # Fallback to form data if JSON parsing failed
         if not data:
             data = request.form.to_dict()
+            log_relist_route(f"Using form data: {data}")
 
         # Check if changes were requested
         changes = {}
@@ -382,33 +391,44 @@ def relist_now(rule_id):
         if 'quantity' in data and data['quantity']:
             changes['quantity'] = int(data['quantity'])
 
+        log_relist_route(f"Changes requested: {changes if changes else 'None'}")
+
         # Set pending changes if any
         if changes:
             rule.set_pending_changes(**changes)
+            log_relist_route(f"Set pending_changes on rule")
         else:
             rule.clear_pending_changes()
+            log_relist_route(f"Cleared pending_changes on rule")
 
         # Trigger manual relist
         if rule.mode == 'manual':
+            log_relist_route(f"Triggering manual relist")
             rule.trigger_manual_relist()
         else:
-            # For auto rules, just set next_run to now
+            log_relist_route(f"Setting next_run_at to now for auto rule")
             rule.next_run_at = datetime.utcnow()
 
         db.session.commit()
+        log_relist_route(f"Database committed successfully")
 
         # Trigger Celery task immediately
+        log_relist_route(f"Queueing Celery task...")
         from ..tasks import auto_relist_offers
-        auto_relist_offers.delay()
+        task = auto_relist_offers.delay()
+        log_relist_route(f"Celery task queued: {task.id}")
 
         return jsonify({
             'success': True,
             'message': 'Relist job queued. Check history in a few moments.',
-            'has_changes': bool(changes)
+            'has_changes': bool(changes),
+            'task_id': str(task.id)
         })
 
     except Exception as e:
         log_relist_route(f"Error triggering relist: {str(e)}")
+        import traceback
+        log_relist_route(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
 
