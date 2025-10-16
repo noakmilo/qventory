@@ -35,7 +35,7 @@ celery.conf.update(
 celery.conf.task_routes = {
     'qventory.tasks.import_ebay_inventory': {'queue': 'imports'},
     'qventory.tasks.process_ai_research': {'queue': 'ai'},
-    'qventory.tasks.auto_relist_offers': {'queue': 'default'},
+    'qventory.tasks.auto_relist_offers': {'queue': 'celery'},  # Use default 'celery' queue
 }
 
 # Celery Beat Schedule (Periodic Tasks)
