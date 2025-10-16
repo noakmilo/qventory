@@ -133,12 +133,16 @@ def create_rule():
     # POST: Create rule
     try:
         data = request.form
+        log_relist_route(f"Creating rule - Form data received: {dict(data)}")
 
         # Basic validation
         offer_id = data.get('offer_id')
         mode = data.get('mode', 'auto')
 
+        log_relist_route(f"Extracted: offer_id={offer_id}, mode={mode}")
+
         if not offer_id:
+            log_relist_route(f"ERROR: No offer_id provided in form data")
             flash('Offer ID is required', 'error')
             return redirect(url_for('auto_relist.create_rule'))
 
@@ -153,6 +157,13 @@ def create_rule():
             return redirect(url_for('auto_relist.dashboard'))
 
         # Create rule
+        log_relist_route(f"Creating AutoRelistRule object with:")
+        log_relist_route(f"  offer_id={offer_id}")
+        log_relist_route(f"  sku={data.get('sku')}")
+        log_relist_route(f"  item_title={data.get('item_title')}")
+        log_relist_route(f"  current_price={data.get('current_price')}")
+        log_relist_route(f"  listing_id={data.get('listing_id')}")
+
         rule = AutoRelistRule(
             user_id=current_user.id,
             offer_id=offer_id,
