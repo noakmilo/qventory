@@ -77,66 +77,47 @@ def create_rule():
     POST: Create rule
     """
     if request.method == 'GET':
-        # Fetch user's active eBay offers using robust wrapper with fallback
+        # Fetch user's active eBay offers - MUST use Offers API (not Trading API fallback)
+        # Trading API doesn't return offerId which is required for relist operations
         try:
-            offers_result = fetch_ebay_inventory_offers(current_user.id, limit=200)
+            from ..helpers.ebay_inventory import get_active_listings
 
-            if offers_result.get('success'):
-                parsed_offers = offers_result.get('offers', [])
-                log_relist_route(f"Successfully fetched {len(parsed_offers)} active offers for user {current_user.id}")
+            log_relist_route(f"Fetching active offers for user {current_user.id}")
+            offers_result = get_active_listings(current_user.id, limit=200)
 
-                # Extract raw offers for template (template expects raw eBay API format)
-                # The parsed offers contain 'raw_offer' field with original data
-                offers = []
-                for parsed in parsed_offers:
-                    raw = parsed.get('raw_offer')
-                    if raw:
-                        # Ensure we have the required fields for display
-                        if not raw.get('offerId'):
-                            raw['offerId'] = parsed.get('ebay_offer_id', '')
-                        if not raw.get('listingId'):
-                            raw['listingId'] = parsed.get('ebay_listing_id', '')
+            raw_offers = offers_result.get('offers', [])
+            log_relist_route(f"Successfully fetched {len(raw_offers)} active offers from eBay Offers API")
 
-                        # ONLY add offers that have a valid offerId
-                        if raw.get('offerId'):
-                            offers.append(raw)
-                        else:
-                            log_relist_route(f"Skipping offer without offerId: {raw.get('listingId', 'unknown')}")
-                    else:
-                        # Fallback: construct a minimal offer object from parsed data
-                        offer_id = parsed.get('ebay_offer_id', '')
+            # Filter offers to only include those with valid offerId
+            offers = []
+            skipped_count = 0
 
-                        # ONLY add offers that have a valid offerId
-                        if offer_id:
-                            offers.append({
-                                'offerId': offer_id,
-                                'sku': parsed.get('ebay_sku', ''),
-                                'listingId': parsed.get('ebay_listing_id', ''),
-                                'product': {
-                                    'title': parsed.get('title', 'Unknown')
-                                },
-                                'pricingSummary': {
-                                    'price': {
-                                        'value': parsed.get('item_price', 0)
-                                    }
-                                }
-                            })
-                        else:
-                            log_relist_route(f"Skipping parsed offer without ebay_offer_id: {parsed.get('ebay_listing_id', 'unknown')}")
+            for offer in raw_offers:
+                offer_id = offer.get('offerId')
 
-                log_relist_route(f"Prepared {len(offers)} offers for template")
+                if not offer_id or offer_id == 'None':
+                    # Skip offers without valid offerId
+                    listing_id = offer.get('listingId', 'unknown')
+                    sku = offer.get('sku', 'unknown')
+                    log_relist_route(f"Skipping offer without offerId: listingId={listing_id}, sku={sku}")
+                    skipped_count += 1
+                    continue
 
-                # Debug: Log first 3 offers to see their structure
-                for i, offer in enumerate(offers[:3]):
-                    log_relist_route(f"Offer {i}: offerId={offer.get('offerId')}, sku={offer.get('sku')}, listingId={offer.get('listingId')}")
-            else:
-                error_msg = offers_result.get('error', 'Unknown error')
-                log_relist_route(f"Error fetching offers: {error_msg}")
-                offers = []
-                flash(f'Error loading eBay offers: {error_msg}', 'error')
+                offers.append(offer)
+
+            log_relist_route(f"Prepared {len(offers)} valid offers for template (skipped {skipped_count} offers without offerId)")
+
+            # Debug: Log first 3 offers to see their structure
+            for i, offer in enumerate(offers[:3]):
+                log_relist_route(f"Offer {i}: offerId={offer.get('offerId')}, sku={offer.get('sku')}, listingId={offer.get('listingId')}")
+
+            if len(offers) == 0:
+                flash('No eBay offers found with valid offer IDs. Please ensure you have active listings on eBay.', 'warning')
 
         except Exception as e:
             log_relist_route(f"Exception fetching offers: {str(e)}")
+            import traceback
+            log_relist_route(f"Traceback: {traceback.format_exc()}")
             offers = []
             flash(f'Error loading eBay offers: {str(e)}', 'error')
 
