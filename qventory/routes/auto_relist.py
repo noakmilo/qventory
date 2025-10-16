@@ -114,6 +114,10 @@ def create_rule():
                         })
 
                 log_relist_route(f"Prepared {len(offers)} offers for template")
+
+                # Debug: Log first 3 offers to see their structure
+                for i, offer in enumerate(offers[:3]):
+                    log_relist_route(f"Offer {i}: offerId={offer.get('offerId')}, sku={offer.get('sku')}, listingId={offer.get('listingId')}")
             else:
                 error_msg = offers_result.get('error', 'Unknown error')
                 log_relist_route(f"Error fetching offers: {error_msg}")
@@ -133,13 +137,15 @@ def create_rule():
     # POST: Create rule
     try:
         data = request.form
-        log_relist_route(f"Creating rule - Form data received: {dict(data)}")
+        log_relist_route(f"Creating rule - Form data keys: {list(data.keys())}")
+        log_relist_route(f"Creating rule - offer_id raw value: '{data.get('offer_id')}'")
+        log_relist_route(f"Creating rule - Full form data: {dict(data)}")
 
         # Basic validation
         offer_id = data.get('offer_id')
         mode = data.get('mode', 'auto')
 
-        log_relist_route(f"Extracted: offer_id={offer_id}, mode={mode}")
+        log_relist_route(f"Extracted: offer_id='{offer_id}' (type: {type(offer_id)}), mode={mode}")
 
         if not offer_id:
             log_relist_route(f"ERROR: No offer_id provided in form data")
