@@ -557,11 +557,11 @@ document.addEventListener('DOMContentLoaded', function() {
       currentRuleId = this.dataset.ruleId;
       const mode = this.dataset.mode;
       const itemTitle = this.dataset.itemTitle || 'Unknown Item';
-      const currentPrice = this.dataset.currentPrice || 'N/A';
+      const currentPrice = this.dataset.currentPrice;
 
       // Populate current info
       document.getElementById('currentTitle').textContent = itemTitle;
-      document.getElementById('currentPrice').textContent = currentPrice ? `$${currentPrice}` : 'N/A';
+      document.getElementById('currentPrice').textContent = (currentPrice && currentPrice !== '') ? `$${currentPrice}` : 'N/A';
 
       // Reset inputs
       newTitleInput.value = '';

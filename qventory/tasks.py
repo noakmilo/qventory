@@ -1063,8 +1063,13 @@ def auto_relist_offers(self):
                     log_task(f"Old price captured: ${rule.current_price}")
 
                 # Execute relist (with or without changes)
-                apply_changes = rule.mode == 'manual' and rule.has_pending_changes
+                # Check if manual mode has changes to apply
+                has_changes = (rule.pending_changes and
+                              isinstance(rule.pending_changes, dict) and
+                              len(rule.pending_changes) > 0)
+                apply_changes = rule.mode == 'manual' and has_changes
 
+                log_task(f"Has pending changes: {has_changes}")
                 log_task(f"Apply changes: {apply_changes}")
 
                 if apply_changes:
