@@ -205,7 +205,12 @@
                 </button>
 
                 <!-- Relist Now -->
-                <button class="btn-icon relist-now-btn" data-rule-id="{{ rule.id }}" title="Relist Now">
+                <button class="btn-icon relist-now-btn"
+                        data-rule-id="{{ rule.id }}"
+                        data-item-title="{{ rule.item_title }}"
+                        data-current-price="{{ rule.current_price }}"
+                        data-mode="{{ rule.mode }}"
+                        title="Relist Now">
                   <i class="fas fa-sync"></i>
                 </button>
 
@@ -311,6 +316,85 @@
 
 </div>
 
+<!-- Relist Modal -->
+<div id="relistModal" class="modal" style="display:none;">
+  <div class="modal-overlay"></div>
+  <div class="modal-content" style="max-width:500px;">
+    <div class="modal-header">
+      <h3 style="margin:0;font-size:18px;color:var(--text);">
+        <i class="fas fa-sync"></i> Relist Item
+      </h3>
+      <button class="modal-close" id="closeRelistModal">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">
+        Optionally modify the title and/or price before relisting. Leave blank to keep current values.
+      </p>
+
+      <!-- Current Info -->
+      <div style="background:var(--bg-secondary);padding:12px;border-radius:6px;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">Current Title:</div>
+        <div id="currentTitle" style="font-size:13px;color:var(--text);font-weight:500;"></div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-top:8px;margin-bottom:4px;">Current Price:</div>
+        <div id="currentPrice" style="font-size:13px;color:var(--text);font-weight:500;"></div>
+      </div>
+
+      <!-- New Title -->
+      <div class="form-group" style="margin-bottom:16px;">
+        <label for="newTitle" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text);">
+          New Title <span style="color:var(--text-tertiary);font-weight:normal;">(optional, max 80 chars)</span>
+        </label>
+        <input type="text"
+               id="newTitle"
+               class="form-control"
+               placeholder="Leave blank to keep current title"
+               maxlength="80"
+               style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <small id="titleError" style="color:#ef4444;font-size:11px;display:none;">
+            <i class="fas fa-exclamation-circle"></i> Title cannot exceed 80 characters
+          </small>
+          <small id="charCount" style="color:var(--text-tertiary);font-size:11px;">
+            0 / 80
+          </small>
+        </div>
+      </div>
+
+      <!-- New Price -->
+      <div class="form-group" style="margin-bottom:16px;">
+        <label for="newPrice" style="display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:var(--text);">
+          New Price <span style="color:var(--text-tertiary);font-weight:normal;">(optional)</span>
+        </label>
+        <div style="position:relative;">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-secondary);font-size:14px;">$</span>
+          <input type="number"
+                 id="newPrice"
+                 class="form-control"
+                 placeholder="Leave blank to keep current price"
+                 step="0.01"
+                 min="0.01"
+                 style="width:100%;padding:10px 10px 10px 24px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px;">
+        </div>
+        <small style="color:var(--text-tertiary);font-size:11px;display:block;margin-top:4px;">
+          Enter the new listing price
+        </small>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cancelRelist">
+        Cancel
+      </button>
+      <button class="btn btn-primary" id="confirmRelist">
+        <i class="fas fa-sync"></i> Relist Now
+      </button>
+    </div>
+  </div>
+</div>
+
 <style>
 .btn-icon {
   background:var(--card-bg);
@@ -332,6 +416,75 @@
 .btn-icon:disabled {
   opacity:0.5;
   cursor:not-allowed;
+}
+
+/* Modal Styles */
+.modal {
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.modal-overlay {
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  bottom:0;
+  background:rgba(0,0,0,0.5);
+  backdrop-filter:blur(4px);
+}
+
+.modal-content {
+  position:relative;
+  background:var(--bg);
+  border-radius:12px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  max-height:90vh;
+  overflow-y:auto;
+  width:90%;
+  max-width:500px;
+  z-index:10000;
+}
+
+.modal-header {
+  padding:20px 24px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.modal-close {
+  background:none;
+  border:none;
+  color:var(--text-secondary);
+  font-size:20px;
+  cursor:pointer;
+  padding:4px 8px;
+  transition:color 0.2s;
+}
+
+.modal-close:hover {
+  color:var(--text);
+}
+
+.modal-body {
+  padding:24px;
+}
+
+.modal-footer {
+  padding:16px 24px;
+  border-top:1px solid var(--border);
+  display:flex;
+  justify-content:flex-end;
+  gap:12px;
 }
 </style>
 
@@ -373,40 +526,136 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Relist Now
+  // Relist Now - Open Modal
+  const relistModal = document.getElementById('relistModal');
+  const newTitleInput = document.getElementById('newTitle');
+  const newPriceInput = document.getElementById('newPrice');
+  const charCount = document.getElementById('charCount');
+  const titleError = document.getElementById('titleError');
+  const confirmRelistBtn = document.getElementById('confirmRelist');
+  let currentRuleId = null;
+
+  // Character counter for title
+  newTitleInput.addEventListener('input', function() {
+    const length = this.value.length;
+    charCount.textContent = `${length} / 80`;
+
+    if (length > 80) {
+      titleError.style.display = 'block';
+      charCount.style.color = '#ef4444';
+      confirmRelistBtn.disabled = true;
+    } else {
+      titleError.style.display = 'none';
+      charCount.style.color = 'var(--text-tertiary)';
+      confirmRelistBtn.disabled = false;
+    }
+  });
+
+  // Open modal on relist button click
   document.querySelectorAll('.relist-now-btn').forEach(btn => {
-    btn.addEventListener('click', async function() {
-      const ruleId = this.dataset.ruleId;
+    btn.addEventListener('click', function() {
+      currentRuleId = this.dataset.ruleId;
+      const mode = this.dataset.mode;
+      const itemTitle = this.dataset.itemTitle || 'Unknown Item';
+      const currentPrice = this.dataset.currentPrice || 'N/A';
 
-      if (!confirm('Relist this item now?')) return;
+      // Populate current info
+      document.getElementById('currentTitle').textContent = itemTitle;
+      document.getElementById('currentPrice').textContent = currentPrice ? `$${currentPrice}` : 'N/A';
 
-      this.disabled = true;
-      this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      // Reset inputs
+      newTitleInput.value = '';
+      newPriceInput.value = '';
+      charCount.textContent = '0 / 80';
+      titleError.style.display = 'none';
+      confirmRelistBtn.disabled = false;
 
-      try {
-        const response = await fetch(`/auto-relist/${ruleId}/relist-now`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          showToast(data.message, 'success');
-          setTimeout(() => window.location.reload(), 2000);
-        } else {
-          showToast('Error: ' + data.error, 'error');
-          this.disabled = false;
-          this.innerHTML = '<i class="fas fa-sync"></i>';
-        }
-      } catch (error) {
-        showToast('Network error', 'error');
-        this.disabled = false;
-        this.innerHTML = '<i class="fas fa-sync"></i>';
+      // Show modal (only if manual mode, otherwise relist directly)
+      if (mode === 'manual') {
+        relistModal.style.display = 'flex';
+      } else {
+        // Auto mode: relist directly without modal
+        performRelist(currentRuleId, {});
       }
     });
   });
+
+  // Close modal
+  document.getElementById('closeRelistModal').addEventListener('click', () => {
+    relistModal.style.display = 'none';
+  });
+
+  document.getElementById('cancelRelist').addEventListener('click', () => {
+    relistModal.style.display = 'none';
+  });
+
+  relistModal.querySelector('.modal-overlay').addEventListener('click', () => {
+    relistModal.style.display = 'none';
+  });
+
+  // Confirm relist with optional changes
+  confirmRelistBtn.addEventListener('click', async function() {
+    const changes = {};
+
+    // Get new values if provided
+    const newTitle = newTitleInput.value.trim();
+    const newPrice = newPriceInput.value.trim();
+
+    if (newTitle && newTitle.length > 0) {
+      if (newTitle.length > 80) {
+        showToast('Title cannot exceed 80 characters', 'error');
+        return;
+      }
+      changes.title = newTitle;
+    }
+
+    if (newPrice && newPrice.length > 0) {
+      const priceFloat = parseFloat(newPrice);
+      if (isNaN(priceFloat) || priceFloat <= 0) {
+        showToast('Please enter a valid price', 'error');
+        return;
+      }
+      changes.price = priceFloat;
+    }
+
+    // Close modal and perform relist
+    relistModal.style.display = 'none';
+    performRelist(currentRuleId, changes);
+  });
+
+  // Perform relist API call
+  async function performRelist(ruleId, changes) {
+    const btn = document.querySelector(`.relist-now-btn[data-rule-id="${ruleId}"]`);
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+      const response = await fetch(`/auto-relist/${ruleId}/relist-now`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes)
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        const hasChanges = Object.keys(changes).length > 0;
+        const message = hasChanges
+          ? `${data.message} (with changes applied)`
+          : data.message;
+        showToast(message, 'success');
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        showToast('Error: ' + data.error, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-sync"></i>';
+      }
+    } catch (error) {
+      showToast('Network error', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-sync"></i>';
+    }
+  }
 
   // Delete Rule
   document.querySelectorAll('.delete-rule-btn').forEach(btn => {
