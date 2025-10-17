@@ -393,6 +393,10 @@ def delete_rule(rule_id):
             user_id=current_user.id
         ).first_or_404()
 
+        # Delete all history records first (to avoid foreign key constraint errors)
+        AutoRelistHistory.query.filter_by(rule_id=rule_id).delete()
+
+        # Now delete the rule
         db.session.delete(rule)
         db.session.commit()
 
