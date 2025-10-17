@@ -64,62 +64,61 @@
         <h2 style="color:var(--text);font-size:18px;">2. Select eBay Offer</h2>
       </div>
       <div style="padding:24px;">
-        {% if offers|length == 0 %}
-        <div style="text-align:center;padding:40px;color:var(--text-secondary);">
-          <i class="fas fa-box-open" style="font-size:48px;opacity:0.3;"></i>
-          <p style="margin-top:16px;">No active eBay offers found</p>
-          <p style="font-size:12px;margin-top:8px;">
-            Make sure you've connected your eBay account in Settings
-          </p>
-        </div>
-        {% else %}
+        <!-- Autocomplete Search -->
         <div class="form-group">
-          <label for="offer_select">Choose Listing *</label>
-          <select id="offer_select" name="offer_id" required class="form-control">
-            <option value="">-- Select a listing --</option>
-            {% for offer in offers %}
-            <option
-              value="{{ offer.offerId or offer.listingId }}"
-              data-sku="{{ offer.sku or '' }}"
-              data-title="{{ offer.product.title if offer.product else 'Unknown' }}"
-              data-price="{{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else '0' }}"
-              data-listing-id="{{ offer.listingId or '' }}"
-              data-legacy="{{ 'true' if offer._legacy else 'false' }}"
+          <label for="item_search">Search for listing by title, SKU, or listing ID *</label>
+          <div style="position:relative;">
+            <input
+              type="text"
+              id="item_search"
+              class="form-control"
+              placeholder="Type at least 2 characters to search..."
+              autocomplete="off"
+              style="padding-right:40px;"
             >
-              {% if offer.product and offer.product.title %}
-                {{ offer.product.title[:60] }}{% if offer.product.title|length > 60 %}...{% endif %}
-              {% else %}
-                Listing {{ offer.listingId or offer.offerId }}
-              {% endif %}
-              - ${{ offer.pricingSummary.price.value if offer.pricingSummary and offer.pricingSummary.price else 'N/A' }}
-              {% if offer._legacy %}
-                <span style="color:#f59e0b;"> (Traditional)</span>
-              {% endif %}
-            </option>
-            {% endfor %}
-          </select>
+            <div id="search_spinner" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);">
+              <i class="fas fa-spinner fa-spin" style="color:var(--text-tertiary);"></i>
+            </div>
+          </div>
+
+          <!-- Dropdown Results -->
+          <div id="search_results" class="autocomplete-dropdown" style="display:none;">
+            <!-- Results populated by JS -->
+          </div>
+
           <small style="color:var(--text-tertiary);font-size:11px;margin-top:4px;display:block;">
-            Traditional listings use Trading API and may have limited functionality
+            Start typing to search your active eBay listings
           </small>
         </div>
 
-        <!-- Hidden fields populated by JS -->
+        <!-- Hidden fields populated by autocomplete -->
+        <input type="hidden" name="offer_id" id="hidden_offer_id" required>
         <input type="hidden" name="sku" id="hidden_sku">
         <input type="hidden" name="item_title" id="hidden_title">
         <input type="hidden" name="current_price" id="hidden_price">
         <input type="hidden" name="listing_id" id="hidden_listing_id">
         <input type="hidden" name="marketplace_id" value="EBAY_US">
 
-        <div id="offer_preview" style="display:none;margin-top:16px;padding:16px;background:var(--bg-secondary);border-radius:8px;">
-          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Selected Offer:</div>
-          <div style="font-weight:500;color:var(--text);" id="preview_title"></div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
-            <span id="preview_sku"></span> |
-            Price: <span id="preview_price"></span> |
-            Listing: <span id="preview_listing"></span>
+        <!-- Selected Item Preview -->
+        <div id="selected_item_preview" style="display:none;margin-top:16px;padding:16px;background:var(--bg-secondary);border-radius:8px;border:1px solid var(--border);">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <i class="fas fa-check-circle" style="color:#10b981;font-size:20px;"></i>
+            <div style="flex:1;">
+              <div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Selected Item:</div>
+              <div style="font-weight:500;color:var(--text);" id="preview_title"></div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+                <span id="preview_sku"></span>
+                <span style="margin:0 8px;">|</span>
+                Price: <span id="preview_price" style="font-weight:500;"></span>
+                <span style="margin:0 8px;">|</span>
+                Listing ID: <span id="preview_listing"></span>
+              </div>
+            </div>
+            <button type="button" id="clear_selection" style="padding:6px 12px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:4px;cursor:pointer;font-size:12px;">
+              <i class="fas fa-times"></i> Change
+            </button>
           </div>
         </div>
-        {% endif %}
       </div>
     </div>
 
@@ -345,6 +344,108 @@ select.form-control {
 textarea.form-control {
   resize:vertical;
 }
+
+/* Autocomplete Dropdown */
+.autocomplete-dropdown {
+  position:absolute;
+  top:100%;
+  left:0;
+  right:0;
+  margin-top:4px;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:8px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  max-height:400px;
+  overflow-y:auto;
+  z-index:1000;
+}
+
+.autocomplete-item {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px;
+  border-bottom:1px solid var(--border);
+  cursor:pointer;
+  transition:background 0.15s;
+}
+
+.autocomplete-item:last-child {
+  border-bottom:none;
+}
+
+.autocomplete-item:hover {
+  background:var(--bg-secondary);
+}
+
+.autocomplete-item-image {
+  width:50px;
+  height:50px;
+  border-radius:6px;
+  object-fit:cover;
+  background:var(--bg-secondary);
+  flex-shrink:0;
+}
+
+.autocomplete-item-image-placeholder {
+  width:50px;
+  height:50px;
+  border-radius:6px;
+  background:var(--bg-secondary);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+
+.autocomplete-item-image-placeholder i {
+  color:var(--text-tertiary);
+  font-size:24px;
+}
+
+.autocomplete-item-details {
+  flex:1;
+  min-width:0;
+}
+
+.autocomplete-item-title {
+  font-size:14px;
+  font-weight:500;
+  color:var(--text);
+  margin-bottom:4px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.autocomplete-item-meta {
+  font-size:12px;
+  color:var(--text-secondary);
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.autocomplete-item-meta span {
+  display:flex;
+  align-items:center;
+  gap:4px;
+}
+
+.autocomplete-empty {
+  padding:24px;
+  text-align:center;
+  color:var(--text-secondary);
+  font-size:13px;
+}
+
+.autocomplete-empty i {
+  font-size:32px;
+  opacity:0.3;
+  margin-bottom:8px;
+  display:block;
+}
 </style>
 
 <script>
@@ -354,8 +455,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const autoSettings = document.querySelector('.auto-settings');
   const frequencySelect = document.getElementById('frequency');
   const customIntervalGroup = document.getElementById('custom_interval_group');
-  const offerSelect = document.getElementById('offer_select');
-  const offerPreview = document.getElementById('offer_preview');
+
+  // Autocomplete elements
+  const searchInput = document.getElementById('item_search');
+  const searchResults = document.getElementById('search_results');
+  const searchSpinner = document.getElementById('search_spinner');
+  const selectedPreview = document.getElementById('selected_item_preview');
+  const clearButton = document.getElementById('clear_selection');
+
+  let searchTimeout;
+  let selectedItem = null;
 
   // Handle mode change
   function updateMode() {
@@ -381,34 +490,170 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  // Handle offer selection
-  offerSelect.addEventListener('change', function() {
-    const selected = this.options[this.selectedIndex];
+  // ==================== AUTOCOMPLETE SEARCH ====================
 
-    if (!selected.value) {
-      offerPreview.style.display = 'none';
+  // Search as user types (with debounce)
+  searchInput.addEventListener('input', function() {
+    const query = this.value.trim();
+
+    // Clear previous timeout
+    clearTimeout(searchTimeout);
+
+    // Hide results if query is too short
+    if (query.length < 2) {
+      searchResults.style.display = 'none';
       return;
     }
 
-    const sku = selected.dataset.sku;
-    const title = selected.dataset.title;
-    const price = selected.dataset.price;
-    const listingId = selected.dataset.listingId;
+    // Show spinner
+    searchSpinner.style.display = 'block';
+
+    // Debounce: Wait 300ms after user stops typing
+    searchTimeout = setTimeout(() => {
+      performSearch(query);
+    }, 300);
+  });
+
+  // Perform AJAX search
+  async function performSearch(query) {
+    try {
+      const response = await fetch(`{{ url_for('auto_relist.search_items_api') }}?q=${encodeURIComponent(query)}&limit=10`);
+      const data = await response.json();
+
+      searchSpinner.style.display = 'none';
+
+      if (!data.success) {
+        showError(data.error || 'Failed to search items');
+        return;
+      }
+
+      displayResults(data.items);
+    } catch (error) {
+      searchSpinner.style.display = 'none';
+      showError('Network error. Please try again.');
+      console.error('Search error:', error);
+    }
+  }
+
+  // Display search results
+  function displayResults(items) {
+    searchResults.innerHTML = '';
+
+    if (items.length === 0) {
+      searchResults.innerHTML = `
+        <div class="autocomplete-empty">
+          <i class="fas fa-search"></i>
+          No items found matching your search.
+        </div>
+      `;
+      searchResults.style.display = 'block';
+      return;
+    }
+
+    items.forEach(item => {
+      const resultItem = document.createElement('div');
+      resultItem.className = 'autocomplete-item';
+      resultItem.dataset.item = JSON.stringify(item);
+
+      // Image or placeholder
+      let imageHtml;
+      if (item.image_url) {
+        imageHtml = `<img src="${item.image_url}" class="autocomplete-item-image" alt="${item.title}">`;
+      } else {
+        imageHtml = `
+          <div class="autocomplete-item-image-placeholder">
+            <i class="fas fa-image"></i>
+          </div>
+        `;
+      }
+
+      resultItem.innerHTML = `
+        ${imageHtml}
+        <div class="autocomplete-item-details">
+          <div class="autocomplete-item-title">${escapeHtml(item.title)}</div>
+          <div class="autocomplete-item-meta">
+            ${item.sku ? `<span><i class="fas fa-barcode"></i> ${escapeHtml(item.sku)}</span>` : ''}
+            <span><i class="fas fa-dollar-sign"></i> ${item.price ? item.price.toFixed(2) : 'N/A'}</span>
+            ${item.quantity ? `<span><i class="fas fa-boxes"></i> ${item.quantity}</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      // Click handler
+      resultItem.addEventListener('click', () => selectItem(item));
+
+      searchResults.appendChild(resultItem);
+    });
+
+    searchResults.style.display = 'block';
+  }
+
+  // Select an item from results
+  function selectItem(item) {
+    selectedItem = item;
 
     // Populate hidden fields
-    document.getElementById('hidden_sku').value = sku;
-    document.getElementById('hidden_title').value = title;
-    document.getElementById('hidden_price').value = price;
-    document.getElementById('hidden_listing_id').value = listingId;
+    document.getElementById('hidden_offer_id').value = item.offer_id || '';
+    document.getElementById('hidden_sku').value = item.sku || '';
+    document.getElementById('hidden_title').value = item.title || '';
+    document.getElementById('hidden_price').value = item.price || '';
+    document.getElementById('hidden_listing_id').value = item.listing_id || '';
 
-    // Show preview
-    document.getElementById('preview_title').textContent = title;
-    document.getElementById('preview_sku').textContent = sku ? `SKU: ${sku}` : 'No SKU';
-    document.getElementById('preview_price').textContent = `$${price}`;
-    document.getElementById('preview_listing').textContent = listingId || 'N/A';
+    // Update preview
+    document.getElementById('preview_title').textContent = item.title || 'Unknown';
+    document.getElementById('preview_sku').textContent = item.sku ? `SKU: ${item.sku}` : 'No SKU';
+    document.getElementById('preview_price').textContent = item.price ? `$${item.price.toFixed(2)}` : 'N/A';
+    document.getElementById('preview_listing').textContent = item.listing_id || 'N/A';
 
-    offerPreview.style.display = 'block';
+    // Show preview, hide search results
+    selectedPreview.style.display = 'block';
+    searchResults.style.display = 'none';
+    searchInput.value = item.title;
+    searchInput.disabled = true;
+  }
+
+  // Clear selection
+  clearButton.addEventListener('click', function() {
+    selectedItem = null;
+
+    // Clear hidden fields
+    document.getElementById('hidden_offer_id').value = '';
+    document.getElementById('hidden_sku').value = '';
+    document.getElementById('hidden_title').value = '';
+    document.getElementById('hidden_price').value = '';
+    document.getElementById('hidden_listing_id').value = '';
+
+    // Hide preview
+    selectedPreview.style.display = 'none';
+    searchInput.value = '';
+    searchInput.disabled = false;
+    searchInput.focus();
   });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+      searchResults.style.display = 'none';
+    }
+  });
+
+  // Show error message
+  function showError(message) {
+    searchResults.innerHTML = `
+      <div class="autocomplete-empty" style="color:var(--danger);">
+        <i class="fas fa-exclamation-triangle"></i>
+        ${escapeHtml(message)}
+      </div>
+    `;
+    searchResults.style.display = 'block';
+  }
+
+  // Escape HTML to prevent XSS
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 });
 </script>
 {% endblock %}

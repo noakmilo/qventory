@@ -77,104 +77,9 @@ def create_rule():
     POST: Create rule
     """
     if request.method == 'GET':
-        # Fetch user's active eBay listings
-        # Supports both Inventory API (modern) and Trading API (legacy) listings
-        try:
-            from ..helpers.ebay_inventory import get_active_listings, get_active_listings_trading_api
-
-            log_relist_route(f"Fetching active listings for user {current_user.id}")
-
-            offers = []
-
-            # Try Inventory API first (modern, has offerId)
-            try:
-                offers_result = get_active_listings(current_user.id, limit=200)
-                raw_offers = offers_result.get('offers', [])
-                log_relist_route(f"Inventory API: Fetched {len(raw_offers)} offers")
-
-                # Filter offers to only include those with valid offerId
-                for offer in raw_offers:
-                    offer_id = offer.get('offerId')
-
-                    if offer_id and offer_id != 'None':
-                        offers.append(offer)
-                    else:
-                        log_relist_route(f"Skipping offer without offerId: {offer.get('listingId', 'unknown')}")
-
-                log_relist_route(f"Inventory API: {len(offers)} valid offers with offerId")
-
-            except Exception as inv_error:
-                log_relist_route(f"Inventory API failed: {str(inv_error)}")
-
-                # Fallback to Trading API (legacy, no offerId but we can use ItemID)
-                try:
-                    log_relist_route("Falling back to Trading API for legacy listings...")
-                    trading_items = get_active_listings_trading_api(current_user.id, max_items=200, collect_failures=False)
-                    log_relist_route(f"Trading API: Fetched {len(trading_items)} active listings")
-
-                    # Convert Trading API items to offer-like format
-                    # Note: These won't have offerId, we'll use listing_id as the primary key
-                    for item in trading_items:
-                        listing_id = item.get('ebay_listing_id')
-                        if not listing_id:
-                            continue
-
-                        # Create pseudo-offer from Trading API data
-                        # We'll use listing_id as the "offer_id" and mark it as legacy
-                        offers.append({
-                            'offerId': None,  # Trading API doesn't have this
-                            'listingId': listing_id,
-                            'sku': item.get('sku', ''),
-                            'product': {
-                                'title': item.get('product', {}).get('title', 'Unknown')
-                            },
-                            'pricingSummary': {
-                                'price': {
-                                    'value': item.get('item_price', 0)
-                                }
-                            },
-                            'availableQuantity': item.get('availability', {}).get('shipToLocationAvailability', {}).get('quantity', 1),
-                            '_legacy': True  # Flag to indicate this is a Trading API listing
-                        })
-
-                    log_relist_route(f"Trading API: Converted {len(offers)} legacy listings")
-
-                    if len(offers) > 0:
-                        flash(
-                            'Loaded traditional eBay listings. Note: Auto-relist for traditional listings '
-                            'uses listing_id instead of offer_id. Some features may be limited.',
-                            'info'
-                        )
-
-                except Exception as trading_error:
-                    log_relist_route(f"Trading API also failed: {str(trading_error)}")
-                    flash(f'Unable to load eBay listings: {str(trading_error)}', 'error')
-                    offers = []
-
-            # Debug: Log first 3 offers
-            for i, offer in enumerate(offers[:3]):
-                is_legacy = offer.get('_legacy', False)
-                log_relist_route(
-                    f"Offer {i}: offerId={offer.get('offerId') or 'N/A'}, "
-                    f"listingId={offer.get('listingId')}, "
-                    f"sku={offer.get('sku')}, "
-                    f"legacy={is_legacy}"
-                )
-
-            if len(offers) == 0:
-                flash('No active eBay listings found. Please create listings on eBay first.', 'warning')
-
-        except Exception as e:
-            log_relist_route(f"Exception fetching listings: {str(e)}")
-            import traceback
-            log_relist_route(f"Traceback: {traceback.format_exc()}")
-            offers = []
-            flash(f'Unexpected error loading eBay listings: {str(e)}', 'error')
-
-        return render_template(
-            'auto_relist/create.html',
-            offers=offers
-        )
+        # Simply render the form - items are loaded dynamically via AJAX autocomplete
+        log_relist_route(f"Rendering create form for user {current_user.id}")
+        return render_template('auto_relist/create.html')
 
     # POST: Create rule
     try:
@@ -406,6 +311,124 @@ def delete_rule(rule_id):
         log_relist_route(f"Error deleting rule: {str(e)}")
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
+
+
+# ==================== SEARCH ITEMS API (AJAX) ====================
+
+@auto_relist_bp.route('/api/search-items', methods=['GET'])
+@login_required
+def search_items_api():
+    """
+    AJAX endpoint to search active eBay listings with autocomplete
+    Returns JSON with items matching search query
+
+    Query params:
+        q: Search query (title, SKU, listing ID)
+        limit: Max results (default 10)
+
+    Response:
+        {
+            'success': True,
+            'items': [
+                {
+                    'offer_id': '123456',
+                    'listing_id': '376512345678',
+                    'title': 'Sony PlayStation 5 Console',
+                    'sku': 'A1-B2-S3-C4',
+                    'price': 499.99,
+                    'quantity': 1,
+                    'image_url': 'https://...',
+                    'views': 234  # if available
+                }
+            ],
+            'total': 5
+        }
+    """
+    try:
+        query = request.args.get('q', '').strip()
+        limit = int(request.args.get('limit', 10))
+
+        # Return empty if no query
+        if not query or len(query) < 2:
+            return jsonify({'success': True, 'items': [], 'total': 0})
+
+        from ..helpers.ebay_inventory import fetch_ebay_inventory_offers
+
+        log_relist_route(f"Searching items for query: '{query}' (limit: {limit})")
+
+        # Fetch offers from eBay (cache for 5 min to avoid excessive API calls)
+        result = fetch_ebay_inventory_offers(current_user.id, limit=200)
+
+        if not result.get('success'):
+            error_msg = result.get('error', 'Failed to fetch items from eBay')
+            log_relist_route(f"Error fetching offers: {error_msg}")
+            return jsonify({
+                'success': False,
+                'error': error_msg
+            }), 500
+
+        all_offers = result.get('offers', [])
+        log_relist_route(f"Fetched {len(all_offers)} total offers from eBay")
+
+        # Filter by search query (case-insensitive, fuzzy match)
+        query_lower = query.lower()
+        filtered_items = []
+
+        for offer in all_offers:
+            title = (offer.get('title') or '').lower()
+            sku = (offer.get('ebay_sku') or '').lower()
+            listing_id = str(offer.get('ebay_listing_id') or '')
+
+            # Match if query appears in title, SKU, or listing ID
+            if query_lower in title or query_lower in sku or query in listing_id:
+                # Extract relevant data for autocomplete preview
+                item_data = {
+                    'offer_id': offer.get('ebay_offer_id') or offer.get('ebay_listing_id'),
+                    'listing_id': offer.get('ebay_listing_id'),
+                    'title': offer.get('title'),
+                    'sku': offer.get('ebay_sku') or '',
+                    'price': offer.get('item_price'),
+                    'quantity': offer.get('item_quantity', 0),
+                    'image_url': None
+                }
+
+                # Try to get image from raw_offer
+                raw_offer = offer.get('raw_offer', {})
+                if raw_offer:
+                    # Try product images first
+                    product = raw_offer.get('product', {})
+                    image_urls = product.get('imageUrls', [])
+                    if image_urls:
+                        item_data['image_url'] = image_urls[0]
+                    else:
+                        # Try listing images
+                        listing = raw_offer.get('listing', {})
+                        picture_urls = listing.get('pictureUrls', [])
+                        if picture_urls:
+                            item_data['image_url'] = picture_urls[0]
+
+                filtered_items.append(item_data)
+
+                # Stop if we reached limit
+                if len(filtered_items) >= limit:
+                    break
+
+        log_relist_route(f"Found {len(filtered_items)} items matching '{query}'")
+
+        return jsonify({
+            'success': True,
+            'items': filtered_items,
+            'total': len(filtered_items)
+        })
+
+    except Exception as e:
+        log_relist_route(f"Error searching items: {str(e)}")
+        import traceback
+        log_relist_route(f"Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 # ==================== MANUAL RELIST ====================
