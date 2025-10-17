@@ -207,8 +207,8 @@
                 <!-- Relist Now -->
                 <button class="btn-icon relist-now-btn"
                         data-rule-id="{{ rule.id }}"
-                        data-item-title="{{ rule.item_title }}"
-                        data-current-price="{{ rule.current_price }}"
+                        data-item-title="{{ rule.item_title or 'Unknown Item' }}"
+                        data-current-price="{{ rule.current_price or '' }}"
                         data-mode="{{ rule.mode }}"
                         title="Relist Now">
                   <i class="fas fa-sync"></i>
