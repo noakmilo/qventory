@@ -1090,11 +1090,11 @@ def auto_relist_offers(self):
                     new_listing_id = result['new_listing_id']
                     log_task(f"✓ Success! New listing ID: {new_listing_id}")
 
-                    rule.mark_success(new_listing_id)
-
-                    # Update current price if it was changed
-                    if apply_changes and 'price' in rule.pending_changes:
+                    # Update current price if it was changed (do this BEFORE mark_success clears pending_changes)
+                    if apply_changes and rule.pending_changes and 'price' in rule.pending_changes:
                         rule.current_price = rule.pending_changes['price']
+
+                    rule.mark_success(new_listing_id)
 
                     history.status = 'success'
                     history.old_listing_id = result.get('old_listing_id')
