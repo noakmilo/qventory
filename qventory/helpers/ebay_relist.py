@@ -1053,7 +1053,7 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
     result['details']['end_item'] = end_result
 
     if not end_result['success']:
-        error_msg = end_result.get('error', '').lower()
+        error_msg = str(end_result.get('error', '')).lower()
 
         # Idempotency: If item is already closed (from previous attempt), continue
         if 'already been closed' in error_msg or 'already closed' in error_msg:
