@@ -256,5 +256,130 @@
   <!-- jsQR Library for QR Code Scanning (Compatible with all browsers) -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
+  <!-- Global Notification System -->
+  <div id="notificationContainer" style="position:fixed;top:20px;right:20px;z-index:10000;max-width:420px;"></div>
+
+  <script>
+  // Global Notification System
+  (function() {
+    let lastCheckTime = Date.now();
+    const CHECK_INTERVAL = 10000; // Check every 10 seconds
+
+    function checkNotifications() {
+      fetch('/api/notifications/unread')
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok && data.notifications && data.notifications.length > 0) {
+            // Show only notifications created since last check
+            data.notifications.forEach(notification => {
+              const createdAt = new Date(notification.created_at).getTime();
+              if (createdAt > lastCheckTime) {
+                showNotification(notification);
+              }
+            });
+            lastCheckTime = Date.now();
+          }
+        })
+        .catch(err => console.error('Error checking notifications:', err));
+    }
+
+    function showNotification(notification) {
+      const container = document.getElementById('notificationContainer');
+      if (!container) return;
+
+      const notifEl = document.createElement('div');
+      notifEl.className = 'global-notification';
+      notifEl.setAttribute('data-notification-id', notification.id);
+
+      const typeIcons = {
+        'success': '<i class="fas fa-check-circle" style="color:#34d399;"></i>',
+        'error': '<i class="fas fa-exclamation-circle" style="color:#ef4444;"></i>',
+        'warning': '<i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>',
+        'info': '<i class="fas fa-info-circle" style="color:#60a5fa;"></i>'
+      };
+
+      const icon = typeIcons[notification.type] || typeIcons['info'];
+
+      let linkHTML = '';
+      if (notification.link_url) {
+        linkHTML = `
+          <a href="${notification.link_url}" style="font-size:12px;color:#60a5fa;text-decoration:none;margin-top:4px;display:inline-block;">
+            ${notification.link_text || 'View'} <i class="fas fa-arrow-right"></i>
+          </a>
+        `;
+      }
+
+      notifEl.innerHTML = `
+        <div style="display:flex;align-items:start;gap:12px;background:var(--card);border:1px solid var(--glass-border);border-radius:12px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:slideIn 0.3s ease;">
+          <div style="font-size:24px;line-height:1;">${icon}</div>
+          <div style="flex:1;">
+            <div style="font-weight:600;margin-bottom:4px;">${notification.title}</div>
+            ${notification.message ? `<div style="font-size:13px;color:var(--sub);">${notification.message}</div>` : ''}
+            ${linkHTML}
+          </div>
+          <button onclick="dismissNotification(${notification.id}, this)" style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:20px;padding:0;width:24px;height:24px;line-height:1;">
+            ×
+          </button>
+        </div>
+      `;
+
+      container.appendChild(notifEl);
+
+      // Auto-dismiss after 10 seconds
+      setTimeout(() => {
+        notifEl.style.opacity = '0';
+        setTimeout(() => notifEl.remove(), 300);
+      }, 10000);
+    }
+
+    window.dismissNotification = function(notificationId, buttonEl) {
+      const notifEl = buttonEl.closest('.global-notification');
+      if (notifEl) {
+        notifEl.style.opacity = '0';
+        setTimeout(() => notifEl.remove(), 300);
+      }
+
+      // Mark as read on server
+      fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' })
+        .catch(err => console.error('Error marking notification as read:', err));
+    };
+
+    // Start checking for notifications
+    if (document.body.classList.contains('new-layout')) {
+      // Initial check after 2 seconds
+      setTimeout(checkNotifications, 2000);
+      // Then check every 10 seconds
+      setInterval(checkNotifications, CHECK_INTERVAL);
+    }
+  })();
+  </script>
+
+  <style>
+  .global-notification {
+    margin-bottom: 12px;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      transform: translateX(400px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  @media (max-width: 480px) {
+    #notificationContainer {
+      left: 10px;
+      right: 10px;
+      max-width: none;
+    }
+  }
+  </style>
+
 </body>
 </html>

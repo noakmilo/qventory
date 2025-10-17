@@ -393,13 +393,28 @@ function showFinalResult(job) {
 
     statusHTML += `
       <div style="margin-top:16px">
-        <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary">
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-primary" id="viewInventoryBtn">
           <i class="fas fa-th-large"></i> View Inventory
         </a>
+        <div style="font-size:12px;color:var(--sub);margin-top:8px">
+          Redirecting to Active Inventory in <span id="redirectCountdown">5</span> seconds...
+        </div>
       </div>
     `;
 
     importStatus.innerHTML = statusHTML;
+
+    // Auto-redirect after 5 seconds
+    let countdown = 5;
+    const countdownEl = document.getElementById('redirectCountdown');
+    const redirectInterval = setInterval(() => {
+      countdown--;
+      if (countdownEl) countdownEl.textContent = countdown;
+      if (countdown <= 0) {
+        clearInterval(redirectInterval);
+        window.location.href = '{{ url_for("main.dashboard") }}';
+      }
+    }, 1000);
   } else if (job.status === 'failed') {
     // Show error toast notification
     showToast('eBay import failed. Please try again.', 'error');

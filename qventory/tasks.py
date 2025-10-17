@@ -655,6 +655,19 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             job.skipped_count = inventory_result.get('skipped', 0) + sales_result.get('skipped', 0)
             db.session.commit()
 
+            # Create notification for user
+            from qventory.models.notification import Notification
+            total_items = job.imported_count + job.updated_count
+            Notification.create_notification(
+                user_id=user_id,
+                type='success',
+                title=f'eBay import completed successfully!',
+                message=f'Imported {job.imported_count} new items, updated {job.updated_count} existing items.',
+                link_url='/dashboard',
+                link_text='View Inventory',
+                source='import'
+            )
+
             log_task("\n🎉 === COMPLETE import finished successfully ===")
 
             return {
@@ -677,6 +690,18 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             job.completed_at = datetime.utcnow()
             job.error_message = str(e)
             db.session.commit()
+
+            # Create error notification
+            from qventory.models.notification import Notification
+            Notification.create_notification(
+                user_id=user_id,
+                type='error',
+                title='eBay import failed',
+                message=f'Error: {str(e)}',
+                link_url='/import/ebay',
+                link_text='Try Again',
+                source='import'
+            )
 
             raise
 
@@ -1083,6 +1108,19 @@ def auto_relist_offers(self):
                     history.publish_response = result.get('details', {}).get('publish')
                     history.mark_completed()
 
+                    # Create error notification
+                    from qventory.models.notification import Notification
+                    item_title = rule.item_title or 'Item'
+                    Notification.create_notification(
+                        user_id=rule.user_id,
+                        type='error',
+                        title=f'Auto-relist failed',
+                        message=f'{item_title[:50]}: {error_msg}',
+                        link_url='/auto-relist',
+                        link_text='View Details',
+                        source='relist'
+                    )
+
                     failed_count += 1
 
                 else:
@@ -1103,6 +1141,19 @@ def auto_relist_offers(self):
                     history.update_response = result.get('details', {}).get('update_offer') or result.get('details', {}).get('update_inventory')
                     history.publish_response = result.get('details', {}).get('publish')
                     history.mark_completed()
+
+                    # Create success notification
+                    from qventory.models.notification import Notification
+                    item_title = rule.item_title or 'Item'
+                    Notification.create_notification(
+                        user_id=rule.user_id,
+                        type='success',
+                        title=f'Auto-relist successful!',
+                        message=f'{item_title[:50]} was relisted with new listing ID {new_listing_id}',
+                        link_url='/auto-relist',
+                        link_text='View Auto-Relist Dashboard',
+                        source='relist'
+                    )
 
                     succeeded_count += 1
 

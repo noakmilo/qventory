@@ -3023,3 +3023,51 @@ CRITICAL RULES:
             "ok": False,
             "error": f"OpenAI API error: {str(e)}"
         }), 500
+
+
+# ==================== NOTIFICATIONS API ====================
+
+@main_bp.route("/api/notifications/unread")
+@login_required
+def get_unread_notifications():
+    """Get unread notifications for current user"""
+    from qventory.models.notification import Notification
+
+    notifications = Notification.get_recent(current_user.id, limit=10, include_read=False)
+    unread_count = Notification.get_unread_count(current_user.id)
+
+    return jsonify({
+        "ok": True,
+        "notifications": [n.to_dict() for n in notifications],
+        "unread_count": unread_count
+    })
+
+
+@main_bp.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
+@login_required
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    from qventory.models.notification import Notification
+
+    notification = Notification.query.filter_by(
+        id=notification_id,
+        user_id=current_user.id
+    ).first()
+
+    if not notification:
+        return jsonify({"ok": False, "error": "Notification not found"}), 404
+
+    notification.mark_as_read()
+
+    return jsonify({"ok": True})
+
+
+@main_bp.route("/api/notifications/mark-all-read", methods=["POST"])
+@login_required
+def mark_all_notifications_read():
+    """Mark all notifications as read for current user"""
+    from qventory.models.notification import Notification
+
+    Notification.mark_all_as_read(current_user.id)
+
+    return jsonify({"ok": True})
