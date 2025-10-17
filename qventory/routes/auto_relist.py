@@ -352,68 +352,40 @@ def search_items_api():
         if not query or len(query) < 2:
             return jsonify({'success': True, 'items': [], 'total': 0})
 
-        from ..helpers.ebay_inventory import fetch_ebay_inventory_offers
+        from ..models.item import Item
+        from sqlalchemy import or_
 
         log_relist_route(f"Searching items for query: '{query}' (limit: {limit})")
 
-        # Fetch offers from eBay (cache for 5 min to avoid excessive API calls)
-        result = fetch_ebay_inventory_offers(current_user.id, limit=200)
+        # Search in items table (same as Active Inventory search)
+        # Only items with ebay_listing_id (active on eBay)
+        search_pattern = f'%{query}%'
 
-        if not result.get('success'):
-            error_msg = result.get('error', 'Failed to fetch items from eBay')
-            log_relist_route(f"Error fetching offers: {error_msg}")
-            return jsonify({
-                'success': False,
-                'error': error_msg
-            }), 500
+        items_query = Item.query.filter(
+            Item.user_id == current_user.id,
+            Item.is_active == True,
+            Item.ebay_listing_id.isnot(None),  # Must have eBay listing
+            or_(
+                Item.title.ilike(search_pattern),
+                Item.sku.ilike(search_pattern)
+            )
+        ).limit(limit).all()
 
-        all_offers = result.get('offers', [])
-        log_relist_route(f"Fetched {len(all_offers)} total offers from eBay")
+        log_relist_route(f"Found {len(items_query)} items in database matching '{query}'")
 
-        # Filter by search query (case-insensitive, fuzzy match)
-        query_lower = query.lower()
+        # Format results for autocomplete
         filtered_items = []
-
-        for offer in all_offers:
-            title = (offer.get('title') or '').lower()
-            sku = (offer.get('ebay_sku') or '').lower()
-            listing_id = str(offer.get('ebay_listing_id') or '')
-
-            # Match if query appears in title, SKU, or listing ID
-            if query_lower in title or query_lower in sku or query in listing_id:
-                # Extract relevant data for autocomplete preview
-                item_data = {
-                    'offer_id': offer.get('ebay_offer_id') or offer.get('ebay_listing_id'),
-                    'listing_id': offer.get('ebay_listing_id'),
-                    'title': offer.get('title'),
-                    'sku': offer.get('ebay_sku') or '',
-                    'price': offer.get('item_price'),
-                    'quantity': offer.get('item_quantity', 0),
-                    'image_url': None
-                }
-
-                # Try to get image from raw_offer
-                raw_offer = offer.get('raw_offer', {})
-                if raw_offer:
-                    # Try product images first
-                    product = raw_offer.get('product', {})
-                    image_urls = product.get('imageUrls', [])
-                    if image_urls:
-                        item_data['image_url'] = image_urls[0]
-                    else:
-                        # Try listing images
-                        listing = raw_offer.get('listing', {})
-                        picture_urls = listing.get('pictureUrls', [])
-                        if picture_urls:
-                            item_data['image_url'] = picture_urls[0]
-
-                filtered_items.append(item_data)
-
-                # Stop if we reached limit
-                if len(filtered_items) >= limit:
-                    break
-
-        log_relist_route(f"Found {len(filtered_items)} items matching '{query}'")
+        for item in items_query:
+            item_data = {
+                'offer_id': item.ebay_listing_id,  # Use listing_id as offer_id
+                'listing_id': item.ebay_listing_id,
+                'title': item.title,
+                'sku': item.sku or '',
+                'price': item.item_price,
+                'quantity': item.quantity or 0,
+                'image_url': item.item_thumb  # Cloudinary URL
+            }
+            filtered_items.append(item_data)
 
         return jsonify({
             'success': True,
