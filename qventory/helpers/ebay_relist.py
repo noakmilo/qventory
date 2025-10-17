@@ -1053,9 +1053,17 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
     result['details']['end_item'] = end_result
 
     if not end_result['success']:
-        log_relist(f"  ✗ EndItem failed: {end_result.get('error')}")
-        result['error'] = f"EndItem failed: {end_result.get('error')}"
-        return result
+        error_msg = end_result.get('error', '').lower()
+
+        # Idempotency: If item is already closed (from previous attempt), continue
+        if 'already been closed' in error_msg or 'already closed' in error_msg:
+            log_relist(f"  ⚠ Item already closed (likely from previous attempt), continuing to relist...")
+            # Don't return - continue to relist step
+        else:
+            # Real error, abort
+            log_relist(f"  ✗ EndItem failed: {end_result.get('error')}")
+            result['error'] = f"EndItem failed: {end_result.get('error')}"
+            return result
 
     # Wait between end and relist
     delay = rule.withdraw_publish_delay_seconds or 30

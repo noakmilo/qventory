@@ -986,15 +986,8 @@ def auto_relist_offers(self):
         from qventory.helpers.ebay_relist import execute_relist
         from datetime import datetime
 
-        log_task("=== Starting auto-relist task ===")
-        log_task(f"Task ID: {self.request.id}")
-        log_task(f"Current time: {datetime.utcnow()}")
-
-        # Find rules that are due to run
+        # Minimal logging to save server resources
         now = datetime.utcnow()
-
-        # Query both auto rules (by schedule) and manual rules (by trigger flag)
-        log_task("Querying database for eligible rules...")
 
         auto_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
@@ -1002,23 +995,15 @@ def auto_relist_offers(self):
             AutoRelistRule.next_run_at <= now
         ).all()
 
-        log_task(f"Auto rules query returned {len(auto_rules)} results")
-
         manual_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
             AutoRelistRule.mode == 'manual',
             AutoRelistRule.manual_trigger_requested == True
         ).all()
 
-        log_task(f"Manual rules query returned {len(manual_rules)} results")
-
         all_rules = auto_rules + manual_rules
 
-        log_task(f"Found {len(auto_rules)} auto rules and {len(manual_rules)} manual rules ready to execute")
-        log_task(f"Total rules to process: {len(all_rules)}")
-
         if not all_rules:
-            log_task("No rules to process")
             return {
                 'success': True,
                 'processed': 0,
@@ -1035,17 +1020,10 @@ def auto_relist_offers(self):
         for rule in all_rules:
             history = None  # Initialize history outside try block
             try:
-                log_task(f"\n{'='*60}")
-                log_task(f"--- Processing rule {rule.id} ({rule.mode} mode) ---")
-                log_task(f"User: {rule.user_id}, Offer: {rule.offer_id}")
-                log_task(f"Item: {rule.item_title or rule.sku}")
-                log_task(f"Enabled: {rule.enabled}")
-                log_task(f"Manual trigger requested: {rule.manual_trigger_requested}")
-                log_task(f"Pending changes type: {type(rule.pending_changes)}")
-                log_task(f"Pending changes value: {rule.pending_changes}")
+                # Minimal logging for normal operations
+                log_task(f"Processing rule {rule.id} ({rule.mode})")
 
                 # Create history record
-                log_task(f"Creating history record...")
                 history = AutoRelistHistory(
                     rule_id=rule.id,
                     user_id=rule.user_id,
@@ -1055,11 +1033,10 @@ def auto_relist_offers(self):
                 )
                 db.session.add(history)
                 db.session.commit()
-                log_task(f"History record created: ID={history.id}")
+
                 # Capture old price if available
                 if rule.current_price:
                     history.old_price = rule.current_price
-                    log_task(f"Old price captured: ${rule.current_price}")
 
                 # Execute relist (with or without changes)
                 # Check if manual mode has changes to apply
@@ -1068,21 +1045,14 @@ def auto_relist_offers(self):
                               len(rule.pending_changes) > 0)
                 apply_changes = rule.mode == 'manual' and has_changes
 
-                log_task(f"Has pending changes: {has_changes}")
-                log_task(f"Apply changes: {apply_changes}")
-
                 if apply_changes:
-                    log_task(f"Applying changes: {list(rule.pending_changes.keys())}")
                     history.changes_applied = rule.pending_changes.copy()
-
                     # Capture new price if changed
                     if 'price' in rule.pending_changes:
                         history.new_price = rule.pending_changes['price']
-                        log_task(f"New price will be: ${history.new_price}")
 
-                log_task("Calling execute_relist()...")
+                # Execute relist
                 result = execute_relist(rule.user_id, rule, apply_changes=apply_changes)
-                log_task(f"execute_relist() returned: success={result.get('success')}, keys={list(result.keys())}")
 
                 # Check result
                 if 'skip_reason' in result:
@@ -1158,8 +1128,9 @@ def auto_relist_offers(self):
                 failed_count += 1
                 processed_count += 1
 
-        log_task(f"\n=== Auto-relist task completed ===")
-        log_task(f"Processed: {processed_count}, Succeeded: {succeeded_count}, Failed: {failed_count}, Skipped: {skipped_count}")
+        # Log only if there were failures
+        if failed_count > 0:
+            log_task(f"Auto-relist: {succeeded_count} succeeded, {failed_count} failed, {skipped_count} skipped")
 
         return {
             'success': True,
