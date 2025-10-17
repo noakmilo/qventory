@@ -59,7 +59,7 @@
     </div>
 
     <!-- Select Offer -->
-    <div class="card" style="margin-bottom:24px;overflow:visible;">
+    <div class="card" style="margin-bottom:24px;overflow:visible;position:relative;z-index:200;">
       <div style="padding:20px;border-bottom:1px solid var(--border);">
         <h2 style="color:var(--text);font-size:18px;">2. Select eBay Offer</h2>
       </div>
@@ -123,7 +123,7 @@
     </div>
 
     <!-- AUTO Mode Settings -->
-    <div class="card auto-settings" style="margin-bottom:24px;display:none;">
+    <div class="card auto-settings" style="margin-bottom:24px;display:none;position:relative;z-index:1;">
       <div style="padding:20px;border-bottom:1px solid var(--border);">
         <h2 style="color:var(--text);font-size:18px;">3. Configure Schedule</h2>
       </div>
@@ -222,7 +222,7 @@
     </div>
 
     <!-- Common Settings -->
-    <div class="card" style="margin-bottom:24px;">
+    <div class="card" style="margin-bottom:24px;position:relative;z-index:1;">
       <div style="padding:20px;border-bottom:1px solid var(--border);">
         <h2 style="color:var(--text);font-size:18px;">4. Additional Options</h2>
       </div>
@@ -343,11 +343,6 @@ select.form-control {
 
 textarea.form-control {
   resize:vertical;
-}
-
-/* Fix card overflow for autocomplete */
-.card {
-  overflow:visible !important;
 }
 
 /* Autocomplete Wrapper */
