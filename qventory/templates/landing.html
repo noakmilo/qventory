@@ -6,20 +6,20 @@
 {% set canonical = request.url_root.rstrip('/') %}
 <link rel="canonical" href="{{ canonical }}/">
 
-<meta name="description" content="Qventory: Smart inventory for resellers with QR scanning, AI pricing, profit calculator, CSV import/export, eBay integration, Cloudinary image hosting, and multi-marketplace tracking. Mobile-first, dark mode, privacy-focused.">
-<meta name="keywords" content="inventory management, reseller tools, qr scanner, profit calculator, ai pricing, ebay import, csv import, warehouse locations, marketplace tracking, depop, poshmark, mercari, vinted">
+<meta name="description" content="Qventory: eBay seller tool with automatic sync, auto-relist, sales analytics, fulfillment tracking, AI pricing, profit calculator, and multi-marketplace inventory management. Mobile-first, real-time updates.">
+<meta name="keywords" content="ebay seller tool, ebay auto relist, ebay sync, sales analytics, fulfillment tracking, inventory management, reseller tools, profit calculator, ai pricing, marketplace tracking, ebay integration">
 
 {# ===== Open Graph ===== #}
-<meta property="og:title" content="Qventory — Smart Inventory Management for Resellers">
-<meta property="og:description" content="QR scanning • AI market research • Profit calculator • CSV import • Multi-marketplace tracking">
+<meta property="og:title" content="Qventory — eBay Seller Tool with Auto-Relist & Sales Analytics">
+<meta property="og:description" content="eBay Sync • Auto-Relist • Sales Analytics • Fulfillment Tracking • AI Pricing • Profit Calculator">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== Twitter Card ===== #}
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Qventory — Smart Inventory for Resellers">
-<meta name="twitter:description" content="QR scanning • AI pricing • Profit calculator • CSV import • Multi-marketplace">
+<meta name="twitter:title" content="Qventory — eBay Auto-Relist & Sales Analytics">
+<meta name="twitter:description" content="eBay Sync • Auto-Relist • Sales Analytics • Fulfillment • AI Pricing • Profit Calculator">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== JSON-LD: SoftwareApplication ===== #}
@@ -30,17 +30,18 @@
   "name": "Qventory",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "Smart inventory management for resellers with QR scanning, AI market research, profit calculator, CSV import/export, image hosting, and multi-marketplace tracking.",
-  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  "description": "eBay seller tool with automatic inventory sync, auto-relist scheduling, sales analytics, fulfillment tracking, AI market research, profit calculator, and multi-marketplace inventory management for resellers.",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "featureList": "eBay OAuth Integration, Auto-Relist Scheduling, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Multi-Marketplace Support, Mobile PWA"
 }
 </script>
 
 {# ===== HERO ===== #}
 <section class="card" style="margin:20px; padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent);">
-  <h1 style="font-size:34px; margin:0 0 10px;">Smart Inventory. <span style="color:var(--accent)">More Sales.</span></h1>
+  <h1 style="font-size:34px; margin:0 0 10px;">eBay Selling. <span style="color:var(--accent)">Automated.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
-    Track inventory with <strong>QR labels</strong>, get <strong>AI pricing insights</strong>, calculate profits instantly,
-    and import from <strong>eBay or CSV</strong>. Built for resellers who want to scale smart.
+    Sync your <strong>eBay inventory</strong>, auto-relist for visibility, track <strong>sales & fulfillment</strong> in real-time,
+    and optimize pricing with <strong>AI research</strong>. Built for eBay sellers who want to scale smart.
   </p>
 
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
@@ -49,13 +50,14 @@
   </div>
 
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; color:var(--sub); font-size:13px;">
+    <span class="tag">eBay Sync</span>
+    <span class="tag">Auto-Relist</span>
     <span class="tag">AI Market Research</span>
+    <span class="tag">Sales Analytics</span>
     <span class="tag">Profit Calculator</span>
     <span class="tag">QR Scanner</span>
     <span class="tag">CSV Import/Export</span>
-    <span class="tag">Image Hosting</span>
-    <span class="tag">eBay Integration</span>
-    <span class="tag">Multi-Marketplace</span>
+    <span class="tag">Fulfillment Tracking</span>
     <span class="tag">Mobile PWA</span>
   </div>
 </section>
@@ -65,30 +67,31 @@
   <div class="card" style="margin:20px; flex:1 1 320px;">
     <h2>🎯 Why Qventory</h2>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
-      <li><strong>Price smarter:</strong> AI-powered eBay market research gives you data-driven pricing</li>
-      <li><strong>Know your margins:</strong> Built-in profit calculator for eBay & Depop</li>
-      <li><strong>Import anywhere:</strong> CSV uploads from Flipwise, eBay, or any platform</li>
-      <li><strong>Track everything:</strong> Multi-marketplace links + flexible A/B/S/C locations</li>
-      <li><strong>Ship faster:</strong> QR scanning + item photos for quick picking</li>
+      <li><strong>eBay Sync:</strong> Import inventory, sales & analytics from eBay automatically</li>
+      <li><strong>Auto-Relist:</strong> Schedule automatic or manual relisting to boost visibility</li>
+      <li><strong>Track sales:</strong> Real-time sales analytics with profit margins & fees</li>
+      <li><strong>Fulfillment:</strong> Track shipping, delivery & order status in one place</li>
+      <li><strong>Price smarter:</strong> AI-powered market research for competitive pricing</li>
     </ul>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
     <h2>⚡ How it Works</h2>
     <ol style="margin:0; padding-left:18px; line-height:1.6;">
-      <li><strong>Import:</strong> Upload CSV or paste eBay URLs to auto-fill items</li>
-      <li><strong>Organize:</strong> Set locations, upload photos, add marketplace links</li>
-      <li><strong>Analyze:</strong> Get AI pricing insights & calculate profit margins</li>
-      <li><strong>Ship:</strong> Scan QR codes to find items instantly</li>
+      <li><strong>Connect eBay:</strong> Sync your active listings, sales & order data</li>
+      <li><strong>Automate:</strong> Set up auto-relist rules to refresh listings automatically</li>
+      <li><strong>Track:</strong> Monitor sales, fulfillment & profit in real-time</li>
+      <li><strong>Optimize:</strong> Use AI research to price competitively & maximize profit</li>
     </ol>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
     <h2>📈 Built for Scale</h2>
     <p style="margin:0 0 8px;">From bedroom to warehouse:</p>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
-      <li>Batch import hundreds of items via CSV</li>
-      <li>AI analyzes market trends for competitive pricing</li>
-      <li>Fast filters by location, supplier, platform</li>
-      <li>Export data anytime (CSV)</li>
+      <li>Sync unlimited eBay listings automatically</li>
+      <li>Auto-relist to refresh visibility & boost sales</li>
+      <li>Track sales across multiple marketplaces</li>
+      <li>Monitor fulfillment & shipping in one dashboard</li>
+      <li>Export all data anytime (CSV)</li>
     </ul>
   </div>
 </section>
@@ -97,6 +100,26 @@
 <section class="card" style="margin:20px;">
   <h2 style="margin-top:0;">🚀 Powerful Features</h2>
   <div class="grid cols-3">
+    <div>
+      <h3 style="margin:0 0 6px;">🔄 eBay Sync</h3>
+      <p class="tag">Full OAuth integration</p>
+      <p>Connect your eBay account to automatically import active listings, sales data, orders, and analytics. Updates in real-time.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">🔁 Auto-Relist</h3>
+      <p class="tag">Boost visibility</p>
+      <p>Schedule automatic relisting every N days or manually relist with price/title changes. Safety rules prevent relisting during active orders.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">📊 Sales Analytics</h3>
+      <p class="tag">Real-time tracking</p>
+      <p>Track all sales with marketplace fees, shipping costs, and calculated profit margins. Filter by date, marketplace, or status.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">📦 Fulfillment Tracking</h3>
+      <p class="tag">Ship & deliver</p>
+      <p>Monitor orders from payment to delivery. Track shipping carriers, tracking numbers, and delivery status in one dashboard.</p>
+    </div>
     <div>
       <h3 style="margin:0 0 6px;">🤖 AI Market Research</h3>
       <p class="tag">Powered by OpenAI</p>
@@ -113,29 +136,9 @@
       <p>Import from Flipwise, eBay, or any platform. Auto-detects format, generates SKUs, and skips duplicates. Export anytime.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">📷 Image Hosting</h3>
-      <p class="tag">Cloudinary integration</p>
-      <p>Upload product photos with drag & drop. Auto-optimized thumbnails for fast mobile browsing. Secure cloud storage.</p>
-    </div>
-    <div>
       <h3 style="margin:0 0 6px;">🏷️ QR Scanner</h3>
       <p class="tag">In-browser + flashlight</p>
       <p>Scan locations with your phone camera. Works in Add/Edit forms. Flashlight & camera flip support for any lighting.</p>
-    </div>
-    <div>
-      <h3 style="margin:0 0 6px;">🔗 eBay Integration</h3>
-      <p class="tag">Auto-fill titles</p>
-      <p>Paste any eBay listing URL and we'll fetch the title automatically. Save time, avoid typos.</p>
-    </div>
-    <div>
-      <h3 style="margin:0 0 6px;">📍 Flexible Locations</h3>
-      <p class="tag">A/B/S/C hierarchy</p>
-      <p>Customize Aisle/Bay/Shelf/Container to fit your space. Enable only what you need. Generate QR labels at 40×30 mm.</p>
-    </div>
-    <div>
-      <h3 style="margin:0 0 6px;">🛒 Multi-Marketplace</h3>
-      <p class="tag">7 platforms supported</p>
-      <p>Track listings on eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your own website. One-click access to all.</p>
     </div>
     <div>
       <h3 style="margin:0 0 6px;">📱 Mobile PWA</h3>
@@ -164,27 +167,52 @@
   </p>
 </section>
 
-{# ===== CSV IMPORT CARD ===== #}
+{# ===== EBAY AUTO-RELIST CARD ===== #}
+<section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(139,92,246,0.05), rgba(236,72,153,0.05));">
+  <h2 style="margin-top:0;">🔁 eBay Auto-Relist Magic</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Boost your listing visibility automatically:</p>
+  <div class="grid cols-2" style="gap:12px;">
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#a78bfa">🤖 Automatic Mode</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Schedule relisting every N days. Set quiet hours, safety rules, and let it run on autopilot.</p>
+    </div>
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#ec4899">✋ Manual Mode</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">One-click relist with optional price/title changes. Perfect for testing new pricing strategies.</p>
+    </div>
+  </div>
+  <p style="margin-top:12px;font-size:13px;color:var(--sub)">
+    🛡️ <strong>Safety first:</strong> Auto-skip if recent orders, active returns, or zero quantity. Never interrupt active sales.
+  </p>
+</section>
+
+{# ===== EBAY SYNC CARD ===== #}
 <section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(251,191,36,0.05), rgba(239,68,68,0.05));">
-  <h2 style="margin-top:0;">📥 Smart CSV Import</h2>
-  <p style="color:var(--sub); margin-bottom:12px;">Migrate from any platform in seconds:</p>
+  <h2 style="margin-top:0;">🔄 Full eBay Sync Integration</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Connect once, sync everything:</p>
   <div style="display:flex;flex-direction:column;gap:10px;">
     <div style="display:flex;align-items:start;gap:10px;">
       <span style="color:#fbbf24;font-size:20px;">✓</span>
       <div>
-        <strong>Auto-detection:</strong> Recognizes Qventory, Flipwise, and custom formats
+        <strong>Active Inventory:</strong> Import all active listings with images, prices, SKUs, and quantities
       </div>
     </div>
     <div style="display:flex;align-items:start;gap:10px;">
       <span style="color:#fbbf24;font-size:20px;">✓</span>
       <div>
-        <strong>Smart mapping:</strong> Auto-generates SKUs, detects duplicates, preserves data
+        <strong>Sales & Orders:</strong> Automatically sync sold items with buyer info, fees, and profit calculations
       </div>
     </div>
     <div style="display:flex;align-items:start;gap:10px;">
       <span style="color:#fbbf24;font-size:20px;">✓</span>
       <div>
-        <strong>Flexible modes:</strong> Add new items or replace entire inventory
+        <strong>Fulfillment:</strong> Track shipping, tracking numbers, carriers, and delivery status
+      </div>
+    </div>
+    <div style="display:flex;align-items:start;gap:10px;">
+      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <div>
+        <strong>Analytics:</strong> View sales trends, profit margins, and performance metrics in real-time
       </div>
     </div>
   </div>
@@ -192,13 +220,13 @@
 
 {# ===== CTA ===== #}
 <section class="card" style="margin:20px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">
-  <h2>Ready to Scale Your Reselling Business?</h2>
+  <h2>Ready to Automate Your eBay Business?</h2>
   <p style="color:var(--sub); max-width:720px; margin:8px auto 16px;">
-    Join resellers using Qventory to track inventory, optimize pricing, and ship faster.
+    Join eBay sellers using Qventory to sync inventory, auto-relist listings, track sales & fulfillment, and maximize profits.
     Free forever. No credit card required.
   </p>
   <a class="btn submitbtn" href="{{ url_for('auth.register') }}" style="font-size:16px;padding:12px 24px;">
-    Create Free Account →
+    Connect Your eBay Account Free →
   </a>
 </section>
 
@@ -207,28 +235,36 @@
   <h2>❓ Frequently Asked Questions</h2>
   <div class="grid cols-2">
     <div>
+      <h3>How does eBay sync work?</h3>
+      <p>Connect your eBay account via OAuth (secure, no password sharing). Qventory imports your active listings, sales, and order data automatically. Updates sync in real-time.</p>
+    </div>
+    <div>
+      <h3>What is auto-relist and how does it help?</h3>
+      <p>Auto-relist refreshes your eBay listings to boost visibility. Schedule automatic relisting every N days, or manually relist with price/title changes. Includes safety rules to skip active orders.</p>
+    </div>
+    <div>
+      <h3>Does it track sales and profit?</h3>
+      <p>Yes! All sales are tracked with marketplace fees, shipping costs, and calculated net profit. Filter by date, marketplace, or status. Export sales data anytime.</p>
+    </div>
+    <div>
+      <h3>Can I track fulfillment and shipping?</h3>
+      <p>Absolutely. Monitor all orders from payment to delivery. Track shipping carriers, tracking numbers, and delivery status in one unified dashboard.</p>
+    </div>
+    <div>
       <h3>Is AI pricing accurate?</h3>
       <p>Our AI analyzes eBay market trends to provide data-driven estimates. Always verify with the "Search sold listings" link provided in reports.</p>
-    </div>
-    <div>
-      <h3>Can I import from other platforms?</h3>
-      <p>Yes! Upload CSV files from Flipwise, eBay exports, or any custom format. Qventory auto-detects and maps fields intelligently.</p>
-    </div>
-    <div>
-      <h3>How does image hosting work?</h3>
-      <p>Drag & drop photos directly in the item form. Images are uploaded to Cloudinary with automatic optimization and secure CDN delivery.</p>
-    </div>
-    <div>
-      <h3>Which marketplaces are supported?</h3>
-      <p>Track links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your website. Profit calculator supports eBay & Depop fees.</p>
     </div>
     <div>
       <h3>Does it work on mobile?</h3>
       <p>Yes! Install as a PWA (Progressive Web App) on iOS or Android. Full QR scanning, dark mode, and optimized for phones.</p>
     </div>
     <div>
+      <h3>Which marketplaces are supported?</h3>
+      <p>eBay full integration (sync, sales, fulfillment). Track links for Amazon, Mercari, Vinted, Poshmark, Depop. Profit calculator supports eBay & Depop fees.</p>
+    </div>
+    <div>
       <h3>Is my data private?</h3>
-      <p>Absolutely. Your inventory is yours. We don't sell data. Images are securely hosted on Cloudinary. Export anytime via CSV.</p>
+      <p>Absolutely. Your inventory is yours. We don't sell data. eBay connection uses secure OAuth. Export all data anytime via CSV.</p>
     </div>
   </div>
 </section>
@@ -241,23 +277,28 @@
   "mainEntity": [
     {
       "@type": "Question",
+      "name": "How does eBay sync work?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Connect your eBay account via OAuth (secure, no password sharing). Qventory imports your active listings, sales, and order data automatically. Updates sync in real-time." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is auto-relist and how does it help?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Auto-relist refreshes your eBay listings to boost visibility. Schedule automatic relisting every N days, or manually relist with price/title changes. Includes safety rules to skip active orders." }
+    },
+    {
+      "@type": "Question",
+      "name": "Does it track sales and profit?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes! All sales are tracked with marketplace fees, shipping costs, and calculated net profit. Filter by date, marketplace, or status. Export sales data anytime." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can I track fulfillment and shipping?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Absolutely. Monitor all orders from payment to delivery. Track shipping carriers, tracking numbers, and delivery status in one unified dashboard." }
+    },
+    {
+      "@type": "Question",
       "name": "Is AI pricing accurate?",
       "acceptedAnswer": { "@type": "Answer", "text": "Our AI analyzes eBay market trends to provide data-driven estimates. Always verify with the 'Search sold listings' link provided in reports." }
-    },
-    {
-      "@type": "Question",
-      "name": "Can I import from other platforms?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Yes! Upload CSV files from Flipwise, eBay exports, or any custom format. Qventory auto-detects and maps fields intelligently." }
-    },
-    {
-      "@type": "Question",
-      "name": "How does image hosting work?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Drag and drop photos directly in the item form. Images are uploaded to Cloudinary with automatic optimization and secure CDN delivery." }
-    },
-    {
-      "@type": "Question",
-      "name": "Which marketplaces are supported?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Track links for eBay, Amazon, Mercari, Vinted, Poshmark, Depop, and your website. Profit calculator supports eBay and Depop fees." }
     },
     {
       "@type": "Question",
@@ -266,8 +307,13 @@
     },
     {
       "@type": "Question",
+      "name": "Which marketplaces are supported?",
+      "acceptedAnswer": { "@type": "Answer", "text": "eBay full integration (sync, sales, fulfillment). Track links for Amazon, Mercari, Vinted, Poshmark, Depop. Profit calculator supports eBay and Depop fees." }
+    },
+    {
+      "@type": "Question",
       "name": "Is my data private?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Absolutely. Your inventory is yours. We don't sell data. Images are securely hosted on Cloudinary. Export anytime via CSV." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Absolutely. Your inventory is yours. We don't sell data. eBay connection uses secure OAuth. Export all data anytime via CSV." }
     }
   ]
 }
