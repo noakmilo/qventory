@@ -1033,30 +1033,29 @@ def auto_relist_offers(self):
         skipped_count = 0
 
         for rule in all_rules:
-            log_task(f"\n{'='*60}")
-            log_task(f"--- Processing rule {rule.id} ({rule.mode} mode) ---")
-            log_task(f"User: {rule.user_id}, Offer: {rule.offer_id}")
-            log_task(f"Item: {rule.item_title or rule.sku}")
-            log_task(f"Enabled: {rule.enabled}")
-            log_task(f"Manual trigger requested: {rule.manual_trigger_requested}")
-            log_task(f"Has pending changes: {rule.has_pending_changes if hasattr(rule, 'has_pending_changes') else 'N/A'}")
-            if rule.pending_changes:
-                log_task(f"Pending changes: {rule.pending_changes}")
-
-            # Create history record
-            log_task(f"Creating history record...")
-            history = AutoRelistHistory(
-                rule_id=rule.id,
-                user_id=rule.user_id,
-                mode=rule.mode,
-                started_at=datetime.utcnow(),
-                status='pending'
-            )
-            db.session.add(history)
-            db.session.commit()
-            log_task(f"History record created: ID={history.id}")
-
+            history = None  # Initialize history outside try block
             try:
+                log_task(f"\n{'='*60}")
+                log_task(f"--- Processing rule {rule.id} ({rule.mode} mode) ---")
+                log_task(f"User: {rule.user_id}, Offer: {rule.offer_id}")
+                log_task(f"Item: {rule.item_title or rule.sku}")
+                log_task(f"Enabled: {rule.enabled}")
+                log_task(f"Manual trigger requested: {rule.manual_trigger_requested}")
+                log_task(f"Pending changes type: {type(rule.pending_changes)}")
+                log_task(f"Pending changes value: {rule.pending_changes}")
+
+                # Create history record
+                log_task(f"Creating history record...")
+                history = AutoRelistHistory(
+                    rule_id=rule.id,
+                    user_id=rule.user_id,
+                    mode=rule.mode,
+                    started_at=datetime.utcnow(),
+                    status='pending'
+                )
+                db.session.add(history)
+                db.session.commit()
+                log_task(f"History record created: ID={history.id}")
                 # Capture old price if available
                 if rule.current_price:
                     history.old_price = rule.current_price
@@ -1148,9 +1147,11 @@ def auto_relist_offers(self):
 
                 rule.mark_error(f"Exception: {str(e)}")
 
-                history.status = 'error'
-                history.error_message = str(e)
-                history.mark_completed()
+                # Only update history if it was created
+                if history:
+                    history.status = 'error'
+                    history.error_message = str(e)
+                    history.mark_completed()
 
                 db.session.commit()
 
