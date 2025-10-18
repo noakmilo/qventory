@@ -796,6 +796,52 @@ def debug_shippo_tracking():
     })
 
 
+@main_bp.route("/fulfillment/debug-ebay-connection", methods=["GET"])
+@login_required
+def debug_ebay_connection():
+    """Debug: Test eBay connection and show order info"""
+    from ..helpers.ebay_inventory import fetch_ebay_orders, get_user_access_token
+
+    # Check if user has eBay token
+    token = get_user_access_token(current_user.id)
+
+    if not token:
+        return jsonify({
+            'success': False,
+            'error': 'No eBay access token found. Please connect your eBay account in Settings.',
+            'has_token': False
+        })
+
+    # Try to fetch orders
+    result = fetch_ebay_orders(current_user.id, filter_status=None, limit=5)
+
+    if result['success']:
+        orders = result['orders']
+        order_summary = []
+        for order in orders[:5]:
+            order_summary.append({
+                'order_id': order.get('orderId'),
+                'status': order.get('orderFulfillmentStatus'),
+                'creation_date': order.get('creationDate'),
+                'line_items_count': len(order.get('lineItems', []))
+            })
+
+        return jsonify({
+            'success': True,
+            'has_token': True,
+            'total_orders': len(orders),
+            'orders_sample': order_summary,
+            'message': f'Connected! Found {len(orders)} orders'
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'has_token': True,
+            'error': result.get('error', 'Unknown error'),
+            'message': 'eBay API returned an error'
+        })
+
+
 @main_bp.route("/fulfillment/debug-order", methods=["GET"])
 @login_required
 def debug_ebay_order():
