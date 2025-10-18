@@ -275,10 +275,14 @@
               const createdAt = new Date(notification.created_at).getTime();
               if (createdAt > lastCheckTime) {
                 showNotification(notification);
+                // Mark as read immediately to prevent showing again
+                fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
+                  .catch(err => console.error('Error marking notification as read:', err));
               }
             });
-            lastCheckTime = Date.now();
           }
+          // Update lastCheckTime regardless of whether there were notifications
+          lastCheckTime = Date.now();
         })
         .catch(err => console.error('Error checking notifications:', err));
     }
@@ -374,9 +378,19 @@
 
   @media (max-width: 480px) {
     #notificationContainer {
+      top: 60px; /* Extra margin to avoid notch on mobile */
       left: 10px;
       right: 10px;
       max-width: none;
+    }
+  }
+
+  /* Extra spacing for devices with notch (iPhone X and newer) */
+  @supports (padding: max(0px)) {
+    @media (max-width: 480px) {
+      #notificationContainer {
+        top: max(60px, env(safe-area-inset-top) + 20px);
+      }
     }
   }
   </style>

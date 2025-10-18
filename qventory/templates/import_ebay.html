@@ -311,35 +311,6 @@ function updateProgressDisplay(job) {
   `;
 }
 
-function showToast(message, type = 'success') {
-  const toast = document.createElement('div');
-  toast.className = 'import-toast';
-  const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-  const iconColor = type === 'success' ? '#34d399' : '#ef4444';
-
-  toast.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;">
-      <i class="fas ${icon}" style="color:${iconColor};font-size:24px;"></i>
-      <div style="flex:1;">
-        <div style="font-weight:600;margin-bottom:4px;">${message}</div>
-        <a href="{{ url_for('main.dashboard') }}" style="font-size:12px;color:#60a5fa;text-decoration:none;">
-          View Inventory <i class="fas fa-arrow-right"></i>
-        </a>
-      </div>
-      <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:var(--sub);cursor:pointer;font-size:20px;padding:0;width:24px;height:24px;">
-        ×
-      </button>
-    </div>
-  `;
-  document.body.appendChild(toast);
-
-  // Auto-remove after 10 seconds
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 10000);
-}
-
 function showFinalResult(job) {
   const importStatus = document.getElementById('importStatus');
 
@@ -347,13 +318,8 @@ function showFinalResult(job) {
     // Check if plan limit was reached
     const planLimitReached = job.error_message && job.error_message.includes('Plan limit reached');
 
-    // Show toast notification
-    const totalItems = (job.imported_count || 0) + (job.updated_count || 0);
-    if (planLimitReached) {
-      showToast(`Import stopped - Plan limit reached! ${job.imported_count} items imported.`, 'error');
-    } else {
-      showToast(`eBay import completed! ${totalItems} items processed.`, 'success');
-    }
+    // Note: Toast notifications are now handled by the global notification system
+    // via backend notifications created in tasks.py
 
     let statusHTML = `
       <div style="color:#10b981;font-weight:600;font-size:16px;margin-bottom:12px">✓ Import Completed Successfully!</div>
@@ -416,8 +382,8 @@ function showFinalResult(job) {
       }
     }, 1000);
   } else if (job.status === 'failed') {
-    // Show error toast notification
-    showToast('eBay import failed. Please try again.', 'error');
+    // Note: Error notifications are now handled by the global notification system
+    // via backend notifications created in tasks.py
 
     importStatus.innerHTML = `
       <div style="color:#ef4444;font-weight:600;font-size:16px;margin-bottom:12px">✗ Import Failed</div>
@@ -484,43 +450,5 @@ window.addEventListener('DOMContentLoaded', async () => {
   // For now, jobs can be checked manually by refreshing
 });
 </script>
-
-<style>
-.import-toast {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background: var(--card);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  z-index: 10000;
-  min-width: 320px;
-  max-width: 420px;
-  animation: slideIn 0.3s ease;
-  opacity: 1;
-  transition: opacity 0.3s ease;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@media (max-width: 480px) {
-  .import-toast {
-    left: 10px;
-    right: 10px;
-    min-width: auto;
-  }
-}
-</style>
 
 {% endblock %}
