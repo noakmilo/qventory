@@ -1003,16 +1003,16 @@ def sync_ebay_orders():
 
                 if existing_sale:
                     # Update existing sale with latest fulfillment data
-                    if sale_data.get('tracking_number'):
-                        existing_sale.tracking_number = sale_data['tracking_number']
-                    if sale_data.get('carrier'):
-                        existing_sale.carrier = sale_data['carrier']
-                    if sale_data.get('shipped_at'):
-                        existing_sale.shipped_at = sale_data['shipped_at']
+                    # Always update these fields from eBay, even if None
+                    existing_sale.tracking_number = sale_data.get('tracking_number') or existing_sale.tracking_number
+                    existing_sale.carrier = sale_data.get('carrier') or existing_sale.carrier
+                    existing_sale.shipped_at = sale_data.get('shipped_at') or existing_sale.shipped_at
+                    existing_sale.status = sale_data.get('status') or existing_sale.status
+
+                    # CRITICAL: Always update delivered_at from eBay if FULFILLED
                     if sale_data.get('delivered_at'):
                         existing_sale.delivered_at = sale_data['delivered_at']
-                    if sale_data.get('status'):
-                        existing_sale.status = sale_data['status']
+                        print(f"[FULFILLMENT_SYNC] Updated delivered_at for order {sale_data['marketplace_order_id']}: {sale_data['delivered_at']}", file=sys.stderr)
 
                     existing_sale.updated_at = datetime.utcnow()
                     orders_updated += 1
