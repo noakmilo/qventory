@@ -1012,12 +1012,13 @@ def sync_ebay_orders():
                     # CRITICAL: Always update delivered_at from eBay if FULFILLED
                     delivered_value = sale_data.get('delivered_at')
                     if delivered_value:
-                        print(f"[FULFILLMENT_SYNC] Before update - Order {sale_data['marketplace_order_id']}: delivered_at={existing_sale.delivered_at}, type={type(existing_sale.delivered_at)}", file=sys.stderr)
                         existing_sale.delivered_at = delivered_value
-                        print(f"[FULFILLMENT_SYNC] After update - Order {sale_data['marketplace_order_id']}: delivered_at={existing_sale.delivered_at}, type={type(existing_sale.delivered_at)}", file=sys.stderr)
-                        print(f"[FULFILLMENT_SYNC] SQLAlchemy dirty: {existing_sale in db.session.dirty}", file=sys.stderr)
+                        print(f"[FULFILLMENT_SYNC] Updated delivered_at for {sale_data['marketplace_order_id']}: {delivered_value}", file=sys.stderr)
 
                     existing_sale.updated_at = datetime.utcnow()
+
+                    # CRITICAL: Commit immediately after each update to avoid worker conflicts
+                    db.session.commit()
                     orders_updated += 1
                 else:
                     # Try to match with existing item by SKU
@@ -1053,16 +1054,9 @@ def sync_ebay_orders():
                 traceback.print_exc()
                 continue
 
-        # Flush changes to ensure they're pending
-        print(f"[FULFILLMENT_SYNC] Flushing {orders_updated} updates to database...", file=sys.stderr)
-        db.session.flush()
-
-        # Commit all changes
-        print(f"[FULFILLMENT_SYNC] Committing transaction...", file=sys.stderr)
-        db.session.commit()
-        print(f"[FULFILLMENT_SYNC] ✓ Transaction committed successfully", file=sys.stderr)
-
-        print(f"[FULFILLMENT_SYNC] Completed: {orders_created} created, {orders_updated} updated", file=sys.stderr)
+        # Note: Each order is committed immediately in the loop above
+        # This prevents worker conflicts with multiple gunicorn processes
+        print(f"[FULFILLMENT_SYNC] Completed: {orders_created} created, {orders_updated} updated (committed per-order)", file=sys.stderr)
 
         return jsonify({
             'success': True,
