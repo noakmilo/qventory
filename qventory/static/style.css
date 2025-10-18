@@ -387,9 +387,11 @@ i {color:#8ab4fd;}
 }
 
 /* ===== Tabla (98%) ===== */
-.inventory-shell{ width:100% }
+.inventory-shell{ width:100%; overflow:hidden; }
 .table-wrap{
-  width:98%; margin:0 auto;
+  width:100%;
+  max-width:100%;
+  margin:0 auto;
   overflow-x:auto; overflow-y:visible; -webkit-overflow-scrolling:touch;
   border-radius:var(--radius);
   border:1px solid var(--glass-border);
@@ -2167,7 +2169,9 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-width: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   transform: none;
   will-change: auto;
   background: var(--bg);
