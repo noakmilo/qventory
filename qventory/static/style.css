@@ -541,7 +541,7 @@ tbody tr:hover td{
   white-space:nowrap;
 }
 .tag i{
-  font-size:10px;
+  font-size:11px;
   opacity:0.8;
 }
 .itsku{
@@ -560,7 +560,7 @@ tbody tr:hover td{
   align-items:center;
 }
 .platform-badges .tag{
-  font-size:10px;
+  font-size:11px;
   padding:4px 8px;
   transition:all .15s ease;
 }
@@ -676,7 +676,7 @@ tbody tr:hover td{
     position:sticky;
     top:0;
     padding:10px 8px;
-    font-size:10px;
+    font-size:11px;
     font-weight:600;
     line-height:1.2;
     color:var(--sub);
@@ -719,7 +719,7 @@ tbody tr:hover td{
 
   td:nth-child(3){ /* SKU */
     font-family:ui-monospace,'SF Mono',Consolas,monospace;
-    font-size:10px;
+    font-size:11px;
     min-width:90px;
     padding-right:6px;
   }
@@ -792,7 +792,7 @@ tbody tr:hover td{
   /* Tags móvil - más compactos */
   .tag{
     padding:4px 7px;
-    font-size:10px;
+    font-size:11px;
     border-radius:6px;
   }
 
@@ -834,7 +834,7 @@ tbody tr:hover td{
   /* Headers tablet */
   th{
     padding:11px 12px;
-    font-size:10px;
+    font-size:11px;
   }
 
   /* Celdas tablet */
