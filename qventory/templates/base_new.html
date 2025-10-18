@@ -175,6 +175,30 @@
     <div class="content-wrapper">
       {% block content %}{% endblock %}
     </div>
+
+    <footer class="footer">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="{{ url_for('static', filename='icons/icon-32.png') }}" alt="Qventory" class="footer-logo">
+          <span class="footer-tagline">Inventory power for hustlers.</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://discord.gg/KWGCZDGWMN" target="_blank" rel="noopener" title="Join our Discord">
+            <i class="fab fa-discord"></i>
+          </a>
+          <a href="mailto:support@qventory.com" title="Contact">
+            <i class="fas fa-envelope"></i>
+          </a>
+        </div>
+        <div class="footer-meta">
+          <span>Built with love by @noakmilo</span>
+          <span class="footer-divider">•</span>
+          <a href="{{ url_for('main.privacy_policy') }}" style="color:var(--sub);text-decoration:none;">Privacy Policy</a>
+          <span class="footer-divider">•</span>
+          <span>No tracking, no fuss</span>
+        </div>
+      </div>
+    </footer>
   </main>
 
   <!-- Mobile Sidebar Overlay -->
