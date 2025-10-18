@@ -3185,7 +3185,6 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   font-weight: 600;
   color: var(--text);
   margin: 0 0 4px 0;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
