@@ -747,6 +747,34 @@ def fulfillment():
     )
 
 
+@main_bp.route("/fulfillment/debug-db", methods=["GET"])
+@login_required
+def debug_database_sales():
+    """Debug: Show raw database values for sales"""
+    from ..models.sale import Sale
+
+    sales = Sale.query.filter_by(user_id=current_user.id).order_by(Sale.id.desc()).limit(10).all()
+
+    debug_data = []
+    for sale in sales:
+        debug_data.append({
+            'id': sale.id,
+            'marketplace_order_id': sale.marketplace_order_id,
+            'status': sale.status,
+            'shipped_at': str(sale.shipped_at) if sale.shipped_at else None,
+            'delivered_at': str(sale.delivered_at) if sale.delivered_at else None,
+            'tracking_number': sale.tracking_number,
+            'carrier': sale.carrier,
+            'sold_at': str(sale.sold_at) if sale.sold_at else None,
+        })
+
+    return jsonify({
+        'success': True,
+        'sales': debug_data,
+        'total': len(debug_data)
+    })
+
+
 @main_bp.route("/fulfillment/debug-shippo", methods=["GET"])
 @login_required
 def debug_shippo_tracking():
