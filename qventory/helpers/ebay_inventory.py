@@ -650,14 +650,26 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
                     item_id = item_elem.find('ebay:ItemID', ns)
                     title = item_elem.find('ebay:Title', ns)
 
-                    # Price
-                    selling_status = item_elem.find('ebay:SellingStatus', ns)
-                    current_price = selling_status.find('ebay:CurrentPrice', ns) if selling_status is not None else None
-                    price = float(current_price.text) if current_price is not None else 0
+                    # Price - with robust parsing
+                    price = 0
+                    try:
+                        selling_status = item_elem.find('ebay:SellingStatus', ns)
+                        current_price = selling_status.find('ebay:CurrentPrice', ns) if selling_status is not None else None
+                        if current_price is not None and current_price.text:
+                            price = float(current_price.text.strip())
+                    except (ValueError, AttributeError) as e:
+                        log_inv(f"Warning: Could not parse price for item, defaulting to 0: {str(e)}")
+                        price = 0
 
-                    # Quantity
-                    quantity_elem = item_elem.find('ebay:Quantity', ns)
-                    quantity = int(quantity_elem.text) if quantity_elem is not None else 1
+                    # Quantity - with robust parsing
+                    quantity = 1
+                    try:
+                        quantity_elem = item_elem.find('ebay:Quantity', ns)
+                        if quantity_elem is not None and quantity_elem.text:
+                            quantity = int(quantity_elem.text.strip())
+                    except (ValueError, AttributeError) as e:
+                        log_inv(f"Warning: Could not parse quantity for item, defaulting to 1: {str(e)}")
+                        quantity = 1
 
                     # SKU
                     sku_elem = item_elem.find('ebay:SKU', ns)

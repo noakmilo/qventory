@@ -209,6 +209,11 @@
     {# =========== BOTONES DE ACCIÓN =========== #}
     <div class="form-actions">
       <button class="btn submitbtn" type="submit"><i class="fas fa-save"></i> Save</button>
+      {% if item.ebay_listing_id %}
+      <button class="btn" type="submit" name="sync_to_ebay" value="true" style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238;">
+        <i class="fab fa-ebay"></i> Save & Sync to eBay
+      </button>
+      {% endif %}
       <a class="btn" href="{{ url_for('main.dashboard') }}"><i class="fas fa-times"></i> Cancel</a>
     </div>
   </form>

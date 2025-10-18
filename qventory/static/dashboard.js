@@ -76,6 +76,9 @@ if (bulkActionApply) {
         console.error('Bulk delete error:', error);
         alert('Failed to delete items');
       }
+    } else if (action === 'assign_location') {
+      // Open bulk location assignment modal
+      openBulkLocationModal(itemIds);
     } else if (action === 'sync_to_ebay') {
       if (!confirm(`Sync ${itemIds.length} item(s) to eBay?`)) {
         return;
@@ -99,6 +102,98 @@ if (bulkActionApply) {
         console.error('Bulk sync error:', error);
         alert('Failed to sync items');
       }
+    }
+  });
+}
+
+// ==================== BULK LOCATION ASSIGNMENT ====================
+
+function openBulkLocationModal(itemIds) {
+  const modal = document.getElementById('bulkLocationModal');
+  if (!modal) {
+    console.error('Bulk location modal not found');
+    return;
+  }
+
+  // Store selected item IDs
+  modal.dataset.itemIds = JSON.stringify(itemIds);
+
+  // Update count
+  const countEl = document.getElementById('bulkLocationCount');
+  if (countEl) {
+    countEl.textContent = itemIds.length;
+  }
+
+  // Reset form
+  const form = document.getElementById('bulkLocationForm');
+  if (form) form.reset();
+
+  // Show modal
+  modal.classList.remove('hidden');
+  modal.removeAttribute('aria-hidden');
+}
+
+function closeBulkLocationModal() {
+  const modal = document.getElementById('bulkLocationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+// Bulk location form submission
+const bulkLocationForm = document.getElementById('bulkLocationForm');
+if (bulkLocationForm) {
+  bulkLocationForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const modal = document.getElementById('bulkLocationModal');
+    const itemIds = JSON.parse(modal.dataset.itemIds || '[]');
+
+    if (itemIds.length === 0) {
+      alert('No items selected');
+      return;
+    }
+
+    const formData = new FormData(e.target);
+    const locationData = {
+      item_ids: itemIds,
+      A: formData.get('A') || null,
+      B: formData.get('B') || null,
+      S: formData.get('S') || null,
+      C: formData.get('C') || null,
+      sync_to_ebay: formData.get('sync_to_ebay') === 'on'
+    };
+
+    // Disable submit button
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    try {
+      const response = await fetch('/items/bulk_assign_location', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(locationData)
+      });
+
+      const data = await response.json();
+
+      if (data.ok) {
+        alert(data.message || 'Location assigned successfully');
+        closeBulkLocationModal();
+        location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to assign location'));
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    } catch (error) {
+      console.error('Bulk location assignment error:', error);
+      alert('Failed to assign location');
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
     }
   });
 }

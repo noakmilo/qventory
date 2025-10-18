@@ -1929,7 +1929,20 @@ def edit_item(item_id):
         it.A, it.B, it.S, it.C = A, B, S_, C
         it.location_code = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
         db.session.commit()
-        flash("Item updated.", "ok")
+
+        # Check if user wants to sync to eBay
+        sync_to_ebay = request.form.get("sync_to_ebay") == "true"
+
+        if sync_to_ebay and it.ebay_listing_id and it.location_code:
+            from qventory.helpers.ebay_inventory import sync_location_to_ebay_sku
+            success = sync_location_to_ebay_sku(current_user.id, it.ebay_listing_id, it.location_code)
+            if success:
+                flash(f"Item updated and synced to eBay (SKU: {it.location_code})", "ok")
+            else:
+                flash("Item updated, but eBay sync failed. Please try again later.", "error")
+        else:
+            flash("Item updated.", "ok")
+
         return redirect(url_for("main.dashboard"))
     return render_template("edit_item.html", item=it, settings=s, cloudinary_enabled=cloudinary_enabled)
 
@@ -2046,6 +2059,89 @@ def sync_item_to_ebay():
 
     except Exception as e:
         print(f"[SYNC_TO_EBAY] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/items/bulk_assign_location", methods=["POST"])
+@login_required
+def bulk_assign_location():
+    """
+    Bulk assign location to multiple items
+    Expects JSON: {
+        "item_ids": [1, 2, 3, ...],
+        "A": "value or null",
+        "B": "value or null",
+        "S": "value or null",
+        "C": "value or null",
+        "sync_to_ebay": true/false
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = [int(x) for x in data['item_ids']]
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        # Get items
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+
+        if len(items) == 0:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        # Get location values
+        A = data.get('A')
+        B = data.get('B')
+        S = data.get('S')
+        C = data.get('C')
+        sync_to_ebay = data.get('sync_to_ebay', False)
+
+        # Compose location code
+        from qventory.helpers import compose_location_code
+        location_code = compose_location_code(A, B, S, C)
+
+        # Update items
+        updated_count = 0
+        synced_count = 0
+
+        for item in items:
+            item.location_A = A
+            item.location_B = B
+            item.location_S = S
+            item.location_C = C
+            item.location_code = location_code
+            updated_count += 1
+
+            # Sync to eBay if requested and item has eBay listing
+            if sync_to_ebay and item.ebay_listing_id and location_code:
+                from qventory.helpers.ebay_inventory import sync_location_to_ebay_sku
+                success = sync_location_to_ebay_sku(current_user.id, item.ebay_listing_id, location_code)
+                if success:
+                    synced_count += 1
+
+        db.session.commit()
+
+        message = f"Successfully updated location for {updated_count} item(s)"
+        if sync_to_ebay and synced_count > 0:
+            message += f" and synced {synced_count} to eBay"
+
+        return jsonify({
+            "ok": True,
+            "updated_count": updated_count,
+            "synced_count": synced_count,
+            "message": message
+        })
+
+    except Exception as e:
+        print(f"[BULK_ASSIGN_LOCATION] Error: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
