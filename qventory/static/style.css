@@ -1979,6 +1979,7 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   width: 32px;
   height: 32px;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .sidebar-brand {
@@ -2016,6 +2017,7 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .sidebar-collapse-btn:hover {
@@ -2170,17 +2172,17 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 }
 
 .new-layout.sidebar-collapsed .sidebar {
-  width: 80px;
+  width: 96px;
 }
 
 .new-layout.sidebar-collapsed .main-content {
-  margin-left: 80px;
+  margin-left: 96px;
 }
 
 .new-layout.sidebar-collapsed .sidebar-header {
   justify-content: flex-start;
-  padding: 16px;
-  gap: 10px;
+  padding: 16px 12px;
+  gap: 4px;
 }
 
 .new-layout.sidebar-collapsed .sidebar-brand,
@@ -2190,13 +2192,8 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   display: none;
 }
 
-.new-layout.sidebar-collapsed .sidebar-logo {
-  width: 28px;
-  height: 28px;
-}
-
 .new-layout.sidebar-collapsed .sidebar-collapse-btn {
-  margin-right: 6px;
+  margin-right: 0;
 }
 
 .new-layout.sidebar-collapsed .sidebar-nav {
