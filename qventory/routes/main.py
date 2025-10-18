@@ -845,16 +845,47 @@ def debug_ebay_connection():
 @main_bp.route("/fulfillment/debug-order", methods=["GET"])
 @login_required
 def debug_ebay_order():
-    """Debug: Show raw eBay order structure"""
-    from ..helpers.ebay_inventory import fetch_ebay_orders
+    """Debug: Show raw eBay order structure with fulfillment details"""
+    from ..helpers.ebay_inventory import fetch_ebay_orders, fetch_shipping_fulfillment_details
 
-    result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=1)
+    result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=5)
 
     if result['success'] and result['orders']:
-        order = result['orders'][0]
+        debug_orders = []
+
+        for order in result['orders'][:5]:
+            order_info = {
+                'order_id': order.get('orderId'),
+                'order_fulfillment_status': order.get('orderFulfillmentStatus'),
+                'creation_date': order.get('creationDate'),
+                'last_modified_date': order.get('lastModifiedDate'),
+                'fulfillment_hrefs': order.get('fulfillmentHrefs', []),
+                'fulfillment_details': []
+            }
+
+            # Fetch detailed fulfillment info
+            fulfillment_hrefs = order.get('fulfillmentHrefs', [])
+            for href in fulfillment_hrefs[:1]:  # Just first one to avoid too many requests
+                details = fetch_shipping_fulfillment_details(current_user.id, href)
+                if details:
+                    order_info['fulfillment_details'].append({
+                        'href': href,
+                        'shipped_date': details.get('shippedDate'),
+                        'line_items': [
+                            {
+                                'line_item_id': li.get('lineItemId'),
+                                'shipment_tracking': li.get('shipmentTracking', {})
+                            }
+                            for li in details.get('lineItems', [])
+                        ]
+                    })
+
+            debug_orders.append(order_info)
+
         return jsonify({
             'success': True,
-            'order': order
+            'orders': debug_orders,
+            'total_orders': len(result['orders'])
         })
     else:
         return jsonify({
