@@ -125,16 +125,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         if existing_item:
                             match_method = "ebay_listing_id"
 
-                    # Second try: Match by eBay SKU
-                    if not existing_item and ebay_sku:
-                        existing_item = Item.query.filter_by(
-                            user_id=user_id,
-                            ebay_sku=ebay_sku
-                        ).first()
-                        if existing_item:
-                            match_method = "ebay_sku"
-
-                    # Third try: Match by exact title (least reliable)
+                    # Second try: Match by exact title (least reliable)
                     if not existing_item and ebay_title:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
