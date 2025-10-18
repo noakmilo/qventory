@@ -278,6 +278,28 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             # Final commit
             db.session.commit()
 
+            # DETAILED SUMMARY LOGGING
+            log_task(f"")
+            log_task(f"=" * 80)
+            log_task(f"IMPORT SUMMARY")
+            log_task(f"=" * 80)
+            log_task(f"Total items fetched from eBay: {len(ebay_items)}")
+            log_task(f"")
+            log_task(f"BREAKDOWN:")
+            log_task(f"  ✅ Imported (new items):     {imported_count}")
+            log_task(f"  🔄 Updated (existing items): {updated_count}")
+            log_task(f"  ⏭  Skipped:                  {skipped_count}")
+            log_task(f"  ❌ Errors during processing: {error_count}")
+            log_task(f"  ⚠️  Failed to parse (eBay):  {len(failed_items)}")
+            log_task(f"")
+            log_task(f"TOTAL ACCOUNTED: {imported_count + updated_count + skipped_count + error_count + len(failed_items)}/{len(ebay_items)}")
+
+            missing = len(ebay_items) - (imported_count + updated_count + skipped_count + error_count + len(failed_items))
+            if missing != 0:
+                log_task(f"⚠️  MISSING/UNACCOUNTED: {missing} items")
+
+            log_task(f"=" * 80)
+
             # Store failed items in database for retry
             log_task(f"Storing {len(failed_items)} failed items for retry...")
             failed_stored = 0
