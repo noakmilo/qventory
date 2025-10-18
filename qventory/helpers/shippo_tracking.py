@@ -276,18 +276,18 @@ def annotate_orders_with_shippo(orders: Sequence) -> Dict[str, object]:
 
     if not api_key:
         for order in orders:
-        order.tracking_status = _default_status(
-            getattr(order, "fulfillment_state", None)
-        )
-        badge = _select_badge(order.tracking_status)
-        order.tracking_status_label = badge["label"]
-        order.tracking_badge_bg = badge["bg"]
-        order.tracking_badge_fg = badge["fg"]
-        order.tracking_status_date = _default_status_date(order, order.tracking_status)
-        order.tracking_status_details = None
-        order.tracking_last_location = None
-        order.tracking_est_delivery = None
-        order.tracking_url = None
+            order.tracking_status = _default_status(
+                getattr(order, "fulfillment_state", None)
+            )
+            badge = _select_badge(order.tracking_status)
+            order.tracking_status_label = badge["label"]
+            order.tracking_badge_bg = badge["bg"]
+            order.tracking_badge_fg = badge["fg"]
+            order.tracking_status_date = _default_status_date(order, order.tracking_status)
+            order.tracking_status_details = None
+            order.tracking_last_location = None
+            order.tracking_est_delivery = None
+            order.tracking_url = None
         return result
 
     headers = {
