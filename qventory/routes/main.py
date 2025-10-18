@@ -48,7 +48,6 @@ from ..helpers.inventory_queries import (
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
 )
-from ..helpers.shippo_tracking import annotate_orders_with_shippo
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 
@@ -590,7 +589,7 @@ def inventory_ended():
 @main_bp.route("/fulfillment")
 @login_required
 def fulfillment():
-    """Show shipped and delivered orders"""
+    """Show shipped and delivered orders based on eBay fulfillment status"""
     from ..models.sale import Sale
 
     page, per_page, offset = _get_pagination_params()
@@ -621,117 +620,33 @@ def fulfillment():
         if getattr(order, "resolved_sku", None):
             order.item_sku = order.resolved_sku
 
-    shippo_enabled = bool(current_app.config.get("SHIPPO_API_KEY"))
+    # Classify orders based on delivered_at field from eBay
+    # delivered_at IS NOT NULL = FULFILLED (delivered)
+    # delivered_at IS NULL = IN_PROGRESS (in transit)
+    shipped_orders = [o for o in orders if o.fulfillment_state == "shipped"]
+    delivered_orders = [o for o in orders if o.fulfillment_state == "delivered"]
 
-    if shippo_enabled and total_items and total_items > len(orders):
-        all_orders_for_status, _ = fetch_fulfillment_orders(
-            db.session,
-            user_id=current_user.id,
-            limit=total_items,
-            offset=0,
-        )
-        for order in all_orders_for_status:
-            if getattr(order, "resolved_title", None):
-                order.item_title = order.resolved_title
-            if getattr(order, "resolved_sku", None):
-                order.item_sku = order.resolved_sku
-    else:
-        all_orders_for_status = list(orders)
+    def _event_key(order):
+        return order.event_ts or datetime.min
 
-    shippo_result = annotate_orders_with_shippo(all_orders_for_status)
+    shipped_orders.sort(key=_event_key, reverse=True)
+    delivered_orders.sort(key=_event_key, reverse=True)
 
-    status_attrs = [
-        "tracking_status",
-        "tracking_status_label",
-        "tracking_badge_bg",
-        "tracking_badge_fg",
-        "tracking_status_details",
-        "tracking_status_date",
-        "tracking_last_location",
-        "tracking_est_delivery",
-        "tracking_url",
-        "shippo_carrier",
-        "tracking_status_raw",
-    ]
+    shipped_count = db.session.query(func.count(Sale.id)).filter(
+        Sale.user_id == current_user.id,
+        Sale.shipped_at.isnot(None),
+        Sale.delivered_at.is_(None)
+    ).scalar()
 
-    status_index = {order.id: order for order in all_orders_for_status}
-
-    for order in orders:
-        status_source = status_index.get(order.id)
-        if not status_source:
-            continue
-        for attr in status_attrs:
-            setattr(order, attr, getattr(status_source, attr, None))
-
-    if shippo_result["enabled"]:
-        def _status_sort_key(order):
-            return (
-                getattr(order, "tracking_status_date", None)
-                or order.event_ts
-                or datetime.min
-            )
-
-        delivered_orders = [
-            o for o in orders if getattr(o, "tracking_status", None) == "delivered"
-        ]
-        shipped_orders = [
-            o for o in orders if getattr(o, "tracking_status", None) != "delivered"
-        ]
-
-        delivered_orders.sort(key=_status_sort_key, reverse=True)
-        shipped_orders.sort(key=_status_sort_key, reverse=True)
-
-        delivered_count = sum(
-            1
-            for o in all_orders_for_status
-            if getattr(o, "tracking_status", None) == "delivered"
-        )
-        shipped_count = sum(
-            1
-            for o in all_orders_for_status
-            if getattr(o, "tracking_status", None) != "delivered"
-        )
-    else:
-        shipped_orders = [o for o in orders if o.fulfillment_state == "shipped"]
-        delivered_orders = [o for o in orders if o.fulfillment_state == "delivered"]
-
-        def _event_key(order):
-            return order.event_ts or datetime.min
-
-        shipped_orders.sort(key=_event_key, reverse=True)
-        delivered_orders.sort(key=_event_key, reverse=True)
-
-        shipped_count = db.session.query(func.count(Sale.id)).filter(
-            Sale.user_id == current_user.id,
-            Sale.shipped_at.isnot(None),
-            Sale.delivered_at.is_(None)
-        ).scalar()
-
-        delivered_count = db.session.query(func.count(Sale.id)).filter(
-            Sale.user_id == current_user.id,
-            Sale.delivered_at.isnot(None)
-        ).scalar()
+    delivered_count = db.session.query(func.count(Sale.id)).filter(
+        Sale.user_id == current_user.id,
+        Sale.delivered_at.isnot(None)
+    ).scalar()
 
     total_value = db.session.query(func.coalesce(func.sum(Sale.sold_price), 0)).filter(
         Sale.user_id == current_user.id,
         or_(Sale.shipped_at.isnot(None), Sale.delivered_at.isnot(None))
     ).scalar()
-
-    last_status_update = None
-    if shippo_result["enabled"]:
-        last_status_update = max(
-            (
-                getattr(order, "tracking_status_date", None)
-                for order in all_orders_for_status
-                if getattr(order, "tracking_status_date", None)
-            ),
-            default=None,
-        )
-
-    shippo_errors = []
-    for message in shippo_result.get("errors", []):
-        if message not in shippo_errors:
-            shippo_errors.append(message)
 
     return render_template(
         "fulfillment.html",
@@ -741,9 +656,9 @@ def fulfillment():
         delivered_count=delivered_count,
         total_value=total_value or 0,
         pagination=pagination,
-        shippo_enabled=shippo_result["enabled"],
-        shippo_errors=shippo_errors,
-        shippo_last_update=last_status_update,
+        shippo_enabled=False,
+        shippo_errors=[],
+        shippo_last_update=None,
     )
 
 
@@ -801,55 +716,6 @@ def debug_database_sales():
         'success': True,
         'sales': debug_data,
         'total': len(debug_data)
-    })
-
-
-@main_bp.route("/fulfillment/debug-shippo", methods=["GET"])
-@login_required
-def debug_shippo_tracking():
-    """Debug: Show Shippo tracking response for orders"""
-    from ..helpers.inventory_queries import fetch_fulfillment_orders
-    from ..helpers.shippo_tracking import annotate_orders_with_shippo
-
-    # Fetch a few orders to test
-    orders, _ = fetch_fulfillment_orders(
-        db.session,
-        user_id=current_user.id,
-        limit=10,
-        offset=0,
-    )
-
-    # Store original data
-    debug_data = []
-    for order in orders:
-        debug_data.append({
-            'order_id': order.id,
-            'tracking_number': getattr(order, 'tracking_number', None),
-            'carrier': getattr(order, 'carrier', None),
-            'fulfillment_state_before': getattr(order, 'fulfillment_state', None),
-            'shipped_at': str(getattr(order, 'shipped_at', None)),
-            'delivered_at': str(getattr(order, 'delivered_at', None)),
-        })
-
-    # Apply Shippo tracking
-    shippo_result = annotate_orders_with_shippo(orders)
-
-    # Add Shippo results
-    for i, order in enumerate(orders):
-        if i < len(debug_data):
-            debug_data[i].update({
-                'tracking_status_after': getattr(order, 'tracking_status', None),
-                'tracking_status_raw': getattr(order, 'tracking_status_raw', None),
-                'tracking_status_label': getattr(order, 'tracking_status_label', None),
-                'tracking_status_details': getattr(order, 'tracking_status_details', None),
-                'shippo_carrier': getattr(order, 'shippo_carrier', None),
-            })
-
-    return jsonify({
-        'success': True,
-        'shippo_enabled': shippo_result['enabled'],
-        'shippo_errors': shippo_result.get('errors', []),
-        'orders': debug_data
     })
 
 
