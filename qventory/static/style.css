@@ -2932,6 +2932,7 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   max-width: 1400px;
   margin: 0 auto;
   padding: var(--space-3) var(--space-2);
+  width: 100%;
 }
 
 .page-header {
@@ -2961,6 +2962,9 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   padding: var(--space-4);
   margin-bottom: var(--space-4);
   backdrop-filter: blur(var(--blur));
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .section-header {
@@ -3021,6 +3025,8 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   align-items: center;
   gap: var(--space-3);
   transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  max-width: 100%;
 }
 
 .task-card:hover {
@@ -3142,6 +3148,8 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   align-items: center;
   gap: var(--space-3);
   transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  max-width: 100%;
 }
 
 .activity-card:hover {
@@ -3268,6 +3276,8 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   align-items: center;
   gap: var(--space-2);
   transition: transform 0.2s, box-shadow 0.2s;
+  width: 100%;
+  max-width: 100%;
 }
 
 .item-card:hover {
