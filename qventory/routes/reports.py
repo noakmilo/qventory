@@ -159,6 +159,18 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
             report.completed_at = db.func.now()
             db.session.commit()
 
+            # Create success notification
+            from qventory.models.notification import Notification
+            Notification.create_notification(
+                user_id=report.user_id,
+                type='success',
+                title='AI Research report is ready!',
+                message=f'Your market analysis for "{item_title[:50]}" is complete.',
+                link_url='/reports/analytics',
+                link_text='View Report',
+                source='ai_research'
+            )
+
             print(f"[Report {report_id}] ✅ Completed successfully", file=sys.stderr)
 
         except Exception as e:
@@ -170,6 +182,18 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
                 report.status = 'failed'
                 report.error_message = str(e)
                 db.session.commit()
+
+                # Create error notification
+                from qventory.models.notification import Notification
+                Notification.create_notification(
+                    user_id=report.user_id,
+                    type='error',
+                    title='AI Research failed',
+                    message=f'Failed to generate report for "{report.item_title[:50]}": {str(e)[:100]}',
+                    link_url='/reports/analytics',
+                    link_text='Try Again',
+                    source='ai_research'
+                )
 
 
 @reports_bp.route("/api/ai-research-async", methods=["POST"])
