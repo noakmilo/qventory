@@ -48,10 +48,16 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         items_remaining = user.items_remaining()
         log_task(f"User plan limits - Items remaining: {items_remaining}")
 
-        if items_remaining is not None and items_remaining <= 0:
-            raise Exception(f"Cannot import: User has reached plan limit (0 items remaining)")
-
-        max_new_items_allowed = items_remaining  # Track how many NEW items we can import
+        # IMPORTANT: In sync_all mode, we allow syncing ALL eBay inventory regardless of plan limits
+        # because the user is syncing their EXISTING eBay inventory, not adding arbitrary new items
+        if import_mode == 'sync_all':
+            max_new_items_allowed = None  # No limit for full sync
+            log_task(f"Mode: sync_all - No item limit (syncing existing eBay inventory)")
+        else:
+            if items_remaining is not None and items_remaining <= 0:
+                raise Exception(f"Cannot import: User has reached plan limit (0 items remaining)")
+            max_new_items_allowed = items_remaining  # Track how many NEW items we can import
+            log_task(f"Mode: {import_mode} - Max new items allowed: {max_new_items_allowed}")
 
         # Get or create ImportJob
         job = ImportJob.query.filter_by(celery_task_id=self.request.id).first()
