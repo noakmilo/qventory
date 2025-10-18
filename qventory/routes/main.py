@@ -747,6 +747,35 @@ def fulfillment():
     )
 
 
+@main_bp.route("/fulfillment/debug-parse", methods=["GET"])
+@login_required
+def debug_parse_order():
+    """Debug: Test parse_ebay_order_to_sale function"""
+    from ..helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
+
+    result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=3)
+
+    if not result['success']:
+        return jsonify({
+            'success': False,
+            'error': result.get('error')
+        })
+
+    parsed_orders = []
+    for order_data in result['orders'][:3]:
+        sale_data = parse_ebay_order_to_sale(order_data, user_id=current_user.id)
+        parsed_orders.append({
+            'order_id': order_data.get('orderId'),
+            'orderFulfillmentStatus': order_data.get('orderFulfillmentStatus'),
+            'parsed_sale_data': sale_data
+        })
+
+    return jsonify({
+        'success': True,
+        'orders': parsed_orders
+    })
+
+
 @main_bp.route("/fulfillment/debug-db", methods=["GET"])
 @login_required
 def debug_database_sales():
