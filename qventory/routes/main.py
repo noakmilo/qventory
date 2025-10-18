@@ -1010,9 +1010,12 @@ def sync_ebay_orders():
                     existing_sale.status = sale_data.get('status') or existing_sale.status
 
                     # CRITICAL: Always update delivered_at from eBay if FULFILLED
-                    if sale_data.get('delivered_at'):
-                        existing_sale.delivered_at = sale_data['delivered_at']
-                        print(f"[FULFILLMENT_SYNC] Updated delivered_at for order {sale_data['marketplace_order_id']}: {sale_data['delivered_at']}", file=sys.stderr)
+                    delivered_value = sale_data.get('delivered_at')
+                    if delivered_value:
+                        print(f"[FULFILLMENT_SYNC] Before update - Order {sale_data['marketplace_order_id']}: delivered_at={existing_sale.delivered_at}, type={type(existing_sale.delivered_at)}", file=sys.stderr)
+                        existing_sale.delivered_at = delivered_value
+                        print(f"[FULFILLMENT_SYNC] After update - Order {sale_data['marketplace_order_id']}: delivered_at={existing_sale.delivered_at}, type={type(existing_sale.delivered_at)}", file=sys.stderr)
+                        print(f"[FULFILLMENT_SYNC] SQLAlchemy dirty: {existing_sale in db.session.dirty}", file=sys.stderr)
 
                     existing_sale.updated_at = datetime.utcnow()
                     orders_updated += 1
