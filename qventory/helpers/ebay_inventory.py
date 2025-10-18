@@ -1625,10 +1625,12 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         if order_fulfillment_status == 'FULFILLED':
             status = 'completed'
 
-            # Use lastModifiedDate as approximate shipped date
+            # Use lastModifiedDate as both shipped and delivered date (fallback)
             modified_date_str = order_data.get('lastModifiedDate', '')
             if modified_date_str:
-                shipped_at = _parse_ebay_datetime(modified_date_str)
+                delivered_at = _parse_ebay_datetime(modified_date_str)
+                # Use creation date as shipped date fallback
+                shipped_at = _parse_ebay_datetime(order_data.get('creationDate', ''))
 
             # Try to get detailed fulfillment info if user_id provided
             fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
@@ -1643,19 +1645,16 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                         shipment_tracking = line_items[0].get('shipmentTracking', {})
                         tracking_number = shipment_tracking.get('trackingNumber', '')
 
-                        # Get actual shipped date
+                        # Get actual shipped date (overrides fallback)
                         shipped_date_str = fulfillment_details.get('shippedDate', '')
                         if shipped_date_str:
                             shipped_at = _parse_ebay_datetime(shipped_date_str)
 
-                        # Get delivery date
+                        # Get delivery date if available (overrides fallback)
                         delivered_date_str = shipment_tracking.get('actualDeliveryDate', '')
                         if delivered_date_str:
                             delivered_at = _parse_ebay_datetime(delivered_date_str)
-                        else:
-                            # Some orders show as fulfilled but no delivery date yet
-                            # Keep delivered_at as None, it will show in "In Transit"
-                            pass
+                        # If no actualDeliveryDate, keep using lastModifiedDate as delivered_at
 
             # Fallback: extract tracking from href if API call failed
             if not tracking_number and fulfillment_hrefs:
