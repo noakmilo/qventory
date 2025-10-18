@@ -318,7 +318,7 @@ header nav .btn{
 .label{ display:block; color:var(--sub); font-size:var(--fs-xs); margin:2px 0 6px }
 .input, select{
   width:100%; padding:10px 12px; border-radius:10px;
-  color:var(--text); min-height:var(--tap-target); font-size:15px; line-height:1.1;
+  color:var(--text); min-height:var(--tap-target); font-size:16px; line-height:1.25;
   border:1px solid var(--glass-border);
   background:rgba(14,22,48,.55);
   backdrop-filter:blur(calc(var(--blur)*.6));
@@ -330,6 +330,8 @@ header nav .btn{
 /* White cursor for all text inputs */
 input, textarea, select {
   caret-color: #ffffff;
+  font-size: 16px;
+  line-height: 1.3;
 }
 
 /* Pointer cursor for all interactive elements */
@@ -380,7 +382,7 @@ i {color:#8ab4fd;}
 @media (min-width:1025px){
   .filters-shell{ position:sticky; top:calc(56px + var(--safe-t)); z-index:15 }
   .cardfilters{ padding:12px 14px }
-  .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:13px }
+  .cardfilters .input, .cardfilters select{ min-height:38px; padding:8px 10px; font-size:16px }
   .cardfilters .btn{ min-height:38px; padding:8px 10px; font-size:12px }
 }
 
@@ -633,7 +635,7 @@ tbody tr:hover td{
   .filters-content[hidden]{ display:none !important }
   .card{ padding:var(--space-2) }
   .cardfilters{ font-size:11px }
-  .cardfilters .input, .cardfilters select, .cardfilters .btn{ min-height:36px; font-size:12px; padding:6px 8px }
+  .cardfilters .input, .cardfilters select, .cardfilters .btn{ min-height:36px; font-size:16px; padding:6px 8px }
 
   /* Export/Import menos intrusivos */
   .backup-btn{ background:var(--glass-bg-strong); color:var(--text); border-color:var(--glass-border); padding:6px 10px !important; font-size:12px !important }
