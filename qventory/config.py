@@ -2,6 +2,7 @@ import os, pathlib
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-me")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SHIPPO_API_KEY = os.environ.get("SHIPPO_API_KEY")
 
     # Support both PostgreSQL (DATABASE_URL) and SQLite (QVENTORY_DB_PATH)
     # PostgreSQL takes priority if both are set
@@ -18,4 +19,3 @@ class Config:
     else:
         # Default to SQLite
         SQLALCHEMY_DATABASE_URI = "sqlite:////opt/qventory/data/app.db"
-

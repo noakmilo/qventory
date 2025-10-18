@@ -25,6 +25,49 @@
     </button>
   </div>
 
+  {% if shippo_enabled %}
+  <div class="card" style="margin-bottom:20px;padding:18px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center;">
+    <div style="flex:1;min-width:200px;">
+      <h3 style="margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;color:var(--text);">
+        <i class="fas fa-satellite-dish" style="color:#60a5fa;"></i>
+        Live tracking powered by Shippo
+      </h3>
+      {% if shippo_last_update %}
+      <p style="margin:0;font-size:12px;color:var(--text-secondary);">
+        Last status refresh: {{ shippo_last_update.strftime('%b %d, %Y %I:%M %p') }} UTC
+      </p>
+      {% else %}
+      <p style="margin:0;font-size:12px;color:var(--text-secondary);">
+        Statuses update automatically as Shippo receives carrier scans.
+      </p>
+      {% endif %}
+    </div>
+    <span style="font-size:12px;color:var(--text-tertiary);white-space:nowrap;">Multi-carrier tracking via Shippo API</span>
+  </div>
+  {% if shippo_errors and shippo_errors|length %}
+  <div class="card" style="margin-bottom:20px;padding:16px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);">
+    <strong style="display:block;margin-bottom:6px;color:#f87171;font-size:13px;">Shippo warnings</strong>
+    <ul style="margin:0;padding-left:18px;color:var(--text-secondary);font-size:12px;line-height:1.4;">
+      {% for msg in shippo_errors[:5] %}
+      <li>{{ msg }}</li>
+      {% endfor %}
+      {% if shippo_errors|length > 5 %}
+      <li>+ {{ shippo_errors|length - 5 }} more</li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="card" style="margin-bottom:20px;padding:18px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);">
+    <h3 style="margin:0 0 6px;color:#60a5fa;font-size:15px;display:flex;align-items:center;gap:8px;">
+      <i class="fas fa-info-circle"></i> Enable live tracking
+    </h3>
+    <p style="margin:0;font-size:12px;color:var(--text-secondary);line-height:1.5;">
+      Add your Shippo API key in Settings to automatically classify parcels as in transit or delivered across every carrier.
+    </p>
+  </div>
+  {% endif %}
+
   <!-- Stats Cards -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-bottom:24px;">
     <!-- Shipped (not delivered) -->
@@ -111,19 +154,20 @@
               {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
             </td>
             <td style="color:var(--text-secondary);">
-              {% if sale.shipped_at %}
-              {{ sale.shipped_at.strftime('%b %d, %Y') }}<br>
-              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.shipped_at.strftime('%I:%M %p') }}</span>
+              {% set status_dt = sale.tracking_status_date or sale.shipped_at %}
+              {% if status_dt %}
+              {{ status_dt.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ status_dt.strftime('%I:%M %p') }}</span>
               {% else %}
               N/A
               {% endif %}
             </td>
             <td style="color:var(--text-secondary);">
-              {{ sale.carrier or 'N/A' }}
+              {{ sale.shippo_carrier or sale.carrier or 'N/A' }}
             </td>
             <td>
               {% if sale.tracking_number %}
-              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
+              <a href="{{ sale.tracking_url or ('https://www.google.com/search?q=' ~ sale.tracking_number) }}"
                  target="_blank"
                  style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
                  title="Track package">
@@ -138,9 +182,24 @@
               ${{ "%.2f"|format(sale.sold_price) }}
             </td>
             <td>
-              <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:500;">
-                <i class="fas fa-truck"></i> Shipped
+              <span class="tracking-badge" style="background:{{ sale.tracking_badge_bg }};color:{{ sale.tracking_badge_fg }};">
+                {{ sale.tracking_status_label }}
               </span>
+              {% if sale.tracking_status_details %}
+              <div style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.4;">
+                {{ sale.tracking_status_details }}
+              </div>
+              {% endif %}
+              {% if sale.tracking_last_location %}
+              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
+                <i class="fas fa-location-arrow"></i> {{ sale.tracking_last_location }}
+              </div>
+              {% endif %}
+              {% if sale.tracking_est_delivery %}
+              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
+                Est. delivery {{ sale.tracking_est_delivery.strftime('%b %d, %Y') }}
+              </div>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -200,19 +259,20 @@
               {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
             </td>
             <td style="color:var(--text-secondary);">
-              {% if sale.delivered_at %}
-              {{ sale.delivered_at.strftime('%b %d, %Y') }}<br>
-              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.delivered_at.strftime('%I:%M %p') }}</span>
+              {% set delivered_dt = sale.tracking_status_date or sale.delivered_at %}
+              {% if delivered_dt %}
+              {{ delivered_dt.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ delivered_dt.strftime('%I:%M %p') }}</span>
               {% else %}
               N/A
               {% endif %}
             </td>
             <td style="color:var(--text-secondary);">
-              {{ sale.carrier or 'N/A' }}
+              {{ sale.shippo_carrier or sale.carrier or 'N/A' }}
             </td>
             <td>
               {% if sale.tracking_number %}
-              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
+              <a href="{{ sale.tracking_url or ('https://www.google.com/search?q=' ~ sale.tracking_number) }}"
                  target="_blank"
                  style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
                  title="Track package">
@@ -227,9 +287,19 @@
               ${{ "%.2f"|format(sale.sold_price) }}
             </td>
             <td>
-              <span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:500;">
-                <i class="fas fa-check"></i> Delivered
+              <span class="tracking-badge" style="background:{{ sale.tracking_badge_bg }};color:{{ sale.tracking_badge_fg }};">
+                {{ sale.tracking_status_label }}
               </span>
+              {% if sale.tracking_status_details %}
+              <div style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.4;">
+                {{ sale.tracking_status_details }}
+              </div>
+              {% endif %}
+              {% if sale.tracking_last_location %}
+              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
+                <i class="fas fa-location-arrow"></i> {{ sale.tracking_last_location }}
+              </div>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

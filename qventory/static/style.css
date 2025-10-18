@@ -3400,9 +3400,13 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 }
 
 .tracking-badge {
-  padding: 4px 8px;
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
   font-size: var(--fs-xs);
+  font-weight: 600;
   background: var(--muted);
   color: var(--sub);
   border: 1px solid var(--border);
