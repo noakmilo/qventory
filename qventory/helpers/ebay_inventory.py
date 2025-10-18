@@ -1668,6 +1668,36 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
 
         elif order_fulfillment_status == 'IN_PROGRESS':
             status = 'shipped'
+            # Order is in transit, NOT delivered yet
+            delivered_at = None
+
+            # Get shipment info
+            fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
+            if fulfillment_hrefs and user_id:
+                href = fulfillment_hrefs[0]
+                fulfillment_details = fetch_shipping_fulfillment_details(user_id, href)
+
+                if fulfillment_details:
+                    # Extract tracking and shipped date
+                    line_items = fulfillment_details.get('lineItems', [])
+                    if line_items:
+                        shipment_tracking = line_items[0].get('shipmentTracking', {})
+                        tracking_number = shipment_tracking.get('trackingNumber', '')
+
+                        # Get shipped date
+                        shipped_date_str = fulfillment_details.get('shippedDate', '')
+                        if shipped_date_str:
+                            shipped_at = _parse_ebay_datetime(shipped_date_str)
+
+            # Fallback: extract tracking from href
+            if not tracking_number and fulfillment_hrefs:
+                href = fulfillment_hrefs[0]
+                parts = href.split('/')
+                if len(parts) > 0:
+                    potential_tracking = parts[-1]
+                    if potential_tracking.isdigit() and len(potential_tracking) >= 18:
+                        tracking_number = potential_tracking
+
         else:
             status = 'pending'
 

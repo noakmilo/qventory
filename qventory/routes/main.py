@@ -960,8 +960,8 @@ def sync_ebay_orders():
 
     try:
         # Fetch orders from eBay
-        # Filter for FULFILLED orders (completed/delivered) and NOT_STARTED (may have tracking)
-        result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED', limit=200)
+        # Get both FULFILLED (delivered) and IN_PROGRESS (in transit) orders
+        result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED,IN_PROGRESS', limit=200)
 
         if not result['success']:
             return jsonify({
