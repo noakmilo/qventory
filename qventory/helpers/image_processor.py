@@ -22,7 +22,7 @@ cloudinary.config(
 )
 
 
-def download_and_upload_image(image_url, target_size_kb=2, max_dimension=400):
+def download_and_upload_image(image_url, target_size_kb=2, max_dimension=400, public_id=None):
     """
     Download an image from URL, compress it to ~2KB, and upload to Cloudinary
 
@@ -30,6 +30,7 @@ def download_and_upload_image(image_url, target_size_kb=2, max_dimension=400):
         image_url (str): URL of the image to download
         target_size_kb (int): Target file size in KB (default 2KB)
         max_dimension (int): Max width/height for thumbnail (default 400px)
+        public_id (str): Optional public_id for Cloudinary (e.g., eBay listing ID)
 
     Returns:
         str: Cloudinary URL of uploaded image, or None if failed
@@ -94,15 +95,25 @@ def download_and_upload_image(image_url, target_size_kb=2, max_dimension=400):
 
         # Upload to Cloudinary
         log_img("Uploading to Cloudinary...")
-        result = cloudinary.uploader.upload(
-            buffer,
-            folder="qventory/items",
-            resource_type="image",
-            format="jpg",
-            transformation=[
+
+        upload_options = {
+            'folder': "qventory/items",
+            'resource_type': "image",
+            'format': "jpg",
+            'transformation': [
                 {'quality': 'auto:low', 'fetch_format': 'auto'}
-            ]
-        )
+            ],
+            'overwrite': True,  # Overwrite if exists (for re-imports)
+            'invalidate': True  # Invalidate CDN cache
+        }
+
+        # Use public_id if provided (e.g., eBay listing ID)
+        if public_id:
+            upload_options['public_id'] = f"qventory/items/{public_id}"
+            upload_options['use_filename'] = False
+            log_img(f"Using public_id: {public_id}")
+
+        result = cloudinary.uploader.upload(buffer, **upload_options)
 
         cloudinary_url = result.get('secure_url')
         log_img(f"Upload success: {cloudinary_url}")

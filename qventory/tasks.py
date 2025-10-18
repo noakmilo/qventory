@@ -168,6 +168,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             if start_time:
                                 existing_item.listing_date = start_time.date()
 
+                            # Update title if changed (this ensures correct titles)
+                            if parsed_with_images.get('title'):
+                                existing_item.title = parsed_with_images['title']
+
                             if parsed_with_images.get('ebay_listing_id'):
                                 existing_item.ebay_listing_id = parsed_with_images['ebay_listing_id']
                             if parsed_with_images.get('ebay_url'):

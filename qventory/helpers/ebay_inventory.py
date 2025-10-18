@@ -1055,13 +1055,24 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         description = product.get('description', '')
         images = product.get('imageUrls', [])
 
+        # Get listing ID FIRST (needed for image upload)
+        ebay_listing_id = ebay_item.get('ebay_listing_id')
+        ebay_url = ebay_item.get('ebay_url')
+        item_price = ebay_item.get('item_price', 0)
+
         # Process image: download from eBay, compress, upload to Cloudinary
+        # Use ebay_listing_id as public_id to prevent image mix-ups
         item_thumb = None
         if images and process_images:
             from qventory.helpers.image_processor import download_and_upload_image
             ebay_image_url = images[0]
             log_inv(f"Processing image for: {title[:50]}")
-            item_thumb = download_and_upload_image(ebay_image_url, target_size_kb=2, max_dimension=400)
+            item_thumb = download_and_upload_image(
+                ebay_image_url,
+                target_size_kb=2,
+                max_dimension=400,
+                public_id=ebay_listing_id  # Use listing ID as unique identifier
+            )
             if not item_thumb:
                 log_inv(f"Failed to process image, using original URL")
                 item_thumb = ebay_image_url  # Fallback to original URL
@@ -1071,11 +1082,6 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         availability = ebay_item.get('availability', {})
         quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
-
-        # Get additional offer-specific data
-        ebay_listing_id = ebay_item.get('ebay_listing_id')
-        ebay_url = ebay_item.get('ebay_url')
-        item_price = ebay_item.get('item_price', 0)
 
         # Check if eBay Custom SKU is a valid Qventory location code
         location_components = {}
@@ -1112,14 +1118,24 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         title = product.get('title', '')
         description = product.get('description', '')
 
+        # Get listing ID FIRST (needed for image upload)
+        ebay_listing_id = ebay_item.get('ebay_listing_id') or ebay_item.get('listingId')
+        ebay_offer_id = ebay_item.get('ebay_offer_id') or ebay_item.get('offerId')
+
         # Process image: download from eBay, compress, upload to Cloudinary
+        # Use ebay_listing_id as public_id to prevent image mix-ups
         images = product.get('imageUrls', [])
         item_thumb = None
         if images and process_images:
             from qventory.helpers.image_processor import download_and_upload_image
             ebay_image_url = images[0]
             log_inv(f"Processing image for: {title[:50]}")
-            item_thumb = download_and_upload_image(ebay_image_url, target_size_kb=2, max_dimension=400)
+            item_thumb = download_and_upload_image(
+                ebay_image_url,
+                target_size_kb=2,
+                max_dimension=400,
+                public_id=ebay_listing_id  # Use listing ID as unique identifier
+            )
             if not item_thumb:
                 log_inv(f"Failed to process image, using original URL")
                 item_thumb = ebay_image_url  # Fallback to original URL
@@ -1153,16 +1169,20 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'item_thumb': item_thumb,
             'ebay_sku': sku,
             'quantity': quantity,
-        'condition': condition,
-        'location_code': location_code,
-        'location_A': location_components.get('A'),
-        'location_B': location_components.get('B'),
-        'location_S': location_components.get('S'),
-        'location_C': location_components.get('C'),
-        'listing_start_time': ebay_item.get('listing_start_time'),
-        'listing_end_time': ebay_item.get('listing_end_time'),
-        'ebay_item_data': ebay_item
-    }
+            'condition': condition,
+            'ebay_listing_id': ebay_listing_id,
+            'ebay_offer_id': ebay_offer_id,
+            'ebay_url': ebay_item.get('ebay_url') or (f"https://www.ebay.com/itm/{ebay_listing_id}" if ebay_listing_id else None),
+            'item_price': ebay_item.get('item_price', 0),
+            'location_code': location_code,
+            'location_A': location_components.get('A'),
+            'location_B': location_components.get('B'),
+            'location_S': location_components.get('S'),
+            'location_C': location_components.get('C'),
+            'listing_start_time': ebay_item.get('listing_start_time'),
+            'listing_end_time': ebay_item.get('listing_end_time'),
+            'ebay_item_data': ebay_item
+        }
 
 
 def sync_location_to_ebay_sku(user_id, ebay_listing_id, location_code):
