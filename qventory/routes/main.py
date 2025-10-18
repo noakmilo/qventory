@@ -747,6 +747,55 @@ def fulfillment():
     )
 
 
+@main_bp.route("/fulfillment/debug-shippo", methods=["GET"])
+@login_required
+def debug_shippo_tracking():
+    """Debug: Show Shippo tracking response for orders"""
+    from ..helpers.inventory_queries import fetch_fulfillment_orders
+    from ..helpers.shippo_tracking import annotate_orders_with_shippo
+
+    # Fetch a few orders to test
+    orders, _ = fetch_fulfillment_orders(
+        db.session,
+        user_id=current_user.id,
+        limit=10,
+        offset=0,
+    )
+
+    # Store original data
+    debug_data = []
+    for order in orders:
+        debug_data.append({
+            'order_id': order.id,
+            'tracking_number': getattr(order, 'tracking_number', None),
+            'carrier': getattr(order, 'carrier', None),
+            'fulfillment_state_before': getattr(order, 'fulfillment_state', None),
+            'shipped_at': str(getattr(order, 'shipped_at', None)),
+            'delivered_at': str(getattr(order, 'delivered_at', None)),
+        })
+
+    # Apply Shippo tracking
+    shippo_result = annotate_orders_with_shippo(orders)
+
+    # Add Shippo results
+    for i, order in enumerate(orders):
+        if i < len(debug_data):
+            debug_data[i].update({
+                'tracking_status_after': getattr(order, 'tracking_status', None),
+                'tracking_status_raw': getattr(order, 'tracking_status_raw', None),
+                'tracking_status_label': getattr(order, 'tracking_status_label', None),
+                'tracking_status_details': getattr(order, 'tracking_status_details', None),
+                'shippo_carrier': getattr(order, 'shippo_carrier', None),
+            })
+
+    return jsonify({
+        'success': True,
+        'shippo_enabled': shippo_result['enabled'],
+        'shippo_errors': shippo_result.get('errors', []),
+        'orders': debug_data
+    })
+
+
 @main_bp.route("/fulfillment/debug-order", methods=["GET"])
 @login_required
 def debug_ebay_order():
