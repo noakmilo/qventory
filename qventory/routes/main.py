@@ -1046,10 +1046,18 @@ def sync_ebay_orders():
 
             except Exception as e:
                 print(f"[FULFILLMENT_SYNC] Error processing order: {str(e)}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
                 continue
 
+        # Flush changes to ensure they're pending
+        print(f"[FULFILLMENT_SYNC] Flushing {orders_updated} updates to database...", file=sys.stderr)
+        db.session.flush()
+
         # Commit all changes
+        print(f"[FULFILLMENT_SYNC] Committing transaction...", file=sys.stderr)
         db.session.commit()
+        print(f"[FULFILLMENT_SYNC] ✓ Transaction committed successfully", file=sys.stderr)
 
         print(f"[FULFILLMENT_SYNC] Completed: {orders_created} created, {orders_updated} updated", file=sys.stderr)
 
