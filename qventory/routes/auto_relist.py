@@ -160,6 +160,14 @@ def create_rule():
             rule.pause_on_error = data.get('pause_on_error') == 'on'
             rule.max_consecutive_errors = int(data.get('max_consecutive_errors', 3))
 
+            # Price decrease settings (auto mode only)
+            rule.enable_price_decrease = data.get('enable_price_decrease') == 'on'
+            if rule.enable_price_decrease:
+                rule.price_decrease_type = data.get('price_decrease_type', 'fixed')
+                rule.price_decrease_amount = float(data.get('price_decrease_amount', 0))
+                min_price_val = data.get('min_price')
+                rule.min_price = float(min_price_val) if min_price_val else None
+
             # Calculate first run
             rule.calculate_next_run()
 
@@ -235,6 +243,19 @@ def edit_rule(rule_id):
             rule.check_duplicate_skus = data.get('check_duplicate_skus') == 'on'
             rule.pause_on_error = data.get('pause_on_error') == 'on'
             rule.max_consecutive_errors = int(data.get('max_consecutive_errors', 3))
+
+            # Price decrease settings (auto mode only)
+            rule.enable_price_decrease = data.get('enable_price_decrease') == 'on'
+            if rule.enable_price_decrease:
+                rule.price_decrease_type = data.get('price_decrease_type', 'fixed')
+                rule.price_decrease_amount = float(data.get('price_decrease_amount', 0))
+                min_price_val = data.get('min_price')
+                rule.min_price = float(min_price_val) if min_price_val else None
+            else:
+                # Clear price decrease settings if disabled
+                rule.price_decrease_type = None
+                rule.price_decrease_amount = None
+                rule.min_price = None
 
             # Recalculate next run
             rule.calculate_next_run()

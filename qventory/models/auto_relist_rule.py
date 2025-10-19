@@ -58,6 +58,12 @@ class AutoRelistRule(db.Model):
     pause_on_error = db.Column(db.Boolean, default=True)
     max_consecutive_errors = db.Column(db.Integer, default=3)  # Pause after N errors
 
+    # Price decrease strategy (only for auto mode)
+    enable_price_decrease = db.Column(db.Boolean, default=False)
+    price_decrease_type = db.Column(db.String(20))  # 'fixed' or 'percentage'
+    price_decrease_amount = db.Column(db.Float)  # Amount to decrease (e.g., 2.00 or 10.0 for 10%)
+    min_price = db.Column(db.Float)  # Minimum price floor (don't go below this)
+
     # ========== MANUAL MODE SETTINGS ==========
 
     # Pending changes to apply before publish (only for manual mode)
@@ -339,6 +345,37 @@ class AutoRelistRule(db.Model):
         """Check if there are pending changes to apply"""
         return self.apply_changes and self.pending_changes is not None
 
+    def calculate_new_price(self):
+        """
+        Calculate new price with decrease applied (auto mode only)
+
+        Returns:
+            float: New price after decrease, respecting min_price
+            None: If price decrease not enabled or current_price not set
+        """
+        if self.mode != 'auto' or not self.enable_price_decrease:
+            return None
+
+        if not self.current_price or not self.price_decrease_amount:
+            return None
+
+        # Calculate new price based on decrease type
+        if self.price_decrease_type == 'fixed':
+            new_price = self.current_price - self.price_decrease_amount
+        elif self.price_decrease_type == 'percentage':
+            # percentage is stored as whole number (e.g., 10 for 10%)
+            decrease_multiplier = self.price_decrease_amount / 100.0
+            new_price = self.current_price * (1 - decrease_multiplier)
+        else:
+            return None
+
+        # Apply minimum price floor
+        if self.min_price and new_price < self.min_price:
+            new_price = self.min_price
+
+        # Round to 2 decimals
+        return round(new_price, 2)
+
     def to_dict(self):
         """Convert to dictionary for JSON serialization"""
         return {
@@ -363,6 +400,10 @@ class AutoRelistRule(db.Model):
             'check_duplicate_skus': self.check_duplicate_skus,
             'pause_on_error': self.pause_on_error,
             'max_consecutive_errors': self.max_consecutive_errors,
+            'enable_price_decrease': self.enable_price_decrease,
+            'price_decrease_type': self.price_decrease_type,
+            'price_decrease_amount': self.price_decrease_amount,
+            'min_price': self.min_price,
             'pending_changes': self.pending_changes,
             'apply_changes': self.apply_changes,
             'has_pending_changes': self.has_pending_changes,

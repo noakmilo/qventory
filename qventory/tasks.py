@@ -1086,6 +1086,35 @@ def auto_relist_offers(self):
                 if rule.current_price:
                     history.old_price = rule.current_price
 
+                # SALE DETECTION: Check if item has been sold (auto mode only)
+                if rule.mode == 'auto' and rule.listing_id:
+                    from qventory.helpers.ebay_relist import check_item_sold_in_fulfillment
+
+                    if check_item_sold_in_fulfillment(rule.user_id, rule.listing_id):
+                        log_task(f"✓ Item SOLD - stopping auto-relist rule {rule.id}")
+
+                        rule.enabled = False
+                        rule.last_run_status = 'stopped_sold'
+                        rule.last_run_at = datetime.utcnow()
+                        rule.last_error_message = 'Rule stopped: item was sold'
+
+                        history.status = 'skipped'
+                        history.skip_reason = 'Item sold - found in fulfillment database'
+                        history.mark_completed()
+
+                        db.session.commit()
+                        skipped_count += 1
+                        processed_count += 1
+                        continue
+
+                # PRICE DECREASE: Calculate new price for auto mode
+                new_price_from_decrease = None
+                if rule.mode == 'auto' and rule.enable_price_decrease:
+                    new_price_from_decrease = rule.calculate_new_price()
+                    if new_price_from_decrease:
+                        log_task(f"  Price decrease: ${rule.current_price} → ${new_price_from_decrease}")
+                        history.new_price = new_price_from_decrease
+
                 # Execute relist (with or without changes)
                 # Check if manual mode has changes to apply
                 has_changes = (rule.pending_changes and
@@ -1093,7 +1122,16 @@ def auto_relist_offers(self):
                               len(rule.pending_changes) > 0)
                 apply_changes = rule.mode == 'manual' and has_changes
 
-                if apply_changes:
+                # For auto mode with price decrease, apply the price change
+                if rule.mode == 'auto' and new_price_from_decrease:
+                    apply_changes = True
+                    # Create pending_changes for price decrease
+                    if not rule.pending_changes:
+                        rule.pending_changes = {}
+                    rule.pending_changes['price'] = new_price_from_decrease
+                    history.changes_applied = {'price': new_price_from_decrease}
+
+                if apply_changes and rule.mode == 'manual':
                     history.changes_applied = rule.pending_changes.copy()
                     # Capture new price if changed
                     if 'price' in rule.pending_changes:
@@ -1154,6 +1192,14 @@ def auto_relist_offers(self):
                     # Update current price if it was changed (do this BEFORE mark_success clears pending_changes)
                     if apply_changes and rule.pending_changes and 'price' in rule.pending_changes:
                         rule.current_price = rule.pending_changes['price']
+
+                    # Fetch and update the new listing ID from eBay
+                    from qventory.helpers.ebay_relist import get_new_listing_id_from_offer
+
+                    updated_listing_id = get_new_listing_id_from_offer(rule.user_id, rule.offer_id)
+                    if updated_listing_id:
+                        new_listing_id = updated_listing_id
+                        log_task(f"  Updated listing ID: {new_listing_id}")
 
                     rule.mark_success(new_listing_id)
 

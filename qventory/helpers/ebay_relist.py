@@ -1094,3 +1094,87 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
     result['new_listing_id'] = new_listing_id
 
     return result
+
+
+# ==================== SALE DETECTION & LISTING ID HELPERS ====================
+
+def check_item_sold_in_fulfillment(user_id: int, listing_id: str) -> bool:
+    """
+    Check if a listing ID exists in the sales/fulfillment database
+    indicating the item has been sold
+
+    Args:
+        user_id: Qventory user ID
+        listing_id: eBay listing ID to check
+
+    Returns:
+        bool: True if item has been sold, False otherwise
+    """
+    if not listing_id:
+        return False
+
+    try:
+        from qventory.models.sale import Sale
+        from sqlalchemy import or_
+
+        # Check if this listing_id appears in sales table
+        # with either shipped_at or delivered_at populated
+        sale = Sale.query.filter_by(
+            user_id=user_id
+        ).filter(
+            or_(
+                Sale.marketplace_order_id == listing_id,
+                Sale.ebay_transaction_id == listing_id
+            )
+        ).filter(
+            or_(
+                Sale.delivered_at.isnot(None),
+                Sale.shipped_at.isnot(None)
+            )
+        ).first()
+
+        if sale:
+            log_relist(f"✓ Listing {listing_id} found in fulfillment DB - item SOLD")
+            return True
+
+        log_relist(f"  Listing {listing_id} not found in sales - item still active")
+        return False
+
+    except Exception as e:
+        log_relist(f"✗ Error checking sale status: {str(e)}")
+        # On error, assume not sold to avoid stopping rules incorrectly
+        return False
+
+
+def get_new_listing_id_from_offer(user_id: int, offer_id: str) -> str:
+    """
+    Get the current listing ID from an offer
+    Used after publish to get the new listing ID
+
+    Args:
+        user_id: Qventory user ID
+        offer_id: eBay offer ID
+
+    Returns:
+        str: Current listing ID, or None if not found
+    """
+    try:
+        result = get_offer_details(user_id, offer_id)
+
+        if not result['success']:
+            log_relist(f"✗ Could not fetch offer details: {result.get('error')}")
+            return None
+
+        offer = result.get('offer', {})
+        listing_id = offer.get('listingId')
+
+        if listing_id:
+            log_relist(f"✓ Retrieved listing ID: {listing_id}")
+        else:
+            log_relist(f"  No listing ID found in offer {offer_id}")
+
+        return listing_id
+
+    except Exception as e:
+        log_relist(f"✗ Error getting listing ID: {str(e)}")
+        return None
