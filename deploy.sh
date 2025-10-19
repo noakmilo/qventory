@@ -123,8 +123,37 @@ ls -t qventory_db_*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
 log "Reiniciando servicio ${SERVICE_NAME}"
 systemctl restart "${SERVICE_NAME}"
 
-log "Reiniciando Celery worker"
-systemctl restart celery-qventory || log "⚠️  Celery no instalado o no configurado"
+log "Reiniciando Celery worker con graceful shutdown"
+# Graceful shutdown: permite que las tareas en ejecución terminen
+if systemctl is-active --quiet celery-qventory; then
+  log "Esperando a que las tareas activas terminen (timeout: 60s)..."
+  systemctl stop celery-qventory || log "⚠️  Error al detener Celery"
+
+  # Esperar hasta 60 segundos para que terminen las tareas
+  TIMEOUT=60
+  ELAPSED=0
+  while [ $ELAPSED -lt $TIMEOUT ]; do
+    if ! pgrep -f "celery.*worker" > /dev/null; then
+      log "✅ Celery detenido limpiamente"
+      break
+    fi
+    sleep 2
+    ELAPSED=$((ELAPSED + 2))
+    if [ $((ELAPSED % 10)) -eq 0 ]; then
+      log "Esperando... ${ELAPSED}s / ${TIMEOUT}s"
+    fi
+  done
+
+  # Si después de 60 segundos aún hay procesos, forzar kill
+  if pgrep -f "celery.*worker" > /dev/null; then
+    log "⚠️  Timeout alcanzado, forzando cierre de Celery"
+    pkill -9 -f "celery.*worker" || true
+  fi
+fi
+
+# Iniciar Celery
+log "Iniciando Celery worker"
+systemctl start celery-qventory || log "⚠️  Error al iniciar Celery"
 
 sleep 2
 
