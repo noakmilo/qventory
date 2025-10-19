@@ -11,6 +11,7 @@ from .import_job import ImportJob
 from .failed_import import FailedImport
 from .expense import Expense
 from .auto_relist_rule import AutoRelistRule, AutoRelistHistory
+from .email_verification import EmailVerification
 
 __all__ = [
     'User',
@@ -28,5 +29,6 @@ __all__ = [
     'FailedImport',
     'Expense',
     'AutoRelistRule',
-    'AutoRelistHistory'
+    'AutoRelistHistory',
+    'EmailVerification'
 ]

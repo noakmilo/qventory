@@ -17,6 +17,15 @@ class Config:
     REMEMBER_COOKIE_SECURE = os.environ.get("REMEMBER_COOKIE_SECURE", "False") == "True"  # True in production with HTTPS
     REMEMBER_COOKIE_HTTPONLY = True
 
+    # Email/SMTP configuration (required for email verification and password reset)
+    # Set these environment variables:
+    # - SMTP_HOST: SMTP server (e.g., smtp.gmail.com)
+    # - SMTP_PORT: Port (587 for TLS, 465 for SSL)
+    # - SMTP_USER: Email username
+    # - SMTP_PASSWORD: Email password or app-specific password
+    # - SMTP_FROM_EMAIL: Sender email (optional, defaults to SMTP_USER)
+    # - SMTP_FROM_NAME: Sender name (optional, defaults to "Qventory")
+
     # Support both PostgreSQL (DATABASE_URL) and SQLite (QVENTORY_DB_PATH)
     # PostgreSQL takes priority if both are set
     _database_url = os.environ.get("DATABASE_URL")

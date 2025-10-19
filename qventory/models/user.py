@@ -10,6 +10,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='free', nullable=False)  # free, early_adopter, premium, pro, god
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)  # Email verification status
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
 
