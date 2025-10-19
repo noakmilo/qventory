@@ -12,6 +12,12 @@
       <label>Password</label>
       <input class="input" type="password" name="password" placeholder="••••••••" required>
     </div>
+    <div style="margin-bottom:16px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;">
+        <input type="checkbox" name="remember_me" style="width:auto;margin:0;">
+        <span style="font-size:14px;color:var(--text);">Remember me for 30 days</span>
+      </label>
+    </div>
     <div>
       <button class="btn submitbtn" type="submit">Sign in</button>
       <a class="btn" href="{{ url_for('auth.register') }}">Create account</a>

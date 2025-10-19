@@ -29,11 +29,13 @@ def login():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
+        remember = request.form.get("remember_me") == "on"
 
         # define 'user' SIEMPRE dentro del POST (no en GET)
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
-            login_user(user)
+            # Login user with remember me functionality
+            login_user(user, remember=remember)
 
             # Update last login timestamp (after login_user)
             user.last_login = datetime.utcnow()
@@ -42,7 +44,7 @@ def login():
             flash("Welcome back.", "ok")
             return redirect(_safe_next())
         else:
-            flash("Invalid credentials.", "error")
+            flash("Invalid email or password. Please try again.", "error")
 
     # GET o POST con error de credenciales
     return render_template("login.html")
@@ -59,14 +61,19 @@ def register():
         password = request.form.get("password") or ""
         password2 = request.form.get("password2") or ""
 
-        # email
+        # email validation
         try:
             validate_email(email, check_deliverability=False)
         except EmailNotValidError:
             flash("Please enter a valid email address.", "error")
             return render_template("register.html", email=email, username=username)
 
-        # username
+        # Check if email already exists
+        if User.query.filter_by(email=email).first():
+            flash("An account with this email already exists. Please sign in or use a different email.", "error")
+            return render_template("register.html", email=email, username=username)
+
+        # username validation
         if not re.fullmatch(r"[a-z0-9_-]{3,32}", username):
             flash("Username must be 3–32 chars, lowercase letters, numbers, _ or -.", "error")
             return render_template("register.html", email=email, username=username)

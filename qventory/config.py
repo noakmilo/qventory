@@ -1,8 +1,21 @@
 import os, pathlib
+from datetime import timedelta
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-me")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SHIPPO_API_KEY = os.environ.get("SHIPPO_API_KEY")
+
+    # Session configuration
+    PERMANENT_SESSION_LIFETIME = timedelta(days=30)  # Sessions last 30 days
+    SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "False") == "True"  # True in production with HTTPS
+    SESSION_COOKIE_HTTPONLY = True  # Prevent XSS attacks
+    SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+
+    # Remember Me cookie configuration
+    REMEMBER_COOKIE_DURATION = timedelta(days=30)  # Remember Me lasts 30 days
+    REMEMBER_COOKIE_SECURE = os.environ.get("REMEMBER_COOKIE_SECURE", "False") == "True"  # True in production with HTTPS
+    REMEMBER_COOKIE_HTTPONLY = True
 
     # Support both PostgreSQL (DATABASE_URL) and SQLite (QVENTORY_DB_PATH)
     # PostgreSQL takes priority if both are set
