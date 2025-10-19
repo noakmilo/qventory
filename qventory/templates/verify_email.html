@@ -1,66 +1,246 @@
 {% extends "base.html" %}
 {% block title %}Verify Email – Qventory{% endblock %}
 {% block content %}
-<div class="card" style="max-width:520px;margin:0 auto">
-  <div style="text-align:center;margin-bottom:24px;">
-    <div style="display:inline-block;width:64px;height:64px;background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:16px;">
-      <i class="fas fa-envelope" style="font-size:28px;color:white;"></i>
+<div class="card" style="max-width:480px;margin:0 auto;padding:40px 32px;">
+  <!-- Header with Icon -->
+  <div style="text-align:center;margin-bottom:32px;">
+    <div style="width:80px;height:80px;background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);border-radius:20px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;box-shadow:0 4px 20px rgba(59,130,246,0.3);">
+      <i class="fas fa-envelope-open" style="font-size:36px;color:white;"></i>
     </div>
-    <h2 style="margin:0 0 8px 0;">Verify your email</h2>
-    <p style="color:var(--text-secondary);margin:0;">We sent a 6-digit code to:</p>
-    <p style="font-weight:600;color:var(--text);margin:4px 0 0 0;">{{ email }}</p>
+    <h2 style="margin:0 0 12px 0;font-size:24px;font-weight:700;">Verify your email</h2>
+    <p style="color:var(--text-secondary);margin:0;font-size:15px;">We sent a 6-digit code to</p>
+    <p style="font-weight:600;color:var(--primary);margin:8px 0 0 0;font-size:15px;">{{ email }}</p>
   </div>
 
-  <form method="post" class="grid cols-1">
+  <!-- Verification Code Inputs -->
+  <form method="post" id="verificationForm">
     <input type="hidden" name="email" value="{{ email }}">
+    <input type="hidden" name="code" id="codeInput">
 
-    <div>
-      <label>Verification Code</label>
-      <input
-        class="input"
-        type="text"
-        name="code"
-        placeholder="000000"
-        maxlength="6"
-        pattern="[0-9]{6}"
-        autocomplete="one-time-code"
-        inputmode="numeric"
-        style="font-size:24px;letter-spacing:8px;text-align:center;font-family:monospace;"
-        required
-        autofocus>
-      <p class="tag" style="margin-top:8px;">
-        <i class="fas fa-clock"></i> Code expires in 15 minutes
-      </p>
+    <div style="margin-bottom:24px;">
+      <label style="display:block;margin-bottom:12px;font-weight:600;font-size:14px;color:var(--text);">Enter verification code</label>
+
+      <!-- 6 Separate Inputs -->
+      <div id="codeInputs" style="display:flex;gap:12px;justify-content:center;">
+        <input type="text" maxlength="1" class="code-digit" data-index="0" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+        <input type="text" maxlength="1" class="code-digit" data-index="1" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+        <input type="text" maxlength="1" class="code-digit" data-index="2" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+        <input type="text" maxlength="1" class="code-digit" data-index="3" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+        <input type="text" maxlength="1" class="code-digit" data-index="4" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+        <input type="text" maxlength="1" class="code-digit" data-index="5" inputmode="numeric" pattern="[0-9]" autocomplete="off"
+          style="width:56px;height:64px;text-align:center;font-size:28px;font-weight:700;border:2px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);transition:all 0.2s;font-family:monospace;">
+      </div>
+
+      <div style="margin-top:12px;text-align:center;">
+        <p class="tag" style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-secondary);padding:8px 16px;border-radius:8px;">
+          <i class="fas fa-clock" style="color:var(--primary);"></i>
+          <span style="color:var(--text-secondary);font-size:13px;">Expires in 15 minutes</span>
+        </p>
+      </div>
     </div>
 
-    <div>
-      <button class="btn submitbtn" type="submit">Verify Email</button>
-    </div>
+    <!-- Submit button (hidden, form submits automatically) -->
+    <button id="submitBtn" class="btn submitbtn" type="submit" style="width:100%;display:none;">
+      Verify Email
+    </button>
   </form>
 
-  <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);text-align:center;">
+  <!-- Resend Section -->
+  <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);text-align:center;">
     <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px;">Didn't receive the code?</p>
     <form method="post" action="{{ url_for('auth.resend_verification') }}" style="display:inline;">
       <input type="hidden" name="email" value="{{ email }}">
-      <button class="btn" type="submit" style="background:var(--surface-secondary);">
+      <button class="btn" type="submit" style="background:var(--surface-secondary);border:1px solid var(--border);">
         <i class="fas fa-redo"></i> Resend Code
       </button>
     </form>
   </div>
 
-  <div style="margin-top:16px;text-align:center;">
-    <a href="{{ url_for('auth.login') }}" style="color:var(--text-secondary);font-size:14px;">
+  <!-- Back to Login -->
+  <div style="margin-top:20px;text-align:center;">
+    <a href="{{ url_for('auth.login') }}" style="color:var(--text-secondary);font-size:14px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:color 0.2s;">
       <i class="fas fa-arrow-left"></i> Back to Sign In
     </a>
   </div>
 </div>
 
 <style>
-/* Remove spinner arrows from number input */
-input[type="text"][inputmode="numeric"]::-webkit-outer-spin-button,
-input[type="text"][inputmode="numeric"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* Code Input Styling */
+.code-digit:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: var(--surface);
+}
+
+.code-digit:hover {
+  border-color: var(--primary);
+}
+
+.code-digit.filled {
+  border-color: var(--primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.code-digit.error {
+  border-color: #ef4444;
+  animation: shake 0.3s;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+
+/* Loading state */
+.code-digit.validating {
+  border-color: var(--primary);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Success state */
+.code-digit.success {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* Remove autofill background */
+.code-digit:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+  -webkit-text-fill-color: var(--text);
 }
 </style>
+
+<script>
+(function() {
+  const inputs = document.querySelectorAll('.code-digit');
+  const form = document.getElementById('verificationForm');
+  const hiddenInput = document.getElementById('codeInput');
+  const submitBtn = document.getElementById('submitBtn');
+
+  // Focus first input on load
+  inputs[0].focus();
+
+  inputs.forEach((input, index) => {
+    // Handle input
+    input.addEventListener('input', (e) => {
+      const value = e.target.value;
+
+      // Only allow digits
+      if (!/^\d*$/.test(value)) {
+        e.target.value = '';
+        return;
+      }
+
+      // Mark as filled
+      if (value) {
+        input.classList.add('filled');
+
+        // Move to next input
+        if (index < inputs.length - 1) {
+          inputs[index + 1].focus();
+        }
+      } else {
+        input.classList.remove('filled');
+      }
+
+      // Check if all inputs are filled
+      checkCompletion();
+    });
+
+    // Handle keydown for backspace
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !e.target.value && index > 0) {
+        // Move to previous input on backspace if current is empty
+        inputs[index - 1].focus();
+        inputs[index - 1].value = '';
+        inputs[index - 1].classList.remove('filled');
+        checkCompletion();
+      }
+
+      // Handle arrow keys
+      if (e.key === 'ArrowLeft' && index > 0) {
+        e.preventDefault();
+        inputs[index - 1].focus();
+      }
+      if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+        e.preventDefault();
+        inputs[index + 1].focus();
+      }
+    });
+
+    // Handle paste
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedData = e.clipboardData.getData('text').trim();
+
+      // Only process if it's 6 digits
+      if (/^\d{6}$/.test(pastedData)) {
+        pastedData.split('').forEach((char, i) => {
+          if (inputs[i]) {
+            inputs[i].value = char;
+            inputs[i].classList.add('filled');
+          }
+        });
+        inputs[inputs.length - 1].focus();
+        checkCompletion();
+      }
+    });
+
+    // Prevent non-numeric input
+    input.addEventListener('keypress', (e) => {
+      if (!/\d/.test(e.key)) {
+        e.preventDefault();
+      }
+    });
+  });
+
+  function checkCompletion() {
+    const code = Array.from(inputs).map(input => input.value).join('');
+
+    if (code.length === 6) {
+      // All digits entered, add validating state
+      inputs.forEach(input => {
+        input.classList.add('validating');
+        input.disabled = true;
+      });
+
+      // Set hidden input value
+      hiddenInput.value = code;
+
+      // Auto-submit after brief delay
+      setTimeout(() => {
+        form.submit();
+      }, 300);
+    }
+  }
+
+  // Handle form errors (if redirected back)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('error')) {
+    inputs.forEach(input => {
+      input.classList.add('error');
+      input.value = '';
+      input.disabled = false;
+      input.classList.remove('validating');
+    });
+
+    setTimeout(() => {
+      inputs.forEach(input => input.classList.remove('error'));
+      inputs[0].focus();
+    }, 500);
+  }
+})();
+</script>
 {% endblock %}
