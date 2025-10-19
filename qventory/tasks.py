@@ -1037,6 +1037,16 @@ def auto_relist_offers(self):
         # Minimal logging to save server resources
         now = datetime.utcnow()
 
+        # DEBUG: Check all rules first
+        all_enabled_rules = AutoRelistRule.query.filter(AutoRelistRule.enabled == True).all()
+        log_task(f"DEBUG: Found {len(all_enabled_rules)} enabled rules total")
+
+        for rule in all_enabled_rules:
+            log_task(f"  Rule {rule.id}: mode={rule.mode}, next_run_at={rule.next_run_at}, manual_trigger={getattr(rule, 'manual_trigger_requested', False)}")
+            if rule.mode == 'auto' and rule.next_run_at:
+                time_diff = (rule.next_run_at - now).total_seconds() / 60
+                log_task(f"    Time until next run: {time_diff:.1f} minutes")
+
         auto_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
             AutoRelistRule.mode == 'auto',
@@ -1051,7 +1061,10 @@ def auto_relist_offers(self):
 
         all_rules = auto_rules + manual_rules
 
+        log_task(f"DEBUG: {len(auto_rules)} auto rules ready, {len(manual_rules)} manual rules triggered")
+
         if not all_rules:
+            log_task("No rules to process - waiting for next_run_at or manual trigger")
             return {
                 'success': True,
                 'processed': 0,

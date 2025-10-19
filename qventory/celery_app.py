@@ -40,11 +40,11 @@ celery.conf.task_routes = {
 
 # Celery Beat Schedule (Periodic Tasks)
 celery.conf.beat_schedule = {
-    'auto-relist-every-15-minutes': {
+    'auto-relist-every-2-minutes': {
         'task': 'qventory.tasks.auto_relist_offers',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'schedule': crontab(minute='*/2'),  # Every 2 minutes (for testing - use */15 for production)
         'options': {
-            'expires': 60 * 10,  # Expire after 10 minutes if not picked up
+            'expires': 60 * 5,  # Expire after 5 minutes if not picked up
         }
     },
 }
