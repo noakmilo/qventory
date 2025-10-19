@@ -1,7 +1,7 @@
 """Add email verification system
 
-Revision ID: 013
-Revises: 012
+Revision ID: 013_add_email_verification
+Revises: 012_add_price_decrease
 Create Date: 2025-01-18
 """
 from alembic import op
@@ -10,8 +10,8 @@ from datetime import datetime
 
 
 # revision identifiers, used by Alembic.
-revision = '013'
-down_revision = '012'
+revision = '013_add_email_verification'
+down_revision = '012_add_price_decrease'
 branch_labels = None
 depends_on = None
 
