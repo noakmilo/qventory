@@ -52,7 +52,7 @@ def send_email(to_email, subject, html_body, text_body=None):
         msg.attach(part2)
 
         # Send email
-        # Use SMTP_SSL for port 465, SMTP + starttls for port 587
+        # Use SMTP_SSL for port 465, SMTP + starttls for ports 587/2525
         if smtp_port == 465:
             with smtplib.SMTP_SSL(smtp_host, smtp_port) as server:
                 server.login(smtp_user, smtp_password)
