@@ -290,7 +290,7 @@
     </div>
 
     <!-- Additional Options (Collapsed by default) -->
-    <div class="card auto-settings" style="margin-bottom:24px;position:relative;z-index:1;display:none;">
+    <div class="card auto-settings" style="margin-bottom:24px;position:relative;z-index:1;">
       <div style="padding:20px;border-bottom:1px solid var(--border);">
         <div style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="document.getElementById('additional_options_content').style.display = document.getElementById('additional_options_content').style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-icon').classList.toggle('rotated');">
           <h2 style="color:var(--text);font-size:18px;margin:0;">
@@ -299,8 +299,7 @@
           <i class="fas fa-chevron-down toggle-icon" style="transition:transform 0.2s;font-size:12px;color:var(--text-tertiary);"></i>
         </div>
       </div>
-      <div id="additional_options_content" style="display:none;">
-      <div style="padding:24px;">
+      <div id="additional_options_content" style="display:none;padding:24px;">
 
         <div class="form-group">
           <label for="withdraw_publish_delay_seconds">Delay between withdraw and publish (seconds)</label>
