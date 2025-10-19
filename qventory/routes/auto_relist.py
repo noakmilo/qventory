@@ -183,7 +183,14 @@ def create_rule():
 
         log_relist_route(f"Created rule {rule.id} for user {current_user.id}")
 
-        flash(f'Auto-relist rule created successfully! ({mode} mode)', 'success')
+        # If user wants first relist immediately, trigger it now (auto mode only)
+        if mode == 'auto' and rule.run_first_relist_immediately:
+            from ..tasks import auto_relist_offers
+            auto_relist_offers.delay()
+            flash(f'Auto-relist rule created and first relist triggered! Check history in a few minutes.', 'success')
+        else:
+            flash(f'Auto-relist rule created successfully! ({mode} mode)', 'success')
+
         return redirect(url_for('auto_relist.dashboard'))
 
     except Exception as e:

@@ -212,16 +212,19 @@
             <!-- Actions -->
             <td>
               <div style="display:flex;gap:8px;justify-content:flex-end;">
-                <!-- Toggle Enable/Disable -->
-                <button class="btn-icon toggle-rule-btn" data-rule-id="{{ rule.id }}" title="{% if rule.enabled %}Disable{% else %}Enable{% endif %}">
+                <!-- Toggle Enable/Disable (only for AUTO mode) -->
+                {% if rule.mode == 'auto' %}
+                <button class="btn-icon toggle-rule-btn" data-rule-id="{{ rule.id }}" title="{% if rule.enabled %}Pause{% else %}Resume{% endif %}">
                   {% if rule.enabled %}
                   <i class="fas fa-pause"></i>
                   {% else %}
                   <i class="fas fa-play"></i>
                   {% endif %}
                 </button>
+                {% endif %}
 
-                <!-- Relist Now -->
+                <!-- Relist Now (only for MANUAL mode) -->
+                {% if rule.mode == 'manual' %}
                 <button class="btn-icon relist-now-btn"
                         data-rule-id="{{ rule.id }}"
                         data-item-title="{{ rule.item_title or 'Unknown Item' }}"
@@ -230,6 +233,7 @@
                         title="Relist Now">
                   <i class="fas fa-sync"></i>
                 </button>
+                {% endif %}
 
                 <!-- Edit -->
                 <a href="{{ url_for('auto_relist.edit_rule', rule_id=rule.id) }}" class="btn-icon" title="Edit">
