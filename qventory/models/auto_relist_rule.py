@@ -64,6 +64,10 @@ class AutoRelistRule(db.Model):
     price_decrease_amount = db.Column(db.Float)  # Amount to decrease (e.g., 2.00 or 10.0 for 10%)
     min_price = db.Column(db.Float)  # Minimum price floor (don't go below this)
 
+    # First run behavior (only for auto mode)
+    run_first_relist_immediately = db.Column(db.Boolean, default=False)
+    # If True, first relist runs ASAP. If False, waits for full interval.
+
     # ========== MANUAL MODE SETTINGS ==========
 
     # Pending changes to apply before publish (only for manual mode)
@@ -163,12 +167,19 @@ class AutoRelistRule(db.Model):
             tz = pytz_timezone(self.timezone)
             now = from_time or datetime.now(tz)
 
+            # Check if this is the first run (never executed before)
+            is_first_run = self.run_count == 0
+
             # Calculate base next run time
             interval_days = self.get_interval_days()
             if not interval_days:
                 interval_days = 7  # Fallback
 
-            next_run = now + timedelta(days=interval_days)
+            # If first run and user wants immediate execution, schedule ASAP
+            if is_first_run and self.run_first_relist_immediately:
+                next_run = now
+            else:
+                next_run = now + timedelta(days=interval_days)
 
             # Apply quiet hours window if configured
             if self.quiet_hours_start and self.quiet_hours_end:
@@ -404,6 +415,7 @@ class AutoRelistRule(db.Model):
             'price_decrease_type': self.price_decrease_type,
             'price_decrease_amount': self.price_decrease_amount,
             'min_price': self.min_price,
+            'run_first_relist_immediately': self.run_first_relist_immediately,
             'pending_changes': self.pending_changes,
             'apply_changes': self.apply_changes,
             'has_pending_changes': self.has_pending_changes,

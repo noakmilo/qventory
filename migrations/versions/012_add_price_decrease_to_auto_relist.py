@@ -30,10 +30,14 @@ def upgrade():
     op.add_column('auto_relist_rules',
         sa.Column('min_price', sa.Float(), nullable=True)
     )
+    op.add_column('auto_relist_rules',
+        sa.Column('run_first_relist_immediately', sa.Boolean(), nullable=True, server_default='0')
+    )
 
 
 def downgrade():
     # Remove price decrease fields from auto_relist_rules table
+    op.drop_column('auto_relist_rules', 'run_first_relist_immediately')
     op.drop_column('auto_relist_rules', 'min_price')
     op.drop_column('auto_relist_rules', 'price_decrease_amount')
     op.drop_column('auto_relist_rules', 'price_decrease_type')

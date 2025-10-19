@@ -150,6 +150,20 @@
           <input type="number" name="custom_interval_days" id="custom_interval_days" class="form-control" min="1" max="365" value="7">
         </div>
 
+        <!-- First Run -->
+        <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
+          <h3 style="font-size:14px;margin-bottom:16px;color:var(--text);">
+            <i class="fas fa-rocket"></i> First Relist
+          </h3>
+          <label class="checkbox-label">
+            <input type="checkbox" name="run_first_relist_immediately" id="run_first_relist_immediately">
+            <span>Run first relist immediately after creating rule</span>
+          </label>
+          <p style="font-size:11px;color:var(--text-tertiary);margin-top:8px;margin-left:24px;">
+            If unchecked, first relist will run after the configured interval (e.g., 7 days)
+          </p>
+        </div>
+
         <!-- Quiet Hours -->
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
           <h3 style="font-size:14px;margin-bottom:16px;color:var(--text);">

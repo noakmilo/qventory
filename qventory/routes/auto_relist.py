@@ -168,6 +168,9 @@ def create_rule():
                 min_price_val = data.get('min_price')
                 rule.min_price = float(min_price_val) if min_price_val else None
 
+            # First run behavior
+            rule.run_first_relist_immediately = data.get('run_first_relist_immediately') == 'on'
+
             # Calculate first run
             rule.calculate_next_run()
 
