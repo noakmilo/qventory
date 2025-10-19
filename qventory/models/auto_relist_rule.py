@@ -177,7 +177,8 @@ class AutoRelistRule(db.Model):
 
             # If first run and user wants immediate execution, schedule ASAP
             if is_first_run and self.run_first_relist_immediately:
-                next_run = now
+                # Schedule 10 seconds in the past to ensure it's picked up immediately
+                next_run = now - timedelta(seconds=10)
             else:
                 next_run = now + timedelta(days=interval_days)
 

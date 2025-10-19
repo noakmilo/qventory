@@ -1214,11 +1214,22 @@ def auto_relist_offers(self):
                     # Create success notification
                     from qventory.models.notification import Notification
                     item_title = rule.item_title or 'Item'
+
+                    # Check if this was the first relist
+                    is_first_relist = rule.success_count == 1  # Just incremented in mark_success
+
+                    if is_first_relist:
+                        notification_title = 'First auto-relist completed! 🎉'
+                        notification_message = f'{item_title[:50]} has been relisted successfully. New listing ID: {new_listing_id}. Next relist will run automatically based on your schedule.'
+                    else:
+                        notification_title = 'Auto-relist successful!'
+                        notification_message = f'{item_title[:50]} was relisted with new listing ID {new_listing_id}'
+
                     Notification.create_notification(
                         user_id=rule.user_id,
                         type='success',
-                        title=f'Auto-relist successful!',
-                        message=f'{item_title[:50]} was relisted with new listing ID {new_listing_id}',
+                        title=notification_title,
+                        message=notification_message,
                         link_url='/auto-relist',
                         link_text='View Auto-Relist Dashboard',
                         source='relist'
