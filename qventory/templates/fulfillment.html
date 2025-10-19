@@ -154,20 +154,19 @@
               {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
             </td>
             <td style="color:var(--text-secondary);">
-              {% set status_dt = sale.tracking_status_date or sale.shipped_at %}
-              {% if status_dt %}
-              {{ status_dt.strftime('%b %d, %Y') }}<br>
-              <span style="font-size:11px;color:var(--text-tertiary);">{{ status_dt.strftime('%I:%M %p') }}</span>
+              {% if sale.shipped_at %}
+              {{ sale.shipped_at.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.shipped_at.strftime('%I:%M %p') }}</span>
               {% else %}
               N/A
               {% endif %}
             </td>
             <td style="color:var(--text-secondary);">
-              {{ sale.shippo_carrier or sale.carrier or 'N/A' }}
+              {{ sale.carrier or 'N/A' }}
             </td>
             <td>
               {% if sale.tracking_number %}
-              <a href="{{ sale.tracking_url or ('https://www.google.com/search?q=' ~ sale.tracking_number) }}"
+              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
                  target="_blank"
                  style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
                  title="Track package">
@@ -182,30 +181,67 @@
               ${{ "%.2f"|format(sale.sold_price) }}
             </td>
             <td>
-              <span class="tracking-badge" style="background:{{ sale.tracking_badge_bg }};color:{{ sale.tracking_badge_fg }};">
-                {{ sale.tracking_status_label }}
+              <span class="tag" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);">
+                <i class="fas fa-shipping-fast"></i> In Transit
               </span>
-              {% if sale.tracking_status_details %}
-              <div style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.4;">
-                {{ sale.tracking_status_details }}
-              </div>
-              {% endif %}
-              {% if sale.tracking_last_location %}
-              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
-                <i class="fas fa-location-arrow"></i> {{ sale.tracking_last_location }}
-              </div>
-              {% endif %}
-              {% if sale.tracking_est_delivery %}
-              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
-                Est. delivery {{ sale.tracking_est_delivery.strftime('%b %d, %Y') }}
-              </div>
-              {% endif %}
             </td>
           </tr>
           {% endfor %}
           {% endif %}
         </tbody>
       </table>
+    </div>
+
+    <!-- In Transit Pagination -->
+    <div class="pagination-bar">
+      <div class="pagination-info">
+        {% if transit_pagination.total_items %}
+          Showing {{ transit_pagination.start_index }}–{{ transit_pagination.end_index }} of {{ transit_pagination.total_items }} orders
+        {% else %}
+          No orders to display
+        {% endif %}
+      </div>
+      <div class="pagination-controls">
+        <form method="get" class="pagination-size">
+          <input type="hidden" name="{{ transit_pagination.page_param }}" value="1">
+          {% for key, value in request.args.items() %}
+            {% if key not in [transit_pagination.per_page_param, transit_pagination.page_param] %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
+            {% endif %}
+          {% endfor %}
+          <label for="transitPerPage">Per page:</label>
+          <select id="transitPerPage" name="{{ transit_pagination.per_page_param }}" onchange="this.form.submit()">
+            {% for option in transit_pagination.per_page_links %}
+              <option value="{{ option.value }}" {% if option.active %}selected{% endif %}>{{ option.value }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <nav class="pagination-nav" aria-label="In Transit pagination">
+          {% if transit_pagination.has_prev %}
+            <a class="pagination-link" href="{{ transit_pagination.prev_url }}">&laquo; Prev</a>
+          {% else %}
+            <span class="pagination-link disabled">&laquo; Prev</span>
+          {% endif %}
+
+          {% for link in transit_pagination.page_links %}
+            {% if link.ellipsis %}
+              <span class="pagination-ellipsis">…</span>
+            {% else %}
+              {% if link.active %}
+                <span class="pagination-link active">{{ link.number }}</span>
+              {% else %}
+                <a class="pagination-link" href="{{ link.url }}">{{ link.number }}</a>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+
+          {% if transit_pagination.has_next %}
+            <a class="pagination-link" href="{{ transit_pagination.next_url }}">Next &raquo;</a>
+          {% else %}
+            <span class="pagination-link disabled">Next &raquo;</span>
+          {% endif %}
+        </nav>
+      </div>
     </div>
   </div>
 
@@ -259,20 +295,19 @@
               {{ sale.buyer_username or sale.ebay_buyer_username or 'N/A' }}
             </td>
             <td style="color:var(--text-secondary);">
-              {% set delivered_dt = sale.tracking_status_date or sale.delivered_at %}
-              {% if delivered_dt %}
-              {{ delivered_dt.strftime('%b %d, %Y') }}<br>
-              <span style="font-size:11px;color:var(--text-tertiary);">{{ delivered_dt.strftime('%I:%M %p') }}</span>
+              {% if sale.delivered_at %}
+              {{ sale.delivered_at.strftime('%b %d, %Y') }}<br>
+              <span style="font-size:11px;color:var(--text-tertiary);">{{ sale.delivered_at.strftime('%I:%M %p') }}</span>
               {% else %}
               N/A
               {% endif %}
             </td>
             <td style="color:var(--text-secondary);">
-              {{ sale.shippo_carrier or sale.carrier or 'N/A' }}
+              {{ sale.carrier or 'N/A' }}
             </td>
             <td>
               {% if sale.tracking_number %}
-              <a href="{{ sale.tracking_url or ('https://www.google.com/search?q=' ~ sale.tracking_number) }}"
+              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
                  target="_blank"
                  style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
                  title="Track package">
@@ -287,19 +322,9 @@
               ${{ "%.2f"|format(sale.sold_price) }}
             </td>
             <td>
-              <span class="tracking-badge" style="background:{{ sale.tracking_badge_bg }};color:{{ sale.tracking_badge_fg }};">
-                {{ sale.tracking_status_label }}
+              <span class="tag" style="background:rgba(16,185,129,0.15);color:#10b981;border:1px solid rgba(16,185,129,0.3);">
+                <i class="fas fa-check-circle"></i> Delivered
               </span>
-              {% if sale.tracking_status_details %}
-              <div style="margin-top:6px;font-size:11px;color:var(--text-secondary);line-height:1.4;">
-                {{ sale.tracking_status_details }}
-              </div>
-              {% endif %}
-              {% if sale.tracking_last_location %}
-              <div style="margin-top:4px;font-size:11px;color:var(--text-tertiary);">
-                <i class="fas fa-location-arrow"></i> {{ sale.tracking_last_location }}
-              </div>
-              {% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -307,56 +332,57 @@
         </tbody>
       </table>
     </div>
-  </div>
 
-  <div class="pagination-bar">
-    <div class="pagination-info">
-      {% if pagination.total_items %}
-        Showing {{ pagination.start_index }}–{{ pagination.end_index }} of {{ pagination.total_items }} orders
-      {% else %}
-        No orders to display
-      {% endif %}
-    </div>
-    <div class="pagination-controls">
-      <form method="get" class="pagination-size">
-        <input type="hidden" name="page" value="1">
-        {% for key, value in request.args.items() %}
-          {% if key not in ['per_page', 'page'] %}
-            <input type="hidden" name="{{ key }}" value="{{ value }}">
-          {% endif %}
-        {% endfor %}
-        <label for="fulfillmentPerPage">Per page:</label>
-        <select id="fulfillmentPerPage" name="per_page" onchange="this.form.submit()">
-          {% for option in pagination.per_page_links %}
-            <option value="{{ option.value }}" {% if option.active %}selected{% endif %}>{{ option.value }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      <nav class="pagination-nav" aria-label="Fulfillment pagination">
-        {% if pagination.has_prev %}
-          <a class="pagination-link" href="{{ pagination.prev_url }}">&laquo; Prev</a>
+    <!-- Delivered Pagination -->
+    <div class="pagination-bar">
+      <div class="pagination-info">
+        {% if delivered_pagination.total_items %}
+          Showing {{ delivered_pagination.start_index }}–{{ delivered_pagination.end_index }} of {{ delivered_pagination.total_items }} orders
         {% else %}
-          <span class="pagination-link disabled">&laquo; Prev</span>
+          No orders to display
         {% endif %}
-
-        {% for link in pagination.page_links %}
-          {% if link.ellipsis %}
-            <span class="pagination-ellipsis">…</span>
-          {% else %}
-            {% if link.active %}
-              <span class="pagination-link active">{{ link.number }}</span>
-            {% else %}
-              <a class="pagination-link" href="{{ link.url }}">{{ link.number }}</a>
+      </div>
+      <div class="pagination-controls">
+        <form method="get" class="pagination-size">
+          <input type="hidden" name="{{ delivered_pagination.page_param }}" value="1">
+          {% for key, value in request.args.items() %}
+            {% if key not in [delivered_pagination.per_page_param, delivered_pagination.page_param] %}
+              <input type="hidden" name="{{ key }}" value="{{ value }}">
             {% endif %}
+          {% endfor %}
+          <label for="deliveredPerPage">Per page:</label>
+          <select id="deliveredPerPage" name="{{ delivered_pagination.per_page_param }}" onchange="this.form.submit()">
+            {% for option in delivered_pagination.per_page_links %}
+              <option value="{{ option.value }}" {% if option.active %}selected{% endif %}>{{ option.value }}</option>
+            {% endfor %}
+          </select>
+        </form>
+        <nav class="pagination-nav" aria-label="Delivered pagination">
+          {% if delivered_pagination.has_prev %}
+            <a class="pagination-link" href="{{ delivered_pagination.prev_url }}">&laquo; Prev</a>
+          {% else %}
+            <span class="pagination-link disabled">&laquo; Prev</span>
           {% endif %}
-        {% endfor %}
 
-        {% if pagination.has_next %}
-          <a class="pagination-link" href="{{ pagination.next_url }}">Next &raquo;</a>
-        {% else %}
-          <span class="pagination-link disabled">Next &raquo;</span>
-        {% endif %}
-      </nav>
+          {% for link in delivered_pagination.page_links %}
+            {% if link.ellipsis %}
+              <span class="pagination-ellipsis">…</span>
+            {% else %}
+              {% if link.active %}
+                <span class="pagination-link active">{{ link.number }}</span>
+              {% else %}
+                <a class="pagination-link" href="{{ link.url }}">{{ link.number }}</a>
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+
+          {% if delivered_pagination.has_next %}
+            <a class="pagination-link" href="{{ delivered_pagination.next_url }}">Next &raquo;</a>
+          {% else %}
+            <span class="pagination-link disabled">Next &raquo;</span>
+          {% endif %}
+        </nav>
+      </div>
     </div>
   </div>
 

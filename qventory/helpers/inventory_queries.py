@@ -241,78 +241,86 @@ WHERE {where_clause}
   AND s.id IS NULL;
 """
 
-FULFILLMENT_SQL = """
-WITH fulfillment_events AS (
-    SELECT
-        s.id,
-        s.user_id,
-        s.item_id,
-        s.marketplace,
-        s.marketplace_order_id,
-        s.item_title,
-        s.item_sku,
-        s.buyer_username,
-        s.ebay_buyer_username,
-        s.carrier,
-        s.tracking_number,
-        s.sold_price,
-        s.shipping_cost,
-        s.shipped_at,
-        s.delivered_at,
-        s.status,
-        CASE
-            WHEN s.delivered_at IS NOT NULL THEN 'delivered'
-            WHEN s.shipped_at IS NOT NULL THEN 'shipped'
-            ELSE 'pending'
-        END AS fulfillment_state,
-        GREATEST(
-            COALESCE(s.delivered_at, '-infinity'::timestamp),
-            COALESCE(s.shipped_at, '-infinity'::timestamp)
-        ) AS event_ts,
-        COALESCE(s.item_title, i.title) AS resolved_title,
-        COALESCE(s.item_sku, i.sku)     AS resolved_sku,
-        i.item_thumb,
-        i.location_code
-    FROM sales AS s
-    LEFT JOIN items AS i
-      ON i.id = s.item_id
-     AND i.user_id = s.user_id
-    WHERE s.user_id = :user_id
-      AND (s.shipped_at IS NOT NULL OR s.delivered_at IS NOT NULL)
-)
+# In Transit: Orders that have been shipped but not yet delivered
+FULFILLMENT_IN_TRANSIT_SQL = """
 SELECT
-    fe.id,
-    fe.user_id,
-    fe.item_id,
-    fe.marketplace,
-    fe.marketplace_order_id,
-    fe.item_title,
-    fe.item_sku,
-    fe.buyer_username,
-    fe.ebay_buyer_username,
-    fe.carrier,
-    fe.tracking_number,
-    fe.sold_price,
-    fe.shipping_cost,
-    fe.shipped_at,
-    fe.delivered_at,
-    fe.status,
-    fe.fulfillment_state,
-    fe.event_ts,
-    fe.resolved_title,
-    fe.resolved_sku,
-    fe.item_thumb,
-    fe.location_code
-FROM fulfillment_events AS fe
-ORDER BY fe.event_ts DESC NULLS LAST, fe.id DESC
+    s.id,
+    s.user_id,
+    s.item_id,
+    s.marketplace,
+    s.marketplace_order_id,
+    s.item_title,
+    s.item_sku,
+    s.buyer_username,
+    s.ebay_buyer_username,
+    s.carrier,
+    s.tracking_number,
+    s.sold_price,
+    s.shipping_cost,
+    s.shipped_at,
+    s.delivered_at,
+    s.status,
+    COALESCE(s.item_title, i.title) AS resolved_title,
+    COALESCE(s.item_sku, i.sku)     AS resolved_sku,
+    i.item_thumb,
+    i.location_code
+FROM sales AS s
+LEFT JOIN items AS i
+  ON i.id = s.item_id
+ AND i.user_id = s.user_id
+WHERE s.user_id = :user_id
+  AND s.shipped_at IS NOT NULL
+  AND s.delivered_at IS NULL
+ORDER BY s.shipped_at DESC NULLS LAST, s.id DESC
 LIMIT :limit OFFSET :offset;
 """
 
-FULFILLMENT_COUNT_SQL = """
+FULFILLMENT_IN_TRANSIT_COUNT_SQL = """
 SELECT COUNT(*)
 FROM sales AS s
 WHERE s.user_id = :user_id
-  AND (s.shipped_at IS NOT NULL OR s.delivered_at IS NOT NULL);
+  AND s.shipped_at IS NOT NULL
+  AND s.delivered_at IS NULL;
+"""
+
+# Delivered: Orders that have been delivered
+FULFILLMENT_DELIVERED_SQL = """
+SELECT
+    s.id,
+    s.user_id,
+    s.item_id,
+    s.marketplace,
+    s.marketplace_order_id,
+    s.item_title,
+    s.item_sku,
+    s.buyer_username,
+    s.ebay_buyer_username,
+    s.carrier,
+    s.tracking_number,
+    s.sold_price,
+    s.shipping_cost,
+    s.shipped_at,
+    s.delivered_at,
+    s.status,
+    COALESCE(s.item_title, i.title) AS resolved_title,
+    COALESCE(s.item_sku, i.sku)     AS resolved_sku,
+    i.item_thumb,
+    i.location_code
+FROM sales AS s
+LEFT JOIN items AS i
+  ON i.id = s.item_id
+ AND i.user_id = s.user_id
+WHERE s.user_id = :user_id
+  AND s.delivered_at IS NOT NULL
+ORDER BY s.delivered_at DESC NULLS LAST, s.id DESC
+LIMIT :limit OFFSET :offset;
+"""
+
+FULFILLMENT_DELIVERED_COUNT_SQL = """
+SELECT COUNT(*)
+FROM sales AS s
+WHERE s.user_id = :user_id
+  AND s.delivered_at IS NOT NULL;
 """
 
 THUMBNAIL_MISMATCH_SQL = """
@@ -452,16 +460,31 @@ def fetch_ended_items(
     return items, total
 
 
-def fetch_fulfillment_orders(
+def fetch_fulfillment_in_transit(
     session: Session,
     *,
     user_id: int,
-    limit: int = 200,
+    limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
+    """Fetch orders that are shipped but not yet delivered (delivered_at IS NULL)"""
     query_params = {"user_id": user_id, "limit": limit, "offset": offset}
-    items = _rows_to_objects(session.execute(text(FULFILLMENT_SQL), query_params))
-    total = session.execute(text(FULFILLMENT_COUNT_SQL), {"user_id": user_id}).scalar_one()
+    items = _rows_to_objects(session.execute(text(FULFILLMENT_IN_TRANSIT_SQL), query_params))
+    total = session.execute(text(FULFILLMENT_IN_TRANSIT_COUNT_SQL), {"user_id": user_id}).scalar_one()
+    return items, total
+
+
+def fetch_fulfillment_delivered(
+    session: Session,
+    *,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[SimpleNamespace], int]:
+    """Fetch orders that have been delivered (delivered_at IS NOT NULL)"""
+    query_params = {"user_id": user_id, "limit": limit, "offset": offset}
+    items = _rows_to_objects(session.execute(text(FULFILLMENT_DELIVERED_SQL), query_params))
+    total = session.execute(text(FULFILLMENT_DELIVERED_COUNT_SQL), {"user_id": user_id}).scalar_one()
     return items, total
 
 

@@ -44,7 +44,8 @@ from ..helpers.inventory_queries import (
     fetch_active_items,
     fetch_sold_items,
     fetch_ended_items,
-    fetch_fulfillment_orders,
+    fetch_fulfillment_in_transit,
+    fetch_fulfillment_delivered,
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
 )
@@ -187,6 +188,77 @@ def _build_pagination_metadata(total_items: int, page: int, per_page: int):
         "per_page_links": per_page_links,
         "start_index": start_index,
         "end_index": end_index,
+    }
+
+
+def _build_independent_pagination(total_items: int, page: int, per_page: int, page_param: str, per_page_param: str):
+    """Build pagination metadata for independent tables with custom param names"""
+    total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
+    page = max(1, min(page, total_pages))
+
+    base_params = request.args.to_dict(flat=True)
+    base_view_args = dict(request.view_args or {})
+
+    def build_url(page_value: int | None = None, per_page_value: int | None = None):
+        params = dict(base_view_args)
+        params.update(base_params)
+        if page_value is not None:
+            params[page_param] = page_value
+        else:
+            params.pop(page_param, None)
+        params[per_page_param] = per_page_value if per_page_value is not None else per_page
+        return url_for(request.endpoint, **params)
+
+    page_links = []
+    if total_pages <= 7:
+        numbers = list(range(1, total_pages + 1))
+    else:
+        numbers = [1]
+        left = max(2, page - 2)
+        right = min(total_pages - 1, page + 2)
+        if left > 2:
+            numbers.append(None)
+        numbers.extend(range(left, right + 1))
+        if right < total_pages - 1:
+            numbers.append(None)
+        numbers.append(total_pages)
+
+    for num in numbers:
+        if num is None:
+            page_links.append({"ellipsis": True})
+        else:
+            page_links.append({
+                "number": num,
+                "url": build_url(page_value=num),
+                "active": num == page
+            })
+
+    per_page_links = [
+        {
+            "value": size,
+            "url": build_url(page_value=1, per_page_value=size),
+            "active": size == per_page
+        } for size in PAGE_SIZES
+    ]
+
+    start_index = ((page - 1) * per_page + 1) if total_items else 0
+    end_index = min(start_index + per_page - 1, total_items) if total_items else 0
+
+    return {
+        "page": page,
+        "per_page": per_page,
+        "total_items": total_items,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "prev_url": build_url(page_value=page - 1) if page > 1 else None,
+        "next_url": build_url(page_value=page + 1) if page < total_pages else None,
+        "page_links": page_links,
+        "per_page_links": per_page_links,
+        "start_index": start_index,
+        "end_index": end_index,
+        "page_param": page_param,
+        "per_page_param": per_page_param,
     }
 
 
@@ -589,60 +661,87 @@ def inventory_ended():
 @main_bp.route("/fulfillment")
 @login_required
 def fulfillment():
-    """Show shipped and delivered orders based on eBay fulfillment status"""
+    """Show shipped and delivered orders with independent pagination"""
     from ..models.sale import Sale
 
-    page, per_page, offset = _get_pagination_params()
+    # Get pagination params for "in transit" table
+    try:
+        transit_page = int(request.args.get("transit_page", 1))
+    except (TypeError, ValueError):
+        transit_page = 1
+    transit_page = max(transit_page, 1)
 
-    orders, total_items = fetch_fulfillment_orders(
+    try:
+        transit_per_page = int(request.args.get("transit_per_page", 20))
+    except (TypeError, ValueError):
+        transit_per_page = 20
+    if transit_per_page not in PAGE_SIZES:
+        transit_per_page = 20
+    transit_offset = (transit_page - 1) * transit_per_page
+
+    # Get pagination params for "delivered" table
+    try:
+        delivered_page = int(request.args.get("delivered_page", 1))
+    except (TypeError, ValueError):
+        delivered_page = 1
+    delivered_page = max(delivered_page, 1)
+
+    try:
+        delivered_per_page = int(request.args.get("delivered_per_page", 20))
+    except (TypeError, ValueError):
+        delivered_per_page = 20
+    if delivered_per_page not in PAGE_SIZES:
+        delivered_per_page = 20
+    delivered_offset = (delivered_page - 1) * delivered_per_page
+
+    # Fetch in transit orders (shipped but not delivered)
+    shipped_orders, shipped_total = fetch_fulfillment_in_transit(
         db.session,
         user_id=current_user.id,
-        limit=per_page,
-        offset=offset,
+        limit=transit_per_page,
+        offset=transit_offset,
     )
 
-    if total_items and offset >= total_items and page > 1:
-        total_pages = max(1, math.ceil(total_items / per_page))
-        page = total_pages
-        offset = (page - 1) * per_page
-        orders, total_items = fetch_fulfillment_orders(
-            db.session,
-            user_id=current_user.id,
-            limit=per_page,
-            offset=offset,
-        )
+    # Fetch delivered orders
+    delivered_orders, delivered_total = fetch_fulfillment_delivered(
+        db.session,
+        user_id=current_user.id,
+        limit=delivered_per_page,
+        offset=delivered_offset,
+    )
 
-    pagination = _build_pagination_metadata(total_items, page, per_page)
-
-    for order in orders:
+    # Resolve titles and SKUs
+    for order in shipped_orders:
         if getattr(order, "resolved_title", None):
             order.item_title = order.resolved_title
         if getattr(order, "resolved_sku", None):
             order.item_sku = order.resolved_sku
 
-    # Classify orders based on delivered_at field from eBay
-    # delivered_at IS NOT NULL = FULFILLED (delivered)
-    # delivered_at IS NULL = IN_PROGRESS (in transit)
-    shipped_orders = [o for o in orders if o.fulfillment_state == "shipped"]
-    delivered_orders = [o for o in orders if o.fulfillment_state == "delivered"]
+    for order in delivered_orders:
+        if getattr(order, "resolved_title", None):
+            order.item_title = order.resolved_title
+        if getattr(order, "resolved_sku", None):
+            order.item_sku = order.resolved_sku
 
-    def _event_key(order):
-        return order.event_ts or datetime.min
+    # Build independent pagination for in transit table
+    transit_pagination = _build_independent_pagination(
+        total_items=shipped_total,
+        page=transit_page,
+        per_page=transit_per_page,
+        page_param="transit_page",
+        per_page_param="transit_per_page",
+    )
 
-    shipped_orders.sort(key=_event_key, reverse=True)
-    delivered_orders.sort(key=_event_key, reverse=True)
+    # Build independent pagination for delivered table
+    delivered_pagination = _build_independent_pagination(
+        total_items=delivered_total,
+        page=delivered_page,
+        per_page=delivered_per_page,
+        page_param="delivered_page",
+        per_page_param="delivered_per_page",
+    )
 
-    shipped_count = db.session.query(func.count(Sale.id)).filter(
-        Sale.user_id == current_user.id,
-        Sale.shipped_at.isnot(None),
-        Sale.delivered_at.is_(None)
-    ).scalar()
-
-    delivered_count = db.session.query(func.count(Sale.id)).filter(
-        Sale.user_id == current_user.id,
-        Sale.delivered_at.isnot(None)
-    ).scalar()
-
+    # Calculate total value across all fulfilled orders
     total_value = db.session.query(func.coalesce(func.sum(Sale.sold_price), 0)).filter(
         Sale.user_id == current_user.id,
         or_(Sale.shipped_at.isnot(None), Sale.delivered_at.isnot(None))
@@ -652,10 +751,11 @@ def fulfillment():
         "fulfillment.html",
         shipped_orders=shipped_orders,
         delivered_orders=delivered_orders,
-        shipped_count=shipped_count,
-        delivered_count=delivered_count,
+        shipped_count=shipped_total,
+        delivered_count=delivered_total,
         total_value=total_value or 0,
-        pagination=pagination,
+        transit_pagination=transit_pagination,
+        delivered_pagination=delivered_pagination,
         shippo_enabled=False,
         shippo_errors=[],
         shippo_last_update=None,
