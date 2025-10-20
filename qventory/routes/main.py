@@ -1165,9 +1165,19 @@ def _parse_external_row_to_qventory(row, user_id):
     sku = generate_sku()
 
     # Mapear campos
-    cost = ffloat('Cost') or ffloat('cost')
-    price = ffloat('List price') or ffloat('list price') or ffloat('List Price')
-    supplier = fstr('Purchased at') or fstr('purchased at')
+    cost = ffloat('Cost') or ffloat('cost') or ffloat('Item Cost') or ffloat('item_cost')
+    price = ffloat('List price') or ffloat('list price') or ffloat('List Price') or ffloat('Price') or ffloat('price')
+
+    # Reconocer múltiples variantes de la columna supplier
+    supplier = (
+        fstr('Supplier') or fstr('supplier') or
+        fstr('Purchased at') or fstr('purchased at') or fstr('Purchased At') or
+        fstr('Buy at') or fstr('buy at') or fstr('Buy At') or
+        fstr('buy_at') or fstr('Buy_At') or
+        fstr('Bought at') or fstr('bought at') or fstr('Bought At') or
+        fstr('Vendor') or fstr('vendor') or
+        fstr('Source') or fstr('source')
+    )
 
     # eBay Item ID -> construir URL de eBay
     ebay_item_id = fstr('eBay Item ID') or fstr('ebay item id')
@@ -1289,10 +1299,16 @@ def import_csv():
         updated_count = 0
         skipped_count = 0
         duplicate_count = 0
+        matched_and_updated_count = 0  # New: items updated by title match
 
-        # Set para detectar duplicados por título
+        # Build a dictionary of existing items indexed by normalized title
+        existing_items_by_title = {}
+        for item in Item.query.filter_by(user_id=current_user.id).all():
+            normalized_title = item.title.lower().strip()
+            existing_items_by_title[normalized_title] = item
+
+        # Set para detectar duplicados por título en el CSV
         seen_titles = set()
-        existing_titles = {item.title.lower().strip() for item in Item.query.filter_by(user_id=current_user.id).all()}
 
         for row in csv_reader:
             # Parsear según el formato detectado
@@ -1308,33 +1324,59 @@ def import_csv():
                 skipped_count += 1
                 continue
 
-            # Detectar duplicados exactos por título
+            # Normalize title for matching
             title_normalized = parsed_data['title'].lower().strip()
 
-            # Si el título ya existe en la BD o en este mismo CSV, saltar
-            if title_normalized in existing_titles or title_normalized in seen_titles:
+            # Check if this title already exists in the database
+            existing_item = existing_items_by_title.get(title_normalized)
+
+            if existing_item:
+                # Item exists - update ONLY supplier and cost if present in CSV
+                updated_fields = []
+
+                if parsed_data.get('supplier') is not None:
+                    existing_item.supplier = parsed_data['supplier']
+                    updated_fields.append('supplier')
+
+                if parsed_data.get('item_cost') is not None:
+                    existing_item.item_cost = parsed_data['item_cost']
+                    updated_fields.append('cost')
+
+                if updated_fields:
+                    matched_and_updated_count += 1
+                else:
+                    # Title matched but no usable data to update
+                    skipped_count += 1
+
+                # Mark as seen to avoid processing duplicates in CSV
+                seen_titles.add(title_normalized)
+                continue
+
+            # No existing item found by title - check if duplicate in CSV
+            if title_normalized in seen_titles:
                 duplicate_count += 1
                 continue
 
             seen_titles.add(title_normalized)
 
+            # For new items, check by SKU as well (legacy behavior)
             sku = parsed_data['sku']
-            existing_item = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
+            existing_item_by_sku = Item.query.filter_by(user_id=current_user.id, sku=sku).first()
 
-            if existing_item and mode == 'add':
-                # Actualizar item existente
+            if existing_item_by_sku and mode == 'add':
+                # Actualizar item existente por SKU
                 for key, value in parsed_data.items():
                     if key != 'sku':  # No actualizar el SKU
-                        setattr(existing_item, key, value)
+                        setattr(existing_item_by_sku, key, value)
                 updated_count += 1
 
-            elif not existing_item:
+            elif not existing_item_by_sku:
                 # Crear nuevo item
                 new_item = Item(user_id=current_user.id, **parsed_data)
                 db.session.add(new_item)
                 imported_count += 1
-                # Agregar a existing_titles para prevenir duplicados en el mismo CSV
-                existing_titles.add(title_normalized)
+                # Add to existing_items_by_title to prevent duplicates in same CSV
+                existing_items_by_title[title_normalized] = new_item
 
         if mode == 'replace':
             # En modo replace, eliminar items que no están en el CSV
@@ -1358,7 +1400,9 @@ def import_csv():
         if imported_count > 0:
             messages.append(f"{imported_count} items imported")
         if updated_count > 0:
-            messages.append(f"{updated_count} items updated")
+            messages.append(f"{updated_count} items updated (by SKU)")
+        if matched_and_updated_count > 0:
+            messages.append(f"{matched_and_updated_count} items updated (by title match)")
         if duplicate_count > 0:
             messages.append(f"{duplicate_count} duplicates skipped")
         if skipped_count > 0:
