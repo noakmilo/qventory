@@ -179,11 +179,14 @@ class AutoRelistRule(db.Model):
             if is_first_run and self.run_first_relist_immediately:
                 # Schedule 10 seconds in the past to ensure it's picked up immediately
                 next_run = now - timedelta(seconds=10)
+                # IMPORTANT: Skip quiet hours for immediate first run
+                skip_quiet_hours = True
             else:
                 next_run = now + timedelta(days=interval_days)
+                skip_quiet_hours = False
 
-            # Apply quiet hours window if configured
-            if self.quiet_hours_start and self.quiet_hours_end:
+            # Apply quiet hours window if configured (but not for immediate first run)
+            if self.quiet_hours_start and self.quiet_hours_end and not skip_quiet_hours:
                 # Set time to start of quiet hours window
                 next_run = next_run.replace(
                     hour=self.quiet_hours_start.hour,
