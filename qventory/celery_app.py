@@ -54,6 +54,13 @@ celery.conf.beat_schedule = {
             'expires': 60 * 60,  # Expire after 1 hour if not picked up
         }
     },
+    'poll-ebay-listings-every-minute': {
+        'task': 'qventory.tasks.poll_ebay_new_listings',
+        'schedule': 60.0,  # Every 60 seconds
+        'options': {
+            'expires': 55,  # Expire after 55 seconds if not picked up
+        }
+    },
 }
 
 if __name__ == '__main__':

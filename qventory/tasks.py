@@ -2171,3 +2171,317 @@ def process_relist_item_notification(event):
     except Exception as e:
         log_task(f"  ✗ Error: {str(e)}")
         return {'status': 'error', 'message': str(e)}
+
+
+@celery.task(bind=True, name='qventory.tasks.poll_ebay_new_listings')
+def poll_ebay_new_listings(self):
+    """
+    Poll eBay GetSellerEvents for new listings and import them automatically
+
+    This task runs every 60 seconds and checks for new listings created
+    in the last 5 minutes. It's an alternative to Platform Notifications
+    that works with OAuth 2.0.
+
+    Smart polling: Only checks users who are "active" to reduce API load.
+
+    Returns:
+        dict: Summary of polling results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.user import User
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.item import Item
+        from datetime import datetime, timedelta
+        import requests
+
+        log_task("=== Polling eBay for new listings ===")
+
+        # Get all users with active eBay credentials
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        if not credentials:
+            log_task("No users with eBay connected")
+            return {
+                'success': True,
+                'users_checked': 0,
+                'new_listings': 0,
+                'errors': 0
+            }
+
+        # Smart polling: Filter to only "active" users
+        active_credentials = []
+        for cred in credentials:
+            # Check if user has created/updated items in last 30 days
+            # Or has logged in recently
+            user = User.query.get(cred.user_id)
+            if user and should_poll_user(user, cred):
+                active_credentials.append(cred)
+
+        log_task(f"Found {len(active_credentials)} active users to check (out of {len(credentials)} total)")
+
+        total_new = 0
+        total_errors = 0
+
+        for cred in active_credentials:
+            try:
+                result = poll_user_listings(cred)
+                total_new += result.get('new_listings', 0)
+
+                if result.get('new_listings', 0) > 0:
+                    log_task(f"  User {cred.user_id}: {result['new_listings']} new listings imported")
+
+            except Exception as e:
+                log_task(f"  ✗ Error polling user {cred.user_id}: {str(e)}")
+                total_errors += 1
+
+        log_task(f"=== Polling complete: {total_new} new listings, {total_errors} errors ===")
+
+        return {
+            'success': True,
+            'users_checked': len(active_credentials),
+            'new_listings': total_new,
+            'errors': total_errors
+        }
+
+
+def should_poll_user(user, credential):
+    """
+    Determine if we should poll this user's eBay account
+
+    Smart polling logic:
+    - Always poll if last login < 24 hours
+    - Always poll if items created/updated < 7 days
+    - Poll every 10 minutes if last activity < 30 days
+    - Poll every hour if last activity > 30 days
+
+    Args:
+        user: User object
+        credential: MarketplaceCredential object
+
+    Returns:
+        bool: True if should poll now
+    """
+    from datetime import datetime, timedelta
+
+    now = datetime.utcnow()
+
+    # Always poll if logged in recently (active users)
+    if user.last_login and (now - user.last_login) < timedelta(hours=24):
+        return True
+
+    # Check last polling time (stored in credential for efficiency)
+    last_poll = getattr(credential, 'last_poll_at', None)
+
+    # First time polling - always check
+    if not last_poll:
+        return True
+
+    # Check if user has recent item activity
+    from qventory.models.item import Item
+    recent_item = Item.query.filter_by(user_id=user.id).filter(
+        Item.created_at > (now - timedelta(days=7))
+    ).first()
+
+    if recent_item:
+        # Active seller - poll every 60 seconds (this task's frequency)
+        return True
+
+    # Check if user has activity in last 30 days
+    activity_30d = Item.query.filter_by(user_id=user.id).filter(
+        Item.created_at > (now - timedelta(days=30))
+    ).first()
+
+    if activity_30d:
+        # Somewhat active - poll every 10 minutes
+        return (now - last_poll) >= timedelta(minutes=10)
+
+    # Inactive user - poll every hour
+    return (now - last_poll) >= timedelta(hours=1)
+
+
+def poll_user_listings(credential):
+    """
+    Poll eBay GetSellerEvents for a single user
+
+    Fetches events from last 5 minutes and imports new listings.
+
+    Args:
+        credential: MarketplaceCredential object
+
+    Returns:
+        dict: {'new_listings': int, 'errors': []}
+    """
+    from datetime import datetime, timedelta
+    from qventory.models.item import Item
+    from qventory.helpers import generate_sku
+    import os
+    import requests
+
+    user_id = credential.user_id
+    access_token = credential.access_token
+
+    # Update last poll time
+    credential.last_poll_at = datetime.utcnow()
+    db.session.commit()
+
+    # eBay Trading API endpoint
+    is_sandbox = os.environ.get('EBAY_SANDBOX', 'false').lower() == 'true'
+    api_url = (
+        'https://api.sandbox.ebay.com/ws/api.dll'
+        if is_sandbox else
+        'https://api.ebay.com/ws/api.dll'
+    )
+
+    # Get events from last 5 minutes
+    time_to = datetime.utcnow()
+    time_from = time_to - timedelta(minutes=5)
+
+    # Build GetSellerEvents XML request
+    ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
+    ebay_dev_id = os.environ.get('EBAY_DEV_ID')
+    ebay_cert_id = os.environ.get('EBAY_CERT_ID')
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetSellerEventsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <StartTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
+  <StartTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetSellerEventsRequest>'''
+
+    headers = {
+        'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+        'X-EBAY-API-DEV-NAME': ebay_dev_id,
+        'X-EBAY-API-APP-NAME': ebay_app_id,
+        'X-EBAY-API-CERT-NAME': ebay_cert_id,
+        'X-EBAY-API-CALL-NAME': 'GetSellerEvents',
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-IAF-TOKEN': access_token,
+        'Content-Type': 'text/xml'
+    }
+
+    try:
+        response = requests.post(api_url, data=xml_request, headers=headers, timeout=30)
+
+        if response.status_code != 200:
+            log_task(f"    GetSellerEvents failed: {response.status_code}")
+            return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
+
+        # Parse XML response
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(response.text)
+
+        # Check for success
+        ack = root.find('.//{urn:ebay:apis:eBLBaseComponents}Ack')
+        if ack is None or ack.text not in ['Success', 'Warning']:
+            errors = root.findall('.//{urn:ebay:apis:eBLBaseComponents}Errors')
+            error_msgs = [e.find('.//{urn:ebay:apis:eBLBaseComponents}LongMessage').text
+                         for e in errors if e.find('.//{urn:ebay:apis:eBLBaseComponents}LongMessage') is not None]
+            log_task(f"    GetSellerEvents error: {'; '.join(error_msgs)}")
+            return {'new_listings': 0, 'errors': error_msgs}
+
+        # Extract items from ItemArray
+        items = root.findall('.//{urn:ebay:apis:eBLBaseComponents}ItemArray/{urn:ebay:apis:eBLBaseComponents}Item')
+
+        new_listings = 0
+
+        for item_elem in items:
+            item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
+            title = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}Title')
+
+            if item_id is None or title is None:
+                continue
+
+            item_id_text = item_id.text
+            title_text = title.text
+
+            # Check if we already have this listing
+            existing = Item.query.filter_by(
+                user_id=user_id,
+                ebay_listing_id=item_id_text
+            ).first()
+
+            if existing:
+                continue  # Already imported
+
+            # Extract price
+            price_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}StartPrice')
+            bin_price_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}BuyItNowPrice')
+
+            price = None
+            if bin_price_elem is not None and bin_price_elem.text:
+                try:
+                    price = float(bin_price_elem.text)
+                except:
+                    pass
+
+            if not price and price_elem is not None and price_elem.text:
+                try:
+                    price = float(price_elem.text)
+                except:
+                    pass
+
+            # Extract SKU
+            sku_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}SKU')
+            sku = sku_elem.text if sku_elem is not None and sku_elem.text else generate_sku()
+
+            # Extract listing URL
+            view_url_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ListingDetails/{urn:ebay:apis:eBLBaseComponents}ViewItemURL')
+            view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{item_id_text}'
+
+            # Create new item
+            new_item = Item(
+                user_id=user_id,
+                title=title_text[:500] if title_text else 'eBay Item',
+                sku=sku[:50] if sku else generate_sku(),
+                ebay_listing_id=item_id_text,
+                ebay_sku=sku[:100] if sku else None,
+                listing_link=view_url,
+                listing_price=price,
+                synced_from_ebay=True,
+                last_ebay_sync=datetime.utcnow(),
+                notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
+            )
+
+            db.session.add(new_item)
+            new_listings += 1
+
+            log_task(f"    ✓ New listing: {title_text[:50]}")
+
+        if new_listings > 0:
+            db.session.commit()
+
+            # Send notification to user
+            from qventory.models.notification import Notification
+            if new_listings == 1:
+                Notification.create_notification(
+                    user_id=user_id,
+                    type='success',
+                    title='New eBay listing imported!',
+                    message=f'{title_text[:50]} was automatically imported',
+                    link_url='/inventory',
+                    link_text='View Inventory',
+                    source='ebay_sync'
+                )
+            else:
+                Notification.create_notification(
+                    user_id=user_id,
+                    type='success',
+                    title=f'{new_listings} eBay listings imported!',
+                    message=f'{new_listings} new listings were automatically imported from eBay',
+                    link_url='/inventory',
+                    link_text='View Inventory',
+                    source='ebay_sync'
+                )
+
+        return {'new_listings': new_listings, 'errors': []}
+
+    except Exception as e:
+        log_task(f"    ✗ Exception: {str(e)}")
+        import traceback
+        log_task(f"    Traceback: {traceback.format_exc()}")
+        return {'new_listings': 0, 'errors': [str(e)]}
