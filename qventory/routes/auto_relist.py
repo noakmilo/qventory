@@ -572,6 +572,49 @@ def get_rule_details(rule_id):
 
 # ==================== API: GET AVAILABLE OFFERS ====================
 
+@auto_relist_bp.route('/debug/rules')
+@login_required
+def debug_rules():
+    """Debug endpoint to see rule execution status"""
+    from datetime import datetime
+
+    rules = AutoRelistRule.query.filter_by(user_id=current_user.id).all()
+
+    debug_info = []
+    now = datetime.utcnow()
+
+    for rule in rules:
+        time_diff = None
+        if rule.next_run_at:
+            time_diff = (rule.next_run_at - now).total_seconds() / 60  # minutes
+
+        debug_info.append({
+            'id': rule.id,
+            'item_title': rule.item_title,
+            'enabled': rule.enabled,
+            'mode': rule.mode,
+            'frequency': rule.frequency,
+            'run_first_immediately': rule.run_first_relist_immediately,
+            'next_run_at': rule.next_run_at.isoformat() if rule.next_run_at else None,
+            'current_time_utc': now.isoformat(),
+            'minutes_until_run': round(time_diff, 2) if time_diff else None,
+            'ready_to_run': rule.next_run_at <= now if rule.next_run_at else False,
+            'run_count': rule.run_count,
+            'success_count': rule.success_count,
+            'last_run_status': rule.last_run_status,
+            'last_run_at': rule.last_run_at.isoformat() if rule.last_run_at else None,
+            'manual_trigger_requested': getattr(rule, 'manual_trigger_requested', False)
+        })
+
+    return jsonify({
+        'success': True,
+        'current_time_utc': now.isoformat(),
+        'rules': debug_info,
+        'total_rules': len(rules),
+        'enabled_rules': sum(1 for r in rules if r.enabled)
+    })
+
+
 @auto_relist_bp.route('/api/offers')
 @login_required
 def get_available_offers():
