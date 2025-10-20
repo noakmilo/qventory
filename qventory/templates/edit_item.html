@@ -31,9 +31,10 @@
             <input class="input" type="text" name="title" value="{{ item.title }}" required>
           </div>
 
-          <div>
+          <div style="position:relative;">
             <label class="label"><i class="fas fa-truck"></i> Supplier</label>
-            <input class="input" type="text" name="supplier" value="{{ item.supplier or '' }}">
+            <input class="input" type="text" id="supplierInput" name="supplier" value="{{ item.supplier or '' }}" autocomplete="off">
+            <div id="supplierAutocompleteList" class="autocomplete-list"></div>
           </div>
           <div>
             <label class="label"><i class="fas fa-dollar-sign"></i> Cost</label>
@@ -863,6 +864,169 @@ document.addEventListener('DOMContentLoaded', () => {
   cost?.addEventListener('input', update);
   price?.addEventListener('input', update);
 })();
+</script>
+
+<style>
+/* Autocomplete dropdown styling */
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: none;
+}
+
+.autocomplete-list.show {
+  display: block;
+}
+
+.autocomplete-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--border);
+}
+
+.autocomplete-item:last-child {
+  border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: rgba(96, 165, 250, 0.15);
+}
+
+.autocomplete-item .match {
+  font-weight: 600;
+  color: #60a5fa;
+}
+</style>
+
+<script>
+/* ========== Supplier Autocomplete ========== */
+document.addEventListener('DOMContentLoaded', () => {
+  const supplierInput = document.getElementById('supplierInput');
+  const autocompleteList = document.getElementById('supplierAutocompleteList');
+
+  if (!supplierInput || !autocompleteList) return;
+
+  let activeIndex = -1;
+  let debounceTimer = null;
+
+  supplierInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+
+    // Clear previous timer
+    clearTimeout(debounceTimer);
+
+    // Hide list if query is too short
+    if (query.length < 1) {
+      autocompleteList.classList.remove('show');
+      autocompleteList.innerHTML = '';
+      return;
+    }
+
+    // Debounce API call (300ms)
+    debounceTimer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/suppliers/search?q=${encodeURIComponent(query)}`);
+        const suppliers = await response.json();
+
+        if (!suppliers || suppliers.length === 0) {
+          autocompleteList.classList.remove('show');
+          autocompleteList.innerHTML = '';
+          return;
+        }
+
+        // Build autocomplete list
+        autocompleteList.innerHTML = '';
+        suppliers.forEach((supplier, index) => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.innerHTML = highlightMatch(supplier, query);
+          div.dataset.value = supplier;
+          div.dataset.index = index;
+
+          div.addEventListener('click', () => {
+            supplierInput.value = supplier;
+            autocompleteList.classList.remove('show');
+            autocompleteList.innerHTML = '';
+          });
+
+          autocompleteList.appendChild(div);
+        });
+
+        autocompleteList.classList.add('show');
+        activeIndex = -1;
+      } catch (error) {
+        console.error('Supplier autocomplete error:', error);
+      }
+    }, 300);
+  });
+
+  // Keyboard navigation
+  supplierInput.addEventListener('keydown', (e) => {
+    const items = autocompleteList.querySelectorAll('.autocomplete-item');
+
+    if (!items.length) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+      updateActiveItem(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIndex = activeIndex <= 0 ? items.length - 1 : activeIndex - 1;
+      updateActiveItem(items);
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      items[activeIndex].click();
+    } else if (e.key === 'Escape') {
+      autocompleteList.classList.remove('show');
+      autocompleteList.innerHTML = '';
+      activeIndex = -1;
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!supplierInput.contains(e.target) && !autocompleteList.contains(e.target)) {
+      autocompleteList.classList.remove('show');
+      autocompleteList.innerHTML = '';
+      activeIndex = -1;
+    }
+  });
+
+  function updateActiveItem(items) {
+    items.forEach((item, index) => {
+      if (index === activeIndex) {
+        item.classList.add('active');
+        item.scrollIntoView({ block: 'nearest' });
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+
+  function highlightMatch(text, query) {
+    if (!text || !query) return text || '';
+    const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+    return text.replace(regex, '<span class="match">$1</span>');
+  }
+
+  function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+});
 </script>
 
 {% endblock %}

@@ -344,6 +344,33 @@ def api_update_item_inline(item_id):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@main_bp.route("/api/suppliers/search", methods=["GET"])
+@login_required
+def api_search_suppliers():
+    """
+    Search existing suppliers with autocomplete
+    Query params: q (search query)
+    Returns: JSON array of unique supplier names
+    """
+    query = request.args.get('q', '').strip()
+
+    if not query or len(query) < 1:
+        return jsonify([])
+
+    # Search for suppliers matching the query (case-insensitive)
+    suppliers = db.session.query(Item.supplier).filter(
+        Item.user_id == current_user.id,
+        Item.supplier.isnot(None),
+        Item.supplier != '',
+        Item.supplier.ilike(f'%{query}%')
+    ).distinct().order_by(Item.supplier.asc()).limit(10).all()
+
+    # Extract supplier names from result tuples
+    supplier_list = [s[0] for s in suppliers]
+
+    return jsonify(supplier_list)
+
+
 @main_bp.route("/dashboard")
 @login_required
 def dashboard():
