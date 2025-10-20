@@ -133,8 +133,8 @@ def handle_ebay_event():
         user_id = get_user_id_from_event(event_data)
 
         if not user_id:
-            log_webhook("⚠️  Could not determine user_id - storing with user_id=0 for manual review")
-            user_id = 0  # Placeholder for manual review
+            log_webhook("⚠️  Could not determine user_id - storing with user_id=NULL for manual review")
+            user_id = None  # Placeholder for manual review
 
         # === STEP 7: Store event in database ===
         webhook_event = WebhookEvent(
@@ -201,7 +201,7 @@ def handle_ebay_event():
         # Try to log error to database if possible
         try:
             error_event = WebhookEvent(
-                user_id=0,
+                user_id=None,
                 event_id=f"error_{datetime.utcnow().timestamp()}",
                 topic='ERROR',
                 payload={'error': str(e), 'raw_payload': request.get_data().decode('utf-8', errors='ignore')},

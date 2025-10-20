@@ -95,7 +95,7 @@ class WebhookEvent(db.Model):
     __tablename__ = 'webhook_events'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Nullable for events where user cannot be determined
     subscription_id = db.Column(db.Integer, db.ForeignKey('webhook_subscriptions.id'))
 
     # Event identification
