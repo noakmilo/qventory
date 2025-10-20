@@ -4,7 +4,7 @@ Handles UI and API endpoints for auto-relist feature
 """
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
-from datetime import datetime, time as datetime_time
+from datetime import datetime, time as datetime_time, timedelta
 from sqlalchemy import desc
 import sys
 
@@ -179,6 +179,9 @@ def create_rule():
 
             # Calculate first run
             rule.calculate_next_run()
+
+            if rule.run_first_relist_immediately:
+                rule.next_run_at = datetime.utcnow() - timedelta(seconds=5)
 
         # Common settings
         rule.withdraw_publish_delay_seconds = int(data.get('withdraw_publish_delay_seconds', 30))
