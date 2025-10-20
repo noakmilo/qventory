@@ -210,7 +210,6 @@ def setup_platform_notifications(user_id: int) -> dict:
 
     try:
         from qventory.models.user import User
-        from qventory.helpers.ebay_api import get_ebay_client
 
         # Get user's eBay credentials
         user = User.query.get(user_id)
@@ -219,15 +218,6 @@ def setup_platform_notifications(user_id: int) -> dict:
             return {
                 'success': False,
                 'error': 'No eBay credentials found'
-            }
-
-        # Get eBay client
-        client = get_ebay_client(user_id)
-        if not client:
-            log_auto_setup("✗ Could not create eBay client")
-            return {
-                'success': False,
-                'error': 'Could not authenticate with eBay'
             }
 
         # Get webhook base URL
@@ -245,7 +235,6 @@ def setup_platform_notifications(user_id: int) -> dict:
 
         # Call SetNotificationPreferences
         result = set_notification_preferences(
-            client=client,
             application_url=application_url,
             user_id=user_id
         )
@@ -267,14 +256,13 @@ def setup_platform_notifications(user_id: int) -> dict:
         }
 
 
-def set_notification_preferences(client, application_url: str, user_id: int) -> dict:
+def set_notification_preferences(application_url: str, user_id: int) -> dict:
     """
     Call eBay Trading API SetNotificationPreferences
 
     This is a SOAP XML API call (different from REST APIs).
 
     Args:
-        client: eBay API client (with Trading API access)
         application_url: URL where eBay will send notifications
         user_id: User ID for logging
 
@@ -291,14 +279,13 @@ def set_notification_preferences(client, application_url: str, user_id: int) -> 
         ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
         ebay_dev_id = os.environ.get('EBAY_DEV_ID')
         ebay_cert_id = os.environ.get('EBAY_CERT_ID')
-        ebay_user_token = client.access_token if hasattr(client, 'access_token') else None
 
         # Get user's OAuth token from database
-        if not ebay_user_token:
-            from qventory.models.user import User
-            user = User.query.get(user_id)
-            if user and user.ebay_oauth_data:
-                ebay_user_token = user.ebay_oauth_data.get('access_token')
+        from qventory.models.user import User
+        user = User.query.get(user_id)
+        ebay_user_token = None
+        if user and user.ebay_oauth_data:
+            ebay_user_token = user.ebay_oauth_data.get('access_token')
 
         if not all([ebay_app_id, ebay_dev_id, ebay_cert_id, ebay_user_token]):
             log_auto_setup("✗ Missing Trading API credentials")
