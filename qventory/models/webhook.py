@@ -15,7 +15,7 @@ class WebhookSubscription(db.Model):
     __tablename__ = 'webhook_subscriptions'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
 
     # eBay subscription details
     subscription_id = db.Column(db.String(100), unique=True, nullable=False)  # eBay's subscription ID
@@ -95,7 +95,7 @@ class WebhookEvent(db.Model):
     __tablename__ = 'webhook_events'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     subscription_id = db.Column(db.Integer, db.ForeignKey('webhook_subscriptions.id'))
 
     # Event identification

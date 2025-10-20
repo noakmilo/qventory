@@ -37,7 +37,7 @@ def upgrade():
         sa.Column('last_error_at', sa.DateTime(), nullable=True),
         sa.Column('last_error_message', sa.Text(), nullable=True),
         sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('subscription_id')
     )
@@ -78,7 +78,7 @@ def upgrade():
         sa.Column('received_at', sa.DateTime(), nullable=False),
         sa.Column('ebay_timestamp', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['subscription_id'], ['webhook_subscriptions.id'], ),
-        sa.ForeignKeyConstraint(['user_id'], ['user.id'], ),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('event_id')
     )
