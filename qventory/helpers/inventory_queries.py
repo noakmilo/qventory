@@ -31,6 +31,7 @@ def _build_item_filters(
     S: Optional[str] = None,
     C: Optional[str] = None,
     platform: Optional[str] = None,
+    missing_data: Optional[str] = None,
     alias: str = "i",
 ) -> Tuple[str, Dict[str, object]]:
     clauses = [f"{alias}.user_id = :user_id"]
@@ -57,6 +58,22 @@ def _build_item_filters(
         column = PLATFORM_COLUMNS.get(platform)
         if column:
             clauses.append(f"{alias}.{column} IS NOT NULL")
+
+    if missing_data:
+        # Filter items with missing data
+        missing_clauses = []
+        if missing_data == 'cost':
+            missing_clauses.append(f"{alias}.item_cost IS NULL")
+        elif missing_data == 'supplier':
+            missing_clauses.append(f"({alias}.supplier IS NULL OR {alias}.supplier = '')")
+        elif missing_data == 'location':
+            missing_clauses.append(f"({alias}.location_code IS NULL OR {alias}.location_code = '')")
+        elif missing_data == 'any':
+            # Any missing data: cost OR supplier OR location
+            missing_clauses.append(f"({alias}.item_cost IS NULL OR {alias}.supplier IS NULL OR {alias}.supplier = '' OR {alias}.location_code IS NULL OR {alias}.location_code = '')")
+
+        if missing_clauses:
+            clauses.append(f"({' OR '.join(missing_clauses)})")
 
     where_clause = " AND ".join(clauses)
     return where_clause, params
@@ -375,6 +392,7 @@ def fetch_active_items(
     S: Optional[str] = None,
     C: Optional[str] = None,
     platform: Optional[str] = None,
+    missing_data: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
@@ -386,6 +404,7 @@ def fetch_active_items(
         S=S,
         C=C,
         platform=platform,
+        missing_data=missing_data,
     )
     where_clause = f"{where_clause} AND i.is_active IS TRUE"
 
@@ -435,6 +454,7 @@ def fetch_ended_items(
     S: Optional[str] = None,
     C: Optional[str] = None,
     platform: Optional[str] = None,
+    missing_data: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
@@ -446,6 +466,7 @@ def fetch_ended_items(
         S=S,
         C=C,
         platform=platform,
+        missing_data=missing_data,
     )
     where_clause = f"{where_clause} AND COALESCE(i.is_active, FALSE) = FALSE"
 

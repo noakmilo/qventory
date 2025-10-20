@@ -102,6 +102,7 @@ def _get_inventory_filter_params():
         "S": _normalize_arg(request.args.get("S")),
         "C": _normalize_arg(request.args.get("C")),
         "platform": _normalize_arg(request.args.get("platform")),
+        "missing_data": _normalize_arg(request.args.get("missing_data")),
     }
 
 

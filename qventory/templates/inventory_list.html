@@ -129,6 +129,20 @@
         </div>
         {% endif %}
 
+        {# Missing Data Filter (only for Active inventory) #}
+        {% if view_type == 'active' %}
+        <div>
+          <label>Missing Data</label>
+          <select name="missing_data">
+            <option value="">All items</option>
+            <option value="any">Any missing data</option>
+            <option value="cost">Missing cost</option>
+            <option value="supplier">Missing supplier</option>
+            <option value="location">Missing location</option>
+          </select>
+        </div>
+        {% endif %}
+
         <div style="grid-column:1/-1">
           <button class="btn submitbtn" type="submit">Apply</button>
           <a class="btn" href="{{ request.path }}">Clear</a>
@@ -719,6 +733,35 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
       notification.remove();
     }, 5000);
+  }
+
+  // Preserve filter values from URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  const filterForm = document.getElementById('filterForm');
+
+  if (filterForm) {
+    // Preserve search query
+    const qParam = urlParams.get('q');
+    if (qParam) {
+      const qInput = filterForm.querySelector('[name="q"]');
+      if (qInput) qInput.value = qParam;
+    }
+
+    // Preserve ABSC filters
+    ['A', 'B', 'S', 'C'].forEach(field => {
+      const value = urlParams.get(field);
+      if (value) {
+        const select = filterForm.querySelector(`[name="${field}"]`);
+        if (select) select.value = value;
+      }
+    });
+
+    // Preserve missing_data filter
+    const missingDataParam = urlParams.get('missing_data');
+    if (missingDataParam) {
+      const missingDataSelect = filterForm.querySelector('[name="missing_data"]');
+      if (missingDataSelect) missingDataSelect.value = missingDataParam;
+    }
   }
 });
 </script>
