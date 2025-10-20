@@ -282,3 +282,216 @@ def webhook_health():
         'service': 'webhooks',
         'timestamp': datetime.utcnow().isoformat()
     }), 200
+
+
+# === Subscription Management Endpoints ===
+
+@webhook_bp.route('/subscriptions', methods=['GET'])
+def list_subscriptions():
+    """
+    List all webhook subscriptions for current user
+    Requires authentication
+    """
+    from flask_login import login_required, current_user
+    from qventory.models.webhook import WebhookSubscription
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    # Get subscriptions from database
+    subscriptions = WebhookSubscription.query.filter_by(
+        user_id=current_user.id
+    ).order_by(WebhookSubscription.created_at.desc()).all()
+
+    return jsonify({
+        'subscriptions': [sub.to_dict() for sub in subscriptions],
+        'total': len(subscriptions)
+    }), 200
+
+
+@webhook_bp.route('/subscriptions/create', methods=['POST'])
+def create_subscription():
+    """
+    Create a new webhook subscription
+    Requires authentication
+    """
+    from flask_login import login_required, current_user
+    from qventory.models.webhook import WebhookSubscription
+    from qventory.helpers.ebay_webhooks import create_webhook_subscription
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    # Get request data
+    data = request.get_json()
+    topic = data.get('topic')
+
+    if not topic:
+        return jsonify({'error': 'Topic is required'}), 400
+
+    # Get webhook base URL from environment
+    webhook_base_url = os.environ.get('WEBHOOK_BASE_URL')
+    if not webhook_base_url:
+        return jsonify({'error': 'WEBHOOK_BASE_URL not configured'}), 500
+
+    delivery_url = f"{webhook_base_url}/webhooks/ebay"
+
+    log_webhook(f"Creating subscription for user {current_user.id}, topic: {topic}")
+
+    # Check if subscription already exists
+    existing = WebhookSubscription.query.filter_by(
+        user_id=current_user.id,
+        topic=topic,
+        status='ENABLED'
+    ).first()
+
+    if existing:
+        return jsonify({
+            'error': 'Subscription already exists',
+            'subscription': existing.to_dict()
+        }), 409
+
+    # Create subscription with eBay
+    result = create_webhook_subscription(current_user.id, topic, delivery_url)
+
+    if not result['success']:
+        log_webhook(f"✗ Failed to create subscription: {result.get('error')}")
+        return jsonify({'error': result.get('error')}), 500
+
+    # Save to database
+    subscription = WebhookSubscription(
+        user_id=current_user.id,
+        subscription_id=result['subscription_id'],
+        topic=topic,
+        status='ENABLED',
+        delivery_url=delivery_url,
+        expires_at=result['expires_at']
+    )
+
+    db.session.add(subscription)
+    db.session.commit()
+
+    log_webhook(f"✓ Subscription created and saved: {subscription.id}")
+
+    return jsonify({
+        'success': True,
+        'subscription': subscription.to_dict()
+    }), 201
+
+
+@webhook_bp.route('/subscriptions/<int:subscription_id>/renew', methods=['POST'])
+def renew_subscription(subscription_id):
+    """
+    Manually renew a webhook subscription
+    Requires authentication
+    """
+    from flask_login import login_required, current_user
+    from qventory.models.webhook import WebhookSubscription
+    from qventory.helpers.ebay_webhooks import renew_webhook_subscription
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    # Get subscription
+    subscription = WebhookSubscription.query.get(subscription_id)
+
+    if not subscription:
+        return jsonify({'error': 'Subscription not found'}), 404
+
+    if subscription.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    log_webhook(f"Manually renewing subscription {subscription_id}")
+
+    # Renew with eBay
+    result = renew_webhook_subscription(current_user.id, subscription.subscription_id)
+
+    if not result['success']:
+        log_webhook(f"✗ Renewal failed: {result.get('error')}")
+        subscription.mark_error(result.get('error'))
+        return jsonify({'error': result.get('error')}), 500
+
+    # Update database
+    subscription.expires_at = result['expires_at']
+    subscription.last_renewed_at = datetime.utcnow()
+    subscription.renewal_attempts = 0
+    subscription.status = 'ENABLED'
+    db.session.commit()
+
+    log_webhook(f"✓ Subscription renewed: {subscription_id}")
+
+    return jsonify({
+        'success': True,
+        'subscription': subscription.to_dict()
+    }), 200
+
+
+@webhook_bp.route('/subscriptions/<int:subscription_id>', methods=['DELETE'])
+def delete_subscription(subscription_id):
+    """
+    Delete a webhook subscription
+    Requires authentication
+    """
+    from flask_login import login_required, current_user
+    from qventory.models.webhook import WebhookSubscription
+    from qventory.helpers.ebay_webhooks import delete_webhook_subscription
+
+    # Check if user is authenticated
+    if not current_user.is_authenticated:
+        return jsonify({'error': 'Authentication required'}), 401
+
+    # Get subscription
+    subscription = WebhookSubscription.query.get(subscription_id)
+
+    if not subscription:
+        return jsonify({'error': 'Subscription not found'}), 404
+
+    if subscription.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    log_webhook(f"Deleting subscription {subscription_id}")
+
+    # Delete from eBay
+    result = delete_webhook_subscription(
+        current_user.id,
+        subscription.subscription_id
+    )
+
+    if not result['success']:
+        log_webhook(f"⚠️  eBay deletion failed: {result.get('error')}, removing from DB anyway")
+
+    # Delete from database
+    db.session.delete(subscription)
+    db.session.commit()
+
+    log_webhook(f"✓ Subscription deleted: {subscription_id}")
+
+    return jsonify({'success': True}), 200
+
+
+@webhook_bp.route('/topics', methods=['GET'])
+def list_available_topics():
+    """
+    List all available webhook topics
+    """
+    from qventory.helpers.ebay_webhooks import AVAILABLE_TOPICS, get_recommended_topics
+
+    recommended = get_recommended_topics()
+
+    topics = []
+    for topic_id, info in AVAILABLE_TOPICS.items():
+        topics.append({
+            'id': topic_id,
+            'category': info['category'],
+            'description': info['description'],
+            'priority': info['priority'],
+            'recommended': topic_id in recommended
+        })
+
+    return jsonify({
+        'topics': topics,
+        'total': len(topics)
+    }), 200
