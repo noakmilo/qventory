@@ -1125,20 +1125,41 @@ def auto_relist_offers(self):
                 if rule.mode == 'auto' and rule.enable_price_decrease:
                     if not rule.current_price:
                         try:
-                            from qventory.helpers.ebay_relist import get_offer_details
-                            price_resp = get_offer_details(rule.user_id, rule.offer_id)
-                            if price_resp.get('success'):
-                                offer_data = price_resp.get('offer') or {}
-                                price_value = (
-                                    offer_data.get('pricingSummary', {})
-                                    .get('price', {})
-                                    .get('value')
-                                )
-                                if price_value is not None:
-                                    try:
-                                        rule.current_price = float(price_value)
-                                    except (TypeError, ValueError):
-                                        pass
+                            # Detect if we should use Trading API (listing ID) or Inventory API (offer ID)
+                            use_trading_api = (rule.offer_id and rule.offer_id.isdigit() and len(rule.offer_id) >= 10)
+
+                            if use_trading_api:
+                                # Use Trading API to get item price
+                                from qventory.helpers.ebay_relist import get_item_details_trading_api
+                                log_task(f"  Fetching current price via Trading API...")
+                                price_resp = get_item_details_trading_api(rule.user_id, rule.offer_id)
+                                if price_resp.get('success'):
+                                    item_data = price_resp.get('item') or {}
+                                    price_value = item_data.get('price')
+                                    if price_value is not None:
+                                        try:
+                                            rule.current_price = float(price_value)
+                                            log_task(f"  ✓ Fetched current price: ${rule.current_price}")
+                                        except (TypeError, ValueError):
+                                            pass
+                            else:
+                                # Use Inventory API to get offer price
+                                from qventory.helpers.ebay_relist import get_offer_details
+                                log_task(f"  Fetching current price via Inventory API...")
+                                price_resp = get_offer_details(rule.user_id, rule.offer_id)
+                                if price_resp.get('success'):
+                                    offer_data = price_resp.get('offer') or {}
+                                    price_value = (
+                                        offer_data.get('pricingSummary', {})
+                                        .get('price', {})
+                                        .get('value')
+                                    )
+                                    if price_value is not None:
+                                        try:
+                                            rule.current_price = float(price_value)
+                                            log_task(f"  ✓ Fetched current price: ${rule.current_price}")
+                                        except (TypeError, ValueError):
+                                            pass
                         except Exception as fetch_err:
                             log_task(f"  ⚠ Unable to refresh current price before decrease: {fetch_err}")
 
@@ -1153,6 +1174,10 @@ def auto_relist_offers(self):
                               isinstance(rule.pending_changes, dict) and
                               len(rule.pending_changes) > 0)
                 apply_changes = rule.mode == 'manual' and has_changes
+
+                log_task(f"  DEBUG: rule.mode = {rule.mode}")
+                log_task(f"  DEBUG: rule.enable_price_decrease = {rule.enable_price_decrease}")
+                log_task(f"  DEBUG: new_price_from_decrease = {new_price_from_decrease}")
 
                 # For auto mode with price decrease, apply the price change
                 if rule.mode == 'auto' and new_price_from_decrease:
