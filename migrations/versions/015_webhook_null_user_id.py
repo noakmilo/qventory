@@ -1,6 +1,6 @@
 """allow null user_id in webhook_events
 
-Revision ID: 015_allow_null_user_id_webhook_events
+Revision ID: 015_webhook_null_user_id
 Revises: 014_add_webhook_tables
 Create Date: 2025-10-20 16:20:00.000000
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '015_allow_null_user_id_webhook_events'
+revision = '015_webhook_null_user_id'
 down_revision = '014_add_webhook_tables'
 branch_labels = None
 depends_on = None
