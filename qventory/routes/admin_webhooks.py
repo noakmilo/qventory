@@ -3,7 +3,6 @@ Admin Webhook Debug Console
 For administrators to monitor webhook system health
 """
 from flask import Blueprint, render_template, jsonify, request
-from flask_login import login_required, current_user
 from qventory.extensions import db
 from qventory.models.webhook import WebhookSubscription, WebhookEvent, WebhookProcessingQueue
 from qventory.models.user import User
@@ -12,38 +11,26 @@ from sqlalchemy import func
 
 admin_webhooks_bp = Blueprint('admin_webhooks', __name__, url_prefix='/admin/webhooks')
 
-
-def is_admin():
-    """Check if current user is admin"""
-    # You can implement your own admin check logic here
-    # For now, checking if user has 'admin' role or is specific user
-    return current_user.is_authenticated and (
-        current_user.role == 'admin' or
-        current_user.username == 'admin'
-    )
+# Import admin auth helpers from main routes
+from qventory.routes.main import check_admin_auth, require_admin
 
 
 @admin_webhooks_bp.route('/', methods=['GET'])
-@login_required
+@require_admin
 def webhook_console():
     """
     Webhook debug console - Admin only
     Shows webhook events, subscriptions, and system health
     """
-    if not is_admin():
-        return "Unauthorized - Admin access required", 403
-
     return render_template('admin_webhooks_console.html')
 
 
 @admin_webhooks_bp.route('/api/events', methods=['GET'])
-@login_required
+@require_admin
 def get_recent_events():
     """
     Get recent webhook events (last 100)
     """
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # Get query parameters
     limit = int(request.args.get('limit', 100))
@@ -83,13 +70,11 @@ def get_recent_events():
 
 
 @admin_webhooks_bp.route('/api/subscriptions', methods=['GET'])
-@login_required
+@require_admin
 def get_all_subscriptions():
     """
     Get all webhook subscriptions across all users
     """
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # Get subscriptions with user info
     subscriptions = db.session.query(
@@ -127,13 +112,11 @@ def get_all_subscriptions():
 
 
 @admin_webhooks_bp.route('/api/stats', methods=['GET'])
-@login_required
+@require_admin
 def get_webhook_stats():
     """
     Get overall webhook system statistics
     """
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # Total subscriptions by status
     sub_stats = db.session.query(
@@ -196,13 +179,11 @@ def get_webhook_stats():
 
 
 @admin_webhooks_bp.route('/api/errors', methods=['GET'])
-@login_required
+@require_admin
 def get_recent_errors():
     """
     Get recent webhook errors
     """
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     limit = int(request.args.get('limit', 50))
 
@@ -232,13 +213,11 @@ def get_recent_errors():
 
 
 @admin_webhooks_bp.route('/api/queue', methods=['GET'])
-@login_required
+@require_admin
 def get_processing_queue():
     """
     Get current processing queue status
     """
-    if not is_admin():
-        return jsonify({'error': 'Unauthorized'}), 403
 
     # Get queue items
     queue_items = WebhookProcessingQueue.query.order_by(
