@@ -429,6 +429,7 @@ def fetch_sold_items(
     S: Optional[str] = None,
     C: Optional[str] = None,
     platform: Optional[str] = None,
+    missing_data: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
