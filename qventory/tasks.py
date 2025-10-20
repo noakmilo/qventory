@@ -1482,3 +1482,129 @@ def process_order_delivered_event(event):
     """Process FULFILLMENT_ORDER_DELIVERED event - Sprint 4"""
     log_task(f"  TODO: Implement ORDER_DELIVERED processor")
     return {'status': 'placeholder', 'message': 'ORDER_DELIVERED processor not yet implemented'}
+
+
+@celery.task(bind=True, name='qventory.tasks.renew_expiring_webhooks')
+def renew_expiring_webhooks(self):
+    """
+    Scheduled task to auto-renew webhook subscriptions that are expiring soon
+
+    eBay webhook subscriptions expire after 7 days and must be renewed.
+    This task runs daily to check for subscriptions expiring within 2 days
+    and renews them automatically.
+
+    Returns:
+        dict with renewal results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.webhook import WebhookSubscription
+        from qventory.helpers.ebay_webhooks import renew_webhook_subscription
+        from datetime import datetime, timedelta
+
+        log_task("=== Starting webhook renewal check ===")
+
+        # Find subscriptions that need renewal (expiring within 2 days)
+        threshold = datetime.utcnow() + timedelta(days=2)
+
+        expiring_subs = WebhookSubscription.query.filter(
+            WebhookSubscription.status == 'ENABLED',
+            WebhookSubscription.expires_at <= threshold
+        ).all()
+
+        log_task(f"Found {len(expiring_subs)} subscriptions that need renewal")
+
+        if not expiring_subs:
+            log_task("No subscriptions need renewal at this time")
+            return {
+                'success': True,
+                'total_checked': 0,
+                'renewed': 0,
+                'failed': 0
+            }
+
+        renewed_count = 0
+        failed_count = 0
+
+        for sub in expiring_subs:
+            try:
+                log_task(f"Renewing subscription {sub.id} for user {sub.user_id}")
+                log_task(f"  Topic: {sub.topic}")
+                log_task(f"  Expires at: {sub.expires_at}")
+                log_task(f"  Subscription ID: {sub.subscription_id}")
+
+                # Call eBay API to renew the subscription
+                result = renew_webhook_subscription(
+                    user_id=sub.user_id,
+                    subscription_id=sub.subscription_id
+                )
+
+                if result['success']:
+                    # Update expiration date in database
+                    sub.expires_at = result['expires_at']
+                    sub.error_count = 0  # Reset error count on success
+                    sub.last_error_message = None
+                    db.session.commit()
+
+                    renewed_count += 1
+                    log_task(f"✓ Renewed successfully. New expiration: {result['expires_at']}")
+
+                else:
+                    # Renewal failed
+                    error_msg = result.get('error', 'Unknown error')
+                    log_task(f"✗ Renewal failed: {error_msg}")
+
+                    # Update error tracking
+                    sub.error_count = (sub.error_count or 0) + 1
+                    sub.last_error_message = error_msg
+                    sub.last_error_at = datetime.utcnow()
+
+                    # If renewal fails 3 times, disable the subscription
+                    if sub.error_count >= 3:
+                        log_task(f"⚠️  Disabling subscription after {sub.error_count} failures")
+                        sub.status = 'DISABLED'
+
+                        # Create admin notification
+                        from qventory.models.notification import Notification
+                        Notification.create_notification(
+                            user_id=sub.user_id,
+                            type='error',
+                            title='Webhook subscription disabled',
+                            message=f'Subscription for {sub.topic} was disabled after multiple renewal failures. Please reconnect your eBay account.',
+                            link_url='/settings',
+                            link_text='Go to Settings',
+                            source='webhook'
+                        )
+
+                    db.session.commit()
+                    failed_count += 1
+
+            except Exception as e:
+                log_task(f"✗ Exception renewing subscription {sub.id}: {str(e)}")
+                import traceback
+                log_task(f"Traceback: {traceback.format_exc()}")
+
+                # Update error tracking
+                sub.error_count = (sub.error_count or 0) + 1
+                sub.last_error_message = f"Exception: {str(e)}"
+                sub.last_error_at = datetime.utcnow()
+
+                # Disable after 3 failures
+                if sub.error_count >= 3:
+                    sub.status = 'DISABLED'
+
+                db.session.commit()
+                failed_count += 1
+
+        log_task(f"=== Renewal check completed ===")
+        log_task(f"Total checked: {len(expiring_subs)}")
+        log_task(f"Renewed: {renewed_count}")
+        log_task(f"Failed: {failed_count}")
+
+        return {
+            'success': True,
+            'total_checked': len(expiring_subs),
+            'renewed': renewed_count,
+            'failed': failed_count
+        }

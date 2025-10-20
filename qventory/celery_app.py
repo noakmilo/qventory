@@ -47,6 +47,13 @@ celery.conf.beat_schedule = {
             'expires': 60 * 5,  # Expire after 5 minutes if not picked up
         }
     },
+    'renew-webhooks-daily': {
+        'task': 'qventory.tasks.renew_expiring_webhooks',
+        'schedule': crontab(hour=2, minute=0),  # Every day at 2:00 AM UTC
+        'options': {
+            'expires': 60 * 60,  # Expire after 1 hour if not picked up
+        }
+    },
 }
 
 if __name__ == '__main__':
