@@ -1,0 +1,905 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Webhook Console – Admin – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Webhook Console</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="webhook-console">
+  <!-- Page Header -->
+  <div class="console-header">
+    <div class="console-header-content">
+      <h1 class="console-title">
+        <i class="fas fa-satellite-dish"></i>
+        Webhook System Console
+      </h1>
+      <p class="console-subtitle">
+        Real-time monitoring of eBay webhook events and system health
+      </p>
+    </div>
+    <div class="console-header-actions">
+      <button class="btn-refresh" onclick="refreshAllData()">
+        <i class="fas fa-sync-alt"></i>
+        Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- Statistics Dashboard -->
+  <div class="stats-grid">
+    <!-- Total Events -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(59, 130, 246, 0.15);">
+        <i class="fas fa-inbox" style="color: #3b82f6;"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Total Events</div>
+        <div class="stat-value" id="stat-total-events">—</div>
+        <div class="stat-sublabel" id="stat-events-24h">— in last 24h</div>
+      </div>
+    </div>
+
+    <!-- Active Subscriptions -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(34, 197, 94, 0.15);">
+        <i class="fas fa-link" style="color: #22c55e;"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Active Subscriptions</div>
+        <div class="stat-value" id="stat-active-subs">—</div>
+        <div class="stat-sublabel" id="stat-expiring-soon">— expiring soon</div>
+      </div>
+    </div>
+
+    <!-- Successful Events -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(34, 197, 94, 0.15);">
+        <i class="fas fa-check-circle" style="color: #22c55e;"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Successful Events</div>
+        <div class="stat-value" id="stat-success-events">—</div>
+        <div class="stat-sublabel" id="stat-success-rate">—% success rate</div>
+      </div>
+    </div>
+
+    <!-- Failed Events -->
+    <div class="stat-card">
+      <div class="stat-icon" style="background: rgba(239, 68, 68, 0.15);">
+        <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-label">Failed Events</div>
+        <div class="stat-value" id="stat-failed-events">—</div>
+        <div class="stat-sublabel" id="stat-failed-24h">— in last 24h</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="console-tabs">
+    <button class="console-tab active" data-tab="events" onclick="switchTab('events')">
+      <i class="fas fa-stream"></i>
+      Recent Events
+    </button>
+    <button class="console-tab" data-tab="subscriptions" onclick="switchTab('subscriptions')">
+      <i class="fas fa-link"></i>
+      Subscriptions
+    </button>
+    <button class="console-tab" data-tab="errors" onclick="switchTab('errors')">
+      <i class="fas fa-exclamation-circle"></i>
+      Errors
+    </button>
+    <button class="console-tab" data-tab="queue" onclick="switchTab('queue')">
+      <i class="fas fa-tasks"></i>
+      Processing Queue
+    </button>
+  </div>
+
+  <!-- Tab Content: Recent Events -->
+  <div class="tab-content active" id="tab-events">
+    <div class="section-header">
+      <h2>Recent Webhook Events (Last 100)</h2>
+      <div class="filter-controls">
+        <select id="filter-status" onchange="loadEvents()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+          <option value="failed">Failed</option>
+        </select>
+        <select id="filter-topic" onchange="loadEvents()">
+          <option value="">All Topics</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-container">
+      <table class="console-table">
+        <thead>
+          <tr>
+            <th>Event ID</th>
+            <th>Topic</th>
+            <th>User</th>
+            <th>Status</th>
+            <th>Received</th>
+            <th>Processed</th>
+            <th>Attempts</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody id="events-table-body">
+          <tr>
+            <td colspan="8" class="table-loading">
+              <i class="fas fa-spinner fa-spin"></i> Loading events...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab Content: Subscriptions -->
+  <div class="tab-content" id="tab-subscriptions">
+    <div class="section-header">
+      <h2>All Webhook Subscriptions</h2>
+    </div>
+    <div class="table-container">
+      <table class="console-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>Topic</th>
+            <th>Status</th>
+            <th>Subscription ID</th>
+            <th>Created</th>
+            <th>Expires</th>
+            <th>Events</th>
+            <th>Errors</th>
+          </tr>
+        </thead>
+        <tbody id="subscriptions-table-body">
+          <tr>
+            <td colspan="9" class="table-loading">
+              <i class="fas fa-spinner fa-spin"></i> Loading subscriptions...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tab Content: Errors -->
+  <div class="tab-content" id="tab-errors">
+    <div class="section-header">
+      <h2>Recent Errors (Last 50)</h2>
+    </div>
+    <div class="error-list" id="error-list">
+      <div class="table-loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading errors...
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Content: Processing Queue -->
+  <div class="tab-content" id="tab-queue">
+    <div class="section-header">
+      <h2>Processing Queue (Last 100)</h2>
+    </div>
+    <div class="table-container">
+      <table class="console-table">
+        <thead>
+          <tr>
+            <th>Queue ID</th>
+            <th>Event ID</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Retry Count</th>
+            <th>Max Retries</th>
+            <th>Next Retry</th>
+            <th>Celery Task</th>
+          </tr>
+        </thead>
+        <tbody id="queue-table-body">
+          <tr>
+            <td colspan="8" class="table-loading">
+              <i class="fas fa-spinner fa-spin"></i> Loading queue...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<style>
+/* ========== Webhook Console Styles ========== */
+
+.webhook-console {
+  width: 100%;
+}
+
+/* Console Header */
+.console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  gap: 20px;
+}
+
+.console-header-content {
+  flex: 1;
+}
+
+.console-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.console-title i {
+  color: #ef4444;
+  font-size: 26px;
+}
+
+.console-subtitle {
+  font-size: 14px;
+  color: var(--sub);
+  margin: 0;
+}
+
+.console-header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-refresh {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.btn-refresh:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-refresh i {
+  font-size: 14px;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.2s;
+}
+
+.stat-card:hover {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--sub);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-sublabel {
+  font-size: 12px;
+  color: var(--sub);
+}
+
+/* Console Tabs */
+.console-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid var(--border);
+  overflow-x: auto;
+}
+
+.console-tab {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  color: var(--sub);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.console-tab:hover {
+  color: var(--text);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.console-tab.active {
+  color: #ef4444;
+  border-bottom-color: #ef4444;
+}
+
+.console-tab i {
+  font-size: 14px;
+}
+
+/* Tab Content */
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Section Header */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+
+.section-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-controls select {
+  padding: 8px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Table Styles */
+.table-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.console-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.console-table thead {
+  background: rgba(239, 68, 68, 0.05);
+  border-bottom: 1px solid var(--border);
+}
+
+.console-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.console-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.console-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.console-table tbody tr:hover {
+  background: rgba(239, 68, 68, 0.02);
+}
+
+.table-loading {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--sub);
+  font-size: 14px;
+}
+
+.table-loading i {
+  margin-right: 8px;
+}
+
+.table-empty {
+  text-align: center;
+  padding: 40px !important;
+  color: var(--sub);
+  font-size: 14px;
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.completed {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.status-badge.pending {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+.status-badge.failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.status-badge.enabled {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.status-badge.disabled {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+}
+
+/* Error List */
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.error-item {
+  background: var(--card-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-left: 4px solid #ef4444;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.error-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.error-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ef4444;
+  margin: 0 0 4px 0;
+}
+
+.error-meta {
+  font-size: 12px;
+  color: var(--sub);
+  display: flex;
+  gap: 12px;
+}
+
+.error-message {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: 'Monaco', 'Menlo', monospace;
+  word-break: break-word;
+}
+
+/* Code/ID Display */
+.code-display {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #3b82f6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .console-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .table-container {
+    overflow-x: auto;
+  }
+
+  .console-table {
+    min-width: 800px;
+  }
+}
+</style>
+
+<script>
+// Global state
+let currentTab = 'events';
+let statsData = null;
+let eventsData = null;
+let subscriptionsData = null;
+let errorsData = null;
+let queueData = null;
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+  loadAllData();
+});
+
+// Switch tabs
+function switchTab(tabName) {
+  currentTab = tabName;
+
+  // Update tab buttons
+  document.querySelectorAll('.console-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  // Update tab content
+  document.querySelectorAll('.tab-content').forEach(content => {
+    content.classList.toggle('active', content.id === `tab-${tabName}`);
+  });
+
+  // Load data if not already loaded
+  if (tabName === 'events' && !eventsData) loadEvents();
+  if (tabName === 'subscriptions' && !subscriptionsData) loadSubscriptions();
+  if (tabName === 'errors' && !errorsData) loadErrors();
+  if (tabName === 'queue' && !queueData) loadQueue();
+}
+
+// Refresh all data
+function refreshAllData() {
+  const btn = document.querySelector('.btn-refresh');
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+  btn.disabled = true;
+
+  // Clear cached data
+  statsData = null;
+  eventsData = null;
+  subscriptionsData = null;
+  errorsData = null;
+  queueData = null;
+
+  loadAllData().finally(() => {
+    btn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    btn.disabled = false;
+  });
+}
+
+// Load all data
+async function loadAllData() {
+  await loadStats();
+  await loadEvents();
+  await loadSubscriptions();
+  await loadErrors();
+  await loadQueue();
+}
+
+// Load stats
+async function loadStats() {
+  try {
+    const response = await fetch('/admin/webhooks/api/stats');
+    const data = await response.json();
+    statsData = data;
+
+    // Update stats display
+    const totalEvents = data.events.total || 0;
+    const events24h = data.events.last_24h || 0;
+    const activeSubs = data.subscriptions.by_status?.ENABLED || 0;
+    const expiringSoon = data.subscriptions.expiring_soon || 0;
+    const completedEvents = data.events.by_status?.completed || 0;
+    const failedEvents = data.events.by_status?.failed || 0;
+    const failed24h = data.events.failed_last_24h || 0;
+
+    const successRate = totalEvents > 0 ? ((completedEvents / totalEvents) * 100).toFixed(1) : 0;
+
+    document.getElementById('stat-total-events').textContent = totalEvents.toLocaleString();
+    document.getElementById('stat-events-24h').textContent = `${events24h.toLocaleString()} in last 24h`;
+
+    document.getElementById('stat-active-subs').textContent = activeSubs.toLocaleString();
+    document.getElementById('stat-expiring-soon').textContent = expiringSoon > 0
+      ? `${expiringSoon} expiring soon`
+      : 'None expiring soon';
+
+    document.getElementById('stat-success-events').textContent = completedEvents.toLocaleString();
+    document.getElementById('stat-success-rate').textContent = `${successRate}% success rate`;
+
+    document.getElementById('stat-failed-events').textContent = failedEvents.toLocaleString();
+    document.getElementById('stat-failed-24h').textContent = `${failed24h.toLocaleString()} in last 24h`;
+
+    // Populate topic filter
+    const topicFilter = document.getElementById('filter-topic');
+    if (data.topics?.top_topics) {
+      const existingTopics = Array.from(topicFilter.options).map(o => o.value);
+      data.topics.top_topics.forEach(({topic}) => {
+        if (!existingTopics.includes(topic)) {
+          const option = document.createElement('option');
+          option.value = topic;
+          option.textContent = topic;
+          topicFilter.appendChild(option);
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Failed to load stats:', error);
+  }
+}
+
+// Load events
+async function loadEvents() {
+  const tbody = document.getElementById('events-table-body');
+  tbody.innerHTML = '<tr><td colspan="8" class="table-loading"><i class="fas fa-spinner fa-spin"></i> Loading events...</td></tr>';
+
+  try {
+    const status = document.getElementById('filter-status')?.value || '';
+    const topic = document.getElementById('filter-topic')?.value || '';
+
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (topic) params.append('topic', topic);
+
+    const response = await fetch(`/admin/webhooks/api/events?${params}`);
+    const data = await response.json();
+    eventsData = data;
+
+    if (!data.events || data.events.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No events found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.events.map(event => `
+      <tr>
+        <td><span class="code-display">${event.event_id || '—'}</span></td>
+        <td>${event.topic || '—'}</td>
+        <td>${event.user_id ? `User ${event.user_id}` : '—'}</td>
+        <td><span class="status-badge ${event.status}">${event.status}</span></td>
+        <td>${formatDate(event.received_at)}</td>
+        <td>${event.processed_at ? formatDate(event.processed_at) : '—'}</td>
+        <td>${event.processing_attempts || 0}</td>
+        <td>${event.error_message ? `<span title="${escapeHtml(event.error_message)}" style="color:#ef4444;cursor:help;">⚠️ Error</span>` : '—'}</td>
+      </tr>
+    `).join('');
+
+  } catch (error) {
+    console.error('Failed to load events:', error);
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty" style="color:#ef4444;">Failed to load events</td></tr>';
+  }
+}
+
+// Load subscriptions
+async function loadSubscriptions() {
+  const tbody = document.getElementById('subscriptions-table-body');
+  tbody.innerHTML = '<tr><td colspan="9" class="table-loading"><i class="fas fa-spinner fa-spin"></i> Loading subscriptions...</td></tr>';
+
+  try {
+    const response = await fetch('/admin/webhooks/api/subscriptions');
+    const data = await response.json();
+    subscriptionsData = data;
+
+    if (!data.subscriptions || data.subscriptions.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="table-empty">No subscriptions found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.subscriptions.map(sub => `
+      <tr>
+        <td>${sub.id}</td>
+        <td>${sub.username || '—'}<br><small style="color:var(--sub);">${sub.email || ''}</small></td>
+        <td>${sub.topic}</td>
+        <td><span class="status-badge ${sub.status.toLowerCase()}">${sub.status}</span></td>
+        <td><span class="code-display">${sub.subscription_id ? sub.subscription_id.substring(0, 12) + '...' : '—'}</span></td>
+        <td>${formatDate(sub.created_at)}</td>
+        <td>${formatDate(sub.expires_at)}${sub.is_expired ? ' <span style="color:#ef4444;">EXPIRED</span>' : sub.needs_renewal ? ' <span style="color:#fbbf24;">⚠️</span>' : ''}</td>
+        <td>${sub.event_count || 0}</td>
+        <td>${sub.error_count || 0}</td>
+      </tr>
+    `).join('');
+
+  } catch (error) {
+    console.error('Failed to load subscriptions:', error);
+    tbody.innerHTML = '<tr><td colspan="9" class="table-empty" style="color:#ef4444;">Failed to load subscriptions</td></tr>';
+  }
+}
+
+// Load errors
+async function loadErrors() {
+  const errorList = document.getElementById('error-list');
+  errorList.innerHTML = '<div class="table-loading"><i class="fas fa-spinner fa-spin"></i> Loading errors...</div>';
+
+  try {
+    const response = await fetch('/admin/webhooks/api/errors?limit=50');
+    const data = await response.json();
+    errorsData = data;
+
+    if (!data.errors || data.errors.length === 0) {
+      errorList.innerHTML = '<div class="table-empty">No errors found - system is healthy! 🎉</div>';
+      return;
+    }
+
+    errorList.innerHTML = data.errors.map(error => `
+      <div class="error-item">
+        <div class="error-header">
+          <div>
+            <h3 class="error-title">${error.topic || 'Unknown Topic'}</h3>
+            <div class="error-meta">
+              <span>Event: <span class="code-display">${error.event_id || '—'}</span></span>
+              <span>User: ${error.user_id ? `User ${error.user_id}` : 'Unknown'}</span>
+              <span>Attempts: ${error.processing_attempts || 0}</span>
+              <span>${formatDate(error.received_at)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="error-message">
+          ${escapeHtml(error.error_message || 'No error message available')}
+        </div>
+      </div>
+    `).join('');
+
+  } catch (error) {
+    console.error('Failed to load errors:', error);
+    errorList.innerHTML = '<div class="table-empty" style="color:#ef4444;">Failed to load errors</div>';
+  }
+}
+
+// Load processing queue
+async function loadQueue() {
+  const tbody = document.getElementById('queue-table-body');
+  tbody.innerHTML = '<tr><td colspan="8" class="table-loading"><i class="fas fa-spinner fa-spin"></i> Loading queue...</td></tr>';
+
+  try {
+    const response = await fetch('/admin/webhooks/api/queue');
+    const data = await response.json();
+    queueData = data;
+
+    if (!data.queue || data.queue.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Queue is empty</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.queue.map(item => `
+      <tr>
+        <td>${item.id}</td>
+        <td>${item.event_id}</td>
+        <td>${item.priority}</td>
+        <td><span class="status-badge ${item.status}">${item.status}</span></td>
+        <td>${item.retry_count}</td>
+        <td>${item.max_retries}</td>
+        <td>${item.next_retry_at ? formatDate(item.next_retry_at) : '—'}</td>
+        <td><span class="code-display">${item.celery_task_id ? item.celery_task_id.substring(0, 12) + '...' : '—'}</span></td>
+      </tr>
+    `).join('');
+
+  } catch (error) {
+    console.error('Failed to load queue:', error);
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty" style="color:#ef4444;">Failed to load queue</td></tr>';
+  }
+}
+
+// Utility: Format date
+function formatDate(isoString) {
+  if (!isoString) return '—';
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+}
+
+// Utility: Escape HTML
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+
+{% endblock %}

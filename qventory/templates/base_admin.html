@@ -65,6 +65,15 @@
         </a>
       </div>
 
+      <!-- System Monitoring Section -->
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-section-title">System Monitoring</div>
+        <a href="{{ url_for('admin_webhooks.webhook_console') }}" class="admin-sidebar-item {% if 'admin_webhooks' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-satellite-dish"></i>
+          <span>Webhook Console</span>
+        </a>
+      </div>
+
       <!-- Divider -->
       <div class="admin-sidebar-divider"></div>
 

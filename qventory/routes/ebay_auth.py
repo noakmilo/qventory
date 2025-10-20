@@ -175,6 +175,16 @@ def callback():
             ebay_user_id=ebay_user_id
         )
 
+        # Auto-setup webhook subscriptions
+        log("Auto-setting up webhook subscriptions...")
+        try:
+            from qventory.helpers.webhook_auto_setup import auto_setup_webhooks
+            webhook_result = auto_setup_webhooks(current_user.id)
+            log(f"Webhook auto-setup: {webhook_result['created']} created, {webhook_result['failed']} failed, {webhook_result['skipped']} skipped")
+        except Exception as webhook_error:
+            # Don't fail the whole connection if webhooks fail
+            log(f"WARNING: Webhook auto-setup failed: {str(webhook_error)}")
+
         log(f"SUCCESS: eBay account connected for user {current_user.username}")
         flash(f'Successfully connected to eBay! (User: {ebay_user_id})', 'success')
         return redirect(url_for('main.settings'))
