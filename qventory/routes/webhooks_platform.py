@@ -308,22 +308,17 @@ def get_user_id_from_seller_id(seller_id: str) -> int:
         int: Qventory user_id or None
     """
     try:
-        from qventory.models.user import User
+        from qventory.models.marketplace_credential import MarketplaceCredential
 
-        # Look up user by eBay seller ID stored in oauth_data
-        users = User.query.all()
+        # Look up user by eBay seller ID stored in MarketplaceCredential
+        credential = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            ebay_user_id=seller_id
+        ).first()
 
-        for user in users:
-            if user.ebay_oauth_data:
-                # Check if this user's eBay account matches
-                oauth_data = user.ebay_oauth_data
-
-                # The seller ID might be stored in different places
-                stored_seller_id = oauth_data.get('ebay_user_id') or oauth_data.get('seller_id')
-
-                if stored_seller_id and stored_seller_id.lower() == seller_id.lower():
-                    log_webhook(f"  ✓ Mapped seller '{seller_id}' to user_id {user.id}")
-                    return user.id
+        if credential:
+            log_webhook(f"  ✓ Mapped seller '{seller_id}' to user_id {credential.user_id}")
+            return credential.user_id
 
         return None
 

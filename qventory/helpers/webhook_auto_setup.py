@@ -210,11 +210,25 @@ def setup_platform_notifications(user_id: int) -> dict:
 
     try:
         from qventory.models.user import User
+        from qventory.models.marketplace_credential import MarketplaceCredential
 
         # Get user's eBay credentials
         user = User.query.get(user_id)
-        if not user or not user.ebay_oauth_data:
-            log_auto_setup("✗ User not found or no eBay OAuth data")
+        if not user:
+            log_auto_setup("✗ User not found")
+            return {
+                'success': False,
+                'error': 'User not found'
+            }
+
+        # Get eBay credentials from MarketplaceCredential
+        credential = MarketplaceCredential.query.filter_by(
+            user_id=user_id,
+            marketplace='ebay'
+        ).first()
+
+        if not credential or not credential.access_token:
+            log_auto_setup("✗ No eBay credentials found")
             return {
                 'success': False,
                 'error': 'No eBay credentials found'
@@ -281,11 +295,13 @@ def set_notification_preferences(application_url: str, user_id: int) -> dict:
         ebay_cert_id = os.environ.get('EBAY_CERT_ID')
 
         # Get user's OAuth token from database
-        from qventory.models.user import User
-        user = User.query.get(user_id)
-        ebay_user_token = None
-        if user and user.ebay_oauth_data:
-            ebay_user_token = user.ebay_oauth_data.get('access_token')
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        credential = MarketplaceCredential.query.filter_by(
+            user_id=user_id,
+            marketplace='ebay'
+        ).first()
+
+        ebay_user_token = credential.access_token if credential else None
 
         if not all([ebay_app_id, ebay_dev_id, ebay_cert_id, ebay_user_token]):
             log_auto_setup("✗ Missing Trading API credentials")
