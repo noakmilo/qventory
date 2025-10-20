@@ -1191,6 +1191,13 @@ def auto_relist_offers(self):
                     log_task(f"  DEBUG: apply_changes = {apply_changes}")
                     log_task(f"  DEBUG: rule.pending_changes = {rule.pending_changes}")
 
+                    # CRITICAL: Commit pending_changes to database before passing rule to execute_relist
+                    # SQLAlchemy JSON columns need explicit flag_modified to track changes
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(rule, 'pending_changes')
+                    db.session.commit()
+                    log_task(f"  DEBUG: Committed pending_changes to database")
+
                 if apply_changes and rule.mode == 'manual':
                     history.changes_applied = rule.pending_changes.copy()
                     # Capture new price if changed
