@@ -183,3 +183,252 @@ def cleanup_expired_subscriptions(user_id: int = None) -> dict:
         'deleted': deleted_count,
         'details': deleted_ids
     }
+
+
+def setup_platform_notifications(user_id: int) -> dict:
+    """
+    Setup eBay Platform Notifications (Trading API SOAP webhooks)
+
+    This enables real-time notifications for:
+    - AddItem: New listing created
+    - ReviseItem: Listing updated
+    - RelistItem: Listing relisted
+
+    Uses Trading API's SetNotificationPreferences call.
+
+    Args:
+        user_id: Qventory user ID
+
+    Returns:
+        dict: {
+            'success': bool,
+            'message': str,
+            'topics_enabled': list of enabled topics
+        }
+    """
+    log_auto_setup(f"Setting up Platform Notifications for user {user_id}")
+
+    try:
+        from qventory.models.user import User
+        from qventory.helpers.ebay_api import get_ebay_client
+
+        # Get user's eBay credentials
+        user = User.query.get(user_id)
+        if not user or not user.ebay_oauth_data:
+            log_auto_setup("✗ User not found or no eBay OAuth data")
+            return {
+                'success': False,
+                'error': 'No eBay credentials found'
+            }
+
+        # Get eBay client
+        client = get_ebay_client(user_id)
+        if not client:
+            log_auto_setup("✗ Could not create eBay client")
+            return {
+                'success': False,
+                'error': 'Could not authenticate with eBay'
+            }
+
+        # Get webhook base URL
+        webhook_base_url = os.environ.get('WEBHOOK_BASE_URL')
+        if not webhook_base_url:
+            log_auto_setup("✗ WEBHOOK_BASE_URL not configured")
+            return {
+                'success': False,
+                'error': 'WEBHOOK_BASE_URL not configured'
+            }
+
+        application_url = f"{webhook_base_url}/webhooks/ebay-platform"
+
+        log_auto_setup(f"Application URL: {application_url}")
+
+        # Call SetNotificationPreferences
+        result = set_notification_preferences(
+            client=client,
+            application_url=application_url,
+            user_id=user_id
+        )
+
+        if result['success']:
+            log_auto_setup(f"✓ Platform Notifications enabled: {', '.join(result['topics_enabled'])}")
+        else:
+            log_auto_setup(f"✗ Failed to enable Platform Notifications: {result.get('error')}")
+
+        return result
+
+    except Exception as e:
+        log_auto_setup(f"✗ Exception setting up Platform Notifications: {str(e)}")
+        import traceback
+        log_auto_setup(f"Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
+
+
+def set_notification_preferences(client, application_url: str, user_id: int) -> dict:
+    """
+    Call eBay Trading API SetNotificationPreferences
+
+    This is a SOAP XML API call (different from REST APIs).
+
+    Args:
+        client: eBay API client (with Trading API access)
+        application_url: URL where eBay will send notifications
+        user_id: User ID for logging
+
+    Returns:
+        dict: Success/failure result
+    """
+    import requests
+    import xml.etree.ElementTree as ET
+
+    log_auto_setup(f"Calling SetNotificationPreferences API")
+
+    try:
+        # Get Trading API credentials
+        ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
+        ebay_dev_id = os.environ.get('EBAY_DEV_ID')
+        ebay_cert_id = os.environ.get('EBAY_CERT_ID')
+        ebay_user_token = client.access_token if hasattr(client, 'access_token') else None
+
+        # Get user's OAuth token from database
+        if not ebay_user_token:
+            from qventory.models.user import User
+            user = User.query.get(user_id)
+            if user and user.ebay_oauth_data:
+                ebay_user_token = user.ebay_oauth_data.get('access_token')
+
+        if not all([ebay_app_id, ebay_dev_id, ebay_cert_id, ebay_user_token]):
+            log_auto_setup("✗ Missing Trading API credentials")
+            return {
+                'success': False,
+                'error': 'Missing Trading API credentials (need EBAY_DEV_ID, EBAY_CERT_ID)'
+            }
+
+        # Determine Trading API endpoint (sandbox vs production)
+        is_sandbox = os.environ.get('EBAY_SANDBOX', 'false').lower() == 'true'
+        trading_api_url = (
+            'https://api.sandbox.ebay.com/ws/api.dll'
+            if is_sandbox else
+            'https://api.ebay.com/ws/api.dll'
+        )
+
+        # Build SOAP XML request for SetNotificationPreferences
+        soap_body = f'''<?xml version="1.0" encoding="utf-8"?>
+<SetNotificationPreferencesRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{ebay_user_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ApplicationDeliveryPreferences>
+    <ApplicationEnable>Enable</ApplicationEnable>
+    <ApplicationURL>{application_url}</ApplicationURL>
+    <DeviceType>Platform</DeviceType>
+  </ApplicationDeliveryPreferences>
+  <UserDeliveryPreferenceArray>
+    <NotificationEnable>
+      <EventType>ItemListed</EventType>
+      <EventEnable>Enable</EventEnable>
+    </NotificationEnable>
+    <NotificationEnable>
+      <EventType>ItemRevised</EventType>
+      <EventEnable>Enable</EventEnable>
+    </NotificationEnable>
+    <NotificationEnable>
+      <EventType>ItemClosed</EventType>
+      <EventEnable>Enable</EventEnable>
+    </NotificationEnable>
+    <NotificationEnable>
+      <EventType>ItemSold</EventType>
+      <EventEnable>Enable</EventEnable>
+    </NotificationEnable>
+  </UserDeliveryPreferenceArray>
+  <WarningLevel>High</WarningLevel>
+</SetNotificationPreferencesRequest>'''
+
+        # Set up headers
+        headers = {
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+            'X-EBAY-API-DEV-NAME': ebay_dev_id,
+            'X-EBAY-API-APP-NAME': ebay_app_id,
+            'X-EBAY-API-CERT-NAME': ebay_cert_id,
+            'X-EBAY-API-CALL-NAME': 'SetNotificationPreferences',
+            'X-EBAY-API-SITEID': '0',  # 0 = US
+            'Content-Type': 'text/xml'
+        }
+
+        log_auto_setup("Sending SOAP request to Trading API...")
+
+        # Make API call
+        response = requests.post(
+            trading_api_url,
+            data=soap_body,
+            headers=headers,
+            timeout=30
+        )
+
+        log_auto_setup(f"Response status: {response.status_code}")
+
+        if response.status_code != 200:
+            log_auto_setup(f"✗ API returned status {response.status_code}")
+            log_auto_setup(f"Response: {response.text[:500]}")
+            return {
+                'success': False,
+                'error': f'Trading API returned status {response.status_code}'
+            }
+
+        # Parse XML response
+        try:
+            root = ET.fromstring(response.text)
+
+            # Check for Ack=Success
+            ack = root.find('.//{urn:ebay:apis:eBLBaseComponents}Ack')
+
+            if ack is not None and ack.text in ['Success', 'Warning']:
+                log_auto_setup(f"✓ API call successful (Ack: {ack.text})")
+
+                return {
+                    'success': True,
+                    'message': 'Platform Notifications enabled',
+                    'topics_enabled': ['ItemListed', 'ItemRevised', 'ItemClosed', 'ItemSold']
+                }
+            else:
+                # Extract error message
+                errors = root.findall('.//{urn:ebay:apis:eBLBaseComponents}Errors')
+                error_msgs = []
+                for error in errors:
+                    long_msg = error.find('.//{urn:ebay:apis:eBLBaseComponents}LongMessage')
+                    if long_msg is not None:
+                        error_msgs.append(long_msg.text)
+
+                error_text = '; '.join(error_msgs) if error_msgs else 'Unknown error'
+                log_auto_setup(f"✗ API returned error: {error_text}")
+
+                return {
+                    'success': False,
+                    'error': error_text
+                }
+
+        except ET.ParseError as e:
+            log_auto_setup(f"✗ Failed to parse XML response: {str(e)}")
+            log_auto_setup(f"Response: {response.text[:500]}")
+            return {
+                'success': False,
+                'error': f'Failed to parse API response: {str(e)}'
+            }
+
+    except requests.exceptions.RequestException as e:
+        log_auto_setup(f"✗ Network error calling Trading API: {str(e)}")
+        return {
+            'success': False,
+            'error': f'Network error: {str(e)}'
+        }
+    except Exception as e:
+        log_auto_setup(f"✗ Exception calling SetNotificationPreferences: {str(e)}")
+        import traceback
+        log_auto_setup(f"Traceback: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': str(e)
+        }

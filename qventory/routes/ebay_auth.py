@@ -175,18 +175,35 @@ def callback():
             ebay_user_id=ebay_user_id
         )
 
-        # Auto-setup webhook subscriptions
-        log("Auto-setting up webhook subscriptions...")
+        # Auto-setup webhook subscriptions (Commerce API - JSON webhooks)
+        log("Auto-setting up Commerce API webhook subscriptions...")
         try:
             from qventory.helpers.webhook_auto_setup import auto_setup_webhooks
             webhook_result = auto_setup_webhooks(current_user.id)
-            log(f"Webhook auto-setup: {webhook_result['created']} created, {webhook_result['failed']} failed, {webhook_result['skipped']} skipped")
+            log(f"Commerce webhook auto-setup: {webhook_result['created']} created, {webhook_result['failed']} failed, {webhook_result['skipped']} skipped")
         except Exception as webhook_error:
             # Don't fail the whole connection if webhooks fail
-            log(f"WARNING: Webhook auto-setup failed: {str(webhook_error)}")
+            log(f"WARNING: Commerce webhook auto-setup failed: {str(webhook_error)}")
+
+        # Setup Platform Notifications (Trading API - SOAP webhooks for new listings)
+        log("Setting up Platform Notifications (for real-time new listing sync)...")
+        try:
+            from qventory.helpers.webhook_auto_setup import setup_platform_notifications
+            platform_result = setup_platform_notifications(current_user.id)
+
+            if platform_result['success']:
+                topics = ', '.join(platform_result.get('topics_enabled', []))
+                log(f"✓ Platform Notifications enabled: {topics}")
+            else:
+                log(f"⚠️ Platform Notifications setup failed: {platform_result.get('error')}")
+                # Show warning but don't fail the connection
+
+        except Exception as platform_error:
+            # Don't fail the whole connection if Platform Notifications fail
+            log(f"WARNING: Platform Notifications setup failed: {str(platform_error)}")
 
         log(f"SUCCESS: eBay account connected for user {current_user.username}")
-        flash(f'Successfully connected to eBay! (User: {ebay_user_id})', 'success')
+        flash(f'Successfully connected to eBay! (User: {ebay_user_id}) Real-time sync enabled.', 'success')
         return redirect(url_for('main.settings'))
 
     except Exception as e:

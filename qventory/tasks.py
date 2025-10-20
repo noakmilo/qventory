@@ -1833,3 +1833,341 @@ def renew_expiring_webhooks(self):
             'renewed': renewed_count,
             'failed': failed_count
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.process_platform_notification')
+def process_platform_notification(self, event_id):
+    """
+    Process eBay Platform Notification (SOAP/XML from Trading API)
+
+    Handles real-time sync for:
+    - AddItem: New listing created → Import to Qventory
+    - ReviseItem: Listing updated → Update in Qventory
+    - RelistItem: Listing relisted → Update in Qventory
+
+    Args:
+        event_id: WebhookEvent ID to process
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.webhook import WebhookEvent
+        from qventory.extensions import db
+
+        # Get event from database
+        event = WebhookEvent.query.get(event_id)
+
+        if not event:
+            log_task(f"✗ Event {event_id} not found")
+            return {'status': 'error', 'message': 'Event not found'}
+
+        log_task(f"Processing Platform Notification: {event.topic}")
+
+        try:
+            # Mark as processing
+            event.status = 'processing'
+            event.processed_at = datetime.utcnow()
+            db.session.commit()
+
+            # Get notification type
+            payload = event.payload
+            notification_type = payload.get('notification_type')
+
+            # Route to appropriate processor
+            if notification_type == 'AddItem':
+                result = process_add_item_notification(event)
+            elif notification_type == 'ReviseItem':
+                result = process_revise_item_notification(event)
+            elif notification_type == 'RelistItem':
+                result = process_relist_item_notification(event)
+            else:
+                log_task(f"⚠️  Unknown notification type: {notification_type}")
+                result = {'status': 'skipped', 'message': f'Unknown type: {notification_type}'}
+
+            # Update event status
+            if result.get('status') == 'success':
+                event.status = 'completed'
+                event.result = result
+            else:
+                event.status = 'failed'
+                event.error_message = result.get('message', 'Unknown error')
+
+            db.session.commit()
+
+            log_task(f"✓ Platform notification processed: {result.get('status')}")
+            return result
+
+        except Exception as e:
+            log_task(f"✗ Error processing Platform notification: {str(e)}")
+            import traceback
+            log_task(f"Traceback: {traceback.format_exc()}")
+
+            # Mark as failed
+            event.status = 'failed'
+            event.error_message = str(e)
+            db.session.commit()
+
+            return {'status': 'error', 'message': str(e)}
+
+
+def process_add_item_notification(event):
+    """
+    Process AddItem notification - Import new listing to Qventory
+
+    This is the CRITICAL function for real-time new listing sync.
+    When user creates item on eBay, this imports it to Qventory in seconds.
+
+    Args:
+        event: WebhookEvent with AddItem data
+
+    Returns:
+        dict: Processing result
+    """
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task("Processing AddItem notification")
+
+    try:
+        payload = event.payload
+        data = payload.get('data', {})
+
+        # Extract item details
+        ebay_listing_id = payload.get('item_id')
+        title = data.get('title', '')
+        ebay_sku = data.get('sku', '')
+        listing_type = data.get('listing_type', '')
+        quantity = data.get('quantity', '1')
+
+        # Extract pricing
+        start_price = data.get('start_price', '')
+        buy_it_now_price = data.get('buy_it_now_price', '')
+
+        # Determine listing price (prefer Buy It Now, fallback to start price)
+        listing_price = None
+        if buy_it_now_price:
+            try:
+                listing_price = float(buy_it_now_price)
+            except (ValueError, TypeError):
+                pass
+
+        if not listing_price and start_price:
+            try:
+                listing_price = float(start_price)
+            except (ValueError, TypeError):
+                pass
+
+        log_task(f"  Item ID: {ebay_listing_id}")
+        log_task(f"  Title: {title}")
+        log_task(f"  SKU: {ebay_sku or 'N/A'}")
+        log_task(f"  Price: ${listing_price}" if listing_price else "  Price: N/A")
+
+        # Check if item already exists
+        existing_item = None
+        if event.user_id:
+            existing_item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_listing_id=ebay_listing_id
+            ).first()
+
+        if existing_item:
+            log_task(f"  ⚠️  Item already exists: {existing_item.id}")
+            return {
+                'status': 'duplicate',
+                'item_id': existing_item.id,
+                'message': 'Item already exists in database'
+            }
+
+        # Generate SKU if not provided
+        if not ebay_sku:
+            from qventory.helpers import generate_sku
+            ebay_sku = generate_sku()
+
+        # Create new item in Qventory
+        new_item = Item(
+            user_id=event.user_id,
+            title=title[:500] if title else 'eBay Item',  # Truncate to fit DB
+            sku=ebay_sku[:50] if ebay_sku else None,
+            ebay_listing_id=ebay_listing_id,
+            ebay_sku=ebay_sku[:100] if ebay_sku else None,
+            listing_link=data.get('view_url', ''),
+            listing_price=listing_price,
+            synced_from_ebay=True,
+            last_ebay_sync=datetime.utcnow(),
+            notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via Platform Notifications"
+        )
+
+        db.session.add(new_item)
+        db.session.commit()
+
+        log_task(f"  ✓ Created item {new_item.id}")
+
+        # Send notification to user
+        from qventory.models.notification import Notification
+        Notification.create_notification(
+            user_id=event.user_id,
+            type='success',
+            title='New eBay listing imported!',
+            message=f'{title[:50]} was automatically imported from eBay',
+            link_url=f'/item/{new_item.id}',
+            link_text='View Item',
+            source='webhook'
+        )
+
+        return {
+            'status': 'success',
+            'item_id': new_item.id,
+            'title': title,
+            'ebay_listing_id': ebay_listing_id,
+            'message': 'Item imported successfully'
+        }
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        import traceback
+        log_task(f"Traceback: {traceback.format_exc()}")
+        return {'status': 'error', 'message': str(e)}
+
+
+def process_revise_item_notification(event):
+    """
+    Process ReviseItem notification - Update listing in Qventory
+
+    Args:
+        event: WebhookEvent with ReviseItem data
+
+    Returns:
+        dict: Processing result
+    """
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task("Processing ReviseItem notification")
+
+    try:
+        payload = event.payload
+        data = payload.get('data', {})
+
+        ebay_listing_id = payload.get('item_id')
+
+        # Find item in database
+        item = None
+        if event.user_id:
+            item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_listing_id=ebay_listing_id
+            ).first()
+
+        if not item:
+            log_task(f"  ⚠️  Item not found: {ebay_listing_id}")
+            return {
+                'status': 'not_found',
+                'message': f'Item {ebay_listing_id} not found in database'
+            }
+
+        # Update item details
+        updated_fields = []
+
+        title = data.get('title')
+        if title and title != item.title:
+            item.title = title[:500]
+            updated_fields.append('title')
+
+        # Update pricing
+        buy_it_now_price = data.get('buy_it_now_price')
+        start_price = data.get('start_price')
+
+        new_price = None
+        if buy_it_now_price:
+            try:
+                new_price = float(buy_it_now_price)
+            except (ValueError, TypeError):
+                pass
+
+        if not new_price and start_price:
+            try:
+                new_price = float(start_price)
+            except (ValueError, TypeError):
+                pass
+
+        if new_price and new_price != item.listing_price:
+            item.listing_price = new_price
+            updated_fields.append('price')
+
+        # Update sync timestamp
+        item.last_ebay_sync = datetime.utcnow()
+
+        # Add note about update
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        update_note = f"\\n[{timestamp}] Updated from eBay: {', '.join(updated_fields) if updated_fields else 'metadata'}"
+        item.notes = (item.notes or '') + update_note
+
+        db.session.commit()
+
+        log_task(f"  ✓ Updated item {item.id}: {', '.join(updated_fields) if updated_fields else 'metadata'}")
+
+        return {
+            'status': 'success',
+            'item_id': item.id,
+            'updated_fields': updated_fields,
+            'message': 'Item updated successfully'
+        }
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
+
+
+def process_relist_item_notification(event):
+    """
+    Process RelistItem notification - Item was relisted
+
+    Args:
+        event: WebhookEvent with RelistItem data
+
+    Returns:
+        dict: Processing result
+    """
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task("Processing RelistItem notification")
+
+    try:
+        payload = event.payload
+        ebay_listing_id = payload.get('item_id')
+
+        # Find item in database
+        item = None
+        if event.user_id:
+            item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_listing_id=ebay_listing_id
+            ).first()
+
+        if not item:
+            log_task(f"  ⚠️  Item not found: {ebay_listing_id}")
+            return {
+                'status': 'not_found',
+                'message': f'Item {ebay_listing_id} not found'
+            }
+
+        # Add relist note
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        relist_note = f"\\n[{timestamp}] Listing relisted on eBay"
+        item.notes = (item.notes or '') + relist_note
+        item.last_ebay_sync = datetime.utcnow()
+
+        db.session.commit()
+
+        log_task(f"  ✓ Updated item {item.id} with relist note")
+
+        return {
+            'status': 'success',
+            'item_id': item.id,
+            'message': 'Relist noted'
+        }
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
