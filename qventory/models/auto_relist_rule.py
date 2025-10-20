@@ -18,7 +18,7 @@ class AutoRelistRule(db.Model):
     __tablename__ = "auto_relist_rules"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # eBay identifiers
     offer_id = db.Column(db.String(100), nullable=False, index=True)
@@ -453,7 +453,7 @@ class AutoRelistHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     rule_id = db.Column(db.Integer, db.ForeignKey("auto_relist_rules.id", ondelete='CASCADE'),
                        nullable=False, index=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Execution timing
     started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
