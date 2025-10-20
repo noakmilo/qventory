@@ -954,24 +954,30 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
     time.sleep(delay)
 
     # Step 3: Update offer/inventory if changes requested
+    log_relist(f"  DEBUG: apply_changes={apply_changes}, rule.pending_changes={rule.pending_changes}")
     if apply_changes and rule.pending_changes:
         changes = rule.pending_changes
         log_relist(f"  → Step 2/3: Applying changes: {list(changes.keys())}")
+        log_relist(f"  DEBUG: Full changes dict: {changes}")
 
         # Update price and/or quantity (Offer level)
         if 'price' in changes or 'quantity' in changes:
             offer_changes = {}
             if 'price' in changes:
                 offer_changes['price'] = changes['price']
+                log_relist(f"  DEBUG: Setting offer price to ${changes['price']}")
             if 'quantity' in changes:
                 offer_changes['quantity'] = changes['quantity']
 
+            log_relist(f"  DEBUG: About to call update_offer with: {offer_changes}")
             update_result = update_offer(user_id, rule.offer_id, offer_changes)
             result['details']['update_offer'] = update_result
 
             if not update_result['success']:
                 log_relist(f"  ⚠ Offer update failed: {update_result.get('error')}")
                 # Continue anyway - not critical
+            else:
+                log_relist(f"  DEBUG: Offer update succeeded!")
 
         # Update title/description/condition (Inventory Item level)
         if any(k in changes for k in ['title', 'description', 'condition']):
@@ -1072,11 +1078,13 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
 
     # Step 3: Relist Item (with optional changes)
     log_relist(f"  → Step 2/2: Relisting item...")
+    log_relist(f"  DEBUG: apply_changes={apply_changes}, rule.pending_changes={rule.pending_changes}")
 
     changes = None
     if apply_changes and rule.pending_changes:
         changes = rule.pending_changes
         log_relist(f"  With changes: {list(changes.keys())}")
+        log_relist(f"  DEBUG: Full changes dict for Trading API: {changes}")
 
     relist_result = relist_item_trading_api(user_id, item_id, changes)
     result['details']['relist_item'] = relist_result

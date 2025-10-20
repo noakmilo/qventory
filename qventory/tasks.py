@@ -1162,6 +1162,9 @@ def auto_relist_offers(self):
                         rule.pending_changes = {}
                     rule.pending_changes['price'] = new_price_from_decrease
                     history.changes_applied = {'price': new_price_from_decrease}
+                    log_task(f"  DEBUG: Set pending_changes['price'] = ${new_price_from_decrease}")
+                    log_task(f"  DEBUG: apply_changes = {apply_changes}")
+                    log_task(f"  DEBUG: rule.pending_changes = {rule.pending_changes}")
 
                 if apply_changes and rule.mode == 'manual':
                     history.changes_applied = rule.pending_changes.copy()
@@ -1170,6 +1173,7 @@ def auto_relist_offers(self):
                         history.new_price = rule.pending_changes['price']
 
                 # Execute relist
+                log_task(f"  DEBUG: About to call execute_relist with apply_changes={apply_changes}")
                 result = execute_relist(rule.user_id, rule, apply_changes=apply_changes)
 
                 # Check result
