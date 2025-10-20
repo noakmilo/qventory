@@ -354,10 +354,11 @@ def api_search_suppliers():
     """
     query = request.args.get('q', '').strip()
 
-    if not query or len(query) < 1:
+    # Return empty if no query (but accept single character queries)
+    if not query:
         return jsonify([])
 
-    # Search for suppliers matching the query (case-insensitive)
+    # Search for suppliers matching the query (case-insensitive, starts from 1 character)
     suppliers = db.session.query(Item.supplier).filter(
         Item.user_id == current_user.id,
         Item.supplier.isnot(None),
