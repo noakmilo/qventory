@@ -1123,6 +1123,25 @@ def auto_relist_offers(self):
                 # PRICE DECREASE: Calculate new price for auto mode
                 new_price_from_decrease = None
                 if rule.mode == 'auto' and rule.enable_price_decrease:
+                    if not rule.current_price:
+                        try:
+                            from qventory.helpers.ebay_relist import get_offer_details
+                            price_resp = get_offer_details(rule.user_id, rule.offer_id)
+                            if price_resp.get('success'):
+                                offer_data = price_resp.get('offer') or {}
+                                price_value = (
+                                    offer_data.get('pricingSummary', {})
+                                    .get('price', {})
+                                    .get('value')
+                                )
+                                if price_value is not None:
+                                    try:
+                                        rule.current_price = float(price_value)
+                                    except (TypeError, ValueError):
+                                        pass
+                        except Exception as fetch_err:
+                            log_task(f"  ⚠ Unable to refresh current price before decrease: {fetch_err}")
+
                     new_price_from_decrease = rule.calculate_new_price()
                     if new_price_from_decrease:
                         log_task(f"  Price decrease: ${rule.current_price} → ${new_price_from_decrease}")
