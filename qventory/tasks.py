@@ -1338,3 +1338,147 @@ def auto_relist_offers(self):
             'failed': failed_count,
             'skipped': skipped_count
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.process_webhook_event')
+def process_webhook_event(self, event_id):
+    """
+    Process a webhook event asynchronously
+
+    This task is triggered when a webhook event is received.
+    It processes the event based on its topic/type.
+
+    Args:
+        event_id: WebhookEvent ID to process
+
+    Returns:
+        dict with processing results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.webhook import WebhookEvent, WebhookProcessingQueue
+
+        log_task(f"=== Processing webhook event {event_id} ===")
+
+        # Get event from database
+        event = WebhookEvent.query.get(event_id)
+
+        if not event:
+            log_task(f"✗ Event {event_id} not found")
+            return {'success': False, 'error': 'Event not found'}
+
+        # Mark as processing
+        event.mark_processing()
+
+        # Get queue item
+        queue_item = WebhookProcessingQueue.query.filter_by(event_id=event_id).first()
+        if queue_item:
+            queue_item.mark_processing(celery_task_id=self.request.id)
+
+        try:
+            log_task(f"Event topic: {event.topic}")
+            log_task(f"Event for user: {event.user_id}")
+
+            # Route to appropriate processor based on topic
+            result = route_webhook_event(event)
+
+            # Mark as completed
+            event.mark_completed()
+            if queue_item:
+                queue_item.mark_completed()
+
+            log_task(f"✓ Event processed successfully")
+
+            return {
+                'success': True,
+                'event_id': event_id,
+                'topic': event.topic,
+                'result': result
+            }
+
+        except Exception as e:
+            log_task(f"✗ Error processing event: {str(e)}")
+
+            # Mark as failed
+            error_details = {
+                'error': str(e),
+                'task_id': self.request.id
+            }
+            event.mark_failed(str(e), error_details)
+
+            if queue_item:
+                queue_item.mark_failed_with_retry()
+
+            return {
+                'success': False,
+                'event_id': event_id,
+                'error': str(e)
+            }
+
+
+def route_webhook_event(event):
+    """
+    Route webhook event to appropriate processor
+
+    Args:
+        event: WebhookEvent object
+
+    Returns:
+        dict with processing result
+    """
+    topic = event.topic
+    payload = event.payload
+
+    log_task(f"Routing event with topic: {topic}")
+
+    # Map topics to processors
+    # For Sprint 1, we just log the events
+    # Sprint 3 and 4 will implement actual processors
+
+    if topic == 'ITEM_SOLD':
+        return process_item_sold_event(event)
+    elif topic == 'ITEM_ENDED':
+        return process_item_ended_event(event)
+    elif topic == 'ITEM_OUT_OF_STOCK':
+        return process_item_out_of_stock_event(event)
+    elif topic == 'FULFILLMENT_ORDER_SHIPPED':
+        return process_order_shipped_event(event)
+    elif topic == 'FULFILLMENT_ORDER_DELIVERED':
+        return process_order_delivered_event(event)
+    else:
+        log_task(f"⚠️  No processor for topic: {topic}")
+        return {'status': 'no_processor', 'message': f'No processor implemented for {topic}'}
+
+
+# === Event Processors (Placeholders for Sprint 3 & 4) ===
+
+def process_item_sold_event(event):
+    """Process ITEM_SOLD event - Sprint 3"""
+    log_task(f"  TODO: Implement ITEM_SOLD processor")
+    log_task(f"  Event data: {event.payload.get('notification', {})}")
+    return {'status': 'placeholder', 'message': 'ITEM_SOLD processor not yet implemented'}
+
+
+def process_item_ended_event(event):
+    """Process ITEM_ENDED event - Sprint 3"""
+    log_task(f"  TODO: Implement ITEM_ENDED processor")
+    return {'status': 'placeholder', 'message': 'ITEM_ENDED processor not yet implemented'}
+
+
+def process_item_out_of_stock_event(event):
+    """Process ITEM_OUT_OF_STOCK event - Sprint 3"""
+    log_task(f"  TODO: Implement ITEM_OUT_OF_STOCK processor")
+    return {'status': 'placeholder', 'message': 'ITEM_OUT_OF_STOCK processor not yet implemented'}
+
+
+def process_order_shipped_event(event):
+    """Process FULFILLMENT_ORDER_SHIPPED event - Sprint 4"""
+    log_task(f"  TODO: Implement ORDER_SHIPPED processor")
+    return {'status': 'placeholder', 'message': 'ORDER_SHIPPED processor not yet implemented'}
+
+
+def process_order_delivered_event(event):
+    """Process FULFILLMENT_ORDER_DELIVERED event - Sprint 4"""
+    log_task(f"  TODO: Implement ORDER_DELIVERED processor")
+    return {'status': 'placeholder', 'message': 'ORDER_DELIVERED processor not yet implemented'}
