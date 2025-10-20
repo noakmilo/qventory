@@ -1451,25 +1451,250 @@ def route_webhook_event(event):
         return {'status': 'no_processor', 'message': f'No processor implemented for {topic}'}
 
 
-# === Event Processors (Placeholders for Sprint 3 & 4) ===
+# === Event Processors (Sprint 3 & 4) ===
 
 def process_item_sold_event(event):
-    """Process ITEM_SOLD event - Sprint 3"""
-    log_task(f"  TODO: Implement ITEM_SOLD processor")
-    log_task(f"  Event data: {event.payload.get('notification', {})}")
-    return {'status': 'placeholder', 'message': 'ITEM_SOLD processor not yet implemented'}
+    """
+    Process ITEM_SOLD event - Create sale record and update inventory
+
+    This processor:
+    1. Extracts sale data from eBay webhook payload
+    2. Finds the matching item in inventory
+    3. Creates a Sale record
+    4. Calculates profit automatically
+    5. Notifies the user
+    """
+    from qventory.models.sale import Sale
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task(f"Processing ITEM_SOLD event")
+
+    try:
+        payload = event.payload
+        notification = payload.get('notification', {})
+
+        # Extract sale data from eBay notification
+        listing_id = notification.get('listingId')
+        sold_price = float(notification.get('price', {}).get('value', 0))
+        currency = notification.get('price', {}).get('currency', 'USD')
+        quantity_sold = int(notification.get('quantity', 1))
+        buyer_username = notification.get('buyerUsername', '')
+        transaction_id = notification.get('transactionId', '')
+        order_id = notification.get('orderId', '')
+
+        log_task(f"  Listing ID: {listing_id}")
+        log_task(f"  Price: {sold_price} {currency}")
+        log_task(f"  Quantity: {quantity_sold}")
+        log_task(f"  Buyer: {buyer_username}")
+
+        if not listing_id:
+            log_task(f"  ⚠️  No listing ID in notification")
+            return {'status': 'error', 'message': 'Missing listing ID'}
+
+        # Find the item in inventory
+        item = None
+        if event.user_id:
+            item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_listing_id=str(listing_id)
+            ).first()
+
+            if item:
+                log_task(f"  ✓ Found item: {item.title}")
+            else:
+                log_task(f"  ⚠️  Item not found (listing_id: {listing_id})")
+
+        # Calculate eBay fees (approximate)
+        marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
+        payment_fee = sold_price * 0.029 + 0.30  # Payment processing
+
+        # Check for duplicates
+        existing_sale = Sale.query.filter_by(
+            user_id=event.user_id,
+            marketplace='ebay',
+            marketplace_order_id=order_id or transaction_id
+        ).first()
+
+        if existing_sale:
+            log_task(f"  ⚠️  Duplicate sale (ID: {existing_sale.id})")
+            return {'status': 'duplicate', 'sale_id': existing_sale.id}
+
+        # Create new sale record
+        new_sale = Sale(
+            user_id=event.user_id,
+            item_id=item.id if item else None,
+            marketplace='ebay',
+            marketplace_order_id=order_id or transaction_id,
+            item_title=item.title if item else f'eBay Item {listing_id}',
+            item_sku=item.sku if item else None,
+            sold_price=sold_price,
+            item_cost=item.item_cost if item else None,
+            marketplace_fee=marketplace_fee,
+            payment_processing_fee=payment_fee,
+            sold_at=datetime.utcnow(),
+            status='paid',
+            ebay_transaction_id=transaction_id,
+            ebay_buyer_username=buyer_username,
+            buyer_username=buyer_username
+        )
+
+        new_sale.calculate_profit()
+        db.session.add(new_sale)
+        db.session.commit()
+
+        log_task(f"  ✓ Sale created (ID: {new_sale.id})")
+        log_task(f"  Net profit: ${new_sale.net_profit:.2f}" if new_sale.net_profit else "  Net profit: N/A")
+
+        # Notify user
+        from qventory.models.notification import Notification
+        profit_text = f"${new_sale.net_profit:.2f} profit" if new_sale.net_profit else "profit unknown"
+        Notification.create_notification(
+            user_id=event.user_id,
+            type='success',
+            title='Item sold!',
+            message=f'{new_sale.item_title[:50]} sold for ${sold_price:.2f} ({profit_text})',
+            link_url='/fulfillment',
+            link_text='View Order',
+            source='webhook'
+        )
+
+        return {
+            'status': 'success',
+            'sale_id': new_sale.id,
+            'sold_price': sold_price,
+            'net_profit': new_sale.net_profit
+        }
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        import traceback
+        log_task(f"  {traceback.format_exc()}")
+        return {'status': 'error', 'message': str(e)}
 
 
 def process_item_ended_event(event):
-    """Process ITEM_ENDED event - Sprint 3"""
-    log_task(f"  TODO: Implement ITEM_ENDED processor")
-    return {'status': 'placeholder', 'message': 'ITEM_ENDED processor not yet implemented'}
+    """
+    Process ITEM_ENDED event - Update item when listing ends
+    """
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task(f"Processing ITEM_ENDED event")
+
+    try:
+        payload = event.payload
+        notification = payload.get('notification', {})
+
+        listing_id = notification.get('listingId')
+        end_reason = notification.get('reason', 'ENDED')
+
+        log_task(f"  Listing ID: {listing_id}")
+        log_task(f"  Reason: {end_reason}")
+
+        if not listing_id or not event.user_id:
+            return {'status': 'error', 'message': 'Missing data'}
+
+        item = Item.query.filter_by(
+            user_id=event.user_id,
+            ebay_listing_id=str(listing_id)
+        ).first()
+
+        if not item:
+            log_task(f"  ⚠️  Item not found")
+            return {'status': 'not_found'}
+
+        log_task(f"  ✓ Found: {item.title}")
+
+        # Add note about listing end
+        end_note = f"\n[{datetime.utcnow().strftime('%Y-%m-%d')}] Listing ended on eBay ({end_reason})"
+        if item.notes:
+            item.notes += end_note
+        else:
+            item.notes = end_note.strip()
+
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        log_task(f"  ✓ Item updated")
+
+        return {'status': 'success', 'item_id': item.id}
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
 
 
 def process_item_out_of_stock_event(event):
-    """Process ITEM_OUT_OF_STOCK event - Sprint 3"""
-    log_task(f"  TODO: Implement ITEM_OUT_OF_STOCK processor")
-    return {'status': 'placeholder', 'message': 'ITEM_OUT_OF_STOCK processor not yet implemented'}
+    """
+    Process ITEM_OUT_OF_STOCK event - Mark item as out of stock
+    """
+    from qventory.models.item import Item
+    from qventory.extensions import db
+
+    log_task(f"Processing ITEM_OUT_OF_STOCK event")
+
+    try:
+        payload = event.payload
+        notification = payload.get('notification', {})
+
+        listing_id = notification.get('listingId')
+        sku = notification.get('sku')
+
+        log_task(f"  Listing ID: {listing_id}")
+
+        if not event.user_id:
+            return {'status': 'error', 'message': 'Missing user ID'}
+
+        # Find item by listing ID or SKU
+        item = None
+        if listing_id:
+            item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_listing_id=str(listing_id)
+            ).first()
+
+        if not item and sku:
+            item = Item.query.filter_by(
+                user_id=event.user_id,
+                ebay_sku=sku
+            ).first()
+
+        if not item:
+            log_task(f"  ⚠️  Item not found")
+            return {'status': 'not_found'}
+
+        log_task(f"  ✓ Found: {item.title}")
+
+        # Add out of stock note
+        oos_note = f"\n[{datetime.utcnow().strftime('%Y-%m-%d')}] Out of stock on eBay"
+        if item.notes:
+            item.notes += oos_note
+        else:
+            item.notes = oos_note.strip()
+
+        item.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        log_task(f"  ✓ Marked out of stock")
+
+        # Notify user
+        from qventory.models.notification import Notification
+        Notification.create_notification(
+            user_id=event.user_id,
+            type='warning',
+            title='Item out of stock',
+            message=f'{item.title[:50]} is now out of stock on eBay',
+            link_url=f'/item/{item.id}/edit',
+            link_text='View Item',
+            source='webhook'
+        )
+
+        return {'status': 'success', 'item_id': item.id}
+
+    except Exception as e:
+        log_task(f"  ✗ Error: {str(e)}")
+        return {'status': 'error', 'message': str(e)}
 
 
 def process_order_shipped_event(event):
