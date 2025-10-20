@@ -1481,6 +1481,7 @@ tbody tr:hover td{
   flex-direction: row;
   align-items: center;
   gap: 6px;
+  position: relative;
 }
 
 .inline-edit__form--compact input {
@@ -1909,12 +1910,22 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   transition: background 0.15s ease;
 }
 
+.autocomplete-item .match {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .autocomplete-item:last-child {
   border-bottom: none;
 }
 
 .autocomplete-item:hover {
   background: var(--muted);
+}
+
+.autocomplete-item.active {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--accent);
 }
 
 .autocomplete-item strong {

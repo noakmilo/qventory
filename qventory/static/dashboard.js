@@ -659,6 +659,14 @@ function setupInlineEditors() {
       }
     });
 
+    if (container.dataset.field === 'supplier') {
+      const supplierInput = form.querySelector('input[name="value"]');
+      const list = form.querySelector('.supplier-inline-autocomplete');
+      if (supplierInput && list) {
+        setupSupplierInlineAutocomplete(supplierInput, list, form, container);
+      }
+    }
+
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       submitInlineForm(container, form, display);
@@ -740,6 +748,126 @@ async function submitInlineForm(container, form, display) {
       display.hidden = false;
     }
   }
+}
+
+function setupSupplierInlineAutocomplete(input, list, form, container) {
+  if (input.dataset.autocompleteInitialized === '1') {
+    return;
+  }
+  input.dataset.autocompleteInitialized = '1';
+
+  let activeIndex = -1;
+  let debounceTimer = null;
+
+  const closeList = () => {
+    list.classList.remove('show');
+    list.innerHTML = '';
+    activeIndex = -1;
+  };
+
+  const commitValue = (value) => {
+    input.value = value;
+    closeList();
+  };
+
+  input.addEventListener('input', (event) => {
+    const query = event.target.value.trim();
+    clearTimeout(debounceTimer);
+
+    if (query.length === 0) {
+      closeList();
+      return;
+    }
+
+    debounceTimer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/suppliers/search?q=${encodeURIComponent(query)}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch suppliers');
+        }
+
+        const suppliers = await response.json();
+        if (!Array.isArray(suppliers) || suppliers.length === 0) {
+          closeList();
+          return;
+        }
+
+        list.innerHTML = '';
+        suppliers.forEach((supplier, index) => {
+          const item = document.createElement('div');
+          item.className = 'autocomplete-item';
+          item.innerHTML = highlightSupplierMatch(supplier, query);
+          item.dataset.index = index;
+          item.dataset.value = supplier;
+          item.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            commitValue(supplier);
+          });
+          list.appendChild(item);
+        });
+
+        list.classList.add('show');
+        activeIndex = -1;
+      } catch (error) {
+        console.error('Supplier autocomplete error:', error);
+        closeList();
+      }
+    }, 200);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    const items = list.querySelectorAll('.autocomplete-item');
+    if (!items.length) {
+      return;
+    }
+
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+      updateSupplierActiveItem(items, activeIndex);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      activeIndex = activeIndex <= 0 ? items.length - 1 : activeIndex - 1;
+      updateSupplierActiveItem(items, activeIndex);
+    } else if (event.key === 'Enter' && activeIndex >= 0) {
+      event.preventDefault();
+      const value = items[activeIndex].dataset.value;
+      commitValue(value);
+    } else if (event.key === 'Escape') {
+      closeList();
+    }
+  });
+
+  const outsideHandler = (event) => {
+    if (!container.contains(event.target)) {
+      closeList();
+    }
+  };
+
+  document.addEventListener('click', outsideHandler);
+  form.addEventListener('reset', closeList);
+  form.addEventListener('submit', closeList);
+}
+
+function updateSupplierActiveItem(items, activeIndex) {
+  items.forEach((item, index) => {
+    if (index === activeIndex) {
+      item.classList.add('active');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+function highlightSupplierMatch(text, query) {
+  if (!text || !query) return text || '';
+  const regex = new RegExp(`(${escapeSupplierRegex(query)})`, 'gi');
+  return text.replace(regex, '<span class="match">$1</span>');
+}
+
+function escapeSupplierRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ==================== LOCATION MODAL ====================
