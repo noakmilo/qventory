@@ -169,40 +169,41 @@
           </div>
         </div>
 
-        <!-- Quiet Hours (Collapsed by default) -->
+        <!-- Quiet Hours -->
         <div style="margin-top:24px;padding-top:24px;border-top:1px solid var(--border);">
-          <div style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;" onclick="document.getElementById('quiet_hours_content').style.display = document.getElementById('quiet_hours_content').style.display === 'none' ? 'block' : 'none'; this.querySelector('.toggle-icon').classList.toggle('rotated');">
-            <h3 style="font-size:14px;margin-bottom:0;color:var(--text);">
-              <i class="fas fa-moon"></i> Quiet Hours (Optional)
-            </h3>
-            <i class="fas fa-chevron-down toggle-icon" style="transition:transform 0.2s;font-size:12px;color:var(--text-tertiary);"></i>
-          </div>
-          <div id="quiet_hours_content" style="display:none;margin-top:16px;">
+          <h3 style="font-size:14px;margin-bottom:16px;color:var(--text);">
+            <i class="fas fa-moon"></i> Quiet Hours (Optional)
+          </h3>
+          <label class="checkbox-label" style="margin-bottom:12px;">
+            <input type="checkbox" name="enable_quiet_hours" id="enable_quiet_hours">
+            <span>Only run during a specific time window</span>
+          </label>
+          <div id="quiet_hours_content" style="display:none;margin-top:12px;">
             <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">
-              Relists will only run during this time window
+              When enabled, relists will be scheduled within this window based on your timezone.
             </p>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div class="form-group">
-              <label for="quiet_hours_start">Start Time</label>
-              <input type="time" name="quiet_hours_start" id="quiet_hours_start" class="form-control" value="02:00">
-            </div>
-            <div class="form-group">
-              <label for="quiet_hours_end">End Time</label>
-              <input type="time" name="quiet_hours_end" id="quiet_hours_end" class="form-control" value="05:00">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div class="form-group">
+                <label for="quiet_hours_start">Start Time</label>
+                <input type="time" name="quiet_hours_start" id="quiet_hours_start" class="form-control" value="" disabled>
+              </div>
+              <div class="form-group">
+                <label for="quiet_hours_end">End Time</label>
+                <input type="time" name="quiet_hours_end" id="quiet_hours_end" class="form-control" value="" disabled>
+              </div>
             </div>
           </div>
+        </div>
 
-          <div class="form-group">
-            <label for="timezone">Timezone</label>
-            <select name="timezone" id="timezone" class="form-control">
-              <option value="America/Los_Angeles" selected>Pacific (Los Angeles)</option>
-              <option value="America/Denver">Mountain (Denver)</option>
-              <option value="America/Chicago">Central (Chicago)</option>
-              <option value="America/New_York">Eastern (New York)</option>
-            </select>
-          </div>
-          </div>
+        <div class="form-group" style="margin-top:16px;">
+          <label for="timezone">Timezone</label>
+          <select name="timezone" id="timezone" class="form-control">
+            <option value="America/Los_Angeles" selected>Pacific (Los Angeles)</option>
+            <option value="America/Denver">Mountain (Denver)</option>
+            <option value="America/Chicago">Central (Chicago)</option>
+            <option value="America/New_York">Eastern (New York)</option>
+          </select>
         </div>
 
         <!-- Safety Rules (Collapsed by default) -->
@@ -782,6 +783,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Initial update
   updateFirstRelistMessage();
+
+  // ==================== QUIET HOURS HANDLING ====================
+  const enableQuietHours = document.getElementById('enable_quiet_hours');
+  const quietHoursContent = document.getElementById('quiet_hours_content');
+  const quietInputs = quietHoursContent.querySelectorAll('input[type="time"]');
+
+  function syncQuietHoursState() {
+    const enabled = enableQuietHours.checked;
+    quietHoursContent.style.display = enabled ? 'block' : 'none';
+    quietInputs.forEach(input => {
+      input.disabled = !enabled;
+      if (!enabled) {
+        input.value = '';
+      }
+    });
+  }
+
+  enableQuietHours.addEventListener('change', syncQuietHoursState);
+  syncQuietHoursState();
 
   // ==================== PRICE DECREASE HANDLING ====================
 

@@ -77,14 +77,25 @@
             <i class="fas fa-moon"></i> Quiet Hours
           </h3>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-            <div class="form-group">
-              <label for="quiet_hours_start">Start Time</label>
-              <input type="time" name="quiet_hours_start" id="quiet_hours_start" class="form-control" value="{{ rule.quiet_hours_start.strftime('%H:%M') if rule.quiet_hours_start else '' }}">
-            </div>
-            <div class="form-group">
-              <label for="quiet_hours_end">End Time</label>
-              <input type="time" name="quiet_hours_end" id="quiet_hours_end" class="form-control" value="{{ rule.quiet_hours_end.strftime('%H:%M') if rule.quiet_hours_end else '' }}">
+          <label class="checkbox-label" style="margin-bottom:12px;">
+            <input type="checkbox" name="enable_quiet_hours" id="enable_quiet_hours" {% if rule.quiet_hours_start and rule.quiet_hours_end %}checked{% endif %}>
+            <span>Only run during a specific time window</span>
+          </label>
+
+          <div id="quiet_hours_content" style="margin-top:12px;{% if not (rule.quiet_hours_start and rule.quiet_hours_end) %}display:none;{% endif %}">
+            <p style="font-size:12px;color:var(--text-secondary);margin-bottom:16px;">
+              When enabled, relists will be scheduled within this window based on your timezone.
+            </p>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div class="form-group">
+                <label for="quiet_hours_start">Start Time</label>
+                <input type="time" name="quiet_hours_start" id="quiet_hours_start" class="form-control" value="{{ rule.quiet_hours_start.strftime('%H:%M') if rule.quiet_hours_start else '' }}" {% if not (rule.quiet_hours_start and rule.quiet_hours_end) %}disabled{% endif %}>
+              </div>
+              <div class="form-group">
+                <label for="quiet_hours_end">End Time</label>
+                <input type="time" name="quiet_hours_end" id="quiet_hours_end" class="form-control" value="{{ rule.quiet_hours_end.strftime('%H:%M') if rule.quiet_hours_end else '' }}" {% if not (rule.quiet_hours_start and rule.quiet_hours_end) %}disabled{% endif %}>
+              </div>
             </div>
           </div>
 
@@ -275,6 +286,9 @@
 document.addEventListener('DOMContentLoaded', function() {
   const frequencySelect = document.getElementById('frequency');
   const customIntervalGroup = document.getElementById('custom_interval_group');
+  const enableQuietHours = document.getElementById('enable_quiet_hours');
+  const quietHoursContent = document.getElementById('quiet_hours_content');
+  const quietInputs = quietHoursContent ? quietHoursContent.querySelectorAll('input[type="time"]') : [];
 
   if (frequencySelect) {
     frequencySelect.addEventListener('change', function() {
@@ -284,6 +298,22 @@ document.addEventListener('DOMContentLoaded', function() {
         customIntervalGroup.style.display = 'none';
       }
     });
+  }
+
+  if (enableQuietHours && quietHoursContent) {
+    const syncQuietHoursState = () => {
+      const enabled = enableQuietHours.checked;
+      quietHoursContent.style.display = enabled ? 'block' : 'none';
+      quietInputs.forEach(input => {
+        input.disabled = !enabled;
+        if (!enabled) {
+          input.value = '';
+        }
+      });
+    };
+
+    enableQuietHours.addEventListener('change', syncQuietHoursState);
+    syncQuietHoursState();
   }
 
   // ==================== PRICE DECREASE HANDLING ====================

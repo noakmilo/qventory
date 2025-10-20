@@ -408,6 +408,7 @@ class AutoRelistRule(db.Model):
             'interval_days': self.get_interval_days(),
             'quiet_hours_start': self.quiet_hours_start.strftime('%H:%M') if self.quiet_hours_start else None,
             'quiet_hours_end': self.quiet_hours_end.strftime('%H:%M') if self.quiet_hours_end else None,
+            'quiet_hours_enabled': bool(self.quiet_hours_start and self.quiet_hours_end),
             'timezone': self.timezone,
             'min_hours_since_last_order': self.min_hours_since_last_order,
             'check_active_returns': self.check_active_returns,

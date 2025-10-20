@@ -139,16 +139,22 @@ def create_rule():
                 rule.custom_interval_days = int(data.get('custom_interval_days', 7))
 
             # Quiet hours
-            quiet_start = data.get('quiet_hours_start')
-            quiet_end = data.get('quiet_hours_end')
+            quiet_enabled = data.get('enable_quiet_hours') == 'on'
+            if quiet_enabled:
+                quiet_start = data.get('quiet_hours_start')
+                quiet_end = data.get('quiet_hours_end')
 
-            if quiet_start:
-                h, m = map(int, quiet_start.split(':'))
-                rule.quiet_hours_start = datetime_time(h, m)
-
-            if quiet_end:
-                h, m = map(int, quiet_end.split(':'))
-                rule.quiet_hours_end = datetime_time(h, m)
+                if quiet_start and quiet_end:
+                    h_start, m_start = map(int, quiet_start.split(':'))
+                    h_end, m_end = map(int, quiet_end.split(':'))
+                    rule.quiet_hours_start = datetime_time(h_start, m_start)
+                    rule.quiet_hours_end = datetime_time(h_end, m_end)
+                else:
+                    rule.quiet_hours_start = None
+                    rule.quiet_hours_end = None
+            else:
+                rule.quiet_hours_start = None
+                rule.quiet_hours_end = None
 
             rule.timezone = data.get('timezone', 'America/Los_Angeles')
 
@@ -229,19 +235,21 @@ def edit_rule(rule_id):
                 rule.custom_interval_days = int(data.get('custom_interval_days', 7))
 
             # Quiet hours
-            quiet_start = data.get('quiet_hours_start')
-            quiet_end = data.get('quiet_hours_end')
+            quiet_enabled = data.get('enable_quiet_hours') == 'on'
+            if quiet_enabled:
+                quiet_start = data.get('quiet_hours_start')
+                quiet_end = data.get('quiet_hours_end')
 
-            if quiet_start:
-                h, m = map(int, quiet_start.split(':'))
-                rule.quiet_hours_start = datetime_time(h, m)
+                if quiet_start and quiet_end:
+                    h_start, m_start = map(int, quiet_start.split(':'))
+                    h_end, m_end = map(int, quiet_end.split(':'))
+                    rule.quiet_hours_start = datetime_time(h_start, m_start)
+                    rule.quiet_hours_end = datetime_time(h_end, m_end)
+                else:
+                    rule.quiet_hours_start = None
+                    rule.quiet_hours_end = None
             else:
                 rule.quiet_hours_start = None
-
-            if quiet_end:
-                h, m = map(int, quiet_end.split(':'))
-                rule.quiet_hours_end = datetime_time(h, m)
-            else:
                 rule.quiet_hours_end = None
 
             rule.timezone = data.get('timezone', 'America/Los_Angeles')
