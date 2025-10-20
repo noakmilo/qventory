@@ -54,7 +54,6 @@ class Item(db.Model):
     purchased_at = db.Column(db.Date, nullable=True)  # Fecha de compra al supplier
 
     # eBay Sync fields
-    ebay_item_id = db.Column(db.String(100), nullable=True, index=True)  # eBay Item ID
     ebay_listing_id = db.Column(db.String(100), nullable=True, index=True)  # eBay Listing ID (active)
     ebay_sku = db.Column(db.String(100), nullable=True)  # Custom SKU from eBay
     synced_from_ebay = db.Column(db.Boolean, default=False)  # Imported from eBay
