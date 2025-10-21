@@ -2506,7 +2506,7 @@ def poll_user_listings(credential):
                 ebay_listing_id=item_id_text,
                 ebay_sku=sku[:100] if sku else None,
                 listing_link=view_url,
-                listing_price=price,
+                item_price=price,
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
