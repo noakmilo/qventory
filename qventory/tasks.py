@@ -2391,17 +2391,18 @@ def poll_user_listings(credential):
         new_listings = 0
 
         for ebay_item in ebay_items:
-            item_id = ebay_item.get('item_id')
+            item_id = ebay_item.get('ebay_listing_id')
 
             # Skip if already in database
             if item_id in existing_listing_ids:
                 continue
 
-            # Create new item from eBay data
-            title = ebay_item.get('title', 'eBay Item')
+            # Create new item from eBay data (matching structure from get_active_listings_trading_api)
+            product_data = ebay_item.get('product', {})
+            title = product_data.get('title', 'eBay Item')
             sku = ebay_item.get('sku') or generate_sku()
-            price = ebay_item.get('price')
-            listing_url = ebay_item.get('listing_url', f'https://www.ebay.com/itm/{item_id}')
+            price = ebay_item.get('item_price')
+            listing_url = ebay_item.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
 
             new_item = Item(
                 user_id=user_id,
