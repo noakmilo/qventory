@@ -2338,26 +2338,24 @@ def refresh_ebay_token(credential):
 def poll_user_listings(credential):
     """
     Poll eBay for ALL active listings and import missing ones
-    
-    This ensures we never miss listings, regardless of when they were created.
-    
+
+    Uses the same proven function as manual import (get_active_listings_trading_api)
+
     Args:
         credential: MarketplaceCredential object
-    
+
     Returns:
         dict: {'new_listings': int, 'errors': []}
     """
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from qventory.models.item import Item
     from qventory.helpers import generate_sku
-    import os
-    import requests
-    
+    from qventory.helpers.ebay_inventory import get_active_listings_trading_api
+
     user_id = credential.user_id
 
     # Check if token needs refresh (eBay tokens expire after 2 hours)
     # We'll refresh if token is older than 1.5 hours to be safe
-    from datetime import timedelta
     token_age = datetime.utcnow() - credential.created_at
     if token_age > timedelta(hours=1, minutes=30):
         log_task(f"    Token is {token_age.total_seconds()/3600:.1f}h old, refreshing...")
@@ -2367,73 +2365,19 @@ def poll_user_listings(credential):
             return {'new_listings': 0, 'errors': ['Token refresh failed']}
         log_task(f"    ✓ Token refreshed successfully")
 
-    access_token = credential.get_access_token()  # Decrypt token
-
     # Update last poll time
     credential.last_poll_at = datetime.utcnow()
     db.session.commit()
-    
-    # eBay Trading API endpoint
-    is_sandbox = os.environ.get('EBAY_SANDBOX', 'false').lower() == 'true'
-    api_url = (
-        'https://api.sandbox.ebay.com/ws/api.dll'
-        if is_sandbox else
-        'https://api.ebay.com/ws/api.dll'
-    )
-    
-    # Build GetSellerList XML request (gets ALL active listings)
-    ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
-    ebay_dev_id = os.environ.get('EBAY_DEV_ID')
-    ebay_cert_id = os.environ.get('EBAY_CERT_ID')
 
-    # eBay requires a time range - use last 120 days to catch all active listings
-    end_time = datetime.utcnow()
-    start_time = end_time - timedelta(days=120)
-
-    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
-<GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <StartTimeFrom>{start_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
-  <StartTimeTo>{end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
-  <IncludeWatchCount>true</IncludeWatchCount>
-  <DetailLevel>ReturnAll</DetailLevel>
-  <GranularityLevel>Fine</GranularityLevel>
-  <Pagination>
-    <EntriesPerPage>200</EntriesPerPage>
-    <PageNumber>1</PageNumber>
-  </Pagination>
-</GetSellerListRequest>'''
-    
-    headers = {
-        'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-        'X-EBAY-API-DEV-NAME': ebay_dev_id,
-        'X-EBAY-API-APP-NAME': ebay_app_id,
-        'X-EBAY-API-CERT-NAME': ebay_cert_id,
-        'X-EBAY-API-CALL-NAME': 'GetSellerList',
-        'X-EBAY-API-SITEID': '0',
-        'X-EBAY-API-IAF-TOKEN': access_token,
-        'Content-Type': 'text/xml'
-    }
-    
     try:
-        response = requests.post(api_url, data=xml_request, headers=headers, timeout=30)
-        
-        if response.status_code != 200:
-            log_task(f"    GetSellerList failed: {response.status_code}")
-            return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
-        
-        # Parse XML response
-        import xml.etree.ElementTree as ET
-        root = ET.fromstring(response.text)
-        
-        # Check for success
-        ack = root.find('.//{urn:ebay:apis:eBLBaseComponents}Ack')
-        if ack is None or ack.text not in ['Success', 'Warning']:
-            errors = root.findall('.//{urn:ebay:apis:eBLBaseComponents}Errors')
-            error_msgs = [e.find('.//{urn:ebay:apis:eBLBaseComponents}LongMessage').text
-                         for e in errors if e.find('.//{urn:ebay:apis:eBLBaseComponents}LongMessage') is not None]
-            log_task(f"    GetSellerList error: {'; '.join(error_msgs)}")
-            return {'new_listings': 0, 'errors': error_msgs}
-        
+        # Use the same proven function as manual import
+        log_task(f"    Fetching active listings from eBay...")
+        ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
+        log_task(f"    Found {len(ebay_items)} active listings on eBay")
+
+        if failed_items:
+            log_task(f"    Warning: {len(failed_items)} items failed to parse")
+
         # Get existing listing IDs from database
         existing_listing_ids = set()
         existing_items = Item.query.filter_by(user_id=user_id).filter(
@@ -2441,96 +2385,41 @@ def poll_user_listings(credential):
         ).all()
         for item in existing_items:
             existing_listing_ids.add(item.ebay_listing_id)
-        
+
         log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
-        
-        # Extract items from ItemArray
-        items = root.findall('.//{urn:ebay:apis:eBLBaseComponents}ItemArray/{urn:ebay:apis:eBLBaseComponents}Item')
-
-        log_task(f"    Found {len(items)} active listings on eBay")
-
-        # DEBUG: Log all listing IDs from eBay
-        ebay_listing_ids = []
-        for item_elem in items:
-            item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
-            if item_id is not None and item_id.text:
-                ebay_listing_ids.append(item_id.text)
-        log_task(f"    eBay listing IDs: {', '.join(ebay_listing_ids)}")
-        log_task(f"    Existing listing IDs in DB: {', '.join(existing_listing_ids)}")
 
         new_listings = 0
-        active_count = 0
-        skipped_inactive = 0
-        skipped_existing = 0
 
-        for item_elem in items:
-            item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
-            title = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}Title')
-
-            if item_id is None or title is None:
-                continue
-
-            item_id_text = item_id.text
-            title_text = title.text
-
-            # CRITICAL: Only import ACTIVE listings
-            selling_status = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}SellingStatus/{urn:ebay:apis:eBLBaseComponents}ListingStatus')
-            if selling_status is None or selling_status.text != 'Active':
-                skipped_inactive += 1
-                continue  # Skip ended, sold, completed listings
-
-            active_count += 1
+        for ebay_item in ebay_items:
+            item_id = ebay_item.get('item_id')
 
             # Skip if already in database
-            if item_id_text in existing_listing_ids:
-                skipped_existing += 1
+            if item_id in existing_listing_ids:
                 continue
-            
-            # Extract price
-            price_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}StartPrice')
-            bin_price_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}BuyItNowPrice')
-            
-            price = None
-            if bin_price_elem is not None and bin_price_elem.text:
-                try:
-                    price = float(bin_price_elem.text)
-                except:
-                    pass
-            
-            if not price and price_elem is not None and price_elem.text:
-                try:
-                    price = float(price_elem.text)
-                except:
-                    pass
-            
-            # Extract SKU
-            sku_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}SKU')
-            sku = sku_elem.text if sku_elem is not None and sku_elem.text else generate_sku()
-            
-            # Extract listing URL
-            view_url_elem = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ListingDetails/{urn:ebay:apis:eBLBaseComponents}ViewItemURL')
-            view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{item_id_text}'
-            
-            # Create new item
+
+            # Create new item from eBay data
+            title = ebay_item.get('title', 'eBay Item')
+            sku = ebay_item.get('sku') or generate_sku()
+            price = ebay_item.get('price')
+            listing_url = ebay_item.get('listing_url', f'https://www.ebay.com/itm/{item_id}')
+
             new_item = Item(
                 user_id=user_id,
-                title=title_text[:500] if title_text else 'eBay Item',
+                title=title[:500] if title else 'eBay Item',
                 sku=sku[:50] if sku else generate_sku(),
-                ebay_listing_id=item_id_text,
+                ebay_listing_id=item_id,
                 ebay_sku=sku[:100] if sku else None,
-                listing_link=view_url,
+                listing_link=listing_url,
                 item_price=price,
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
-            
+
             db.session.add(new_item)
             new_listings += 1
-            
-            log_task(f"    ✓ New listing: {title_text[:50]}")
 
-        log_task(f"    Summary: {active_count} active, {skipped_inactive} inactive, {skipped_existing} already in DB, {new_listings} imported")
+            log_task(f"    ✓ New listing: {title[:50]}")
 
         if new_listings > 0:
             db.session.commit()
@@ -2542,7 +2431,7 @@ def poll_user_listings(credential):
                     user_id=user_id,
                     type='success',
                     title='New eBay listing imported!',
-                    message=f'{title_text[:50]} was automatically imported',
+                    message=f'{title[:50]} was automatically imported',
                     link_url='/inventory',
                     link_text='View Inventory',
                     source='ebay_sync'
