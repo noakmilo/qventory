@@ -2394,6 +2394,7 @@ def poll_user_listings(credential):
 <GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <StartTimeFrom>{start_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
   <StartTimeTo>{end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
+  <IncludeWatchCount>true</IncludeWatchCount>
   <DetailLevel>ReturnAll</DetailLevel>
   <GranularityLevel>Fine</GranularityLevel>
   <Pagination>
@@ -2458,19 +2459,31 @@ def poll_user_listings(credential):
         log_task(f"    Existing listing IDs in DB: {', '.join(existing_listing_ids)}")
 
         new_listings = 0
+        active_count = 0
+        skipped_inactive = 0
+        skipped_existing = 0
 
         for item_elem in items:
             item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
             title = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}Title')
-            
+
             if item_id is None or title is None:
                 continue
-            
+
             item_id_text = item_id.text
             title_text = title.text
-            
+
+            # CRITICAL: Only import ACTIVE listings
+            selling_status = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}SellingStatus/{urn:ebay:apis:eBLBaseComponents}ListingStatus')
+            if selling_status is None or selling_status.text != 'Active':
+                skipped_inactive += 1
+                continue  # Skip ended, sold, completed listings
+
+            active_count += 1
+
             # Skip if already in database
             if item_id_text in existing_listing_ids:
+                skipped_existing += 1
                 continue
             
             # Extract price
@@ -2516,7 +2529,9 @@ def poll_user_listings(credential):
             new_listings += 1
             
             log_task(f"    ✓ New listing: {title_text[:50]}")
-        
+
+        log_task(f"    Summary: {active_count} active, {skipped_inactive} inactive, {skipped_existing} already in DB, {new_listings} imported")
+
         if new_listings > 0:
             db.session.commit()
             
