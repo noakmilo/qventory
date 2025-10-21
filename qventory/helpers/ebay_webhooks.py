@@ -55,23 +55,18 @@ def create_webhook_subscription(user_id: int, topic: str, delivery_url: str) -> 
 
     try:
         # Step 1: Create destination (webhook endpoint)
-        # Generate a unique verification token for this destination
-        # eBay will send a GET request to the endpoint with this token to verify ownership
-        import secrets
-        verification_token = secrets.token_urlsafe(32)
-
+        # eBay will verify the endpoint by sending a GET request with challenge_code
+        # Our endpoint must echo back the challenge_code to pass verification
         destination_payload = {
             "name": f"Qventory-{topic}",
             "status": "ENABLED",
             "deliveryConfig": {
-                "endpoint": delivery_url,
-                "verificationToken": verification_token
+                "endpoint": delivery_url
             }
         }
 
         log_webhook_api("Step 1: Creating destination...")
         log_webhook_api(f"  Payload: {destination_payload}")
-        log_webhook_api(f"  Verification token: {verification_token[:20]}...")
 
         dest_response = requests.post(
             f"{NOTIFICATION_API_URL}/destination",
