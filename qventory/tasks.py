@@ -2397,12 +2397,17 @@ def poll_user_listings(credential):
             if item_id in existing_listing_ids:
                 continue
 
-            # Create new item from eBay data (matching structure from get_active_listings_trading_api)
-            product_data = ebay_item.get('product', {})
+            # Process images (upload to Cloudinary) for new items
+            from qventory.helpers.ebay_inventory import parse_ebay_inventory_item
+            parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
+
+            # Extract data from parsed item
+            product_data = parsed_with_images.get('product', {})
             title = product_data.get('title', 'eBay Item')
-            sku = ebay_item.get('sku') or generate_sku()
-            price = ebay_item.get('item_price')
-            listing_url = ebay_item.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
+            sku = parsed_with_images.get('sku') or generate_sku()
+            price = parsed_with_images.get('item_price')
+            listing_url = parsed_with_images.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
+            item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
 
             new_item = Item(
                 user_id=user_id,
@@ -2412,6 +2417,7 @@ def poll_user_listings(credential):
                 ebay_sku=sku[:100] if sku else None,
                 listing_link=listing_url,
                 item_price=price,
+                item_thumb=item_thumb,  # Cloudinary URL
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
