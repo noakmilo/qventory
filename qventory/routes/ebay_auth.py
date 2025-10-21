@@ -175,15 +175,21 @@ def callback():
             ebay_user_id=ebay_user_id
         )
 
-        # Auto-setup webhook subscriptions (Commerce API - JSON webhooks)
-        log("Auto-setting up Commerce API webhook subscriptions...")
-        try:
-            from qventory.helpers.webhook_auto_setup import auto_setup_webhooks
-            webhook_result = auto_setup_webhooks(current_user.id)
-            log(f"Commerce webhook auto-setup: {webhook_result['created']} created, {webhook_result['failed']} failed, {webhook_result['skipped']} skipped")
-        except Exception as webhook_error:
-            # Don't fail the whole connection if webhooks fail
-            log(f"WARNING: Commerce webhook auto-setup failed: {str(webhook_error)}")
+        # NOTE: Commerce API webhook subscriptions are disabled for now
+        # They require special access/approval from eBay that may not be available for all accounts
+        # Platform Notifications (below) covers the main events: ItemListed, ItemSold, ItemRevised, ItemClosed
+        #
+        # To enable Commerce API webhooks in the future:
+        # 1. Request access to Commerce Notification API from eBay Developer Support
+        # 2. Uncomment the code below
+        #
+        # log("Auto-setting up Commerce API webhook subscriptions...")
+        # try:
+        #     from qventory.helpers.webhook_auto_setup import auto_setup_webhooks
+        #     webhook_result = auto_setup_webhooks(current_user.id)
+        #     log(f"Commerce webhook auto-setup: {webhook_result['created']} created, {webhook_result['failed']} failed, {webhook_result['skipped']} skipped")
+        # except Exception as webhook_error:
+        #     log(f"WARNING: Commerce webhook auto-setup failed: {str(webhook_error)}")
 
         # Setup Platform Notifications (Trading API - SOAP webhooks for new listings)
         log("Setting up Platform Notifications (for real-time new listing sync)...")
