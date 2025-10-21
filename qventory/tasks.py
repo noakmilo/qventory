@@ -2318,12 +2318,13 @@ def refresh_ebay_token(credential):
         from qventory.routes.ebay_auth import refresh_access_token
         from datetime import datetime
 
-        # Use the existing refresh function
-        token_data = refresh_access_token(credential.refresh_token)
+        # Use the existing refresh function (decrypt refresh_token first)
+        token_data = refresh_access_token(credential.get_refresh_token())
 
-        # Update credential with new tokens
-        credential.access_token = token_data['access_token']
-        credential.refresh_token = token_data.get('refresh_token', credential.refresh_token)
+        # Update credential with new tokens (setters will encrypt)
+        credential.set_access_token(token_data['access_token'])
+        if 'refresh_token' in token_data:
+            credential.set_refresh_token(token_data['refresh_token'])
         credential.created_at = datetime.utcnow()  # Reset token age
         db.session.commit()
 
@@ -2366,7 +2367,7 @@ def poll_user_listings(credential):
             return {'new_listings': 0, 'errors': ['Token refresh failed']}
         log_task(f"    ✓ Token refreshed successfully")
 
-    access_token = credential.access_token
+    access_token = credential.get_access_token()  # Decrypt token
 
     # Update last poll time
     credential.last_poll_at = datetime.utcnow()
