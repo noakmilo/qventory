@@ -50,20 +50,29 @@ def handle_ebay_challenge():
     Response should be:
     {"challengeResponse": "abc123"}
     """
+    # Log ALL request details for debugging
+    log_webhook("="*60)
+    log_webhook("EBAY CHALLENGE REQUEST RECEIVED")
+    log_webhook(f"  Method: {request.method}")
+    log_webhook(f"  URL: {request.url}")
+    log_webhook(f"  Query params: {dict(request.args)}")
+    log_webhook(f"  Headers: {dict(request.headers)}")
+    log_webhook("="*60)
+
     challenge_code = request.args.get('challenge_code')
 
     if not challenge_code:
         log_webhook("✗ Challenge request missing challenge_code parameter")
         return jsonify({'error': 'Missing challenge_code parameter'}), 400
 
-    log_webhook(f"✓ Received eBay challenge: {challenge_code[:20]}...")
+    log_webhook(f"✓ Received eBay challenge code: {challenge_code[:50]}...")
 
     # Echo back the challenge code as required by eBay
     response = {
         'challengeResponse': challenge_code
     }
 
-    log_webhook("✓ Challenge response sent")
+    log_webhook(f"✓ Sending challenge response: {response}")
     return jsonify(response), 200
 
 

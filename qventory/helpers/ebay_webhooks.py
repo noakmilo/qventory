@@ -55,16 +55,20 @@ def create_webhook_subscription(user_id: int, topic: str, delivery_url: str) -> 
 
     try:
         # Step 1: Create destination (webhook endpoint)
+        # NOTE: eBay validates the endpoint via challenge-response (GET request)
+        # before accepting the destination creation
         destination_payload = {
             "name": f"Qventory-{topic}",
             "status": "ENABLED",
             "deliveryConfig": {
-                "endpoint": delivery_url,
-                "verificationToken": os.environ.get('EBAY_CLIENT_SECRET')[:20]  # Optional verification token
+                "endpoint": delivery_url
+                # Do NOT include verificationToken - eBay uses challenge-response instead
             }
         }
 
         log_webhook_api("Step 1: Creating destination...")
+        log_webhook_api(f"  Payload: {destination_payload}")
+
         dest_response = requests.post(
             f"{NOTIFICATION_API_URL}/destination",
             headers=headers,
@@ -72,10 +76,17 @@ def create_webhook_subscription(user_id: int, topic: str, delivery_url: str) -> 
             timeout=30
         )
 
+        log_webhook_api(f"  Response status: {dest_response.status_code}")
+        log_webhook_api(f"  Response body: {dest_response.text[:500]}")
+
         if dest_response.status_code not in [200, 201]:
             error_data = dest_response.json() if dest_response.text else {}
             error_msg = error_data.get('errors', [{}])[0].get('message', f'HTTP {dest_response.status_code}')
+
+            # Log full error details
             log_webhook_api(f"✗ Destination creation failed: {error_msg}")
+            log_webhook_api(f"  Full error response: {error_data}")
+
             return {'success': False, 'error': f'Destination creation failed: {error_msg}'}
 
         destination = dest_response.json()
