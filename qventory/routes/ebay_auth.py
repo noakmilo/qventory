@@ -202,8 +202,35 @@ def callback():
             # Don't fail the whole connection if Platform Notifications fail
             log(f"WARNING: Platform Notifications setup failed: {str(platform_error)}")
 
+        # Create notification that import is starting
+        log("Creating import notification...")
+        try:
+            from qventory.models.notification import Notification
+            Notification.create_notification(
+                user_id=current_user.id,
+                type='info',
+                title='Importing eBay Inventory',
+                message=f'We are importing your eBay listings. This may take a few moments. You will be notified when the import is complete.',
+                link_url='/inventory',
+                link_text='View Inventory',
+                source='ebay_import'
+            )
+        except Exception as notif_error:
+            log(f"WARNING: Failed to create notification: {str(notif_error)}")
+
+        # Trigger initial inventory import (respects plan limits)
+        log("Triggering initial inventory import...")
+        try:
+            from qventory.tasks import import_ebay_inventory
+            # Import in background using Celery
+            task = import_ebay_inventory.delay(current_user.id, import_mode='new_only', listing_status='ACTIVE')
+            log(f"✓ Initial import triggered: task ID {task.id}")
+            flash(f'Successfully connected to eBay! (User: {ebay_user_id}) Importing your inventory in the background...', 'success')
+        except Exception as import_error:
+            log(f"WARNING: Failed to trigger initial import: {str(import_error)}")
+            flash(f'Successfully connected to eBay! (User: {ebay_user_id}) Please import your inventory manually.', 'success')
+
         log(f"SUCCESS: eBay account connected for user {current_user.username}")
-        flash(f'Successfully connected to eBay! (User: {ebay_user_id}) Real-time sync enabled.', 'success')
         return redirect(url_for('main.settings'))
 
     except Exception as e:

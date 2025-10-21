@@ -362,6 +362,50 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             log_task(f"Imported: {imported_count}, Updated: {updated_count}, Skipped: {skipped_count}, Errors: {error_count}")
             log_task(f"Failed to parse: {len(failed_items)} (stored for retry)")
 
+            # Send completion notification to user
+            try:
+                from qventory.models.notification import Notification
+
+                if plan_limit_reached:
+                    # Plan limit reached - notify user to upgrade
+                    Notification.create_notification(
+                        user_id=user_id,
+                        type='warning',
+                        title='Plan Limit Reached',
+                        message=f'We imported {imported_count} items from eBay, but you have more listings available. Upgrade your plan to import all your inventory.',
+                        link_url='/settings',
+                        link_text='Upgrade Plan',
+                        source='ebay_import'
+                    )
+                    log_task(f"✓ Sent plan limit notification")
+                else:
+                    # Import completed successfully
+                    if imported_count > 0 or updated_count > 0:
+                        Notification.create_notification(
+                            user_id=user_id,
+                            type='success',
+                            title='eBay Import Completed',
+                            message=f'Successfully imported {imported_count} new items and updated {updated_count} existing items from eBay.',
+                            link_url='/inventory',
+                            link_text='View Inventory',
+                            source='ebay_import'
+                        )
+                        log_task(f"✓ Sent completion notification")
+                    else:
+                        # No new items found
+                        Notification.create_notification(
+                            user_id=user_id,
+                            type='info',
+                            title='eBay Import Completed',
+                            message=f'Your eBay inventory is already up to date. No new items to import.',
+                            link_url='/inventory',
+                            link_text='View Inventory',
+                            source='ebay_import'
+                        )
+                        log_task(f"✓ Sent 'no new items' notification")
+            except Exception as notif_error:
+                log_task(f"WARNING: Failed to send completion notification: {str(notif_error)}")
+
             return {
                 'status': 'completed',
                 'imported': imported_count,
