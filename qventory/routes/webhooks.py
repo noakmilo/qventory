@@ -39,41 +39,48 @@ def ebay_webhook():
 
 def handle_ebay_challenge():
     """
-    Handle eBay challenge code verification
+    Handle eBay challenge/verification requests
 
-    When you create a webhook subscription, eBay sends a GET request with
-    a challenge code that you must echo back to verify your endpoint.
+    eBay sends two types of GET verification requests:
 
-    Example:
-    GET /webhooks/ebay?challenge_code=abc123
+    1. Endpoint verification (during destination creation):
+       GET /webhooks/ebay?verification_token=abc123
+       Response: {"verificationToken": "abc123"}
 
-    Response should be:
-    {"challengeResponse": "abc123"}
+    2. Subscription challenge (during subscription activation):
+       GET /webhooks/ebay?challenge_code=abc123
+       Response: {"challengeResponse": "abc123"}
+
+    This endpoint handles both types.
     """
     # Log ALL request details for debugging
     log_webhook("="*60)
-    log_webhook("EBAY CHALLENGE REQUEST RECEIVED")
+    log_webhook("EBAY CHALLENGE/VERIFICATION REQUEST RECEIVED")
     log_webhook(f"  Method: {request.method}")
     log_webhook(f"  URL: {request.url}")
     log_webhook(f"  Query params: {dict(request.args)}")
     log_webhook(f"  Headers: {dict(request.headers)}")
     log_webhook("="*60)
 
+    # Check for verification_token (destination verification)
+    verification_token = request.args.get('verification_token')
+    if verification_token:
+        log_webhook(f"✓ Received eBay verification token: {verification_token[:50]}...")
+        response = {'verificationToken': verification_token}
+        log_webhook(f"✓ Sending verification response: {response}")
+        return jsonify(response), 200
+
+    # Check for challenge_code (subscription challenge)
     challenge_code = request.args.get('challenge_code')
+    if challenge_code:
+        log_webhook(f"✓ Received eBay challenge code: {challenge_code[:50]}...")
+        response = {'challengeResponse': challenge_code}
+        log_webhook(f"✓ Sending challenge response: {response}")
+        return jsonify(response), 200
 
-    if not challenge_code:
-        log_webhook("✗ Challenge request missing challenge_code parameter")
-        return jsonify({'error': 'Missing challenge_code parameter'}), 400
-
-    log_webhook(f"✓ Received eBay challenge code: {challenge_code[:50]}...")
-
-    # Echo back the challenge code as required by eBay
-    response = {
-        'challengeResponse': challenge_code
-    }
-
-    log_webhook(f"✓ Sending challenge response: {response}")
-    return jsonify(response), 200
+    # Neither parameter provided
+    log_webhook("✗ Request missing both verification_token and challenge_code parameters")
+    return jsonify({'error': 'Missing verification_token or challenge_code parameter'}), 400
 
 
 def handle_ebay_event():
