@@ -2370,6 +2370,20 @@ def poll_user_listings(credential):
     db.session.commit()
 
     try:
+        # Check user's plan limits
+        from qventory.models.user import User
+        user = User.query.get(user_id)
+        if not user:
+            log_task(f"    ✗ User {user_id} not found")
+            return {'new_listings': 0, 'errors': ['User not found']}
+
+        items_remaining = user.items_remaining()
+        log_task(f"    User plan: {user.user_role}, Items remaining: {items_remaining}")
+
+        if items_remaining is not None and items_remaining <= 0:
+            log_task(f"    ✗ User has reached plan limit (0 items remaining)")
+            return {'new_listings': 0, 'errors': ['Plan limit reached']}
+
         # Use the same proven function as manual import
         log_task(f"    Fetching active listings from eBay...")
         ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
@@ -2389,6 +2403,7 @@ def poll_user_listings(credential):
         log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
 
         new_listings = 0
+        max_new_items = items_remaining  # Limit how many new items can be imported
 
         for ebay_item in ebay_items:
             item_id = ebay_item.get('ebay_listing_id')
@@ -2396,6 +2411,11 @@ def poll_user_listings(credential):
             # Skip if already in database
             if item_id in existing_listing_ids:
                 continue
+
+            # Check plan limit before importing
+            if max_new_items is not None and new_listings >= max_new_items:
+                log_task(f"    ✗ Plan limit reached: {max_new_items} items. Stopping import.")
+                break
 
             # Process images (upload to Cloudinary) for new items
             from qventory.helpers.ebay_inventory import parse_ebay_inventory_item
