@@ -2304,6 +2304,36 @@ def should_poll_user(user, credential):
     return (now - last_poll) >= timedelta(hours=1)
 
 
+def refresh_ebay_token(credential):
+    """
+    Refresh eBay OAuth token if expired
+
+    Args:
+        credential: MarketplaceCredential object
+
+    Returns:
+        dict: {'success': bool, 'error': str (if failed)}
+    """
+    try:
+        from qventory.routes.ebay_auth import refresh_access_token
+        from datetime import datetime
+
+        # Use the existing refresh function
+        token_data = refresh_access_token(credential.refresh_token)
+
+        # Update credential with new tokens
+        credential.access_token = token_data['access_token']
+        credential.refresh_token = token_data.get('refresh_token', credential.refresh_token)
+        credential.created_at = datetime.utcnow()  # Reset token age
+        db.session.commit()
+
+        return {'success': True}
+
+    except Exception as e:
+        log_task(f"    Token refresh exception: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
 def poll_user_listings(credential):
     """
     Poll eBay for ALL active listings and import missing ones
@@ -2323,8 +2353,21 @@ def poll_user_listings(credential):
     import requests
     
     user_id = credential.user_id
+
+    # Check if token needs refresh (eBay tokens expire after 2 hours)
+    # We'll refresh if token is older than 1.5 hours to be safe
+    from datetime import timedelta
+    token_age = datetime.utcnow() - credential.created_at
+    if token_age > timedelta(hours=1, minutes=30):
+        log_task(f"    Token is {token_age.total_seconds()/3600:.1f}h old, refreshing...")
+        refresh_result = refresh_ebay_token(credential)
+        if not refresh_result['success']:
+            log_task(f"    ✗ Token refresh failed: {refresh_result.get('error', 'Unknown error')}")
+            return {'new_listings': 0, 'errors': ['Token refresh failed']}
+        log_task(f"    ✓ Token refreshed successfully")
+
     access_token = credential.access_token
-    
+
     # Update last poll time
     credential.last_poll_at = datetime.utcnow()
     db.session.commit()
