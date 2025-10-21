@@ -262,12 +262,11 @@ def disconnect():
 
             # Clean up webhook subscriptions before deleting credentials
             try:
-                from qventory.models.webhook_subscription import WebhookSubscription
+                from qventory.models.webhook import WebhookSubscription
                 from qventory.helpers.ebay_webhooks import delete_webhook_subscription
 
                 subscriptions = WebhookSubscription.query.filter_by(
-                    user_id=current_user.id,
-                    marketplace='ebay'
+                    user_id=current_user.id
                 ).all()
 
                 log(f"Found {len(subscriptions)} webhook subscriptions to delete")
