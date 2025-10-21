@@ -2395,11 +2395,20 @@ def poll_user_listings(credential):
         
         # Extract items from ItemArray
         items = root.findall('.//{urn:ebay:apis:eBLBaseComponents}ItemArray/{urn:ebay:apis:eBLBaseComponents}Item')
-        
+
         log_task(f"    Found {len(items)} active listings on eBay")
-        
+
+        # DEBUG: Log all listing IDs from eBay
+        ebay_listing_ids = []
+        for item_elem in items:
+            item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
+            if item_id is not None and item_id.text:
+                ebay_listing_ids.append(item_id.text)
+        log_task(f"    eBay listing IDs: {', '.join(ebay_listing_ids)}")
+        log_task(f"    Existing listing IDs in DB: {', '.join(existing_listing_ids)}")
+
         new_listings = 0
-        
+
         for item_elem in items:
             item_id = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}ItemID')
             title = item_elem.find('.//{urn:ebay:apis:eBLBaseComponents}Title')
