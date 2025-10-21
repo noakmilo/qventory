@@ -2385,9 +2385,15 @@ def poll_user_listings(credential):
     ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
     ebay_dev_id = os.environ.get('EBAY_DEV_ID')
     ebay_cert_id = os.environ.get('EBAY_CERT_ID')
-    
+
+    # eBay requires a time range - use last 120 days to catch all active listings
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(days=120)
+
     xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
 <GetSellerListRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <StartTimeFrom>{start_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
+  <StartTimeTo>{end_time.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
   <DetailLevel>ReturnAll</DetailLevel>
   <GranularityLevel>Fine</GranularityLevel>
   <Pagination>
