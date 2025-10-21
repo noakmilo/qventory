@@ -227,7 +227,7 @@ def setup_platform_notifications(user_id: int) -> dict:
             marketplace='ebay'
         ).first()
 
-        if not credential or not credential.access_token:
+        if not credential or not credential.get_access_token():
             log_auto_setup("✗ No eBay credentials found")
             return {
                 'success': False,
@@ -301,7 +301,7 @@ def set_notification_preferences(application_url: str, user_id: int) -> dict:
             marketplace='ebay'
         ).first()
 
-        ebay_user_token = credential.access_token if credential else None
+        ebay_user_token = credential.get_access_token() if credential else None
 
         if not all([ebay_app_id, ebay_dev_id, ebay_cert_id, ebay_user_token]):
             log_auto_setup("✗ Missing Trading API credentials")

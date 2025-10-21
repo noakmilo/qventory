@@ -246,7 +246,7 @@ def callback():
 def disconnect():
     """
     Disconnect eBay account
-    Removes credentials from database
+    Removes credentials from database and cleans up webhooks
     """
     log(f"=== DISCONNECT ROUTE CALLED ===")
     log(f"User: {current_user.id} ({current_user.username})")
@@ -259,6 +259,41 @@ def disconnect():
 
         if credential:
             log(f"Found credential ID: {credential.id}")
+
+            # Clean up webhook subscriptions before deleting credentials
+            try:
+                from qventory.models.webhook_subscription import WebhookSubscription
+                from qventory.helpers.ebay_webhooks import delete_webhook_subscription
+
+                subscriptions = WebhookSubscription.query.filter_by(
+                    user_id=current_user.id,
+                    marketplace='ebay'
+                ).all()
+
+                log(f"Found {len(subscriptions)} webhook subscriptions to delete")
+
+                for subscription in subscriptions:
+                    try:
+                        # Try to delete from eBay first
+                        log(f"Deleting subscription {subscription.subscription_id} from eBay")
+                        delete_webhook_subscription(current_user.id, subscription.subscription_id)
+                        log(f"✓ Deleted subscription {subscription.subscription_id} from eBay")
+                    except Exception as e:
+                        # Log error but continue - eBay subscription might already be expired/deleted
+                        log(f"⚠ Failed to delete subscription {subscription.subscription_id} from eBay: {str(e)}")
+
+                    # Delete from local database
+                    db.session.delete(subscription)
+                    log(f"✓ Deleted subscription {subscription.subscription_id} from database")
+
+                db.session.commit()
+                log(f"✓ Cleaned up {len(subscriptions)} webhook subscriptions")
+
+            except Exception as e:
+                log(f"⚠ Error cleaning up webhooks (non-fatal): {str(e)}")
+                # Continue with credential deletion even if webhook cleanup fails
+
+            # Delete the credential
             db.session.delete(credential)
             db.session.commit()
             log("Credential deleted successfully")
