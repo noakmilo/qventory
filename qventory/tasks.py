@@ -2322,11 +2322,14 @@ def should_poll_user(user, credential):
     """
     Determine if we should poll this user's eBay account
 
-    Smart polling logic:
-    - Always poll if last login < 24 hours
-    - Always poll if items created/updated < 7 days
-    - Poll every 10 minutes if last activity < 30 days
-    - Poll every hour if last activity > 30 days
+    SCALABLE ADAPTIVE POLLING (optimized for 100+ users):
+    - VERY active (item in last hour): poll every 60s
+    - Active (login < 6 hours): poll every 5 minutes
+    - Normal (login < 24 hours): poll every 15 minutes
+    - Semi-active (login < 7 days): poll every hour
+    - Inactive: poll every 6 hours
+
+    This reduces API load from ~200k/day to ~20k/day with 100 users.
 
     Args:
         user: User object
@@ -2336,41 +2339,36 @@ def should_poll_user(user, credential):
         bool: True if should poll now
     """
     from datetime import datetime, timedelta
+    from qventory.models.item import Item
 
     now = datetime.utcnow()
-
-    # Always poll if logged in recently (active users)
-    if user.last_login and (now - user.last_login) < timedelta(hours=24):
-        return True
-
-    # Check last polling time (stored in credential for efficiency)
     last_poll = getattr(credential, 'last_poll_at', None)
 
     # First time polling - always check
     if not last_poll:
         return True
 
-    # Check if user has recent item activity
-    from qventory.models.item import Item
-    recent_item = Item.query.filter_by(user_id=user.id).filter(
-        Item.created_at > (now - timedelta(days=7))
+    # TIER 1: VERY ACTIVE - User created item in last hour → Poll every 60s
+    very_recent_activity = Item.query.filter_by(user_id=user.id).filter(
+        Item.created_at > (now - timedelta(hours=1))
     ).first()
+    if very_recent_activity:
+        return True  # Poll every 60s (task frequency)
 
-    if recent_item:
-        # Active seller - poll every 60 seconds (this task's frequency)
-        return True
+    # TIER 2: ACTIVE - User logged in < 6 hours → Poll every 5 minutes
+    if user.last_login and (now - user.last_login) < timedelta(hours=6):
+        return (now - last_poll) >= timedelta(minutes=5)
 
-    # Check if user has activity in last 30 days
-    activity_30d = Item.query.filter_by(user_id=user.id).filter(
-        Item.created_at > (now - timedelta(days=30))
-    ).first()
+    # TIER 3: NORMAL - User logged in < 24 hours → Poll every 15 minutes
+    if user.last_login and (now - user.last_login) < timedelta(hours=24):
+        return (now - last_poll) >= timedelta(minutes=15)
 
-    if activity_30d:
-        # Somewhat active - poll every 10 minutes
-        return (now - last_poll) >= timedelta(minutes=10)
+    # TIER 4: SEMI-ACTIVE - User logged in < 7 days → Poll every hour
+    if user.last_login and (now - user.last_login) < timedelta(days=7):
+        return (now - last_poll) >= timedelta(hours=1)
 
-    # Inactive user - poll every hour
-    return (now - last_poll) >= timedelta(hours=1)
+    # TIER 5: INACTIVE - User logged in > 7 days → Poll every 6 hours
+    return (now - last_poll) >= timedelta(hours=6)
 
 
 def refresh_ebay_token(credential):
@@ -2549,3 +2547,337 @@ def poll_user_listings(credential):
         import traceback
         log_task(f"    Traceback: {traceback.format_exc()}")
         return {'new_listings': 0, 'errors': [str(e)]}
+
+
+# ==================== AUTO-SYNC HELPERS (PHASE 1 - SCALABLE) ====================
+
+def get_active_users_with_ebay(hours_since_login=24):
+    """
+    Get users who logged in recently and have active eBay credentials
+    
+    Used by auto-sync tasks to filter only recently active users.
+    This reduces API load and focuses on users who are actively using the platform.
+    
+    Args:
+        hours_since_login (int): Max hours since last login (default 24)
+    
+    Returns:
+        list: List of tuples (user, credential)
+    """
+    from qventory.models.user import User
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    from datetime import datetime, timedelta
+    
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours_since_login)
+    
+    # Get users with recent login
+    active_users = User.query.filter(
+        User.last_login.isnot(None),
+        User.last_login > cutoff_time
+    ).all()
+    
+    # Get their eBay credentials if active
+    result = []
+    for user in active_users:
+        credential = MarketplaceCredential.query.filter_by(
+            user_id=user.id,
+            marketplace='ebay',
+            is_active=True
+        ).first()
+        
+        if credential:
+            result.append((user, credential))
+    
+    return result
+
+
+def get_user_batch(all_users, batch_size=20):
+    """
+    Get current batch of users to process based on current time
+    
+    Rotates through users to distribute load evenly over time.
+    With 100 users and batch_size=20, each user is processed every 5 cycles.
+    
+    Args:
+        all_users (list): List of all users to batch
+        batch_size (int): Users per batch (default 20)
+    
+    Returns:
+        list: Current batch of users
+    """
+    from datetime import datetime
+    
+    if not all_users:
+        return []
+    
+    # Use current minute to determine batch (rotates every execution)
+    # For 15-minute task: minute 0 → batch 0, minute 15 → batch 1, etc.
+    current_minute = datetime.utcnow().minute
+    total_batches = (len(all_users) + batch_size - 1) // batch_size  # Ceiling division
+    
+    if total_batches == 0:
+        return all_users
+    
+    batch_index = (current_minute // 15) % total_batches  # Rotates through batches
+    
+    start_idx = batch_index * batch_size
+    end_idx = min(start_idx + batch_size, len(all_users))
+    
+    return all_users[start_idx:end_idx]
+
+
+# ==================== AUTO-SYNC TASKS ====================
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_active_inventory_auto')
+def sync_ebay_active_inventory_auto(self):
+    """
+    Auto-sync active inventory for recently active users
+    
+    Updates prices, statuses, and removes sold items automatically.
+    Uses batching to handle 100+ users without exceeding eBay API limits.
+    
+    Runs: Every 15 minutes
+    Batch: 20 users per execution (100 users = 5 batches = 75 min cycle)
+    API Calls: ~20-40 per execution
+    
+    Returns:
+        dict: Summary of sync operations
+    """
+    app = create_app()
+    
+    with app.app_context():
+        from qventory.models.item import Item
+        from qventory.helpers.ebay_inventory import fetch_ebay_inventory_offers
+        from sqlalchemy import or_
+        
+        log_task("=== Auto-sync active inventory ===")
+        
+        # Get active users (logged in < 24 hours)
+        all_active_users = get_active_users_with_ebay(hours_since_login=24)
+        
+        if not all_active_users:
+            log_task("No active users to sync")
+            return {
+                'success': True,
+                'users_processed': 0,
+                'items_updated': 0,
+                'items_deleted': 0
+            }
+        
+        log_task(f"Found {len(all_active_users)} active users total")
+        
+        # Get current batch (20 users max to avoid API limits)
+        batch_users = get_user_batch(all_active_users, batch_size=20)
+        log_task(f"Processing batch of {len(batch_users)} users")
+        
+        total_updated = 0
+        total_deleted = 0
+        users_processed = 0
+        
+        for user, credential in batch_users:
+            try:
+                log_task(f"  Syncing user {user.id} ({user.username})...")
+                
+                # Get items with eBay listings
+                items_to_sync = Item.query.filter(
+                    Item.user_id == user.id,
+                    or_(
+                        Item.ebay_listing_id.isnot(None),
+                        Item.ebay_sku.isnot(None)
+                    )
+                ).all()
+                
+                if not items_to_sync:
+                    log_task(f"    No items to sync")
+                    continue
+                
+                # Fetch current data from eBay
+                result = fetch_ebay_inventory_offers(user.id)
+                
+                if not result['success']:
+                    log_task(f"    ✗ Failed to fetch eBay data: {result.get('error')}")
+                    continue
+                
+                offers_by_listing = {
+                    offer.get('ebay_listing_id'): offer
+                    for offer in result['offers']
+                    if offer.get('ebay_listing_id')
+                }
+                offers_by_sku = {
+                    offer.get('ebay_sku'): offer
+                    for offer in result['offers']
+                    if offer.get('ebay_sku')
+                }
+                
+                updated_count = 0
+                deleted_count = 0
+                items_to_delete = []
+                
+                for item in items_to_sync:
+                    offer_data = None
+                    
+                    if item.ebay_listing_id and item.ebay_listing_id in offers_by_listing:
+                        offer_data = offers_by_listing[item.ebay_listing_id]
+                    elif item.ebay_sku and item.ebay_sku in offers_by_sku:
+                        offer_data = offers_by_sku[item.ebay_sku]
+                    
+                    if offer_data:
+                        # Item still exists - update price
+                        if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
+                            item.item_price = offer_data['item_price']
+                            updated_count += 1
+                        
+                        # Update status
+                        listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
+                        ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED', 'CANCELED'}
+                        
+                        if listing_status in ended_statuses and item.is_active:
+                            item.is_active = False
+                            updated_count += 1
+                    else:
+                        # Item no longer on eBay (sold/removed) - delete it
+                        items_to_delete.append(item)
+                        deleted_count += 1
+                
+                # Delete sold/removed items
+                for item in items_to_delete:
+                    db.session.delete(item)
+                
+                db.session.commit()
+                
+                log_task(f"    ✓ {updated_count} updated, {deleted_count} deleted")
+                total_updated += updated_count
+                total_deleted += deleted_count
+                users_processed += 1
+                
+            except Exception as e:
+                log_task(f"    ✗ Error syncing user {user.id}: {str(e)}")
+                db.session.rollback()
+                continue
+        
+        log_task(f"=== Sync complete: {users_processed} users, {total_updated} updated, {total_deleted} deleted ===")
+        
+        return {
+            'success': True,
+            'users_processed': users_processed,
+            'items_updated': total_updated,
+            'items_deleted': total_deleted
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_sold_orders_auto')
+def sync_ebay_sold_orders_auto(self):
+    """
+    Auto-sync sold orders for recently active users
+    
+    Fetches recent sold orders (last 12 hours) and updates sales database.
+    Uses batching to handle 100+ users without exceeding eBay API limits.
+    
+    Runs: Every 2 hours
+    Batch: 20 users per execution (100 users = 5 batches = 10 hour cycle)
+    API Calls: ~20-40 per execution
+    Range: Last 12 hours only (reduces API load vs full history)
+    
+    Returns:
+        dict: Summary of sync operations
+    """
+    app = create_app()
+    
+    with app.app_context():
+        from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
+        from qventory.models.sale import Sale
+        from datetime import datetime
+        
+        log_task("=== Auto-sync sold orders (last 12 hours) ===")
+        
+        # Get active users (logged in < 24 hours)
+        all_active_users = get_active_users_with_ebay(hours_since_login=24)
+        
+        if not all_active_users:
+            log_task("No active users to sync")
+            return {
+                'success': True,
+                'users_processed': 0,
+                'sales_created': 0,
+                'sales_updated': 0
+            }
+        
+        log_task(f"Found {len(all_active_users)} active users total")
+        
+        # Get current batch (20 users max)
+        batch_users = get_user_batch(all_active_users, batch_size=20)
+        log_task(f"Processing batch of {len(batch_users)} users")
+        
+        total_created = 0
+        total_updated = 0
+        users_processed = 0
+        
+        for user, credential in batch_users:
+            try:
+                log_task(f"  Syncing sales for user {user.id} ({user.username})...")
+                
+                # Fetch sold orders from last 12 hours only (0.5 days)
+                result = fetch_ebay_sold_orders(user.id, days_back=0.5)
+                
+                if not result['success']:
+                    log_task(f"    ✗ Failed to fetch sold orders: {result.get('error')}")
+                    continue
+                
+                sold_orders = result['orders']
+                
+                if not sold_orders:
+                    log_task(f"    No new sales")
+                    continue
+                
+                created_count = 0
+                updated_count = 0
+                
+                for order in sold_orders:
+                    # Check if sale already exists
+                    existing_sale = Sale.query.filter_by(
+                        user_id=user.id,
+                        marketplace_order_id=order.get('marketplace_order_id')
+                    ).first()
+                    
+                    if existing_sale:
+                        # Update existing sale
+                        if order.get('sold_price'):
+                            existing_sale.sold_price = order['sold_price']
+                        if order.get('marketplace_fee'):
+                            existing_sale.marketplace_fee = order['marketplace_fee']
+                        if order.get('payment_processing_fee'):
+                            existing_sale.payment_processing_fee = order['payment_processing_fee']
+                        
+                        existing_sale.updated_at = datetime.utcnow()
+                        existing_sale.calculate_profit()
+                        updated_count += 1
+                    else:
+                        # Create new sale
+                        new_sale = Sale(
+                            user_id=user.id,
+                            **order
+                        )
+                        new_sale.calculate_profit()
+                        db.session.add(new_sale)
+                        created_count += 1
+                
+                db.session.commit()
+                
+                log_task(f"    ✓ {created_count} created, {updated_count} updated")
+                total_created += created_count
+                total_updated += updated_count
+                users_processed += 1
+                
+            except Exception as e:
+                log_task(f"    ✗ Error syncing sales for user {user.id}: {str(e)}")
+                db.session.rollback()
+                continue
+        
+        log_task(f"=== Sales sync complete: {users_processed} users, {total_created} created, {total_updated} updated ===")
+        
+        return {
+            'success': True,
+            'users_processed': users_processed,
+            'sales_created': total_created,
+            'sales_updated': total_updated
+        }

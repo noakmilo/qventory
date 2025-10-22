@@ -56,9 +56,24 @@ celery.conf.beat_schedule = {
     },
     'poll-ebay-listings-every-minute': {
         'task': 'qventory.tasks.poll_ebay_new_listings',
-        'schedule': 60.0,  # Every 60 seconds
+        'schedule': 60.0,  # Every 60 seconds (uses smart adaptive polling)
         'options': {
             'expires': 55,  # Expire after 55 seconds if not picked up
+        }
+    },
+    # ==================== PHASE 1: AUTO-SYNC (SCALABLE) ====================
+    'sync-active-inventory-auto': {
+        'task': 'qventory.tasks.sync_ebay_active_inventory_auto',
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'options': {
+            'expires': 840,  # Expire after 14 minutes (before next execution)
+        }
+    },
+    'sync-sold-orders-auto': {
+        'task': 'qventory.tasks.sync_ebay_sold_orders_auto',
+        'schedule': crontab(minute=0, hour='*/2'),  # Every 2 hours (00:00, 02:00, 04:00, etc.)
+        'options': {
+            'expires': 7080,  # Expire after 118 minutes (before next execution)
         }
     },
 }
