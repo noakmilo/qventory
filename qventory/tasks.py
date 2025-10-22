@@ -2490,10 +2490,9 @@ def poll_user_listings(credential):
             from qventory.helpers.ebay_inventory import parse_ebay_inventory_item
             parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
 
-            # Extract data from parsed item
-            product_data = parsed_with_images.get('product', {})
-            title = product_data.get('title', 'eBay Item')
-            sku = parsed_with_images.get('sku') or generate_sku()
+            # Extract data from parsed item (note: parse_ebay_inventory_item returns fields in root, not nested in 'product')
+            title = parsed_with_images.get('title', 'eBay Item')
+            sku = parsed_with_images.get('ebay_sku') or generate_sku()
             price = parsed_with_images.get('item_price')
             listing_url = parsed_with_images.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
             item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
