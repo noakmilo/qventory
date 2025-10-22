@@ -1315,6 +1315,31 @@ def auto_relist_offers(self):
 
                     rule.mark_success(new_listing_id)
 
+                    # DELETE OLD ITEM FROM INVENTORY
+                    # After successful relist, delete the old item from Qventory inventory
+                    # so it will be re-imported fresh on next polling cycle (every 60s)
+                    old_listing_id = result.get('old_listing_id')
+                    if old_listing_id:
+                        try:
+                            from qventory.models.item import Item
+                            old_item = Item.query.filter_by(
+                                user_id=rule.user_id,
+                                ebay_listing_id=old_listing_id
+                            ).first()
+
+                            if old_item:
+                                log_task(f"  Deleting old item from inventory (listing_id: {old_listing_id}, sku: {old_item.sku})")
+                                db.session.delete(old_item)
+                                db.session.flush()  # Flush to database but don't commit yet
+                                log_task(f"  ✓ Old item deleted - will be re-imported fresh on next polling cycle")
+                            else:
+                                log_task(f"  No item found with listing_id {old_listing_id} to delete")
+                        except Exception as delete_err:
+                            log_task(f"  ⚠ Error deleting old item (non-fatal): {delete_err}")
+                            # Don't fail the whole relist if deletion fails
+                            import traceback
+                            log_task(f"  Traceback: {traceback.format_exc()}")
+
                     history.status = 'success'
                     history.old_listing_id = result.get('old_listing_id')
                     history.new_listing_id = new_listing_id
