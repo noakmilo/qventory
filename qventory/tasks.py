@@ -2422,7 +2422,7 @@ def poll_user_listings(credential):
             return {'new_listings': 0, 'errors': ['User not found']}
 
         items_remaining = user.items_remaining()
-        log_task(f"    User plan: {user.user_role}, Items remaining: {items_remaining}")
+        log_task(f"    User plan: {user.role}, Items remaining: {items_remaining}")
 
         if items_remaining is not None and items_remaining <= 0:
             log_task(f"    ✗ User has reached plan limit (0 items remaining)")
