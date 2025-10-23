@@ -1,7 +1,7 @@
 """Add sold tracking to items
 
 Revision ID: 019_add_sold_tracking
-Revises: 018_add_last_poll_at_to_credentials
+Revises: 018_add_last_poll_at
 Create Date: 2025-01-22
 
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '019_add_sold_tracking'
-down_revision = '018_add_last_poll_at_to_credentials'
+down_revision = '018_add_last_poll_at'
 branch_labels = None
 depends_on = None
 
