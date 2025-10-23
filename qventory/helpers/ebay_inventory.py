@@ -1595,6 +1595,7 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         title = line_item.get('title', 'Unknown Item')
         sku = line_item.get('sku', '')
         line_item_id = line_item.get('lineItemId', '')
+        legacy_item_id = line_item.get('legacyItemId', '')  # eBay listing ID
 
         # Extract prices
         total = line_item.get('total', {})
@@ -1720,7 +1721,8 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
             'delivered_at': delivered_at,
             'status': status,
             'sold_at': sold_at,
-            'ebay_transaction_id': line_item_id
+            'ebay_transaction_id': line_item_id,
+            'ebay_listing_id': legacy_item_id  # For matching with Item.ebay_listing_id
         }
 
     except Exception as e:

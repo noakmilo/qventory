@@ -59,6 +59,10 @@ class Item(db.Model):
     synced_from_ebay = db.Column(db.Boolean, default=False)  # Imported from eBay
     last_ebay_sync = db.Column(db.DateTime, nullable=True)  # Last sync with eBay
 
+    # Sold tracking (soft delete)
+    sold_at = db.Column(db.DateTime, nullable=True, index=True)  # When item was sold
+    sold_price = db.Column(db.Float, nullable=True)  # Price it sold for
+
     # Metadata
     notes = db.Column(db.Text, nullable=True)  # Notas internas
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

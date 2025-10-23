@@ -2711,41 +2711,38 @@ def sync_ebay_active_inventory_auto(self):
                 
                 updated_count = 0
                 deleted_count = 0
-                items_to_delete = []
-                
+
                 for item in items_to_sync:
                     offer_data = None
-                    
+
                     if item.ebay_listing_id and item.ebay_listing_id in offers_by_listing:
                         offer_data = offers_by_listing[item.ebay_listing_id]
                     elif item.ebay_sku and item.ebay_sku in offers_by_sku:
                         offer_data = offers_by_sku[item.ebay_sku]
-                    
+
                     if offer_data:
                         # Item still exists - update price
                         if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
                             item.item_price = offer_data['item_price']
                             updated_count += 1
-                        
+
                         # Update status
                         listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
                         ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED', 'CANCELED'}
-                        
+
                         if listing_status in ended_statuses and item.is_active:
                             item.is_active = False
                             updated_count += 1
                     else:
-                        # Item no longer on eBay (sold/removed) - delete it
-                        items_to_delete.append(item)
-                        deleted_count += 1
-                
-                # Delete sold/removed items
-                for item in items_to_delete:
-                    db.session.delete(item)
+                        # SOFT DELETE: Item no longer on eBay (sold/removed) - mark as inactive
+                        # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
+                        if item.is_active:
+                            item.is_active = False
+                            deleted_count += 1
                 
                 db.session.commit()
                 
-                log_task(f"    ✓ {updated_count} updated, {deleted_count} deleted")
+                log_task(f"    ✓ {updated_count} updated, {deleted_count} marked inactive")
                 total_updated += updated_count
                 total_deleted += deleted_count
                 users_processed += 1
@@ -2755,7 +2752,7 @@ def sync_ebay_active_inventory_auto(self):
                 db.session.rollback()
                 continue
         
-        log_task(f"=== Sync complete: {users_processed} users, {total_updated} updated, {total_deleted} deleted ===")
+        log_task(f"=== Sync complete: {users_processed} users, {total_updated} updated, {total_deleted} marked inactive ===")
         
         return {
             'success': True,
@@ -2786,6 +2783,7 @@ def sync_ebay_sold_orders_auto(self):
     with app.app_context():
         from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
         from qventory.models.sale import Sale
+        from qventory.models.item import Item
         from datetime import datetime
         
         log_task("=== Auto-sync sold orders (last 12 hours) ===")
@@ -2838,7 +2836,29 @@ def sync_ebay_sold_orders_auto(self):
                         user_id=user.id,
                         marketplace_order_id=order.get('marketplace_order_id')
                     ).first()
-                    
+
+                    # SOFT DELETE: Look up item by ebay_listing_id to get item_cost and mark as sold
+                    ebay_listing_id = order.get('ebay_listing_id')
+                    item = None
+                    item_cost = None
+
+                    if ebay_listing_id:
+                        item = Item.query.filter_by(
+                            user_id=user.id,
+                            ebay_listing_id=ebay_listing_id
+                        ).first()
+
+                        if item:
+                            # Snapshot item cost for profit calculation
+                            item_cost = item.item_cost
+
+                            # Mark item as sold (soft delete) if not already marked
+                            if not item.sold_at:
+                                item.is_active = False
+                                item.sold_at = order.get('sold_at')
+                                item.sold_price = order.get('sold_price')
+                                log_task(f"      Marked item {item.sku} as sold (soft delete)")
+
                     if existing_sale:
                         # Update existing sale
                         if order.get('sold_price'):
@@ -2847,15 +2867,27 @@ def sync_ebay_sold_orders_auto(self):
                             existing_sale.marketplace_fee = order['marketplace_fee']
                         if order.get('payment_processing_fee'):
                             existing_sale.payment_processing_fee = order['payment_processing_fee']
-                        
+
+                        # Update item_cost if we found it
+                        if item_cost is not None and existing_sale.item_cost is None:
+                            existing_sale.item_cost = item_cost
+
                         existing_sale.updated_at = datetime.utcnow()
                         existing_sale.calculate_profit()
                         updated_count += 1
                     else:
-                        # Create new sale
+                        # Create new sale with item_cost snapshot
+                        order_data = order.copy()
+                        if item_cost is not None:
+                            order_data['item_cost'] = item_cost
+
+                        # Set item_id if we found the item
+                        if item:
+                            order_data['item_id'] = item.id
+
                         new_sale = Sale(
                             user_id=user.id,
-                            **order
+                            **order_data
                         )
                         new_sale.calculate_profit()
                         db.session.add(new_sale)

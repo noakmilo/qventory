@@ -1667,22 +1667,19 @@ def sync_ebay_inventory():
                     if not item.is_active:
                         item.is_active = True
             else:
-                # Item no longer exists on eBay (sold/removed) - delete it from Qventory
-                print(f"[SYNC_INVENTORY] Item no longer on eBay, deleting: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
-                items_to_delete.append(item)
-                deleted_count += 1
-
-        # Delete items that are no longer on eBay
-        for item in items_to_delete:
-            db.session.delete(item)
+                # SOFT DELETE: Item no longer exists on eBay (sold/removed) - mark as inactive
+                print(f"[SYNC_INVENTORY] Item no longer on eBay, marking inactive: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
+                if item.is_active:
+                    item.is_active = False
+                    deleted_count += 1
 
         db.session.commit()
 
-        print(f"[SYNC_INVENTORY] Updated {updated_count} items, deleted {deleted_count} items", file=sys.stderr)
+        print(f"[SYNC_INVENTORY] Updated {updated_count} items, marked {deleted_count} items as inactive", file=sys.stderr)
 
         return jsonify({
             'success': True,
-            'message': f'Synced {len(items_to_sync)} items: {updated_count} updated, {deleted_count} removed (sold/inactive on eBay)',
+            'message': f'Synced {len(items_to_sync)} items: {updated_count} updated, {deleted_count} marked inactive (sold/inactive on eBay)',
             'total': len(items_to_sync),
             'updated': updated_count,
             'deleted': deleted_count
