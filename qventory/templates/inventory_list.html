@@ -977,7 +977,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (isScanning) return;
     isScanning = true;
 
-    const v = extractSku(raw);
+    // Check if there's a location callback (from location modal)
+    const hasLocationCallback = window.qrScannerLocationCallback && typeof window.qrScannerLocationCallback === 'function';
+
+    // For location callback, use raw value to preserve full URL
+    // For search, extract SKU
+    const v = hasLocationCallback ? raw.trim() : extractSku(raw);
+
     if (!v) {
       isScanning = false;
       return;
@@ -996,11 +1002,11 @@ document.addEventListener('DOMContentLoaded', function() {
       cleanupAll();
       closeModal();
 
-      // Check if there's a location callback (from location modal)
-      if (window.qrScannerLocationCallback && typeof window.qrScannerLocationCallback === 'function') {
+      if (hasLocationCallback) {
+        // Location callback gets full URL/raw value
         window.qrScannerLocationCallback(v);
       } else {
-        // Default behavior: populate search and submit
+        // Default behavior: populate search and submit with extracted SKU
         inputQ.value = v;
         form?.submit();
       }
