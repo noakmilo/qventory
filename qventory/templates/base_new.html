@@ -54,10 +54,11 @@
           <i class="fas fa-check-circle"></i>
           <span>Sold</span>
         </a>
-        <a href="{{ url_for('main.inventory_ended') }}" class="sidebar-item {% if 'inventory_ended' in request.endpoint %}active{% endif %}" title="Ended Inventory">
+        {# COMMENTED OUT - Not critical, moved to soft delete approach #}
+        {# <a href="{{ url_for('main.inventory_ended') }}" class="sidebar-item {% if 'inventory_ended' in request.endpoint %}active{% endif %}" title="Ended Inventory">
           <i class="fas fa-times-circle"></i>
           <span>Ended</span>
-        </a>
+        </a> #}
       </div>
 
       <a href="{{ url_for('reports.analytics') }}" class="sidebar-item {% if 'analytics' in request.endpoint %}active{% endif %}" title="Analytics">

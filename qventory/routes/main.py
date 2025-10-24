@@ -612,77 +612,78 @@ def inventory_sold():
     )
 
 
-@main_bp.route("/inventory/ended")
-@login_required
-def inventory_ended():
-    """Show inactive/ended items (is_active=False)"""
-    s = get_or_create_settings(current_user)
-
-    page, per_page, offset = _get_pagination_params()
-    filters = _get_inventory_filter_params()
-    items, total_items = fetch_ended_items(
-        db.session,
-        user_id=current_user.id,
-        limit=per_page,
-        offset=offset,
-        **filters,
-    )
-
-    if total_items and offset >= total_items and page > 1:
-        total_pages = max(1, math.ceil(total_items / per_page))
-        page = total_pages
-        offset = (page - 1) * per_page
-        items, total_items = fetch_ended_items(
-            db.session,
-            user_id=current_user.id,
-            limit=per_page,
-            offset=offset,
-            **filters,
-        )
-
-    pagination = _build_pagination_metadata(total_items, page, per_page)
-
-    mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
-    if mismatches:
-        sample = mismatches[:3]
-        current_app.logger.warning(
-            "Thumbnail slug collisions detected for ended items user %s: %s",
-            current_user.id,
-            sample,
-        )
-
-    def distinct(col):
-        return [
-            r[0] for r in db.session.query(col)
-            .filter(col.isnot(None), Item.user_id == current_user.id)
-            .distinct().order_by(col.asc()).all()
-        ]
-
-    options = {
-        "A": distinct(Item.A) if s.enable_A else [],
-        "B": distinct(Item.B) if s.enable_B else [],
-        "S": distinct(Item.S) if s.enable_S else [],
-        "C": distinct(Item.C) if s.enable_C else [],
-    }
-
-    plan_limits = current_user.get_plan_limits()
-    items_remaining = current_user.items_remaining()
-    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
-
-    return render_template(
-        "inventory_list.html",
-        items=items,
-        settings=s,
-        options=options,
-        total_items=total_items,
-        pagination=pagination,
-        view_type="ended",
-        page_title="Ended Inventory",
-        items_remaining=items_remaining,
-        plan_max_items=plan_max_items,
-        show_upgrade_banner=False,
-        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
-    )
+# COMMENTED OUT - Not critical, items moved to soft delete approach
+# @main_bp.route("/inventory/ended")
+# @login_required
+# def inventory_ended():
+#     """Show inactive/ended items (is_active=False)"""
+#     s = get_or_create_settings(current_user)
+#
+#     page, per_page, offset = _get_pagination_params()
+#     filters = _get_inventory_filter_params()
+#     items, total_items = fetch_ended_items(
+#         db.session,
+#         user_id=current_user.id,
+#         limit=per_page,
+#         offset=offset,
+#         **filters,
+#     )
+#
+#     if total_items and offset >= total_items and page > 1:
+#         total_pages = max(1, math.ceil(total_items / per_page))
+#         page = total_pages
+#         offset = (page - 1) * per_page
+#         items, total_items = fetch_ended_items(
+#             db.session,
+#             user_id=current_user.id,
+#             limit=per_page,
+#             offset=offset,
+#             **filters,
+#         )
+#
+#     pagination = _build_pagination_metadata(total_items, page, per_page)
+#
+#     mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
+#     if mismatches:
+#         sample = mismatches[:3]
+#         current_app.logger.warning(
+#             "Thumbnail slug collisions detected for ended items user %s: %s",
+#             current_user.id,
+#             sample,
+#         )
+#
+#     def distinct(col):
+#         return [
+#             r[0] for r in db.session.query(col)
+#             .filter(col.isnot(None), Item.user_id == current_user.id)
+#             .distinct().order_by(col.asc()).all()
+#         ]
+#
+#     options = {
+#         "A": distinct(Item.A) if s.enable_A else [],
+#         "B": distinct(Item.B) if s.enable_B else [],
+#         "S": distinct(Item.S) if s.enable_S else [],
+#         "C": distinct(Item.C) if s.enable_C else [],
+#     }
+#
+#     plan_limits = current_user.get_plan_limits()
+#     items_remaining = current_user.items_remaining()
+#     plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+#
+#     return render_template(
+#         "inventory_list.html",
+#         items=items,
+#         settings=s,
+#         options=options,
+#         total_items=total_items,
+#         pagination=pagination,
+#         view_type="ended",
+#         page_title="Ended Inventory",
+#         items_remaining=items_remaining,
+#         plan_max_items=plan_max_items,
+#         show_upgrade_banner=False,
+#         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
+#     )
 
 
 # ---------------------- Fulfillment View ----------------------
