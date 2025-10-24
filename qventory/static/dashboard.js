@@ -1159,10 +1159,16 @@ if (locationModalScanQRBtn) {
     locationModal.classList.add('hidden');
     locationModal.setAttribute('hidden', '');
 
-    // Trigger the QR scanner button (will be handled by dashboard.html script)
-    const btnScanQR = document.getElementById('btnScanQR');
-    if (btnScanQR) {
-      btnScanQR.click();
+    // Open the QR scanner (exposed globally from dashboard.html)
+    if (typeof window.openQRScanner === 'function') {
+      window.openQRScanner();
+    } else {
+      console.error('QR Scanner not available');
+      alert('QR Scanner not available on this page');
+      // Reopen location modal
+      locationModal.classList.remove('hidden');
+      locationModal.removeAttribute('hidden');
+      window.qrScannerLocationCallback = null;
     }
   });
 }
