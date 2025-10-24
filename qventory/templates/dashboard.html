@@ -277,6 +277,9 @@
     <div class="qr-header">
       <strong><i class="fas fa-map-marker-alt"></i> Edit Location</strong>
       <div class="qr-actions">
+        <button type="button" id="locationModalScanQR" class="qr-icon" title="Scan QR to populate location" aria-label="Scan QR code">
+          <i class="fas fa-qrcode"></i>
+        </button>
         <button type="button" id="locationModalClose" class="qr-icon" aria-label="Close">
           <i class="fas fa-times"></i>
         </button>
@@ -823,13 +826,13 @@
   function onDetected(raw){
     if (isScanning) return; // Prevenir detecciones múltiples
     isScanning = true;
-    
+
     const v = extractSku(raw);
     if (!v) {
       isScanning = false;
       return;
     }
-    
+
     result.textContent = `Detected: ${v.slice(0,120)}`;
     result.style.display='block';
     showSuccess();
@@ -840,10 +843,17 @@
     }catch{}
 
     setTimeout(()=>{
-      cleanupAll(); 
+      cleanupAll();
       closeModal();
-      inputQ.value = v;
-      form?.submit();
+
+      // Check if there's a location callback (from location modal)
+      if (window.qrScannerLocationCallback && typeof window.qrScannerLocationCallback === 'function') {
+        window.qrScannerLocationCallback(v);
+      } else {
+        // Default behavior: populate search and submit
+        inputQ.value = v;
+        form?.submit();
+      }
     }, 500);
   }
 

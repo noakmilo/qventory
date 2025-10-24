@@ -335,9 +335,26 @@ def api_update_item_inline(item_id):
         item.updated_at = datetime.utcnow()
         db.session.commit()
 
-        settings = get_or_create_settings(current_user)
-        row_html = render_template("_item_row.html", item=item, settings=settings)
-        return jsonify({"ok": True, "row_html": row_html})
+        # Return updated item data instead of full row HTML to prevent losing unsaved edits
+        response_data = {
+            "ok": True,
+            "field": field,
+            "item_id": item.id
+        }
+
+        # Return field-specific data
+        if field == "supplier":
+            response_data["supplier"] = item.supplier
+        elif field == "item_cost":
+            response_data["item_cost"] = item.item_cost
+        elif field == "location":
+            response_data["location_code"] = item.location_code
+            response_data["A"] = item.A
+            response_data["B"] = item.B
+            response_data["S"] = item.S
+            response_data["C"] = item.C
+
+        return jsonify(response_data)
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception("Inline update failed")

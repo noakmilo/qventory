@@ -724,17 +724,14 @@ async function submitInlineForm(container, form, display) {
       throw new Error(data.error || 'Failed to update item');
     }
 
-    if (data.row_html) {
-      const row = container.closest('tr');
-      if (row) {
-        const temp = document.createElement('tbody');
-        temp.innerHTML = data.row_html.trim();
-        const newRow = temp.querySelector('tr');
-        if (newRow) {
-          row.replaceWith(newRow);
-          initializeItemEventListeners();
-        }
-      }
+    // Update only the specific field instead of replacing entire row
+    // This prevents losing unsaved edits in other fields
+    if (data.field === 'supplier') {
+      updateSupplierDisplay(container, data.supplier);
+    } else if (data.field === 'item_cost') {
+      updateCostDisplay(container, data.item_cost);
+    } else if (data.field === 'location') {
+      updateLocationDisplay(container, data.location_code, data.A, data.B, data.S, data.C);
     }
   } catch (error) {
     alert(error.message || 'Error updating item');
@@ -746,6 +743,115 @@ async function submitInlineForm(container, form, display) {
     form.hidden = true;
     if (display) {
       display.hidden = false;
+    }
+  }
+}
+
+// Helper functions to update field displays without replacing entire row
+function updateSupplierDisplay(container, supplierValue) {
+  const display = container.querySelector('.inline-edit__display');
+  const valueSpan = display ? display.querySelector('.inline-edit__value') : null;
+  const placeholder = display ? display.querySelector('.inline-edit__placeholder') : null;
+
+  if (supplierValue) {
+    if (valueSpan) {
+      valueSpan.textContent = supplierValue;
+      valueSpan.style.display = '';
+    } else if (placeholder) {
+      const newValueSpan = document.createElement('span');
+      newValueSpan.className = 'inline-edit__value tag';
+      newValueSpan.textContent = supplierValue;
+      placeholder.replaceWith(newValueSpan);
+    }
+  } else {
+    if (valueSpan) {
+      const newPlaceholder = document.createElement('span');
+      newPlaceholder.className = 'inline-edit__placeholder';
+      newPlaceholder.textContent = 'Add supplier';
+      valueSpan.replaceWith(newPlaceholder);
+    }
+  }
+}
+
+function updateCostDisplay(container, costValue) {
+  const display = container.querySelector('.inline-edit__display');
+  const valueSpan = display ? display.querySelector('.inline-edit__value') : null;
+  const placeholder = display ? display.querySelector('.inline-edit__placeholder') : null;
+
+  if (costValue !== null && costValue !== undefined) {
+    const formattedCost = `$${parseFloat(costValue).toFixed(2)}`;
+    if (valueSpan) {
+      valueSpan.innerHTML = `<i class="fas fa-receipt"></i> ${formattedCost}`;
+      valueSpan.style.display = '';
+    } else if (placeholder) {
+      const newValueSpan = document.createElement('span');
+      newValueSpan.className = 'inline-edit__value tag';
+      newValueSpan.innerHTML = `<i class="fas fa-receipt"></i> ${formattedCost}`;
+      placeholder.replaceWith(newValueSpan);
+    }
+  } else {
+    if (valueSpan) {
+      const newPlaceholder = document.createElement('span');
+      newPlaceholder.className = 'inline-edit__placeholder';
+      newPlaceholder.textContent = 'Add cost';
+      valueSpan.replaceWith(newPlaceholder);
+    }
+  }
+}
+
+function updateLocationDisplay(container, locationCode, A, B, S, C) {
+  const locationDisplay = container.querySelector('.location-display');
+  if (!locationDisplay) return;
+
+  // Update data attributes
+  if (A !== undefined) locationDisplay.dataset.locationA = A || '';
+  if (B !== undefined) locationDisplay.dataset.locationB = B || '';
+  if (S !== undefined) locationDisplay.dataset.locationS = S || '';
+  if (C !== undefined) locationDisplay.dataset.locationC = C || '';
+  locationDisplay.dataset.locationCode = locationCode || '';
+
+  // Find or create elements for display
+  const linkContainer = locationDisplay.querySelector('a[data-inline-ignore]');
+  const qrLink = locationDisplay.querySelector('.qr-link');
+  const placeholder = locationDisplay.querySelector('.inline-edit__placeholder');
+
+  if (locationCode) {
+    const username = document.querySelector('[data-username]')?.dataset.username || '';
+
+    if (linkContainer) {
+      linkContainer.textContent = locationCode;
+      linkContainer.href = `/inventory/${username}/location/${locationCode}`;
+    } else if (placeholder) {
+      // Create new link elements
+      const newLink = document.createElement('a');
+      newLink.href = `/inventory/${username}/location/${locationCode}`;
+      newLink.dataset.inlineIgnore = 'true';
+      newLink.textContent = locationCode;
+
+      const newQRLink = document.createElement('a');
+      newQRLink.className = 'tag qr-link';
+      newQRLink.href = `/inventory/${username}/qr-location?code=${encodeURIComponent(locationCode)}`;
+      newQRLink.dataset.caption = `QR for ${locationCode}`;
+      newQRLink.dataset.inlineIgnore = 'true';
+      newQRLink.innerHTML = '<i class="fas fa-qrcode"></i> QR';
+
+      placeholder.replaceWith(newLink);
+      newLink.after(document.createTextNode(' '));
+      newLink.nextSibling.after(newQRLink);
+    }
+
+    if (qrLink) {
+      qrLink.href = `/inventory/${username}/qr-location?code=${encodeURIComponent(locationCode)}`;
+      qrLink.dataset.caption = `QR for ${locationCode}`;
+    }
+  } else {
+    // No location - show placeholder
+    if (linkContainer) {
+      const newPlaceholder = document.createElement('span');
+      newPlaceholder.className = 'inline-edit__placeholder';
+      newPlaceholder.textContent = 'No location';
+      linkContainer.replaceWith(newPlaceholder);
+      if (qrLink) qrLink.remove();
     }
   }
 }
@@ -996,16 +1102,12 @@ async function submitLocationModal(event) {
       throw new Error(data.error || 'Failed to update location');
     }
 
-    if (data.row_html) {
-      const row = document.querySelector(`tr[data-item-row="${locationModalItemId}"]`);
-      if (row) {
-        const temp = document.createElement('tbody');
-        temp.innerHTML = data.row_html.trim();
-        const newRow = temp.querySelector('tr');
-        if (newRow) {
-          row.replaceWith(newRow);
-          initializeItemEventListeners();
-        }
+    // Update location display without replacing entire row
+    const row = document.querySelector(`tr[data-item-row="${locationModalItemId}"]`);
+    if (row) {
+      const locationContainer = row.querySelector('.inline-edit--location');
+      if (locationContainer) {
+        updateLocationDisplay(locationContainer, data.location_code, data.A, data.B, data.S, data.C);
       }
     }
   } catch (error) {
@@ -1041,3 +1143,62 @@ document.addEventListener('keydown', (event) => {
     closeLocationModal();
   }
 });
+
+// QR Scanner callback for location parsing
+// This will be called by the QR scanner script when scanning from location modal
+window.qrScannerLocationCallback = null;
+
+// QR Scanner button in location modal
+const locationModalScanQRBtn = document.getElementById('locationModalScanQR');
+if (locationModalScanQRBtn) {
+  locationModalScanQRBtn.addEventListener('click', () => {
+    // Set the callback for when QR is scanned
+    window.qrScannerLocationCallback = parseAndPopulateLocation;
+
+    // Close location modal temporarily
+    locationModal.classList.add('hidden');
+    locationModal.setAttribute('hidden', '');
+
+    // Trigger the QR scanner button (will be handled by dashboard.html script)
+    const btnScanQR = document.getElementById('btnScanQR');
+    if (btnScanQR) {
+      btnScanQR.click();
+    }
+  });
+}
+
+function parseLocationCode(code) {
+  // Parse location code like "A1B2S3C4" into components
+  // Returns {A: '1', B: '2', S: '3', C: '4'}
+  const components = {};
+  const pattern = /([ABSC])(\d+)/g;
+  let match;
+
+  while ((match = pattern.exec(code)) !== null) {
+    const [, key, value] = match;
+    components[key] = value;
+  }
+
+  return components;
+}
+
+function parseAndPopulateLocation(qrValue) {
+  // Callback when QR is scanned
+  const components = parseLocationCode(qrValue);
+
+  // Reopen location modal
+  locationModal.classList.remove('hidden');
+  locationModal.removeAttribute('hidden');
+  locationModal.removeAttribute('aria-hidden');
+
+  // Populate the fields
+  locationModalFields.querySelectorAll('[data-component]').forEach(input => {
+    const key = input.dataset.component;
+    if (components[key]) {
+      input.value = components[key];
+    }
+  });
+
+  // Clear the callback
+  window.qrScannerLocationCallback = null;
+}
