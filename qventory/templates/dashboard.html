@@ -760,14 +760,15 @@
   async function startWithDevice(deviceId){
     cleanupLoop();
     showSpinner(true);
-    
+
+    // Simplified constraints for better browser compatibility with permission caching
     const constraints = {
-      video: deviceId 
-        ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
-        : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
+      video: deviceId
+        ? { deviceId:{exact:deviceId}, facingMode:'environment' }
+        : { facingMode:{ideal:'environment'} },
       audio: false
     };
-    
+
     stream = await navigator.mediaDevices.getUserMedia(constraints);
     video.setAttribute('playsinline',''); 
     video.setAttribute('autoplay',''); 
