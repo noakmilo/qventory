@@ -361,6 +361,107 @@ def api_update_item_inline(item_id):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@main_bp.route("/api/inventory/stream")
+@login_required
+def inventory_stream():
+    """
+    Server-Sent Events stream for inventory updates
+    Sends updates when items are added/removed
+    """
+    def generate():
+        import json
+
+        # Send initial count
+        initial_count = Item.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).count()
+
+        yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
+
+        # Keep connection alive and check for changes every 5 seconds
+        last_count = initial_count
+        while True:
+            try:
+                time.sleep(5)
+
+                current_count = Item.query.filter_by(
+                    user_id=current_user.id,
+                    is_active=True
+                ).count()
+
+                if current_count != last_count:
+                    yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"
+                    last_count = current_count
+                else:
+                    # Send heartbeat to keep connection alive
+                    yield f": heartbeat\n\n"
+
+            except Exception as e:
+                current_app.logger.error(f"SSE error: {str(e)}")
+                break
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+@main_bp.route("/api/items/recent")
+@login_required
+def api_recent_items():
+    """
+    API endpoint to fetch recent items for dynamic table refresh
+    Returns HTML rows for items created/updated after a given timestamp
+    """
+    from datetime import datetime
+
+    # Get timestamp parameter (ISO format)
+    since = request.args.get('since', None)
+
+    if not since:
+        return jsonify({"ok": False, "error": "Missing 'since' parameter"}), 400
+
+    try:
+        since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid timestamp format"}), 400
+
+    # Fetch items created or updated after the timestamp
+    items = Item.query.filter(
+        Item.user_id == current_user.id,
+        Item.is_active == True,
+        db.or_(
+            Item.created_at > since_dt,
+            Item.updated_at > since_dt
+        )
+    ).order_by(Item.created_at.desc()).all()
+
+    if not items:
+        return jsonify({"ok": True, "count": 0, "html": ""})
+
+    # Get user settings for location labels
+    from ..models.setting import Setting as UserSettings
+    settings = UserSettings.query.filter_by(user_id=current_user.id).first()
+    if not settings:
+        settings = UserSettings(user_id=current_user.id)
+
+    # Render each item row
+    rows_html = []
+    for item in items:
+        row_html = render_template('_item_row.html',
+                                   item=item,
+                                   it=item,
+                                   view_type='active',
+                                   settings=settings,
+                                   current_user=current_user)
+        rows_html.append(row_html)
+
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "html": "\n".join(rows_html),
+        "item_ids": [item.id for item in items]
+    })
+
+
 @main_bp.route("/api/suppliers/search", methods=["GET"])
 @login_required
 def api_search_suppliers():

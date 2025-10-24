@@ -1282,3 +1282,11 @@ function parseAndPopulateLocation(qrValue) {
   window.qrScannerLocationCallback = null;
   locationModalContext = null;
 }
+
+// ==================== EXPOSE FOR AUTO-REFRESH ====================
+// Expose setupInlineEditors globally so it can be called after dynamic row insertion
+window.dashboardScripts = {
+  initInlineEdit: setupInlineEditors,
+  setupLocationButtons: setupLocationButtons,
+  setupActionButtons: setupActionButtons
+};

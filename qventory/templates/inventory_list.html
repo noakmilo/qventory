@@ -803,6 +803,237 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script>
+/* ===== AUTO-REFRESH WITH SERVER-SENT EVENTS ===== */
+{% if view_type == 'active' %}
+(function(){
+  let eventSource = null;
+  let currentCount = {{ total_items }};
+  let reconnectTimeout = null;
+  let lastCheckTimestamp = new Date().toISOString();
+
+  function setupSSE() {
+    // Cleanup existing connection
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    console.log('[SSE] Connecting to inventory stream...');
+    eventSource = new EventSource('/api/inventory/stream');
+
+    eventSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        console.log('[SSE] Received:', data);
+
+        if (data.type === 'update' && data.count !== currentCount) {
+          console.log(`[SSE] Count changed: ${currentCount} → ${data.count}`);
+          const diff = data.count - currentCount;
+
+          // Only fetch and insert new items if count increased
+          if (diff > 0) {
+            fetchAndInsertNewItems();
+          } else {
+            // If count decreased, show notification (items may have been deleted/sold elsewhere)
+            showNotification(diff);
+          }
+
+          currentCount = data.count;
+        }
+      } catch (e) {
+        console.error('[SSE] Parse error:', e);
+      }
+    };
+
+    eventSource.onerror = function(e) {
+      console.error('[SSE] Connection error, reconnecting in 10s...');
+      eventSource.close();
+
+      // Reconnect after 10 seconds
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(setupSSE, 10000);
+    };
+
+    eventSource.onopen = function() {
+      console.log('[SSE] Connected successfully');
+    };
+  }
+
+  async function fetchAndInsertNewItems() {
+    try {
+      console.log('[Auto-refresh] Fetching items since:', lastCheckTimestamp);
+
+      const response = await fetch(`/api/items/recent?since=${encodeURIComponent(lastCheckTimestamp)}`);
+      const data = await response.json();
+
+      if (!data.ok) {
+        console.error('[Auto-refresh] Error:', data.error);
+        return;
+      }
+
+      if (data.count === 0) {
+        console.log('[Auto-refresh] No new items to display');
+        return;
+      }
+
+      console.log(`[Auto-refresh] Inserting ${data.count} new item(s)`);
+
+      // Find the tbody in the items table
+      const tbody = document.querySelector('table tbody');
+      if (!tbody) {
+        console.error('[Auto-refresh] Table body not found');
+        return;
+      }
+
+      // Create temporary container to parse HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = data.html;
+
+      // Get all new rows
+      const newRows = tempDiv.querySelectorAll('tr[data-item-row]');
+
+      // Insert new rows at the top of the table with animation
+      newRows.forEach((row, index) => {
+        // Check if row already exists (by item ID)
+        const itemId = row.getAttribute('data-item-row');
+        const existingRow = tbody.querySelector(`tr[data-item-row="${itemId}"]`);
+
+        if (existingRow) {
+          console.log(`[Auto-refresh] Item ${itemId} already exists, skipping`);
+          return;
+        }
+
+        // Add animation class
+        row.style.animation = 'slideInNew 0.5s ease-out';
+        row.style.animationDelay = `${index * 0.1}s`;
+
+        // Insert at the beginning of tbody
+        tbody.insertBefore(row, tbody.firstChild);
+      });
+
+      // Update the item count display
+      updateItemCountDisplay(currentCount);
+
+      // Show success notification
+      showNotification(data.count);
+
+      // Update last check timestamp
+      lastCheckTimestamp = new Date().toISOString();
+
+      // Re-initialize inline edit handlers for new rows
+      if (window.dashboardScripts && window.dashboardScripts.initInlineEdit) {
+        window.dashboardScripts.initInlineEdit();
+      }
+
+    } catch (error) {
+      console.error('[Auto-refresh] Failed to fetch items:', error);
+    }
+  }
+
+  function updateItemCountDisplay(newCount) {
+    // Update the item count in the header if it exists
+    const countElement = document.querySelector('.inventory-header h1, .card-header h1');
+    if (countElement) {
+      const text = countElement.textContent;
+      const match = text.match(/\((\d+)\)/);
+      if (match) {
+        countElement.textContent = text.replace(/\(\d+\)/, `(${newCount})`);
+      }
+    }
+  }
+
+  function showNotification(diff) {
+    // Remove existing notification if any
+    const existingNotif = document.getElementById('autoRefreshNotif');
+    if (existingNotif) {
+      existingNotif.remove();
+    }
+
+    const notif = document.createElement('div');
+    notif.id = 'autoRefreshNotif';
+    notif.style.cssText = `
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 500;
+      animation: slideDown 0.3s ease-out;
+    `;
+
+    const message = diff > 0
+      ? `${Math.abs(diff)} new item${Math.abs(diff) > 1 ? 's' : ''} added`
+      : `${Math.abs(diff)} item${Math.abs(diff) > 1 ? 's' : ''} removed`;
+
+    notif.innerHTML = `
+      <i class="fas fa-check-circle" style="font-size: 16px;"></i>
+      <span>${message}</span>
+    `;
+
+    // Add animation styles if not already added
+    if (!document.getElementById('autoRefreshStyles')) {
+      const style = document.createElement('style');
+      style.id = 'autoRefreshStyles';
+      style.textContent = `
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -20px);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+        @keyframes slideInNew {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+            background: rgba(102, 126, 234, 0.1);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+            background: transparent;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    document.body.appendChild(notif);
+
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+      if (notif.parentElement) {
+        notif.style.animation = 'slideDown 0.3s ease-out reverse';
+        setTimeout(() => notif.remove(), 300);
+      }
+    }, 3000);
+  }
+
+  // Start SSE connection
+  setupSSE();
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', function() {
+    if (eventSource) {
+      eventSource.close();
+    }
+    clearTimeout(reconnectTimeout);
+  });
+})();
+{% endif %}
+</script>
+
+<script>
 /* ===== QR SCANNER SCRIPT (Optimizado iOS + Android) ===== */
 (function(){
   const btnScan = document.getElementById('btnScanQR');
