@@ -1173,15 +1173,31 @@ if (locationModalScanQRBtn) {
   });
 }
 
-function parseLocationCode(code) {
-  // Parse location code like "A1B2S3C4" into components
-  // Returns {A: '1', B: '2', S: '3', C: '4'}
+function parseLocationCode(rawCode) {
+  // Extract location code from URL if needed
+  // Example: "https://qventory.com/user/location/B3S2" -> "B3S2"
+  let code = rawCode;
+
+  // If it's a URL, extract the location code part
+  if (code.includes('/location/')) {
+    const parts = code.split('/location/');
+    code = parts[1] || code;
+    // Remove any trailing slashes or query params
+    code = code.split('?')[0].split('#')[0].replace(/\/$/, '');
+  }
+
+  // Parse location code like "A1B2S3CT1" into components
+  // Handles multi-char values: A1, B2, S3, C=T1
+  // Returns {A: '1', B: '2', S: '3', C: 'T1'}
   const components = {};
-  const pattern = /([ABSC])(\d+)/g;
+
+  // Pattern: A letter (A, B, S, or C) followed by one or more alphanumeric chars
+  const pattern = /([ABSC])([A-Z0-9]+)/gi;
   let match;
 
   while ((match = pattern.exec(code)) !== null) {
-    const [, key, value] = match;
+    const key = match[1].toUpperCase();
+    const value = match[2];
     components[key] = value;
   }
 
@@ -1190,7 +1206,9 @@ function parseLocationCode(code) {
 
 function parseAndPopulateLocation(qrValue) {
   // Callback when QR is scanned
+  console.log('[QR Location] Raw QR value:', qrValue);
   const components = parseLocationCode(qrValue);
+  console.log('[QR Location] Parsed components:', components);
 
   // Reopen location modal
   locationModal.classList.remove('hidden');
@@ -1198,12 +1216,19 @@ function parseAndPopulateLocation(qrValue) {
   locationModal.removeAttribute('aria-hidden');
 
   // Populate the fields
+  let populated = 0;
   locationModalFields.querySelectorAll('[data-component]').forEach(input => {
     const key = input.dataset.component;
     if (components[key]) {
       input.value = components[key];
+      populated++;
+      console.log(`[QR Location] Populated ${key} = ${components[key]}`);
     }
   });
+
+  if (populated === 0) {
+    console.warn('[QR Location] No fields were populated. Available components:', components);
+  }
 
   // Clear the callback
   window.qrScannerLocationCallback = null;
