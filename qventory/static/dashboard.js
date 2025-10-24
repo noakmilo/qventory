@@ -984,6 +984,7 @@ const locationModalFields = document.getElementById('locationModalFields');
 const locationModalClose = document.getElementById('locationModalClose');
 const locationModalCancel = document.getElementById('locationModalCancel');
 let locationModalItemId = null;
+let locationModalContext = null; // Store modal context when opening QR scanner
 
 function setupLocationButtons() {
   document.querySelectorAll('.location-inline-button').forEach(button => {
@@ -1152,10 +1153,28 @@ window.qrScannerLocationCallback = null;
 const locationModalScanQRBtn = document.getElementById('locationModalScanQR');
 if (locationModalScanQRBtn) {
   locationModalScanQRBtn.addEventListener('click', () => {
+    // Save current modal context before closing
+    locationModalContext = {
+      itemId: locationModalItemId,
+      fields: []
+    };
+
+    // Save current field configuration
+    locationModalFields.querySelectorAll('[data-component]').forEach(input => {
+      const label = input.parentElement.textContent.replace(input.value, '').trim();
+      locationModalContext.fields.push({
+        key: input.dataset.component,
+        label: label,
+        value: input.value
+      });
+    });
+
+    console.log('[QR Location] Saved modal context:', locationModalContext);
+
     // Set the callback for when QR is scanned
     window.qrScannerLocationCallback = parseAndPopulateLocation;
 
-    // Close location modal temporarily
+    // Close location modal temporarily (hide but don't clear fields yet)
     locationModal.classList.add('hidden');
     locationModal.setAttribute('hidden', '');
 
@@ -1169,6 +1188,7 @@ if (locationModalScanQRBtn) {
       locationModal.classList.remove('hidden');
       locationModal.removeAttribute('hidden');
       window.qrScannerLocationCallback = null;
+      locationModalContext = null;
     }
   });
 }
@@ -1210,26 +1230,54 @@ function parseAndPopulateLocation(qrValue) {
   const components = parseLocationCode(qrValue);
   console.log('[QR Location] Parsed components:', components);
 
+  if (!locationModalContext) {
+    console.error('[QR Location] No modal context saved!');
+    window.qrScannerLocationCallback = null;
+    return;
+  }
+
+  // Restore item ID
+  locationModalItemId = locationModalContext.itemId;
+
+  // Recreate fields with scanned values
+  locationModalFields.innerHTML = '';
+  let firstInput = null;
+
+  locationModalContext.fields.forEach(field => {
+    const wrapper = document.createElement('label');
+    wrapper.textContent = field.label;
+    wrapper.className = 'location-modal__label';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.name = field.key;
+    input.autocomplete = 'off';
+    input.dataset.component = field.key;
+    input.setAttribute('data-component', field.key);
+
+    // Use scanned value if available, otherwise use previous value
+    input.value = components[field.key] || field.value;
+    console.log(`[QR Location] Field ${field.key} = ${input.value} (scanned: ${components[field.key] || 'N/A'})`);
+
+    wrapper.appendChild(input);
+    locationModalFields.appendChild(wrapper);
+
+    if (!firstInput) {
+      firstInput = input;
+    }
+  });
+
   // Reopen location modal
   locationModal.classList.remove('hidden');
   locationModal.removeAttribute('hidden');
   locationModal.removeAttribute('aria-hidden');
 
-  // Populate the fields
-  let populated = 0;
-  locationModalFields.querySelectorAll('[data-component]').forEach(input => {
-    const key = input.dataset.component;
-    if (components[key]) {
-      input.value = components[key];
-      populated++;
-      console.log(`[QR Location] Populated ${key} = ${components[key]}`);
-    }
-  });
-
-  if (populated === 0) {
-    console.warn('[QR Location] No fields were populated. Available components:', components);
+  if (firstInput) {
+    firstInput.focus();
+    firstInput.select();
   }
 
-  // Clear the callback
+  // Clear the callback and context
   window.qrScannerLocationCallback = null;
+  locationModalContext = null;
 }
