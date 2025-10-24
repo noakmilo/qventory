@@ -1226,15 +1226,19 @@ function parseLocationCode(rawCode) {
 
 function parseAndPopulateLocation(qrValue) {
   // Callback when QR is scanned
+  alert('[DEBUG] parseAndPopulateLocation called with: ' + qrValue);
   console.log('[QR Location] Raw QR value:', qrValue);
   const components = parseLocationCode(qrValue);
   console.log('[QR Location] Parsed components:', components);
+  alert('[DEBUG] Parsed components: ' + JSON.stringify(components));
 
   if (!locationModalContext) {
+    alert('[DEBUG ERROR] No modal context saved!');
     console.error('[QR Location] No modal context saved!');
     window.qrScannerLocationCallback = null;
     return;
   }
+  alert('[DEBUG] Modal context found: ' + JSON.stringify(locationModalContext));
 
   // Restore item ID
   locationModalItemId = locationModalContext.itemId;
