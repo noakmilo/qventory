@@ -450,6 +450,39 @@
   </div>
 </div>
 
+<!-- QR Scanner Modal -->
+<div id="scanQRModal" class="qr-modal hidden" hidden role="dialog" aria-hidden="true" aria-label="QR Scanner">
+  <div class="qr-sheet" style="max-width:480px">
+    <div class="qr-header">
+      <strong><i class="fas fa-qrcode"></i> Scan QR Code</strong>
+      <div class="qr-actions">
+        <button type="button" id="scanQRFlip" class="qr-icon" title="Flip camera" aria-label="Flip camera">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button type="button" id="scanQRFlashlight" class="qr-icon" title="Toggle flashlight" aria-label="Toggle flashlight">
+          <i class="fas fa-lightbulb"></i>
+        </button>
+        <button type="button" id="scanQRClose" class="qr-icon" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
+    <div class="qr-body">
+      <div class="qr-viewport" style="position:relative;background:#000">
+        <video id="scanQRVideo" style="width:100%;height:100%;object-fit:cover;display:none" playsinline autoplay muted></video>
+        <div id="scanQRSpinner" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#fff;font-size:24px">
+          <i class="fas fa-spinner fa-spin"></i>
+        </div>
+        <div id="scanQRSuccess" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,200,100,0.3);color:#fff;font-size:48px;pointer-events:none">
+          <i class="fas fa-check-circle"></i>
+        </div>
+      </div>
+      <div id="scanQRResult" class="qr-tip" style="display:none;color:#4ade80"></div>
+      <div class="qr-tip">Position QR code within camera view</div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
 
 <script>
@@ -767,6 +800,374 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 });
+</script>
+
+<script>
+/* ===== QR SCANNER SCRIPT (Optimizado iOS + Android) ===== */
+(function(){
+  const btnScan = document.getElementById('btnScanQR');
+  const modal = document.getElementById('scanQRModal');
+  const btnClose = document.getElementById('scanQRClose');
+  const btnFlip = document.getElementById('scanQRFlip');
+  const btnFlash = document.getElementById('scanQRFlashlight');
+  const video = document.getElementById('scanQRVideo');
+  const spinner = document.getElementById('scanQRSpinner');
+  const success = document.getElementById('scanQRSuccess');
+  const result = document.getElementById('scanQRResult');
+  const inputQ = document.getElementById('q');
+  const form = document.getElementById('filterForm');
+
+  const CAM_CACHE_KEY = 'qv_inventory_qr_cam_device_id';
+  let stream = null, rafId = null;
+  let detector = null;
+  let usingBD = false, usingJsQR = false, jsQRLoaded = false;
+  let videoDevices = [], currentDeviceIdx = -1, devicesLoaded = false;
+  let flashlightOn = false;
+  let isScanning = false;
+
+  // === Audio beep cross-platform ===
+  let beepAudio = null;
+  let beepReady = false;
+
+  function ensureBeep() {
+    if (beepReady) return;
+    try {
+      beepAudio = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");
+      beepAudio.preload = "auto";
+      const p = beepAudio.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          beepAudio.pause();
+          beepAudio.currentTime = 0;
+          beepReady = true;
+        }).catch(()=>{});
+      } else {
+        beepAudio.pause();
+        beepAudio.currentTime = 0;
+        beepReady = true;
+      }
+    } catch(e) {}
+  }
+
+  function openModal(){
+    document.body.classList.add('modal-open');
+    modal.removeAttribute('hidden');
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden','false');
+  }
+
+  function closeModal(){
+    document.body.classList.remove('modal-open');
+    modal.setAttribute('hidden','');
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden','true');
+  }
+
+  function showSpinner(on){ spinner.style.display = on ? 'flex' : 'none'; }
+  function showSuccess(){ success.style.display='flex'; setTimeout(()=>success.style.display='none', 450); }
+
+  function cleanupLoop(){
+    if (rafId){
+      cancelAnimationFrame(rafId);
+      rafId=null;
+    }
+    isScanning = false;
+  }
+
+  function cleanupAll(){
+    cleanupLoop();
+    if (stream){
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch{};
+      stream=null;
+    }
+    flashlightOn=false;
+    btnFlash.classList.remove('active');
+    video.srcObject=null;
+    video.style.display='none';
+    usingBD=false;
+    usingJsQR=false;
+  }
+
+  function showError(msg){
+    console.error('[QR]', msg);
+    alert(msg);
+  }
+
+  async function loadVideoDevices(){
+    if (devicesLoaded) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    videoDevices = devices.filter(d=>d.kind==='videoinput');
+    const prefers = ['back','rear','environment'];
+    videoDevices.sort((a,b)=>{
+      const la=(a.label||'').toLowerCase(), lb=(b.label||'').toLowerCase();
+      const as = prefers.some(p=>la.includes(p)) ? 1:0;
+      const bs = prefers.some(p=>lb.includes(p)) ? 1:0;
+      return bs - as;
+    });
+    devicesLoaded = true;
+  }
+
+  async function startWithDevice(deviceId){
+    cleanupLoop();
+    showSpinner(true);
+
+    const constraints = {
+      video: deviceId
+        ? { deviceId:{exact:deviceId}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30}, facingMode:'environment' }
+        : { facingMode:{ideal:'environment'}, width:{ideal:1280,min:640}, height:{ideal:720,min:480}, frameRate:{ideal:30} },
+      audio: false
+    };
+
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.setAttribute('playsinline','');
+    video.setAttribute('autoplay','');
+    video.setAttribute('muted','');
+    video.srcObject = stream;
+
+    await video.play();
+
+    if (video.readyState < 2){
+      await new Promise(res=>{
+        const t = setTimeout(res, 250);
+        video.onloadedmetadata = ()=>{ clearTimeout(t); res(); };
+      });
+    }
+
+    showSpinner(false);
+    video.style.display='block';
+
+    // Guardar preferencia de cámara
+    if (deviceId) {
+      try{ localStorage.setItem(CAM_CACHE_KEY, deviceId); }catch{}
+    }
+  }
+
+  async function flipCamera(){
+    await loadVideoDevices();
+    if (!videoDevices.length) return;
+    currentDeviceIdx = (currentDeviceIdx + 1) % videoDevices.length;
+    await startWithDevice(videoDevices[currentDeviceIdx].deviceId);
+    if (usingBD) startBDLoop();
+    if (usingJsQR) startJsQRLoop();
+  }
+
+  async function toggleFlashlight(){
+    if (!stream) return;
+    try{
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+      if (!caps.torch) return alert('Flashlight not supported on this camera');
+      flashlightOn = !flashlightOn;
+      await track.applyConstraints({ advanced:[{ torch: flashlightOn }] });
+      btnFlash.classList.toggle('active', flashlightOn);
+    }catch{ alert('Unable to control flashlight'); }
+  }
+
+  function extractSku(val){
+    if (!val) return '';
+    const s = String(val).trim();
+    try{
+      const u = new URL(s);
+      const m = u.href.match(/([A-Z0-9]{8,}|\d{10,}|\d{8}-[A-Z0-9]{3,})/i);
+      return m ? m[1] : s;
+    }catch{ return s; }
+  }
+
+  function onDetected(raw){
+    if (isScanning) return;
+    isScanning = true;
+
+    const v = extractSku(raw);
+    if (!v) {
+      isScanning = false;
+      return;
+    }
+
+    result.textContent = `Detected: ${v.slice(0,120)}`;
+    result.style.display='block';
+    showSuccess();
+
+    try{
+      if (navigator.vibrate) navigator.vibrate(80);
+      if (beepReady && beepAudio) beepAudio.play().catch(()=>{});
+    }catch{}
+
+    setTimeout(()=>{
+      cleanupAll();
+      closeModal();
+
+      // Check if there's a location callback (from location modal)
+      if (window.qrScannerLocationCallback && typeof window.qrScannerLocationCallback === 'function') {
+        window.qrScannerLocationCallback(v);
+      } else {
+        // Default behavior: populate search and submit
+        inputQ.value = v;
+        form?.submit();
+      }
+    }, 500);
+  }
+
+  async function tryBarcodeDetector(){
+    if (!('BarcodeDetector' in window)) return false;
+    try{
+      detector = new window.BarcodeDetector({ formats: ['qr_code','qr'] });
+    }catch{
+      try{ detector = new window.BarcodeDetector(); }catch{ return false; }
+    }
+    usingBD = true;
+    usingJsQR = false;
+    startBDLoop();
+    return true;
+  }
+
+  function startBDLoop(){
+    cleanupLoop();
+    isScanning = false;
+    let frame = 0;
+
+    const tick = async ()=>{
+      if (!usingBD) return;
+      frame++;
+      try{
+        if (frame%2===0 && detector && video.readyState >= 2){
+          const codes = await detector.detect(video);
+          if (codes && codes.length){
+            const val = (codes[0].rawValue || '').trim();
+            if (val){
+              onDetected(val);
+              return;
+            }
+          }
+        }
+      }catch(e){}
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function loadJsQR(){
+    if (jsQRLoaded) return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+      s.async=true;
+      s.onload=()=>{ jsQRLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('jsQR CDN blocked/failed to load'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function startJsQRLoop(){
+    usingBD=false;
+    usingJsQR=true;
+    cleanupLoop();
+    isScanning = false;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ROI_INSET = 0.08;
+
+    let lastTS = 0;
+    const MIN_INTERVAL = 100;
+
+    const tick = (now)=>{
+      if (!usingJsQR) return;
+
+      try{
+        if (now - lastTS >= MIN_INTERVAL && video.videoWidth>0 && video.readyState >= 2){
+          lastTS = now;
+
+          const vw = video.videoWidth, vh = video.videoHeight;
+          const rx = Math.floor(vw*ROI_INSET), ry = Math.floor(vh*ROI_INSET);
+          const rw = Math.floor(vw*(1-2*ROI_INSET)), rh = Math.floor(vh*(1-2*ROI_INSET));
+
+          canvas.width = rw;
+          canvas.height = rh;
+          ctx.drawImage(video, rx, ry, rw, rh, 0, 0, rw, rh);
+
+          const img = ctx.getImageData(0, 0, rw, rh);
+          const qr = window.jsQR && window.jsQR(img.data, img.width, img.height, { inversionAttempts:'attemptBoth' });
+          const val = (qr?.data || '').trim();
+
+          if (val){
+            onDetected(val);
+            return;
+          }
+        }
+      }catch(e){
+        console.error('[jsQR]', e);
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  async function startScan(){
+    ensureBeep();
+    openModal();
+    result.style.display='none';
+    success.style.display='none';
+    isScanning = false;
+
+    try{
+      const cachedId = localStorage.getItem(CAM_CACHE_KEY) || null;
+      await loadVideoDevices();
+
+      if (videoDevices.length){
+        if (cachedId){
+          const idx = videoDevices.findIndex(d=>d.deviceId===cachedId);
+          currentDeviceIdx = idx >= 0 ? idx : 0;
+        } else {
+          currentDeviceIdx = 0;
+        }
+      }
+
+      await startWithDevice(videoDevices[currentDeviceIdx]?.deviceId);
+
+      const bdOK = await tryBarcodeDetector();
+      if (!bdOK){
+        try{
+          await loadJsQR();
+          startJsQRLoop();
+        }catch(e){
+          showError('No QR engine available (BarcodeDetector unsupported and jsQR blocked).');
+          cleanupAll();
+          closeModal();
+        }
+      }
+    }catch(e){
+      showError(e?.message || 'Camera access denied or not available');
+      cleanupAll();
+      closeModal();
+    }
+  }
+
+  function handleClose(){
+    cleanupAll();
+    closeModal();
+  }
+
+  // Event listeners
+  btnScan?.addEventListener('click', startScan);
+  btnFlip?.addEventListener('click', flipCamera);
+  btnFlash?.addEventListener('click', toggleFlashlight);
+  btnClose?.addEventListener('click', handleClose);
+
+  modal?.addEventListener('click', (e)=>{
+    if (e.target === modal){
+      handleClose();
+    }
+  });
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')){
+      handleClose();
+    }
+  });
+
+  // Expose startScan globally for location modal QR button
+  window.openQRScanner = startScan;
+})();
 </script>
 
 {% endblock %}
