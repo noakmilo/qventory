@@ -1211,8 +1211,9 @@ function parseLocationCode(rawCode) {
   // Returns {A: '1', B: '2', S: '3', C: 'T1'}
   const components = {};
 
-  // Pattern: A letter (A, B, S, or C) followed by one or more alphanumeric chars
-  const pattern = /([ABSC])([A-Z0-9]+)/gi;
+  // Pattern: A letter (A, B, S, or C) followed by alphanumeric chars until next marker
+  // Use non-greedy +? and lookahead to stop before the next A/B/S/C or end of string
+  const pattern = /([ABSC])([A-Z0-9]+?)(?=[ABSC]|$)/gi;
   let match;
 
   while ((match = pattern.exec(code)) !== null) {
