@@ -810,6 +810,16 @@ function updateLocationDisplay(container, locationCode, A, B, S, C) {
   if (C !== undefined) locationDisplay.dataset.locationC = C || '';
   locationDisplay.dataset.locationCode = locationCode || '';
 
+  // CRITICAL: Update the sync-to-ebay button's data-location-code attribute
+  const row = container.closest('tr[data-item-row]');
+  if (row) {
+    const syncBtn = row.querySelector('.sync-to-ebay-btn');
+    if (syncBtn) {
+      syncBtn.dataset.locationCode = locationCode || '';
+      console.log('[Location Update] Updated sync button locationCode to:', locationCode || '(empty)');
+    }
+  }
+
   // Find or create elements for display
   const linkContainer = locationDisplay.querySelector('a[data-inline-ignore]');
   const qrLink = locationDisplay.querySelector('.qr-link');
