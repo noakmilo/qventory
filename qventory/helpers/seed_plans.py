@@ -12,9 +12,14 @@ def seed_plan_limits():
     Called automatically on app startup
     """
     # Check if the table has the new columns (migration might not have run yet)
-    from sqlalchemy import inspect
+    from sqlalchemy import inspect, text
     inspector = inspect(db.engine)
-    columns = [col['name'] for col in inspector.get_columns('plan_limits')]
+
+    try:
+        columns = [col['name'] for col in inspector.get_columns('plan_limits')]
+    except Exception as e:
+        print(f"Warning: Could not inspect plan_limits table: {e}")
+        return
 
     # Skip receipt OCR fields if they don't exist yet (pre-migration)
     has_receipt_limits = 'max_receipt_ocr_per_month' in columns
@@ -106,29 +111,60 @@ def seed_plan_limits():
 
     for plan_data in plans_config:
         plan_name = plan_data['plan']
-        existing = PlanLimit.query.filter_by(plan=plan_name).first()
 
-        if existing:
-            # Only fill in missing values so admin overrides persist
-            updated = False
-            for key, value in plan_data.items():
-                if key == 'plan':
-                    continue
+        # Use raw SQL to avoid SQLAlchemy trying to select non-existent columns
+        try:
+            result = db.session.execute(
+                text("SELECT id FROM plan_limits WHERE plan = :plan"),
+                {"plan": plan_name}
+            ).fetchone()
 
-                current = getattr(existing, key, None)
-                if current is None:
-                    setattr(existing, key, value)
-                    updated = True
+            if result:
+                # Plan exists - update using raw SQL to avoid column issues
+                plan_id = result[0]
 
-            if updated:
-                print(f"Seeded missing defaults for: {plan_name}")
+                # Build UPDATE statement dynamically based on available columns
+                update_parts = []
+                update_values = {"plan_id": plan_id}
+
+                for key, value in plan_data.items():
+                    if key == 'plan':
+                        continue
+                    if key in columns:  # Only update if column exists
+                        update_parts.append(f"{key} = :{key}")
+                        update_values[key] = value
+
+                if update_parts:
+                    update_sql = f"UPDATE plan_limits SET {', '.join(update_parts)} WHERE id = :plan_id"
+                    db.session.execute(text(update_sql), update_values)
+                    print(f"Updated plan limits for: {plan_name}")
+                else:
+                    print(f"Preserved custom plan limits for: {plan_name}")
             else:
-                print(f"Preserved custom plan limits for: {plan_name}")
-        else:
-            # Create new plan
-            new_plan = PlanLimit(**plan_data)
-            db.session.add(new_plan)
-            print(f"Created plan limits for: {plan_name}")
+                # Create new plan - only include columns that exist
+                insert_cols = []
+                insert_vals = []
+                insert_placeholders = []
+                insert_values = {}
 
-    db.session.commit()
-    print("✅ Plan limits seeded successfully")
+                for key, value in plan_data.items():
+                    if key in columns:
+                        insert_cols.append(key)
+                        insert_placeholders.append(f":{key}")
+                        insert_values[key] = value
+
+                if insert_cols:
+                    insert_sql = f"INSERT INTO plan_limits ({', '.join(insert_cols)}) VALUES ({', '.join(insert_placeholders)})"
+                    db.session.execute(text(insert_sql), insert_values)
+                    print(f"Created plan limits for: {plan_name}")
+
+        except Exception as e:
+            print(f"Error processing plan {plan_name}: {e}")
+            continue
+
+    try:
+        db.session.commit()
+        print("✅ Plan limits seeded successfully")
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Error seeding plan limits: {e}")
