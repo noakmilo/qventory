@@ -90,15 +90,15 @@
 
     <!-- Receipts Grid -->
     {% if receipts %}
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
         {% for receipt in receipts %}
         <div class="card" style="overflow:hidden;transition:transform 0.2s,box-shadow 0.2s;cursor:pointer"
              onclick="window.location.href='{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}'"
-             onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 12px 24px rgba(0,0,0,0.15)'"
+             onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.12)'"
              onmouseout="this.style.transform='';this.style.boxShadow=''">
 
             <!-- Receipt Image -->
-            <div style="position:relative;height:220px;overflow:hidden;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
+            <div style="position:relative;height:154px;overflow:hidden;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
                 <img
                     src="{{ receipt.thumbnail_url or receipt.image_url }}"
                     alt="Receipt"
@@ -107,33 +107,33 @@
                 >
 
                 <!-- Status Badge Overlay -->
-                <div style="position:absolute;top:12px;right:12px">
+                <div style="position:absolute;top:8px;right:8px">
                     {% if receipt.status == 'completed' %}
-                    <span style="background:#10b981;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#10b981;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-check-circle"></i> Completed
                     </span>
                     {% elif receipt.status == 'partially_associated' %}
-                    <span style="background:#f59e0b;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#f59e0b;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-clock"></i> In Progress
                     </span>
                     {% elif receipt.status == 'extracted' %}
-                    <span style="background:#3b82f6;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#3b82f6;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-eye"></i> Ready
                     </span>
                     {% elif receipt.status == 'processing' %}
-                    <span style="background:#8b5cf6;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#8b5cf6;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-spinner fa-spin"></i> Processing
                     </span>
                     {% elif receipt.status == 'failed' %}
-                    <span style="background:#ef4444;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#ef4444;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-exclamation-circle"></i> Failed
                     </span>
                     {% elif receipt.status == 'discarded' %}
-                    <span style="background:#6b7280;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#6b7280;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         <i class="fas fa-trash"></i> Discarded
                     </span>
                     {% else %}
-                    <span style="background:#6b7280;color:white;padding:6px 12px;border-radius:16px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3);backdrop-filter:blur(4px)">
+                    <span style="background:#6b7280;color:white;padding:4px 8px;border-radius:12px;font-size:10px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.2);backdrop-filter:blur(4px)">
                         {{ receipt.status }}
                     </span>
                     {% endif %}
@@ -141,79 +141,79 @@
             </div>
 
             <!-- Card Body -->
-            <div class="card-body" style="padding:20px">
+            <div class="card-body" style="padding:14px">
                 <!-- Merchant Name -->
-                <h5 style="color:var(--text);font-size:18px;font-weight:600;margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                <h5 style="color:var(--text);font-size:13px;font-weight:600;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
                     {{ receipt.merchant_name or 'Unknown Merchant' }}
                 </h5>
 
                 <!-- Receipt Details Grid -->
-                <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;color:var(--sub);font-size:13px;margin-bottom:16px">
+                <div style="display:grid;grid-template-columns:auto 1fr;gap:7px;color:var(--sub);font-size:11px;margin-bottom:11px">
                     {% if receipt.receipt_date %}
                     <div style="display:flex;align-items:center">
-                        <i class="fas fa-calendar" style="width:16px;color:#3b82f6"></i>
+                        <i class="fas fa-calendar" style="width:12px;color:#3b82f6;font-size:10px"></i>
                     </div>
                     <div>
                         <span style="color:var(--sub)">Date:</span>
-                        <strong style="color:var(--text);margin-left:4px">{{ receipt.receipt_date.strftime('%b %d, %Y') }}</strong>
+                        <strong style="color:var(--text);margin-left:3px">{{ receipt.receipt_date.strftime('%b %d, %Y') }}</strong>
                     </div>
                     {% endif %}
 
                     {% if receipt.total_amount %}
                     <div style="display:flex;align-items:center">
-                        <i class="fas fa-dollar-sign" style="width:16px;color:#10b981"></i>
+                        <i class="fas fa-dollar-sign" style="width:12px;color:#10b981;font-size:10px"></i>
                     </div>
                     <div>
                         <span style="color:var(--sub)">Total:</span>
-                        <strong style="color:#10b981;font-size:16px;margin-left:4px">${{ "%.2f"|format(receipt.total_amount) }}</strong>
+                        <strong style="color:#10b981;font-size:12px;margin-left:3px">${{ "%.2f"|format(receipt.total_amount) }}</strong>
                     </div>
                     {% endif %}
 
                     <div style="display:flex;align-items:center">
-                        <i class="fas fa-clock" style="width:16px;color:#f59e0b"></i>
+                        <i class="fas fa-clock" style="width:12px;color:#f59e0b;font-size:10px"></i>
                     </div>
                     <div>
                         <span style="color:var(--sub)">Uploaded:</span>
-                        <span style="color:var(--text);margin-left:4px">{{ receipt.uploaded_at|timeago }}</span>
+                        <span style="color:var(--text);margin-left:3px">{{ receipt.uploaded_at|timeago }}</span>
                     </div>
 
                     <div style="display:flex;align-items:center">
-                        <i class="fas fa-list" style="width:16px;color:#8b5cf6"></i>
+                        <i class="fas fa-list" style="width:12px;color:#8b5cf6;font-size:10px"></i>
                     </div>
                     <div>
                         <span style="color:var(--sub)">Items:</span>
-                        <strong style="color:var(--text);margin-left:4px">{{ receipt.items_count }}</strong>
+                        <strong style="color:var(--text);margin-left:3px">{{ receipt.items_count }}</strong>
                     </div>
                 </div>
 
                 <!-- Progress Bar -->
                 {% if receipt.items_count > 0 %}
-                <div style="margin-bottom:16px">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                        <small style="color:var(--sub);font-size:12px;font-weight:500">
-                            <i class="fas fa-link" style="margin-right:4px"></i>Association Progress
+                <div style="margin-bottom:11px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                        <small style="color:var(--sub);font-size:10px;font-weight:500">
+                            <i class="fas fa-link" style="margin-right:3px"></i>Progress
                         </small>
-                        <small style="color:var(--text);font-weight:700;font-size:13px">{{ receipt.association_progress }}%</small>
+                        <small style="color:var(--text);font-weight:700;font-size:10px">{{ receipt.association_progress }}%</small>
                     </div>
-                    <div style="background:rgba(0,0,0,0.06);height:8px;border-radius:4px;overflow:hidden">
-                        <div style="background:{% if receipt.association_progress == 100 %}#10b981{% elif receipt.association_progress > 0 %}#f59e0b{% else %}#cbd5e1{% endif %};height:100%;width:{{ receipt.association_progress }}%;transition:width 0.4s ease;border-radius:4px"></div>
+                    <div style="background:rgba(0,0,0,0.06);height:6px;border-radius:3px;overflow:hidden">
+                        <div style="background:{% if receipt.association_progress == 100 %}#10b981{% elif receipt.association_progress > 0 %}#f59e0b{% else %}#cbd5e1{% endif %};height:100%;width:{{ receipt.association_progress }}%;transition:width 0.4s ease;border-radius:3px"></div>
                     </div>
                 </div>
                 {% endif %}
 
                 <!-- Action Buttons -->
-                <div style="display:grid;grid-template-columns:1fr auto;gap:10px" onclick="event.stopPropagation()">
+                <div style="display:grid;grid-template-columns:1fr auto;gap:7px" onclick="event.stopPropagation()">
                     <button
                         onclick="window.location.href='{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}'"
                         class="btn btn--primary"
-                        style="width:100%;font-size:14px;padding:10px"
+                        style="width:100%;font-size:11px;padding:7px"
                     >
-                        <i class="fas fa-eye"></i> View Details
+                        <i class="fas fa-eye"></i> View
                     </button>
                     <button
                         onclick="if(confirm('Delete this receipt? This cannot be undone.')) { deleteReceipt({{ receipt.id }}); }"
                         class="btn btn--danger"
-                        style="font-size:14px;padding:10px 16px"
+                        style="font-size:11px;padding:7px 10px"
                         title="Delete Receipt"
                     >
                         <i class="fas fa-trash"></i>
