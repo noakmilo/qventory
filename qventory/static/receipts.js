@@ -31,18 +31,6 @@ function initializeAutocomplete() {
         // Create autocomplete dropdown container
         const dropdown = document.createElement('div');
         dropdown.className = 'autocomplete-dropdown';
-        dropdown.style.cssText = `
-            position: absolute;
-            z-index: 1000;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            display: none;
-            width: 100%;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        `;
         input.parentElement.style.position = 'relative';
         input.parentElement.appendChild(dropdown);
 
@@ -51,7 +39,7 @@ function initializeAutocomplete() {
             const query = e.target.value.toLowerCase().trim();
 
             if (query.length < 2) {
-                dropdown.style.display = 'none';
+                dropdown.classList.remove('show');
                 dropdown.innerHTML = '';
                 associateBtn.disabled = true;
                 selectedItems.delete(receiptItemId);
@@ -70,13 +58,9 @@ function initializeAutocomplete() {
             // Render dropdown
             if (matches.length > 0) {
                 dropdown.innerHTML = matches.slice(0, 10).map(item => `
-                    <div class="autocomplete-item" data-item-id="${item.id}" style="
-                        padding: 8px 12px;
-                        cursor: pointer;
-                        border-bottom: 1px solid #eee;
-                    ">
-                        <div style="font-weight: 500;">${escapeHtml(item.title)}</div>
-                        <div style="font-size: 0.85em; color: #666;">
+                    <div class="autocomplete-item" data-item-id="${item.id}">
+                        <div class="autocomplete-item-title">${escapeHtml(item.title)}</div>
+                        <div class="autocomplete-item-meta">
                             SKU: ${escapeHtml(item.sku)}
                             ${item.location_code ? ` • Location: ${escapeHtml(item.location_code)}` : ''}
                             ${item.item_cost ? ` • Cost: $${parseFloat(item.item_cost).toFixed(2)}` : ''}
@@ -84,16 +68,10 @@ function initializeAutocomplete() {
                     </div>
                 `).join('');
 
-                dropdown.style.display = 'block';
+                dropdown.classList.add('show');
 
                 // Add click handlers to items
                 dropdown.querySelectorAll('.autocomplete-item').forEach(itemEl => {
-                    itemEl.addEventListener('mouseenter', function() {
-                        this.style.backgroundColor = '#f0f0f0';
-                    });
-                    itemEl.addEventListener('mouseleave', function() {
-                        this.style.backgroundColor = 'white';
-                    });
                     itemEl.addEventListener('click', function() {
                         const selectedItemId = parseInt(this.dataset.itemId);
                         const selectedItem = inventoryItemsData.find(i => i.id === selectedItemId);
@@ -102,13 +80,13 @@ function initializeAutocomplete() {
                             input.value = selectedItem.title;
                             selectedItems.set(receiptItemId, selectedItemId);
                             associateBtn.disabled = false;
-                            dropdown.style.display = 'none';
+                            dropdown.classList.remove('show');
                         }
                     });
                 });
             } else {
-                dropdown.innerHTML = '<div style="padding: 12px; color: #999; text-align: center;">No items found</div>';
-                dropdown.style.display = 'block';
+                dropdown.innerHTML = '<div class="autocomplete-empty">No items found</div>';
+                dropdown.classList.add('show');
                 associateBtn.disabled = true;
                 selectedItems.delete(receiptItemId);
             }
@@ -117,7 +95,7 @@ function initializeAutocomplete() {
         // Close dropdown on outside click
         document.addEventListener('click', (e) => {
             if (!input.contains(e.target) && !dropdown.contains(e.target)) {
-                dropdown.style.display = 'none';
+                dropdown.classList.remove('show');
             }
         });
     });

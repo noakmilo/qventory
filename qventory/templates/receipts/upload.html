@@ -92,7 +92,12 @@
                     </button>
                     <div style="text-align:center;margin-top:12px">
                         <small style="color:var(--sub);font-size:13px">
-                            Supports JPG, PNG, GIF, HEIC • Auto-compressed to ~400KB
+                            <i class="fas fa-check-circle" style="color:#10b981;margin-right:4px"></i>
+                            JPG, PNG, GIF, HEIC • Min 800px • Max 10MB
+                        </small>
+                        <br>
+                        <small style="color:var(--sub);font-size:12px;margin-top:4px;display:inline-block">
+                            Auto-compressed to ~400KB for fast AI processing
                         </small>
                     </div>
                     {% if usage_stats and not usage_stats.can_process %}
@@ -232,6 +237,19 @@ function compressImage(file, maxSizeKB = 400) {
                 let width = img.width;
                 let height = img.height;
 
+                // Check minimum resolution for OCR accuracy
+                const MIN_DIMENSION = 800;
+                const minDimension = Math.min(width, height);
+
+                if (minDimension < MIN_DIMENSION) {
+                    reject(new Error(
+                        `Image resolution too low (${width}x${height}). ` +
+                        `Minimum ${MIN_DIMENSION}px required for accurate text extraction. ` +
+                        `Please use a higher quality image.`
+                    ));
+                    return;
+                }
+
                 // Calculate scaling to reduce file size
                 const MAX_DIMENSION = 1600;
 
@@ -306,7 +324,26 @@ async function handleFileSelect(e) {
 
     // Show original file info
     const fileSizeKB = Math.round(file.size / 1024);
+    const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
     console.log(`Selected file: ${file.name} - ${fileSizeKB}KB`);
+
+    // Validation 1: File type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/heic', 'image/heif'];
+    const isValidExtension = /\.(jpe?g|png|gif|heic|heif)$/i.test(file.name);
+
+    if (!validTypes.includes(file.type) && !isValidExtension) {
+        alert('Invalid file type. Please upload an image file (JPG, PNG, GIF, or HEIC).');
+        e.target.value = '';
+        return;
+    }
+
+    // Validation 2: Maximum file size (10MB before compression)
+    const MAX_FILE_SIZE_MB = 10;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        alert(`File too large (${fileSizeMB}MB). Maximum size is ${MAX_FILE_SIZE_MB}MB. Please use a smaller image.`);
+        e.target.value = '';
+        return;
+    }
 
     // Check if it's HEIC and convert to JPEG immediately
     const isHEIC = file.name.toLowerCase().match(/\.(heic|heif)$/);

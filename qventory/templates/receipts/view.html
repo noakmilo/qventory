@@ -188,12 +188,81 @@
     </script>
     {% endif %}
 
-    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;align-items:start">
+    <div class="receipt-grid" style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;align-items:start">
     <style>
+        /* Responsive grid for mobile */
         @media (max-width: 992px) {
-            div[style*="grid-template-columns:1fr 1.5fr"] {
+            .receipt-grid {
                 grid-template-columns: 1fr !important;
             }
+            /* Remove sticky positioning on mobile */
+            .receipt-grid > div:first-child {
+                position: static !important;
+            }
+        }
+
+        /* Better spacing for item controls on mobile */
+        @media (max-width: 576px) {
+            .association-controls input[type="text"] {
+                font-size: 14px !important;
+            }
+            .association-controls button {
+                font-size: 13px !important;
+                padding: 6px 12px !important;
+            }
+        }
+
+        /* Autocomplete dropdown styles with dark mode support */
+        .autocomplete-dropdown {
+            position: absolute;
+            z-index: 1000;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            display: none;
+            width: 100%;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            margin-top: 4px;
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background-color 0.15s;
+        }
+
+        .autocomplete-item:last-child {
+            border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+            background-color: rgba(59,130,246,0.08);
+        }
+
+        .autocomplete-item-title {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .autocomplete-item-meta {
+            font-size: 12px;
+            color: var(--sub);
+        }
+
+        .autocomplete-empty {
+            padding: 16px;
+            color: var(--sub);
+            text-align: center;
+            font-size: 13px;
         }
     </style>
         <!-- Left Column: Receipt Image -->
@@ -323,58 +392,52 @@
                     {% if receipt_items %}
                     <div class="receipt-items">
                         {% for item in receipt_items %}
-                        <div class="receipt-item mb-4 pb-4 border-bottom" data-item-id="{{ item.id }}">
+                        <div style="margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid var(--border)" data-item-id="{{ item.id }}">
                             <!-- Item Header -->
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+                                <div style="flex:1;min-width:200px">
+                                    <h6 style="color:var(--text);font-size:15px;font-weight:600;margin:0 0 6px 0">
                                         {{ item.line_number }}. {{ item.final_description }}
                                     </h6>
-                                    <p class="text-muted small mb-0">
+                                    <p style="color:var(--sub);font-size:13px;margin:0">
                                         Qty: {{ item.final_quantity }}
                                         {% if item.final_unit_price %}
                                         @ ${{ "%.2f"|format(item.final_unit_price) }}
                                         {% endif %}
                                         {% if item.final_total_price %}
-                                        = <strong>${{ "%.2f"|format(item.final_total_price) }}</strong>
+                                        = <strong style="color:var(--text)">${{ "%.2f"|format(item.final_total_price) }}</strong>
                                         {% endif %}
                                     </p>
                                 </div>
 
                                 <!-- Association Status -->
-                                <div>
+                                <div style="flex-shrink:0">
                                     {% if item.inventory_item_id %}
-                                    <span class="badge bg-success">
-                                        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                                            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                        </svg>
-                                        Inventory
+                                    <span style="background:#10b981;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">
+                                        <i class="fas fa-check-circle"></i> Inventory
                                     </span>
                                     {% elif item.expense_id %}
-                                    <span class="badge bg-info">
-                                        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
-                                            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                                        </svg>
-                                        Expense
+                                    <span style="background:#3b82f6;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">
+                                        <i class="fas fa-check-circle"></i> Expense
                                     </span>
                                     {% else %}
-                                    <span class="badge bg-secondary">Not Associated</span>
+                                    <span style="background:var(--sub);color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap">Not Associated</span>
                                     {% endif %}
                                 </div>
                             </div>
 
                             <!-- Association Details (if associated) -->
                             {% if item.inventory_item %}
-                            <div class="alert alert-success py-2 mb-2">
-                                <small>
+                            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:12px;margin-bottom:12px">
+                                <small style="color:var(--text);font-size:13px">
                                     <strong>Linked to:</strong> {{ item.inventory_item.title }} ({{ item.inventory_item.sku }})
                                     <br>
                                     <strong>Location:</strong> {{ item.inventory_item.location_code or 'N/A' }}
                                 </small>
                             </div>
                             {% elif item.expense %}
-                            <div class="alert alert-info py-2 mb-2">
-                                <small>
+                            <div style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:12px;margin-bottom:12px">
+                                <small style="color:var(--text);font-size:13px">
                                     <strong>Expense:</strong> {{ item.expense.description }}
                                     <br>
                                     <strong>Category:</strong> {{ item.expense.category }}
