@@ -83,6 +83,8 @@ class Receipt(db.Model):
     @property
     def associated_items_count(self):
         """Number of items associated with inventory or expenses."""
+        # Import here to avoid circular dependency
+        from qventory.models.receipt_item import ReceiptItem
         return self.items.filter(
             db.or_(
                 ReceiptItem.inventory_item_id.isnot(None),
