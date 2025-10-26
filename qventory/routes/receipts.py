@@ -367,7 +367,7 @@ def associate_item(receipt_id):
                 description=expense_description,
                 amount=Decimal(str(expense_amount)),
                 category=expense_category,
-                date=expense_date,
+                expense_date=expense_date,
                 notes=notes
             )
             db.session.add(expense)
