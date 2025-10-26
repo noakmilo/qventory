@@ -226,11 +226,23 @@ def view_receipt(receipt_id):
     # Get receipt items
     receipt_items = receipt.items.order_by(ReceiptItem.line_number).all()
 
-    # Get user's inventory items for autocomplete
-    inventory_items = Item.query.filter_by(
+    # Get user's inventory items for autocomplete (convert to dict for JSON)
+    inventory_items_query = Item.query.filter_by(
         user_id=current_user.id,
         is_active=True
     ).order_by(Item.title).all()
+
+    # Convert to serializable format for JavaScript
+    inventory_items = [
+        {
+            'id': item.id,
+            'title': item.title,
+            'sku': item.sku,
+            'location_code': item.location_code,
+            'item_cost': float(item.item_cost) if item.item_cost else None
+        }
+        for item in inventory_items_query
+    ]
 
     return render_template(
         'receipts/view.html',
