@@ -14,8 +14,8 @@ class ReceiptUsage(db.Model):
     __tablename__ = "receipt_usage"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
-    receipt_id = db.Column(db.Integer, db.ForeignKey("receipts.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    receipt_id = db.Column(db.Integer, db.ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False)
 
     # When was OCR performed
     processed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)

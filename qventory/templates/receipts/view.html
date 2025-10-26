@@ -47,6 +47,147 @@
         </div>
     </div>
 
+    <!-- Processing State Banner -->
+    {% if receipt.status == 'processing' %}
+    <div class="card" style="margin-bottom:24px;background:linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(59,130,246,0.05) 100%);border:1px solid rgba(139,92,246,0.2)">
+        <div class="card-body" style="padding:32px;text-align:center">
+            <div style="margin-bottom:20px">
+                <div style="display:inline-block;position:relative">
+                    <i class="fas fa-robot" style="font-size:64px;color:#8b5cf6;animation:pulse 2s infinite"></i>
+                    <div style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;border:3px solid #8b5cf6;opacity:0.3;animation:ripple 2s infinite"></div>
+                </div>
+            </div>
+
+            <h3 style="color:var(--text);font-size:24px;font-weight:600;margin-bottom:8px">
+                AI Processing Your Receipt
+            </h3>
+            <p style="color:var(--sub);font-size:15px;margin-bottom:24px">
+                Our AI is reading and extracting items, prices, and totals from your receipt...
+            </p>
+
+            <!-- Animated Progress Bar -->
+            <div style="max-width:500px;margin:0 auto 20px">
+                <div style="background:rgba(0,0,0,0.08);height:12px;border-radius:6px;overflow:hidden;position:relative">
+                    <div id="progressBar" style="background:linear-gradient(90deg, #8b5cf6 0%, #3b82f6 100%);height:100%;width:0%;transition:width 0.5s ease;border-radius:6px;position:relative;overflow:hidden">
+                        <!-- Shimmer effect -->
+                        <div style="position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);animation:shimmer 2s infinite"></div>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:8px">
+                    <small id="progressText" style="color:var(--sub);font-size:13px">Analyzing image...</small>
+                    <small id="progressPercent" style="color:var(--text);font-weight:600;font-size:13px">0%</small>
+                </div>
+            </div>
+
+            <!-- Processing Steps -->
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;max-width:600px;margin:24px auto 0">
+                <div class="processing-step" data-step="1" style="padding:12px;background:rgba(139,92,246,0.08);border-radius:8px;border:1px solid rgba(139,92,246,0.15)">
+                    <i class="fas fa-upload" style="font-size:20px;color:#8b5cf6;margin-bottom:8px"></i>
+                    <div style="font-size:12px;color:var(--sub)">Uploading</div>
+                </div>
+                <div class="processing-step" data-step="2" style="padding:12px;background:rgba(0,0,0,0.02);border-radius:8px;border:1px solid var(--border)">
+                    <i class="fas fa-eye" style="font-size:20px;color:var(--sub);margin-bottom:8px"></i>
+                    <div style="font-size:12px;color:var(--sub)">Reading</div>
+                </div>
+                <div class="processing-step" data-step="3" style="padding:12px;background:rgba(0,0,0,0.02);border-radius:8px;border:1px solid var(--border)">
+                    <i class="fas fa-list" style="font-size:20px;color:var(--sub);margin-bottom:8px"></i>
+                    <div style="font-size:12px;color:var(--sub)">Extracting</div>
+                </div>
+                <div class="processing-step" data-step="4" style="padding:12px;background:rgba(0,0,0,0.02);border-radius:8px;border:1px solid var(--border)">
+                    <i class="fas fa-check" style="font-size:20px;color:var(--sub);margin-bottom:8px"></i>
+                    <div style="font-size:12px;color:var(--sub)">Complete</div>
+                </div>
+            </div>
+
+            <div style="margin-top:24px;padding-top:24px;border-top:1px solid rgba(0,0,0,0.05)">
+                <small style="color:var(--sub);font-size:12px">
+                    <i class="fas fa-info-circle" style="margin-right:4px"></i>
+                    This usually takes 10-30 seconds. The page will automatically refresh when ready.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+    </style>
+
+    <script>
+        // Auto-refresh progress simulation and actual page refresh
+        let progress = 0;
+        let currentStep = 1;
+        const steps = [
+            { percent: 25, text: "Uploading to AI...", duration: 2000 },
+            { percent: 50, text: "Reading receipt with GPT-4 Vision...", duration: 8000 },
+            { percent: 75, text: "Extracting items and prices...", duration: 5000 },
+            { percent: 95, text: "Finalizing...", duration: 3000 }
+        ];
+
+        function updateProgress() {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressPercent = document.getElementById('progressPercent');
+
+            if (currentStep <= steps.length) {
+                const step = steps[currentStep - 1];
+
+                // Update progress bar
+                progressBar.style.width = step.percent + '%';
+                progressText.textContent = step.text;
+                progressPercent.textContent = step.percent + '%';
+
+                // Update step indicators
+                document.querySelectorAll('.processing-step').forEach((el, idx) => {
+                    if (idx + 1 <= currentStep) {
+                        el.style.background = 'rgba(139,92,246,0.08)';
+                        el.style.borderColor = 'rgba(139,92,246,0.15)';
+                        el.querySelector('i').style.color = '#8b5cf6';
+                    }
+                });
+
+                currentStep++;
+
+                // Schedule next step
+                if (currentStep <= steps.length) {
+                    setTimeout(updateProgress, step.duration);
+                }
+            }
+        }
+
+        // Start progress animation
+        setTimeout(updateProgress, 1000);
+
+        // Auto-refresh page every 5 seconds to check status
+        let refreshInterval = setInterval(() => {
+            fetch(window.location.href, { method: 'HEAD' })
+                .then(() => {
+                    // Refresh the page
+                    window.location.reload();
+                })
+                .catch(err => console.error('Refresh check failed:', err));
+        }, 5000);
+
+        // Stop refreshing after 2 minutes (in case something went wrong)
+        setTimeout(() => {
+            clearInterval(refreshInterval);
+            console.log('Auto-refresh stopped after 2 minutes');
+        }, 120000);
+    </script>
+    {% endif %}
+
     <div class="row">
         <!-- Left Column: Receipt Image -->
         <div class="col-lg-5">
