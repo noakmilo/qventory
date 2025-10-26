@@ -103,7 +103,6 @@ def seed_plan_limits():
 
         plans_config[4]['max_receipt_ocr_per_month'] = None  # god: unlimited
         plans_config[4]['max_receipt_ocr_per_day'] = None
-    ]
 
     for plan_data in plans_config:
         plan_name = plan_data['plan']
