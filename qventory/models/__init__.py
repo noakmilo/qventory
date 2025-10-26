@@ -12,6 +12,8 @@ from .failed_import import FailedImport
 from .expense import Expense
 from .auto_relist_rule import AutoRelistRule, AutoRelistHistory
 from .email_verification import EmailVerification
+from .receipt import Receipt
+from .receipt_item import ReceiptItem
 
 __all__ = [
     'User',
@@ -30,5 +32,7 @@ __all__ = [
     'Expense',
     'AutoRelistRule',
     'AutoRelistHistory',
-    'EmailVerification'
+    'EmailVerification',
+    'Receipt',
+    'ReceiptItem'
 ]

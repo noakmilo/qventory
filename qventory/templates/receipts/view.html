@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}Receipt Details - Qventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>{{ receipt.merchant_name or 'Receipt #' + receipt.id|string }}</h1>
+            <p class="text-muted mb-0">
+                Uploaded {{ receipt.uploaded_at|timeago }}
+                {% if receipt.receipt_date %} • Receipt Date: {{ receipt.receipt_date.strftime('%b %d, %Y') }}{% endif %}
+            </p>
+        </div>
+        <div class="d-flex gap-2">
+            {% if receipt.status not in ['completed', 'discarded'] %}
+            <form method="POST" action="{{ url_for('receipts.mark_complete', receipt_id=receipt.id) }}" style="display: inline;">
+                <button type="submit" class="btn btn-success">Mark Complete</button>
+            </form>
+            <form method="POST" action="{{ url_for('receipts.discard_receipt', receipt_id=receipt.id) }}" style="display: inline;">
+                <button type="submit" class="btn btn-secondary">Discard</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('receipts.list_receipts') }}" class="btn btn-outline-secondary">Back to List</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Column: Receipt Image -->
+        <div class="col-lg-5">
+            <div class="card sticky-top" style="top: 20px;">
+                <div class="card-header">
+                    <h5 class="mb-0">Receipt Image</h5>
+                </div>
+                <div class="card-body text-center">
+                    <img
+                        src="{{ receipt.image_url }}"
+                        alt="Receipt"
+                        class="img-fluid rounded"
+                        style="max-height: 600px; cursor: pointer;"
+                        onclick="window.open(this.src, '_blank')"
+                    >
+                    <p class="text-muted small mt-2 mb-0">Click to view full size</p>
+                </div>
+                <div class="card-footer">
+                    <!-- Receipt Summary -->
+                    <div class="mb-2">
+                        <strong>Status:</strong>
+                        {% if receipt.status == 'completed' %}
+                        <span class="badge bg-success">Completed</span>
+                        {% elif receipt.status == 'partially_associated' %}
+                        <span class="badge bg-warning">In Progress</span>
+                        {% elif receipt.status == 'extracted' %}
+                        <span class="badge bg-info">Ready to Review</span>
+                        {% elif receipt.status == 'processing' %}
+                        <span class="badge bg-primary">Processing...</span>
+                        {% elif receipt.status == 'failed' %}
+                        <span class="badge bg-danger">Failed</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ receipt.status }}</span>
+                        {% endif %}
+                    </div>
+
+                    {% if receipt.total_amount %}
+                    <div class="d-flex justify-content-between">
+                        <span>Subtotal:</span>
+                        <span>${{ "%.2f"|format(receipt.subtotal or 0) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Tax:</span>
+                        <span>${{ "%.2f"|format(receipt.tax_amount or 0) }}</span>
+                    </div>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total:</strong>
+                        <strong>${{ "%.2f"|format(receipt.total_amount) }}</strong>
+                    </div>
+                    {% endif %}
+
+                    <!-- Progress -->
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            {{ receipt.associated_items_count }}/{{ receipt.items_count }} items associated
+                        </small>
+                        <div class="progress" style="height: 8px;">
+                            <div
+                                class="progress-bar"
+                                role="progressbar"
+                                style="width: {{ receipt.association_progress }}%"
+                                aria-valuenow="{{ receipt.association_progress }}"
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                            ></div>
+                        </div>
+                    </div>
+
+                    {% if receipt.ocr_confidence %}
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            OCR Confidence: {{ "%.0f"|format(receipt.ocr_confidence * 100) }}%
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Line Items -->
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Receipt Items ({{ receipt_items|length }})</h5>
+                </div>
+                <div class="card-body">
+                    {% if receipt_items %}
+                    <div class="receipt-items">
+                        {% for item in receipt_items %}
+                        <div class="receipt-item mb-4 pb-4 border-bottom" data-item-id="{{ item.id }}">
+                            <!-- Item Header -->
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">
+                                        {{ item.line_number }}. {{ item.final_description }}
+                                    </h6>
+                                    <p class="text-muted small mb-0">
+                                        Qty: {{ item.final_quantity }}
+                                        {% if item.final_unit_price %}
+                                        @ ${{ "%.2f"|format(item.final_unit_price) }}
+                                        {% endif %}
+                                        {% if item.final_total_price %}
+                                        = <strong>${{ "%.2f"|format(item.final_total_price) }}</strong>
+                                        {% endif %}
+                                    </p>
+                                </div>
+
+                                <!-- Association Status -->
+                                <div>
+                                    {% if item.inventory_item_id %}
+                                    <span class="badge bg-success">
+                                        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                                        </svg>
+                                        Inventory
+                                    </span>
+                                    {% elif item.expense_id %}
+                                    <span class="badge bg-info">
+                                        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                                            <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                                        </svg>
+                                        Expense
+                                    </span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Not Associated</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <!-- Association Details (if associated) -->
+                            {% if item.inventory_item %}
+                            <div class="alert alert-success py-2 mb-2">
+                                <small>
+                                    <strong>Linked to:</strong> {{ item.inventory_item.title }} ({{ item.inventory_item.sku }})
+                                    <br>
+                                    <strong>Location:</strong> {{ item.inventory_item.location_code or 'N/A' }}
+                                </small>
+                            </div>
+                            {% elif item.expense %}
+                            <div class="alert alert-info py-2 mb-2">
+                                <small>
+                                    <strong>Expense:</strong> {{ item.expense.description }}
+                                    <br>
+                                    <strong>Category:</strong> {{ item.expense.category }}
+                                </small>
+                            </div>
+                            {% endif %}
+
+                            <!-- Association Actions -->
+                            <div class="association-controls">
+                                {% if not item.is_associated %}
+                                <!-- Associate with Inventory -->
+                                <div class="mb-2">
+                                    <label class="form-label small mb-1">Associate with Inventory Item:</label>
+                                    <div class="input-group input-group-sm">
+                                        <input
+                                            type="text"
+                                            class="form-control inventory-autocomplete"
+                                            placeholder="Type to search items..."
+                                            data-receipt-item-id="{{ item.id }}"
+                                        >
+                                        <button
+                                            class="btn btn-outline-primary associate-inventory-btn"
+                                            type="button"
+                                            data-receipt-item-id="{{ item.id }}"
+                                            disabled
+                                        >
+                                            Link
+                                        </button>
+                                    </div>
+                                    <div class="form-check form-check-sm mt-1">
+                                        <input
+                                            class="form-check-input update-cost-checkbox"
+                                            type="checkbox"
+                                            id="update-cost-{{ item.id }}"
+                                            checked
+                                        >
+                                        <label class="form-check-label small" for="update-cost-{{ item.id }}">
+                                            Update item cost to ${{ "%.2f"|format(item.final_unit_price or 0) }}
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- OR -->
+                                <div class="text-center text-muted small my-2">— OR —</div>
+
+                                <!-- Record as Expense -->
+                                <button
+                                    class="btn btn-sm btn-outline-info w-100 record-expense-btn"
+                                    type="button"
+                                    data-receipt-item-id="{{ item.id }}"
+                                    data-description="{{ item.final_description }}"
+                                    data-amount="{{ item.final_total_price or 0 }}"
+                                >
+                                    Record as Expense
+                                </button>
+                                {% else %}
+                                <!-- Remove Association -->
+                                <button
+                                    class="btn btn-sm btn-outline-danger w-100 remove-association-btn"
+                                    type="button"
+                                    data-receipt-item-id="{{ item.id }}"
+                                    data-has-expense="{{ 'true' if item.expense_id else 'false' }}"
+                                >
+                                    Remove Association
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center py-4">
+                        No items extracted from this receipt.
+                        {% if receipt.status == 'failed' %}
+                        <br><small>OCR processing failed: {{ receipt.ocr_error_message }}</small>
+                        {% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JavaScript -->
+<div id="inventory-items-data" style="display: none;">
+    {{ inventory_items|tojson }}
+</div>
+
+<script src="{{ url_for('static', filename='receipts.js') }}"></script>
+{% endblock %}

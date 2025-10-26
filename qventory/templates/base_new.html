@@ -71,6 +71,11 @@
         <span>Expenses</span>
       </a>
 
+      <a href="{{ url_for('receipts.list_receipts') }}" class="sidebar-item {% if 'receipts' in request.endpoint %}active{% endif %}" title="Receipt Scanner">
+        <i class="fas fa-file-invoice"></i>
+        <span>Receipts</span>
+      </a>
+
       <a href="{{ url_for('main.fulfillment') }}" class="sidebar-item {% if 'fulfillment' in request.endpoint %}active{% endif %}" title="Fulfillment">
         <i class="fas fa-shipping-fast"></i>
         <span>Fulfillment</span>

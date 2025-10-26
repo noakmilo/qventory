@@ -5,6 +5,7 @@ from .routes import main_bp, auth_bp, auto_relist_bp
 from .routes.reports import reports_bp
 from .routes.ebay_auth import ebay_auth_bp
 from .routes.expenses import expenses_bp
+from .routes.receipts import receipts_bp
 from .routes.webhooks import webhook_bp
 from .routes.webhooks_platform import platform_webhook_bp
 from .routes.admin_webhooks import admin_webhooks_bp
@@ -68,6 +69,7 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(ebay_auth_bp)
     app.register_blueprint(expenses_bp)
+    app.register_blueprint(receipts_bp)
     app.register_blueprint(auto_relist_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(platform_webhook_bp)

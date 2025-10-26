@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Receipt - Qventory{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Upload Receipt</h2>
+                    <p class="text-muted mb-0">
+                        Upload a photo or scan of your receipt to automatically extract items and prices.
+                    </p>
+                </div>
+                <div class="card-body">
+                    <!-- Upload Form -->
+                    <form method="POST" enctype="multipart/form-data" id="upload-form">
+                        <div class="mb-4">
+                            <label for="receipt_image" class="form-label">Receipt Image</label>
+                            <input
+                                type="file"
+                                class="form-control"
+                                id="receipt_image"
+                                name="receipt_image"
+                                accept="image/*"
+                                capture="environment"
+                                required
+                            >
+                            <div class="form-text">
+                                Supported formats: JPG, PNG, GIF, HEIC. Maximum size: 10MB.
+                                <br>
+                                <strong>Tip:</strong> For best results, ensure the receipt is well-lit and all text is legible.
+                            </div>
+                        </div>
+
+                        <!-- Image Preview -->
+                        <div id="image-preview" class="mb-4" style="display: none;">
+                            <label class="form-label">Preview</label>
+                            <div class="border rounded p-2 text-center">
+                                <img id="preview-img" src="" alt="Receipt preview" style="max-width: 100%; max-height: 400px;">
+                            </div>
+                        </div>
+
+                        <!-- Upload Button -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary" id="upload-btn">
+                                <svg width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                                    <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                    <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                                </svg>
+                                Upload & Process
+                            </button>
+                            <a href="{{ url_for('receipts.list_receipts') }}" class="btn btn-secondary">Cancel</a>
+                        </div>
+
+                        <!-- Loading State -->
+                        <div id="upload-progress" class="mt-4" style="display: none;">
+                            <div class="alert alert-info">
+                                <div class="d-flex align-items-center">
+                                    <div class="spinner-border spinner-border-sm me-3" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <div>
+                                        <strong>Processing receipt...</strong>
+                                        <br>
+                                        <small>Uploading image and extracting text. This may take a few seconds.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                    <!-- Info Section -->
+                    <div class="mt-5 p-4 bg-light rounded">
+                        <h5>How it works</h5>
+                        <ol class="mb-0">
+                            <li><strong>Upload:</strong> Take a photo or upload an existing image of your receipt</li>
+                            <li><strong>Extract:</strong> Our OCR system automatically reads items, prices, and totals</li>
+                            <li><strong>Review:</strong> Check the extracted data and make corrections if needed</li>
+                            <li><strong>Associate:</strong> Link items to your inventory or record as expenses</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Image preview
+document.getElementById('receipt_image').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Validate file size
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.size > maxSize) {
+            alert('File is too large. Maximum size is 10MB.');
+            this.value = '';
+            document.getElementById('image-preview').style.display = 'none';
+            return;
+        }
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview-img').src = e.target.result;
+            document.getElementById('image-preview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        document.getElementById('image-preview').style.display = 'none';
+    }
+});
+
+// Form submission
+document.getElementById('upload-form').addEventListener('submit', function(e) {
+    const fileInput = document.getElementById('receipt_image');
+    if (!fileInput.files || !fileInput.files[0]) {
+        e.preventDefault();
+        alert('Please select a file to upload.');
+        return;
+    }
+
+    // Show loading state
+    document.getElementById('upload-btn').disabled = true;
+    document.getElementById('upload-progress').style.display = 'block';
+});
+</script>
+{% endblock %}
