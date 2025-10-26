@@ -1,7 +1,7 @@
 """Add receipts and receipt_items tables for OCR receipt processing
 
 Revision ID: 020_add_receipts
-Revises: 019_add_sold_tracking_to_items
+Revises: 019_add_sold_tracking
 Create Date: 2025-10-25
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = '020_add_receipts'
-down_revision = '019_add_sold_tracking_to_items'
+down_revision = '019_add_sold_tracking'
 branch_labels = None
 depends_on = None
 
