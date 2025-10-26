@@ -32,8 +32,8 @@ class ReceiptUsage(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     # Relationships
-    user = db.relationship("User", backref="receipt_usage")
-    receipt = db.relationship("Receipt", backref="usage_record", uselist=False)
+    user = db.relationship("User", backref="receipt_usage", passive_deletes=True)
+    receipt = db.relationship("Receipt", backref="usage_record", uselist=False, passive_deletes=True)
 
     @staticmethod
     def get_usage_today(user_id: int) -> int:
