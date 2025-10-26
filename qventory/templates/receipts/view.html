@@ -188,155 +188,138 @@
     </script>
     {% endif %}
 
-    <div class="row">
+    <div style="display:grid;grid-template-columns:1fr 1.5fr;gap:24px;align-items:start">
+    <style>
+        @media (max-width: 992px) {
+            div[style*="grid-template-columns:1fr 1.5fr"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
         <!-- Left Column: Receipt Image -->
-        <div class="col-lg-5">
-            <div class="card shadow-sm sticky-top" style="top: 20px;">
-                <div class="card-header bg-white border-bottom">
-                    <h5 class="mb-0">
-                        <svg width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                            <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
-                            <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
-                        </svg>
-                        Receipt Image
-                    </h5>
-                </div>
-                <div class="card-body text-center p-3">
-                    <div class="border rounded p-2 mb-2" style="background: #f8f9fa;">
-                        <img
-                            src="{{ receipt.image_url }}"
-                            alt="Receipt"
-                            class="img-fluid rounded shadow-sm"
-                            style="max-height: 500px; cursor: pointer; transition: transform 0.2s;"
-                            onclick="window.open(this.src, '_blank')"
-                            onmouseover="this.style.transform='scale(1.02)'"
-                            onmouseout="this.style.transform='scale(1)'"
-                        >
+        <div style="position:sticky;top:20px">
+            <div class="card">
+                <div class="card-body" style="padding:0">
+                    <!-- Image Header -->
+                    <div style="padding:20px;border-bottom:1px solid var(--border)">
+                        <h5 style="color:var(--text);font-size:16px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px">
+                            <i class="fas fa-image" style="color:var(--primary)"></i>
+                            Receipt Image
+                        </h5>
                     </div>
-                    <p class="text-muted small mb-0">
-                        <svg width="12" height="12" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                            <path d="M.5 1a.5.5 0 0 0 0 1h1.11l.401 1.607 1.498 7.985A.5.5 0 0 0 4 12h1a2 2 0 1 0 0 4 2 2 0 0 0 0-4h7a2 2 0 1 0 0 4 2 2 0 0 0 0-4h1a.5.5 0 0 0 .491-.408l1.5-8A.5.5 0 0 0 14.5 3H2.89l-.405-1.621A.5.5 0 0 0 2 1H.5zM6 14a1 1 0 1 1-2 0 1 1 0 0 1 2 0zm7 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
-                        </svg>
-                        Click to view full size
-                    </p>
-                </div>
-                <div class="card-footer bg-light">
-                    <!-- Receipt Summary -->
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <strong>Status:</strong>
-                        {% if receipt.status == 'completed' %}
-                        <span class="badge bg-success">
-                            <svg width="12" height="12" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-                            </svg>
-                            Completed
-                        </span>
-                        {% elif receipt.status == 'partially_associated' %}
-                        <span class="badge bg-warning text-dark">
-                            <svg width="12" height="12" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                                <path d="M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z"/>
-                            </svg>
-                            In Progress
-                        </span>
-                        {% elif receipt.status == 'extracted' %}
-                        <span class="badge bg-info">
-                            <svg width="12" height="12" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
-                            </svg>
-                            Ready to Review
-                        </span>
-                        {% elif receipt.status == 'processing' %}
-                        <span class="badge bg-primary">
-                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                            Processing...
-                        </span>
-                        {% elif receipt.status == 'failed' %}
-                        <span class="badge bg-danger">
-                            <svg width="12" height="12" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293 5.354 4.646z"/>
-                            </svg>
-                            Failed
-                        </span>
-                        {% else %}
-                        <span class="badge bg-secondary">{{ receipt.status }}</span>
+
+                    <!-- Image Content -->
+                    <div style="padding:20px;text-align:center">
+                        <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:rgba(0,0,0,0.02);margin-bottom:12px">
+                            <img
+                                src="{{ receipt.image_url }}"
+                                alt="Receipt"
+                                style="max-width:100%;max-height:500px;border-radius:6px;cursor:pointer;transition:transform 0.2s"
+                                onclick="window.open(this.src, '_blank')"
+                                onmouseover="this.style.transform='scale(1.02)'"
+                                onmouseout="this.style.transform='scale(1)'"
+                            >
+                        </div>
+                        <p style="color:var(--sub);font-size:13px;margin:0">
+                            <i class="fas fa-search-plus" style="margin-right:4px"></i>
+                            Click to view full size
+                        </p>
+                    </div>
+
+                    <!-- Receipt Summary Footer -->
+                    <div style="padding:20px;border-top:1px solid var(--border);background:rgba(0,0,0,0.01)">
+                        <!-- Status Badge -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                            <strong style="color:var(--text);font-size:14px">Status:</strong>
+                            {% if receipt.status == 'completed' %}
+                            <span style="background:#10b981;color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                                <i class="fas fa-check-circle"></i> Completed
+                            </span>
+                            {% elif receipt.status == 'partially_associated' %}
+                            <span style="background:#f59e0b;color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                                <i class="fas fa-clock"></i> In Progress
+                            </span>
+                            {% elif receipt.status == 'extracted' %}
+                            <span style="background:#3b82f6;color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                                <i class="fas fa-info-circle"></i> Ready to Review
+                            </span>
+                            {% elif receipt.status == 'processing' %}
+                            <span style="background:#8b5cf6;color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                                <span class="spinner-border" style="width:12px;height:12px;border-width:2px"></span> Processing...
+                            </span>
+                            {% elif receipt.status == 'failed' %}
+                            <span style="background:#ef4444;color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">
+                                <i class="fas fa-times-circle"></i> Failed
+                            </span>
+                            {% else %}
+                            <span style="background:var(--sub);color:white;padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600">{{ receipt.status }}</span>
+                            {% endif %}
+                        </div>
+
+                        {% if receipt.total_amount %}
+                        <!-- Totals -->
+                        <div style="margin-bottom:16px">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+                                <span style="color:var(--sub);font-size:13px">Subtotal:</span>
+                                <span style="color:var(--text);font-weight:500;font-size:13px">${{ "%.2f"|format(receipt.subtotal or 0) }}</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+                                <span style="color:var(--sub);font-size:13px">Tax:</span>
+                                <span style="color:var(--text);font-weight:500;font-size:13px">${{ "%.2f"|format(receipt.tax_amount or 0) }}</span>
+                            </div>
+                            <div style="border-top:1px solid var(--border);padding-top:12px;display:flex;justify-content:space-between;align-items:center">
+                                <strong style="color:var(--text);font-size:14px">Total:</strong>
+                                <strong style="color:#10b981;font-size:20px">${{ "%.2f"|format(receipt.total_amount) }}</strong>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Progress Bar -->
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                                <small style="color:var(--sub);font-size:12px">
+                                    <i class="fas fa-link" style="margin-right:4px"></i>
+                                    {{ receipt.associated_items_count }}/{{ receipt.items_count }} items linked
+                                </small>
+                                <small style="color:var(--text);font-weight:600;font-size:12px">{{ receipt.association_progress }}%</small>
+                            </div>
+                            <div style="background:rgba(0,0,0,0.08);height:8px;border-radius:4px;overflow:hidden">
+                                <div style="background:#10b981;height:100%;width:{{ receipt.association_progress }}%;transition:width 0.3s;border-radius:4px"></div>
+                            </div>
+                        </div>
+
+                        {% if receipt.ocr_confidence %}
+                        <!-- AI Info -->
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+                            <small style="color:var(--sub);font-size:12px;display:block;margin-bottom:6px">
+                                <i class="fas fa-robot" style="margin-right:4px;color:#8b5cf6"></i>
+                                AI Confidence: <strong style="color:var(--text)">{{ "%.0f"|format(receipt.ocr_confidence * 100) }}%</strong>
+                            </small>
+                            <small style="color:var(--sub);font-size:12px;display:block">
+                                <i class="fas fa-brain" style="margin-right:4px;color:#3b82f6"></i>
+                                Provider: <strong style="color:var(--text)">{{ receipt.ocr_provider or 'GPT-4 Vision' }}</strong>
+                            </small>
+                        </div>
                         {% endif %}
                     </div>
-
-                    {% if receipt.total_amount %}
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Subtotal:</span>
-                            <span class="fw-medium">${{ "%.2f"|format(receipt.subtotal or 0) }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Tax:</span>
-                            <span class="fw-medium">${{ "%.2f"|format(receipt.tax_amount or 0) }}</span>
-                        </div>
-                        <hr class="my-2">
-                        <div class="d-flex justify-content-between">
-                            <strong>Total:</strong>
-                            <strong class="text-success fs-5">${{ "%.2f"|format(receipt.total_amount) }}</strong>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- Progress -->
-                    <div class="mt-3 pt-3 border-top">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <small class="text-muted">
-                                <svg width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5h-3z"/>
-                                </svg>
-                                {{ receipt.associated_items_count }}/{{ receipt.items_count }} items linked
-                            </small>
-                            <small class="text-muted">{{ receipt.association_progress }}%</small>
-                        </div>
-                        <div class="progress" style="height: 10px;">
-                            <div
-                                class="progress-bar bg-success"
-                                role="progressbar"
-                                style="width: {{ receipt.association_progress }}%"
-                                aria-valuenow="{{ receipt.association_progress }}"
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                            ></div>
-                        </div>
-                    </div>
-
-                    {% if receipt.ocr_confidence %}
-                    <div class="mt-3 pt-3 border-top">
-                        <small class="text-muted d-block">
-                            <svg width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.464 1.448 1.545 1.07.114 1.564.415 2.068.723l.048.03c.272.165.578.348.97.484.397.136.861.217 1.466.217h3.5c.937 0 1.599-.477 1.934-1.064a1.86 1.86 0 0 0 .254-.912c0-.152-.023-.312-.077-.464.201-.263.38-.578.488-.901.11-.33.172-.762.004-1.149.069-.13.12-.269.159-.403.077-.27.113-.568.113-.857 0-.288-.036-.585-.113-.856a2.144 2.144 0 0 0-.138-.362 1.9 1.9 0 0 0 .234-1.734c-.206-.592-.682-1.1-1.2-1.272-.847-.282-1.803-.276-2.516-.211a9.84 9.84 0 0 0-.443.05 9.365 9.365 0 0 0-.062-4.509A1.38 1.38 0 0 0 9.125.111L8.864.046zM11.5 14.721H8c-.51 0-.863-.069-1.14-.164-.281-.097-.506-.228-.776-.393l-.04-.024c-.555-.339-1.198-.731-2.49-.868-.333-.036-.554-.29-.554-.55V8.72c0-.254.226-.543.62-.65 1.095-.3 1.977-.996 2.614-1.708.635-.71 1.064-1.475 1.238-1.978.243-.7.407-1.768.482-2.85.025-.362.36-.594.667-.518l.262.066c.16.04.258.143.288.255a8.34 8.34 0 0 1-.145 4.725.5.5 0 0 0 .595.644l.003-.001.014-.003.058-.014a8.908 8.908 0 0 1 1.036-.157c.663-.06 1.457-.054 2.11.164.175.058.45.3.57.65.107.308.087.67-.266 1.022l-.353.353.353.354c.043.043.105.141.154.315.048.167.075.37.075.581 0 .212-.027.414-.075.582-.05.174-.111.272-.154.315l-.353.353.353.354c.047.047.109.177.005.488a2.224 2.224 0 0 1-.505.805l-.353.353.353.354c.006.005.041.05.041.17a.866.866 0 0 1-.121.416c-.165.288-.503.56-1.066.56z"/>
-                            </svg>
-                            AI Confidence: {{ "%.0f"|format(receipt.ocr_confidence * 100) }}%
-                        </small>
-                        <small class="text-muted d-block mt-1">
-                            <svg width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                <path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/>
-                            </svg>
-                            Provider: {{ receipt.ocr_provider or 'OpenAI GPT-4 Vision' }}
-                        </small>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
 
         <!-- Right Column: Line Items -->
-        <div class="col-lg-7">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white border-bottom">
-                    <h5 class="mb-0">
-                        <svg width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                            <path d="M2.5 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2h-11zm4.5 6a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zM7 8a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1H7zm0 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1H7z"/>
-                            <path fill-rule="evenodd" d="M2 2.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm0 3a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1zm0 3a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1z"/>
-                        </svg>
-                        Receipt Items ({{ receipt_items|length }})
-                    </h5>
-                </div>
-                <div class="card-body">
+        <div>
+            <div class="card">
+                <div class="card-body" style="padding:0">
+                    <!-- Items Header -->
+                    <div style="padding:20px;border-bottom:1px solid var(--border)">
+                        <h5 style="color:var(--text);font-size:16px;font-weight:600;margin:0;display:flex;align-items:center;gap:8px">
+                            <i class="fas fa-list" style="color:var(--primary)"></i>
+                            Receipt Items ({{ receipt_items|length }})
+                        </h5>
+                    </div>
+
+                    <!-- Items Content -->
+                    <div style="padding:20px">
                     {% if receipt_items %}
                     <div class="receipt-items">
                         {% for item in receipt_items %}
@@ -463,13 +446,17 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted text-center py-4">
-                        No items extracted from this receipt.
+                    <div style="text-align:center;padding:40px 20px;color:var(--sub)">
+                        <i class="fas fa-inbox" style="font-size:48px;color:var(--border);margin-bottom:16px"></i>
+                        <p style="font-size:15px;margin:0">No items extracted from this receipt.</p>
                         {% if receipt.status == 'failed' %}
-                        <br><small>OCR processing failed: {{ receipt.ocr_error_message }}</small>
+                        <p style="font-size:13px;color:#ef4444;margin-top:8px">
+                            <i class="fas fa-exclamation-circle"></i> OCR processing failed: {{ receipt.ocr_error_message }}
+                        </p>
                         {% endif %}
-                    </p>
+                    </div>
                     {% endif %}
+                    </div>
                 </div>
             </div>
         </div>

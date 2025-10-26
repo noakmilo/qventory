@@ -122,20 +122,36 @@
                     </button>
                 </div>
 
-                <!-- Loading State -->
+                <!-- Loading State with Progress Bar -->
                 <div id="upload-progress" style="display:none;margin-top:24px">
-                    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:16px">
-                        <div style="display:flex;align-items:center;gap:16px">
-                            <div class="spinner-border" style="width:24px;height:24px;border-width:3px;color:#3b82f6" role="status">
+                    <div style="background:linear-gradient(135deg, rgba(139,92,246,0.05) 0%, rgba(59,130,246,0.05) 100%);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.05)">
+                        <!-- Progress Bar -->
+                        <div style="position:relative;background:rgba(0,0,0,0.05);height:8px;border-radius:4px;overflow:hidden;margin-bottom:16px">
+                            <div id="progressBar" style="background:linear-gradient(90deg, #8b5cf6 0%, #3b82f6 100%);height:100%;width:0%;transition:width 0.5s ease;border-radius:4px;position:relative;overflow:hidden">
+                                <!-- Shimmer effect -->
+                                <div style="position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);animation:shimmer 2s infinite"></div>
+                            </div>
+                        </div>
+
+                        <!-- Status Text -->
+                        <div style="display:flex;align-items:center;gap:12px">
+                            <div class="spinner-border" style="width:20px;height:20px;border-width:2.5px;color:#3b82f6" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <div style="flex:1">
-                                <strong style="color:var(--text);display:block;margin-bottom:4px">Processing receipt...</strong>
-                                <small id="progress-text" style="color:var(--sub);font-size:13px">Uploading image and extracting text...</small>
+                                <strong id="progress-title" style="color:var(--text);display:block;margin-bottom:2px;font-size:14px">Processing receipt...</strong>
+                                <small id="progress-text" style="color:var(--sub);font-size:12px">Uploading image and extracting text...</small>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <style>
+                @keyframes shimmer {
+                    0% { left: -100%; }
+                    100% { left: 100%; }
+                }
+                </style>
             </form>
 
             <!-- Info Section -->
@@ -359,6 +375,8 @@ document.getElementById('upload-form').addEventListener('submit', async function
     // Show loading state
     const submitBtn = document.getElementById('submit-btn');
     const progressDiv = document.getElementById('upload-progress');
+    const progressBar = document.getElementById('progressBar');
+    const progressTitle = document.getElementById('progress-title');
     const progressText = document.getElementById('progress-text');
     const uploadActions = document.getElementById('upload-actions');
 
@@ -366,23 +384,34 @@ document.getElementById('upload-form').addEventListener('submit', async function
     uploadActions.style.display = 'none';
     progressDiv.style.display = 'block';
 
+    // Helper to update progress
+    function updateProgress(percent, title, text) {
+        progressBar.style.width = percent + '%';
+        progressTitle.textContent = title;
+        progressText.textContent = text;
+    }
+
     try {
+        // Stage 1: Preparing
+        updateProgress(10, 'Preparing upload...', 'Getting image ready for processing');
+        await new Promise(resolve => setTimeout(resolve, 300));
+
         // Compress image if it's larger than 500KB
         const fileSizeKB = originalFile.size / 1024;
         let fileToUpload = originalFile;
 
         if (fileSizeKB > 500) {
-            progressText.textContent = `Compressing image (${Math.round(fileSizeKB)}KB → ~400KB)...`;
+            // Stage 2: Compressing
+            updateProgress(25, 'Compressing image...', `Optimizing ${Math.round(fileSizeKB)}KB → ~400KB`);
 
             fileToUpload = await compressImage(originalFile, 400);
 
             const compressedSizeKB = Math.round(fileToUpload.size / 1024);
             console.log(`Compressed: ${Math.round(fileSizeKB)}KB → ${compressedSizeKB}KB`);
-
-            progressText.textContent = `Uploading (${compressedSizeKB}KB) and processing with AI...`;
-        } else {
-            progressText.textContent = 'Uploading image and processing with AI...';
         }
+
+        // Stage 3: Uploading
+        updateProgress(50, 'Uploading to cloud...', `Sending image (${Math.round(fileToUpload.size / 1024)}KB) to server`);
 
         // Create FormData with compressed image
         const formData = new FormData();
@@ -395,6 +424,14 @@ document.getElementById('upload-form').addEventListener('submit', async function
         });
 
         if (response.ok) {
+            // Stage 4: Processing with AI
+            updateProgress(75, 'Processing with AI...', 'GPT-4 Vision is extracting items and prices');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Stage 5: Complete
+            updateProgress(100, 'Complete!', 'Redirecting to receipt details...');
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             // Redirect to the response URL (receipt detail page)
             window.location.href = response.url;
         } else {
@@ -407,6 +444,7 @@ document.getElementById('upload-form').addEventListener('submit', async function
         submitBtn.disabled = false;
         uploadActions.style.display = 'flex';
         progressDiv.style.display = 'none';
+        progressBar.style.width = '0%';
     }
 });
 </script>
