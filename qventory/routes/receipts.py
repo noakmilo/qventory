@@ -60,6 +60,13 @@ def upload():
         return redirect(request.url)
 
     try:
+        # Check if Cloudinary is configured
+        from qventory.helpers.receipt_image_processor import CLOUDINARY_ENABLED
+        if not CLOUDINARY_ENABLED:
+            flash('Receipt upload is not configured. Please contact administrator to set up Cloudinary.', 'error')
+            logger.error("Cloudinary not configured - missing environment variables")
+            return redirect(request.url)
+
         # Create receipt record first (without image)
         receipt = Receipt(
             user_id=current_user.id,
@@ -78,17 +85,22 @@ def upload():
         if not upload_result['success']:
             db.session.rollback()
             flash(f"Upload failed: {upload_result['error']}", 'error')
+            logger.error(f"Cloudinary upload failed: {upload_result['error']}")
             return redirect(request.url)
 
         # Update receipt with image info
         receipt.image_url = upload_result['url']
         receipt.thumbnail_url = upload_result['thumbnail_url']
         receipt.image_public_id = upload_result['public_id']
-        receipt.file_size = file.tell()
 
-        # Get file size properly
-        file.seek(0, 2)
-        receipt.file_size = file.tell()
+        # Get file size (file might have been read, so reset first)
+        try:
+            file.seek(0, 2)  # Seek to end
+            receipt.file_size = file.tell()
+            file.seek(0)  # Reset to beginning
+        except Exception:
+            # If seek fails, file size is not critical
+            receipt.file_size = 0
 
         db.session.commit()
         logger.info(f"Receipt {receipt.id} uploaded by user {current_user.id}")
