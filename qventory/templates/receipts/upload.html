@@ -28,7 +28,7 @@
                                 required
                             >
                             <div class="form-text">
-                                Supported formats: JPG, PNG, GIF, HEIC. Maximum size: 10MB.
+                                Supported formats: JPG, PNG, GIF, HEIC. Images are automatically compressed to ~400KB.
                                 <br>
                                 <strong>Tip:</strong> For best results, ensure the receipt is well-lit and all text is legible.
                             </div>
@@ -88,43 +88,163 @@
 </div>
 
 <script>
-// Image preview
-document.getElementById('receipt_image').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (file) {
-        // Validate file size
-        const maxSize = 10 * 1024 * 1024; // 10MB
-        if (file.size > maxSize) {
-            alert('File is too large. Maximum size is 10MB.');
-            this.value = '';
-            document.getElementById('image-preview').style.display = 'none';
-            return;
-        }
-
-        // Show preview
+/**
+ * Compress image to target size (~400KB) before upload
+ */
+function compressImage(file, maxSizeKB = 400) {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
+
         reader.onload = function(e) {
-            document.getElementById('preview-img').src = e.target.result;
-            document.getElementById('image-preview').style.display = 'block';
+            const img = new Image();
+
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Calculate scaling to reduce file size
+                // iPhone photos are typically 3000x4000px, we'll resize to max 1600px
+                const MAX_DIMENSION = 1600;
+
+                if (width > height && width > MAX_DIMENSION) {
+                    height = Math.round((height * MAX_DIMENSION) / width);
+                    width = MAX_DIMENSION;
+                } else if (height > MAX_DIMENSION) {
+                    width = Math.round((width * MAX_DIMENSION) / height);
+                    height = MAX_DIMENSION;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Start with quality 0.85, reduce if needed
+                let quality = 0.85;
+
+                function tryCompress() {
+                    canvas.toBlob(function(blob) {
+                        const sizeKB = blob.size / 1024;
+
+                        // If still too large and quality can be reduced, try again
+                        if (sizeKB > maxSizeKB && quality > 0.5) {
+                            quality -= 0.1;
+                            tryCompress();
+                        } else {
+                            // Convert blob to File
+                            const compressedFile = new File(
+                                [blob],
+                                file.name.replace(/\.[^.]+$/, '.jpg'),
+                                { type: 'image/jpeg' }
+                            );
+                            resolve(compressedFile);
+                        }
+                    }, 'image/jpeg', quality);
+                }
+
+                tryCompress();
+            };
+
+            img.onerror = function() {
+                reject(new Error('Failed to load image'));
+            };
+
+            img.src = e.target.result;
         };
+
+        reader.onerror = function() {
+            reject(new Error('Failed to read file'));
+        };
+
         reader.readAsDataURL(file);
-    } else {
+    });
+}
+
+// Image preview and compression status
+document.getElementById('receipt_image').addEventListener('change', async function(e) {
+    const file = e.target.files[0];
+    if (!file) {
         document.getElementById('image-preview').style.display = 'none';
+        return;
     }
+
+    // Show original file info
+    const fileSizeKB = Math.round(file.size / 1024);
+    console.log(`Original file: ${fileSizeKB}KB`);
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        document.getElementById('preview-img').src = e.target.result;
+        document.getElementById('image-preview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
 });
 
-// Form submission
-document.getElementById('upload-form').addEventListener('submit', function(e) {
+// Form submission with compression
+document.getElementById('upload-form').addEventListener('submit', async function(e) {
+    e.preventDefault(); // Prevent default submission
+
     const fileInput = document.getElementById('receipt_image');
-    if (!fileInput.files || !fileInput.files[0]) {
-        e.preventDefault();
+    const originalFile = fileInput.files[0];
+
+    if (!originalFile) {
         alert('Please select a file to upload.');
         return;
     }
 
     // Show loading state
-    document.getElementById('upload-btn').disabled = true;
-    document.getElementById('upload-progress').style.display = 'block';
+    const uploadBtn = document.getElementById('upload-btn');
+    const progressDiv = document.getElementById('upload-progress');
+    uploadBtn.disabled = true;
+    progressDiv.style.display = 'block';
+
+    try {
+        // Compress image if it's larger than 500KB
+        const fileSizeKB = originalFile.size / 1024;
+        let fileToUpload = originalFile;
+
+        if (fileSizeKB > 500) {
+            progressDiv.querySelector('small').textContent =
+                `Compressing image (${Math.round(fileSizeKB)}KB → ~400KB)...`;
+
+            fileToUpload = await compressImage(originalFile, 400);
+
+            const compressedSizeKB = Math.round(fileToUpload.size / 1024);
+            console.log(`Compressed: ${fileSizeKB}KB → ${compressedSizeKB}KB`);
+
+            progressDiv.querySelector('small').textContent =
+                `Uploading (${compressedSizeKB}KB) and extracting text...`;
+        } else {
+            progressDiv.querySelector('small').textContent =
+                'Uploading image and extracting text...';
+        }
+
+        // Create FormData with compressed image
+        const formData = new FormData();
+        formData.append('receipt_image', fileToUpload);
+
+        // Submit form via fetch
+        const response = await fetch(this.action, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (response.ok) {
+            // Redirect to the response URL (receipt detail page)
+            window.location.href = response.url;
+        } else {
+            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+        }
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        alert(`Upload failed: ${error.message}`);
+        uploadBtn.disabled = false;
+        progressDiv.style.display = 'none';
+    }
 });
 </script>
 {% endblock %}
