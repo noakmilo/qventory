@@ -1,0 +1,499 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Admin - System Logs{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">System Logs</span>
+{% endblock %}
+
+{% block content %}
+<style>
+  /* Logs Console Specific Styles */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat-card {
+    background: var(--muted);
+    padding: 16px;
+    border-radius: var(--radius);
+    border-left: 3px solid var(--accent);
+  }
+
+  .stat-card.error {
+    border-left-color: #ef4444;
+  }
+
+  .stat-card.success {
+    border-left-color: #10b981;
+  }
+
+  .stat-card.warning {
+    border-left-color: #f59e0b;
+  }
+
+  .stat-card.info {
+    border-left-color: #3b82f6;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 8px 0 4px 0;
+  }
+
+  .stat-label {
+    font-size: var(--fs-sm);
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .logs-table th {
+    text-align: left;
+    padding: 12px;
+    background: var(--muted);
+    color: var(--sub);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logs-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .logs-table tbody tr:hover {
+    background: var(--muted);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .status-badge.processing {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .status-badge.completed {
+    background: #10b981;
+    color: white;
+  }
+
+  .status-badge.failed {
+    background: #ef4444;
+    color: white;
+  }
+
+  .status-badge.pending {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .auto-refresh-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--muted);
+    border-radius: 20px;
+    font-size: var(--fs-sm);
+    color: var(--sub);
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .tab-navigation {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .tab-btn {
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: var(--sub);
+    font-size: var(--fs-base);
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .tab-btn:hover {
+    color: var(--text);
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  .error-details {
+    margin-top: 4px;
+    padding: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 4px;
+    font-size: var(--fs-xs);
+    color: #ef4444;
+    font-family: monospace;
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .logs-table {
+      font-size: var(--fs-xs);
+    }
+
+    .logs-table th,
+    .logs-table td {
+      padding: 8px;
+    }
+  }
+</style>
+
+<div style="padding: 20px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+      <h1 style="margin: 0 0 8px 0;">System Logs</h1>
+      <p style="color: var(--sub); margin: 0;">Real-time monitoring of Celery tasks and system events</p>
+    </div>
+    <div class="auto-refresh-indicator">
+      <span class="pulse-dot"></span>
+      <span>Auto-refresh: 10s</span>
+    </div>
+  </div>
+
+  <!-- Stats Overview -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card info">
+      <div class="stat-label">Total Tasks (24h)</div>
+      <div class="stat-value" id="statTotalTasks">-</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Processing Now</div>
+      <div class="stat-value" id="statProcessingNow">-</div>
+    </div>
+    <div class="stat-card error">
+      <div class="stat-label">Failed (24h)</div>
+      <div class="stat-value" id="statFailedTasks">-</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Avg Duration</div>
+      <div class="stat-value" id="statAvgDuration">-</div>
+    </div>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="tab-navigation">
+    <button class="tab-btn active" onclick="switchTab('recent')">
+      <i class="fas fa-clock"></i> Recent Tasks
+    </button>
+    <button class="tab-btn" onclick="switchTab('active')">
+      <i class="fas fa-sync fa-spin"></i> Active Tasks
+    </button>
+    <button class="tab-btn" onclick="switchTab('errors')">
+      <i class="fas fa-exclamation-triangle"></i> Errors
+    </button>
+  </div>
+
+  <!-- Recent Tasks Tab -->
+  <div id="tab-recent" class="tab-content active">
+    <div class="glass" style="padding: 20px; border-radius: var(--radius); overflow-x: auto;">
+      <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Recent Tasks</h2>
+      <table class="logs-table">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>User</th>
+            <th>Mode</th>
+            <th>Status</th>
+            <th>Items</th>
+            <th>Duration</th>
+            <th>Started</th>
+          </tr>
+        </thead>
+        <tbody id="recentTasksBody">
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 40px; color: var(--sub);">
+              <i class="fas fa-spinner fa-spin"></i> Loading tasks...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Active Tasks Tab -->
+  <div id="tab-active" class="tab-content">
+    <div class="glass" style="padding: 20px; border-radius: var(--radius); overflow-x: auto;">
+      <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Active Tasks</h2>
+      <table class="logs-table">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>User</th>
+            <th>Mode</th>
+            <th>Items Processed</th>
+            <th>Running For</th>
+            <th>Started</th>
+          </tr>
+        </thead>
+        <tbody id="activeTasksBody">
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 40px; color: var(--sub);">
+              <i class="fas fa-spinner fa-spin"></i> Loading active tasks...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Errors Tab -->
+  <div id="tab-errors" class="tab-content">
+    <div class="glass" style="padding: 20px; border-radius: var(--radius); overflow-x: auto;">
+      <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Recent Errors</h2>
+      <table class="logs-table">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>User</th>
+            <th>Mode</th>
+            <th>Error Message</th>
+            <th>Failed At</th>
+          </tr>
+        </thead>
+        <tbody id="errorsBody">
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 40px; color: var(--sub);">
+              <i class="fas fa-spinner fa-spin"></i> Loading errors...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top: 20px;">
+    <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+      <i class="fas fa-arrow-left"></i> Back to Admin Dashboard
+    </a>
+  </div>
+</div>
+
+<script>
+  let currentTab = 'recent';
+  let refreshInterval;
+
+  function switchTab(tabName) {
+    currentTab = tabName;
+
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.closest('.tab-btn').classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.getElementById(`tab-${tabName}`).classList.add('active');
+
+    // Load data for the new tab
+    if (tabName === 'recent') loadRecentTasks();
+    else if (tabName === 'active') loadActiveTasks();
+    else if (tabName === 'errors') loadErrors();
+  }
+
+  function formatDuration(seconds) {
+    if (!seconds) return '-';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+    return `${Math.round(seconds / 3600)}h`;
+  }
+
+  function formatTimestamp(isoString) {
+    if (!isoString) return '-';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
+    return `${Math.floor(diffMins / 1440)}d ago`;
+  }
+
+  async function loadStats() {
+    try {
+      const response = await fetch('/admin/logs/api/stats');
+      const data = await response.json();
+
+      document.getElementById('statTotalTasks').textContent = data.tasks.last_24h || 0;
+      document.getElementById('statProcessingNow').textContent = data.tasks.processing_now || 0;
+      document.getElementById('statFailedTasks').textContent = data.tasks.failed_last_24h || 0;
+      document.getElementById('statAvgDuration').textContent =
+        data.performance.avg_duration_seconds ? formatDuration(data.performance.avg_duration_seconds) : '-';
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  }
+
+  async function loadRecentTasks() {
+    try {
+      const response = await fetch('/admin/logs/api/celery-tasks?limit=50');
+      const data = await response.json();
+
+      const tbody = document.getElementById('recentTasksBody');
+
+      if (!data.tasks || data.tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: var(--sub);">No tasks found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.tasks.map(task => `
+        <tr>
+          <td style="font-family: monospace; font-size: var(--fs-xs);">${task.task_id ? task.task_id.substring(0, 8) : '-'}</td>
+          <td>${task.username || '-'}</td>
+          <td>${task.import_mode || '-'}</td>
+          <td>
+            <span class="status-badge ${task.status}">
+              ${task.status === 'processing' ? '<i class="fas fa-sync fa-spin"></i>' : ''}
+              ${task.status === 'completed' ? '<i class="fas fa-check"></i>' : ''}
+              ${task.status === 'failed' ? '<i class="fas fa-times"></i>' : ''}
+              ${task.status}
+            </span>
+          </td>
+          <td>${task.items_imported || 0}/${task.total_items || 0}</td>
+          <td>${formatDuration(task.duration_seconds)}</td>
+          <td>${formatTimestamp(task.started_at)}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.error('Error loading recent tasks:', error);
+    }
+  }
+
+  async function loadActiveTasks() {
+    try {
+      const response = await fetch('/admin/logs/api/active-tasks');
+      const data = await response.json();
+
+      const tbody = document.getElementById('activeTasksBody');
+
+      if (!data.active_tasks || data.active_tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--sub);">No active tasks</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.active_tasks.map(task => `
+        <tr>
+          <td style="font-family: monospace; font-size: var(--fs-xs);">${task.task_id ? task.task_id.substring(0, 8) : '-'}</td>
+          <td>${task.username || '-'}</td>
+          <td>${task.import_mode || '-'}</td>
+          <td>${task.items_imported || 0}/${task.total_items || 0}</td>
+          <td>${formatDuration(task.running_for_seconds)}</td>
+          <td>${formatTimestamp(task.started_at)}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.error('Error loading active tasks:', error);
+    }
+  }
+
+  async function loadErrors() {
+    try {
+      const response = await fetch('/admin/logs/api/errors?limit=30');
+      const data = await response.json();
+
+      const tbody = document.getElementById('errorsBody');
+
+      if (!data.errors || data.errors.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--sub);">No errors found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.errors.map(error => `
+        <tr>
+          <td style="font-family: monospace; font-size: var(--fs-xs);">${error.task_id ? error.task_id.substring(0, 8) : '-'}</td>
+          <td>${error.username || '-'}</td>
+          <td>${error.import_mode || '-'}</td>
+          <td>
+            ${error.error_message || 'Unknown error'}
+          </td>
+          <td>${formatTimestamp(error.started_at)}</td>
+        </tr>
+      `).join('');
+    } catch (error) {
+      console.error('Error loading errors:', error);
+    }
+  }
+
+  function refreshCurrentTab() {
+    if (currentTab === 'recent') loadRecentTasks();
+    else if (currentTab === 'active') loadActiveTasks();
+    else if (currentTab === 'errors') loadErrors();
+  }
+
+  // Initial load
+  loadStats();
+  loadRecentTasks();
+
+  // Auto-refresh every 10 seconds (optimized for low resource usage)
+  refreshInterval = setInterval(() => {
+    loadStats();
+    refreshCurrentTab();
+  }, 10000);
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    clearInterval(refreshInterval);
+  });
+</script>
+{% endblock %}

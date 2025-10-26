@@ -74,6 +74,36 @@
             style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
           >
         </div>
+
+        <div>
+          <label for="max_receipt_monthly_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Max Receipt OCR Per Month
+          </label>
+          <input
+            type="text"
+            id="max_receipt_monthly_{{ plan.plan }}"
+            name="max_receipt_ocr_per_month"
+            value="{{ plan.max_receipt_ocr_per_month if plan.max_receipt_ocr_per_month is not none else 'Unlimited' }}"
+            placeholder="Unlimited"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+          <small style="color: var(--sub); font-size: var(--fs-xs);">Monthly limit for receipt OCR processing</small>
+        </div>
+
+        <div>
+          <label for="max_receipt_daily_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Max Receipt OCR Per Day
+          </label>
+          <input
+            type="text"
+            id="max_receipt_daily_{{ plan.plan }}"
+            name="max_receipt_ocr_per_day"
+            value="{{ plan.max_receipt_ocr_per_day if plan.max_receipt_ocr_per_day is not none else 'Unlimited' }}"
+            placeholder="Unlimited"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+          <small style="color: var(--sub); font-size: var(--fs-xs);">Daily limit for receipt OCR processing</small>
+        </div>
       </div>
 
       <!-- Feature Toggles -->

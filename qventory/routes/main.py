@@ -3257,6 +3257,19 @@ def admin_update_plan_limits(plan):
         plan_limit.max_images_per_item = int(request.form.get("max_images_per_item", 1))
         plan_limit.max_marketplace_integrations = int(request.form.get("max_marketplace_integrations", 0))
 
+        # Receipt OCR limits
+        receipt_monthly_str = request.form.get("max_receipt_ocr_per_month", "").strip()
+        if receipt_monthly_str == "" or receipt_monthly_str.lower() == "unlimited":
+            plan_limit.max_receipt_ocr_per_month = None
+        else:
+            plan_limit.max_receipt_ocr_per_month = int(receipt_monthly_str)
+
+        receipt_daily_str = request.form.get("max_receipt_ocr_per_day", "").strip()
+        if receipt_daily_str == "" or receipt_daily_str.lower() == "unlimited":
+            plan_limit.max_receipt_ocr_per_day = None
+        else:
+            plan_limit.max_receipt_ocr_per_day = int(receipt_daily_str)
+
         # Boolean features
         plan_limit.can_use_ai_research = request.form.get("can_use_ai_research") == "on"
         plan_limit.can_bulk_operations = request.form.get("can_bulk_operations") == "on"

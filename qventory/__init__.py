@@ -9,6 +9,7 @@ from .routes.receipts import receipts_bp
 from .routes.webhooks import webhook_bp
 from .routes.webhooks_platform import platform_webhook_bp
 from .routes.admin_webhooks import admin_webhooks_bp
+from .routes.admin_logs import admin_logs_bp
 
 def _maybe_seed_demo():
     """
@@ -74,6 +75,7 @@ def create_app():
     app.register_blueprint(webhook_bp)
     app.register_blueprint(platform_webhook_bp)
     app.register_blueprint(admin_webhooks_bp)
+    app.register_blueprint(admin_logs_bp)
 
     # Register template filters
     @app.template_filter('timeago')

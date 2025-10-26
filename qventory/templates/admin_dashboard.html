@@ -16,6 +16,9 @@
         <p style="color:var(--sub);">Manage all users and their inventory</p>
       </div>
       <div class="admin-actions">
+        <a href="{{ url_for('admin_logs.logs_console') }}" class="btn">
+          <i class="fas fa-terminal"></i> System Logs
+        </a>
         <a href="{{ url_for('main.admin_users_roles') }}" class="btn">
           <i class="fas fa-user-tag"></i> User Roles
         </a>
