@@ -146,27 +146,28 @@ class ReceiptImageProcessor:
             public_id = f"{self.folder}/{public_id_suffix}"
 
             # Upload to Cloudinary with transformations
+            # Force JPEG format to ensure HEIC images work on all browsers
             upload_result = cloudinary.uploader.upload(
                 file,
                 folder=self.folder,
                 public_id=public_id_suffix,
                 resource_type='image',
                 overwrite=False,
+                format='jpg',  # Convert HEIC and other formats to JPEG
                 # Transformations
                 transformation=[
                     {'quality': 'auto:good'},  # Auto quality optimization
-                    {'fetch_format': 'auto'},  # Auto format (WebP if supported)
                 ],
                 # Add context for searchability
                 context=f"user_id={self.user_id}|type=receipt",
                 tags=['receipt', f'user_{self.user_id}']
             )
 
-            # Extract URLs
+            # Extract URLs - force .jpg extension in URL
             result['url'] = upload_result['secure_url']
             result['public_id'] = upload_result['public_id']
 
-            # Generate thumbnail URL (200px wide, auto height)
+            # Generate thumbnail URL (200px wide, auto height) in JPEG format
             result['thumbnail_url'] = cloudinary.CloudinaryImage(
                 result['public_id']
             ).build_url(
@@ -174,7 +175,7 @@ class ReceiptImageProcessor:
                 height=200,
                 crop='fill',
                 quality='auto:low',
-                fetch_format='auto'
+                format='jpg'  # Force JPEG for thumbnails too
             )
 
             result['success'] = True
