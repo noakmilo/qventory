@@ -1690,24 +1690,47 @@ def sync_ebay_inventory():
             'error': 'eBay account not connected'
         }), 400
 
-    # Check if user has reached their limit
-    items_remaining = current_user.items_remaining()
-    if items_remaining is not None and items_remaining == 0:
+    # Check plan limits
+    plan_limits = current_user.get_plan_limits()
+
+    # Verify the user can use marketplace integrations
+    if plan_limits.max_marketplace_integrations == 0:
         return jsonify({
             'success': False,
-            'error': 'You have reached your plan limit. Upgrade to sync more items.',
+            'error': 'Marketplace syncing is not available on your plan. Upgrade to sync with eBay.',
             'upgrade_required': True
         }), 403
 
+    # Check how many items they're trying to sync vs their plan limit
+    current_item_count = Item.query.filter_by(user_id=current_user.id).count()
+
+    # Free plan should only sync up to their max_items limit
+    if plan_limits.max_items is not None:
+        if current_item_count >= plan_limits.max_items:
+            return jsonify({
+                'success': False,
+                'error': f'You have reached your plan limit ({plan_limits.max_items} items). Upgrade to sync more items.',
+                'upgrade_required': True,
+                'current_count': current_item_count,
+                'max_allowed': plan_limits.max_items
+            }), 403
+
     try:
         # Get all items with eBay listing IDs
-        items_to_sync = Item.query.filter(
+        items_query = Item.query.filter(
             Item.user_id == current_user.id,
             or_(
                 Item.ebay_listing_id.isnot(None),
                 Item.ebay_sku.isnot(None)
             )
-        ).all()
+        )
+
+        # Limit sync to plan limits
+        if plan_limits.max_items is not None:
+            # Only sync up to the plan limit
+            items_to_sync = items_query.limit(plan_limits.max_items).all()
+        else:
+            items_to_sync = items_query.all()
 
         if not items_to_sync:
             return jsonify({
