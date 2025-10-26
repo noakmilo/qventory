@@ -386,59 +386,64 @@
                             <div class="association-controls">
                                 {% if not item.is_associated %}
                                 <!-- Associate with Inventory -->
-                                <div class="mb-2">
-                                    <label class="form-label small mb-1">Associate with Inventory Item:</label>
-                                    <div class="input-group input-group-sm">
+                                <div style="margin-bottom:12px">
+                                    <label style="color:var(--text);font-weight:600;font-size:13px;display:block;margin-bottom:6px">Associate with Inventory Item:</label>
+                                    <div style="display:flex;gap:8px">
                                         <input
                                             type="text"
                                             class="form-control inventory-autocomplete"
                                             placeholder="Type to search items..."
                                             data-receipt-item-id="{{ item.id }}"
+                                            style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:14px"
                                         >
                                         <button
-                                            class="btn btn-outline-primary associate-inventory-btn"
+                                            class="btn btn--primary associate-inventory-btn"
                                             type="button"
                                             data-receipt-item-id="{{ item.id }}"
                                             disabled
+                                            style="padding:8px 16px;font-size:14px"
                                         >
-                                            Link
+                                            <i class="fas fa-link"></i> Link
                                         </button>
                                     </div>
-                                    <div class="form-check form-check-sm mt-1">
+                                    <div style="margin-top:8px;display:flex;align-items:center;gap:8px">
                                         <input
-                                            class="form-check-input update-cost-checkbox"
+                                            class="update-cost-checkbox"
                                             type="checkbox"
                                             id="update-cost-{{ item.id }}"
                                             checked
+                                            style="width:16px;height:16px;cursor:pointer"
                                         >
-                                        <label class="form-check-label small" for="update-cost-{{ item.id }}">
+                                        <label for="update-cost-{{ item.id }}" style="color:var(--sub);font-size:13px;cursor:pointer;margin:0">
                                             Update item cost to ${{ "%.2f"|format(item.final_unit_price or 0) }}
                                         </label>
                                     </div>
                                 </div>
 
                                 <!-- OR -->
-                                <div class="text-center text-muted small my-2">— OR —</div>
+                                <div style="text-align:center;color:var(--sub);font-size:13px;margin:12px 0">— OR —</div>
 
                                 <!-- Record as Expense -->
                                 <button
-                                    class="btn btn-sm btn-outline-info w-100 record-expense-btn"
+                                    class="btn btn--info record-expense-btn"
                                     type="button"
                                     data-receipt-item-id="{{ item.id }}"
                                     data-description="{{ item.final_description }}"
                                     data-amount="{{ item.final_total_price or 0 }}"
+                                    style="width:100%;padding:8px;font-size:14px"
                                 >
-                                    Record as Expense
+                                    <i class="fas fa-dollar-sign"></i> Record as Expense
                                 </button>
                                 {% else %}
                                 <!-- Remove Association -->
                                 <button
-                                    class="btn btn-sm btn-outline-danger w-100 remove-association-btn"
+                                    class="btn btn--danger remove-association-btn"
                                     type="button"
                                     data-receipt-item-id="{{ item.id }}"
                                     data-has-expense="{{ 'true' if item.expense_id else 'false' }}"
+                                    style="width:100%;padding:8px;font-size:14px"
                                 >
-                                    Remove Association
+                                    <i class="fas fa-unlink"></i> Remove Association
                                 </button>
                                 {% endif %}
                             </div>
