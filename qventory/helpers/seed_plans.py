@@ -120,26 +120,8 @@ def seed_plan_limits():
             ).fetchone()
 
             if result:
-                # Plan exists - update using raw SQL to avoid column issues
-                plan_id = result[0]
-
-                # Build UPDATE statement dynamically based on available columns
-                update_parts = []
-                update_values = {"plan_id": plan_id}
-
-                for key, value in plan_data.items():
-                    if key == 'plan':
-                        continue
-                    if key in columns:  # Only update if column exists
-                        update_parts.append(f"{key} = :{key}")
-                        update_values[key] = value
-
-                if update_parts:
-                    update_sql = f"UPDATE plan_limits SET {', '.join(update_parts)} WHERE id = :plan_id"
-                    db.session.execute(text(update_sql), update_values)
-                    print(f"Updated plan limits for: {plan_name}")
-                else:
-                    print(f"Preserved custom plan limits for: {plan_name}")
+                # Plan exists - PRESERVE custom values, do not overwrite
+                print(f"Plan '{plan_name}' already exists - preserving custom configuration")
             else:
                 # Create new plan - only include columns that exist
                 insert_cols = []
