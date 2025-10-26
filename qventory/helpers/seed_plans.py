@@ -11,6 +11,14 @@ def seed_plan_limits():
     Create or update plan limits with default values
     Called automatically on app startup
     """
+    # Check if the table has the new columns (migration might not have run yet)
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    columns = [col['name'] for col in inspector.get_columns('plan_limits')]
+
+    # Skip receipt OCR fields if they don't exist yet (pre-migration)
+    has_receipt_limits = 'max_receipt_ocr_per_month' in columns
+
     plans_config = [
         {
             'plan': 'free',
@@ -23,8 +31,6 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': False,
             'can_create_listings': False,
-            'max_receipt_ocr_per_month': None,
-            'max_receipt_ocr_per_day': 1,  # 1 receipt with AI OCR per day
             'support_level': 'community'
         },
         {
@@ -38,8 +44,6 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
-            'max_receipt_ocr_per_month': 10,  # 10 receipts with AI OCR per month
-            'max_receipt_ocr_per_day': None,
             'support_level': 'email'
         },
         {
@@ -53,8 +57,6 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
-            'max_receipt_ocr_per_month': 50,  # 50 receipts with AI OCR per month
-            'max_receipt_ocr_per_day': None,
             'support_level': 'email'
         },
         {
@@ -68,8 +70,6 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
-            'max_receipt_ocr_per_month': 200,  # 200 receipts with AI OCR per month
-            'max_receipt_ocr_per_day': None,
             'support_level': 'priority'
         },
         {
@@ -83,10 +83,26 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
-            'max_receipt_ocr_per_month': None,  # Unlimited
-            'max_receipt_ocr_per_day': None,  # Unlimited
             'support_level': 'priority'
         }
+    ]
+
+    # Add receipt OCR limits if the columns exist
+    if has_receipt_limits:
+        plans_config[0]['max_receipt_ocr_per_month'] = None
+        plans_config[0]['max_receipt_ocr_per_day'] = 1  # free: 1/day
+
+        plans_config[1]['max_receipt_ocr_per_month'] = 10  # early_adopter: 10/month
+        plans_config[1]['max_receipt_ocr_per_day'] = None
+
+        plans_config[2]['max_receipt_ocr_per_month'] = 50  # premium: 50/month
+        plans_config[2]['max_receipt_ocr_per_day'] = None
+
+        plans_config[3]['max_receipt_ocr_per_month'] = 200  # pro: 200/month
+        plans_config[3]['max_receipt_ocr_per_day'] = None
+
+        plans_config[4]['max_receipt_ocr_per_month'] = None  # god: unlimited
+        plans_config[4]['max_receipt_ocr_per_day'] = None
     ]
 
     for plan_data in plans_config:
