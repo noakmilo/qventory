@@ -1,7 +1,7 @@
 """Add receipt OCR limits and usage tracking
 
-Revision ID: 021
-Revises: 020
+Revision ID: 021_add_receipt_ocr_limits
+Revises: 020_add_receipts
 Create Date: 2025-10-25
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '021'
-down_revision = '020'
+revision = '021_add_receipt_ocr_limits'
+down_revision = '020_add_receipts'
 branch_labels = None
 depends_on = None
 
