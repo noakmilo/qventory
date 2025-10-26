@@ -112,6 +112,7 @@ def upload():
 
             # Process OCR
             ocr_service = get_ocr_service()
+            logger.info(f"Starting OCR processing for receipt {receipt.id} with provider: {ocr_service.provider}")
             ocr_result = ocr_service.extract_receipt_data(receipt.image_url)
 
             # Update receipt with OCR results
@@ -123,6 +124,7 @@ def upload():
             if ocr_result.error:
                 receipt.status = 'failed'
                 receipt.ocr_error_message = ocr_result.error
+                logger.error(f"OCR failed for receipt {receipt.id}: {ocr_result.error}")
                 flash(f'OCR processing failed: {ocr_result.error}', 'warning')
             else:
                 receipt.status = 'extracted'
@@ -132,6 +134,8 @@ def upload():
                 receipt.subtotal = ocr_result.subtotal
                 receipt.tax_amount = ocr_result.tax_amount
                 receipt.total_amount = ocr_result.total_amount
+
+                logger.info(f"OCR extracted {len(ocr_result.line_items)} items from receipt {receipt.id}")
 
                 # Create receipt items
                 for item_data in ocr_result.line_items:
@@ -145,8 +149,10 @@ def upload():
                         ocr_confidence=item_data.get('confidence')
                     )
                     db.session.add(receipt_item)
+                    logger.debug(f"Added receipt item: {receipt_item.description}")
 
                 flash(f'Receipt uploaded successfully! Extracted {len(ocr_result.line_items)} items.', 'success')
+                logger.info(f"Receipt {receipt.id} processing completed successfully")
 
             db.session.commit()
 
@@ -502,3 +508,43 @@ def get_receipt_items_json(receipt_id):
         'items': [item.to_dict() for item in items],
         'receipt': receipt.to_dict()
     })
+
+
+@receipts_bp.route('/api/<int:receipt_id>/debug')
+@login_required
+def debug_receipt(receipt_id):
+    """Debug endpoint to check receipt processing status."""
+    receipt = Receipt.query.filter_by(id=receipt_id, user_id=current_user.id).first_or_404()
+
+    items = receipt.items.order_by(ReceiptItem.line_number).all()
+
+    debug_info = {
+        'receipt_id': receipt.id,
+        'status': receipt.status,
+        'uploaded_at': receipt.uploaded_at.isoformat() if receipt.uploaded_at else None,
+        'ocr_provider': receipt.ocr_provider,
+        'ocr_processed_at': receipt.ocr_processed_at.isoformat() if receipt.ocr_processed_at else None,
+        'ocr_confidence': receipt.ocr_confidence,
+        'ocr_error_message': receipt.ocr_error_message,
+        'merchant_name': receipt.merchant_name,
+        'total_amount': float(receipt.total_amount) if receipt.total_amount else None,
+        'items_count': len(items),
+        'items': [
+            {
+                'id': item.id,
+                'line_number': item.line_number,
+                'description': item.description,
+                'user_description': item.user_description,
+                'final_description': item.final_description,
+                'quantity': float(item.quantity) if item.quantity else None,
+                'unit_price': float(item.unit_price) if item.unit_price else None,
+                'total_price': float(item.total_price) if item.total_price else None,
+                'inventory_item_id': item.inventory_item_id,
+                'expense_id': item.expense_id
+            }
+            for item in items
+        ],
+        'raw_text_preview': receipt.ocr_raw_text[:500] if receipt.ocr_raw_text else None
+    }
+
+    return jsonify(debug_info)
