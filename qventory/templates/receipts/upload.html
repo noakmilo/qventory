@@ -2,197 +2,207 @@
 
 {% block title %}Upload Receipt - Qventory{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('receipts.list_receipts') }}">Receipts</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Upload</span>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
-    <div class="row">
-        <div class="col-lg-8 offset-lg-2">
-            <!-- AI OCR Usage Stats -->
-            {% if usage_stats %}
-            <div class="alert {% if usage_stats.can_process %}alert-info{% else %}alert-warning{% endif %} mb-4">
-                <div class="d-flex align-items-center justify-content-between">
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1">
-                            <svg width="16" height="16" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                <path d="M11 5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm.256 7a4.474 4.474 0 0 1-.229-1.004H3c.001-.246.154-.986.832-1.664C4.484 10.68 5.711 10 8 10c.26 0 .507.009.74.025.226-.341.496-.65.804-.918C9.077 9.038 8.564 9 8 9c-5 0-6 3-6 4s1 1 1 1h5.256Z"/>
-                                <path d="M16 12.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm-1.993-1.679a.5.5 0 0 0-.686.172l-1.17 1.95-.547-.547a.5.5 0 0 0-.708.708l.774.773a.75.75 0 0 0 1.174-.144l1.335-2.226a.5.5 0 0 0-.172-.686Z"/>
-                            </svg>
-                            AI OCR Usage - {{ usage_stats.plan_display }} Plan
-                        </h6>
-                        {% if usage_stats.limit %}
-                            <div class="progress" style="height: 8px;">
-                                <div class="progress-bar {% if usage_stats.can_process %}bg-info{% else %}bg-warning{% endif %}"
-                                     role="progressbar"
-                                     style="width: {{ (usage_stats.used / usage_stats.limit * 100) }}%">
-                                </div>
-                            </div>
-                            <small class="text-muted">
-                                {{ usage_stats.used }} / {{ usage_stats.limit }} AI receipts used this {{ usage_stats.period }}
-                                {% if not usage_stats.can_process %}
-                                - <strong>Limit reached!</strong>
-                                {% endif %}
-                            </small>
-                        {% else %}
-                            <small class="text-success">
-                                <svg width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                                    <path d="M10.97 4.97a.235.235 0 0 0-.02.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-1.071-1.05z"/>
-                                </svg>
-                                Unlimited AI OCR processing
-                            </small>
-                        {% endif %}
+<div class="container page-shell page-shell--medium">
+
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;flex-wrap:wrap;gap:16px">
+        <div>
+            <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+                <i class="fas fa-receipt"></i> Upload Receipt
+            </h1>
+            <p style="color:var(--sub);font-size:14px">
+                Upload a photo or scan of your receipt to automatically extract items and prices with AI
+            </p>
+        </div>
+        <a href="{{ url_for('receipts.list_receipts') }}" class="btn btn--secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <!-- AI OCR Usage Stats -->
+    {% if usage_stats %}
+    <div style="background:{% if usage_stats.can_process %}rgba(59,130,246,0.05){% else %}rgba(245,158,11,0.05){% endif %};border:1px solid {% if usage_stats.can_process %}rgba(59,130,246,0.2){% else %}rgba(245,158,11,0.2){% endif %};border-radius:8px;padding:16px;margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:250px">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                    <i class="fas fa-robot" style="color:{% if usage_stats.can_process %}#3b82f6{% else %}#f59e0b{% endif %}"></i>
+                    <strong style="color:var(--text);font-size:14px">AI OCR Usage - {{ usage_stats.plan_display }} Plan</strong>
+                </div>
+                {% if usage_stats.limit %}
+                <div style="background:rgba(0,0,0,0.05);height:8px;border-radius:4px;overflow:hidden;margin-bottom:6px">
+                    <div style="background:{% if usage_stats.can_process %}#3b82f6{% else %}#f59e0b{% endif %};height:100%;width:{{ (usage_stats.used / usage_stats.limit * 100)|round }}%;transition:width 0.3s"></div>
+                </div>
+                <small style="color:var(--sub);font-size:13px">
+                    {{ usage_stats.used }} / {{ usage_stats.limit }} AI receipts used this {{ usage_stats.period }}
+                    {% if not usage_stats.can_process %}<strong style="color:#f59e0b">- Limit reached!</strong>{% endif %}
+                </small>
+                {% else %}
+                <small style="color:#10b981;font-size:13px">
+                    <i class="fas fa-infinity"></i> Unlimited AI OCR processing
+                </small>
+                {% endif %}
+            </div>
+            {% if not usage_stats.can_process %}
+            <a href="{{ url_for('main.upgrade') }}" class="btn btn--warning" style="white-space:nowrap">
+                <i class="fas fa-arrow-up"></i> Upgrade Plan
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Upload Card -->
+    <div class="card">
+        <div class="card-body" style="padding:32px">
+
+            <!-- Upload Form -->
+            <form method="POST" enctype="multipart/form-data" id="upload-form">
+                <!-- Hidden file input -->
+                <input
+                    type="file"
+                    id="file-input"
+                    name="receipt_image"
+                    accept="image/*,.heic,.heif"
+                    capture="environment"
+                    style="display:none"
+                >
+
+                <!-- Single Upload Button -->
+                <div style="margin-bottom:24px">
+                    <button
+                        type="button"
+                        class="btn btn--primary btn--xl"
+                        id="upload-btn-trigger"
+                        style="width:100%;padding:24px;font-size:16px"
+                        {% if usage_stats and not usage_stats.can_process %}disabled{% endif %}
+                    >
+                        <i class="fas fa-camera" style="font-size:20px;margin-right:12px"></i>
+                        Upload or Take a Photo
+                    </button>
+                    <div style="text-align:center;margin-top:12px">
+                        <small style="color:var(--sub);font-size:13px">
+                            Supports JPG, PNG, GIF, HEIC • Auto-compressed to ~400KB
+                        </small>
                     </div>
-                    {% if not usage_stats.can_process %}
-                    <div class="ms-3">
-                        <a href="{{ url_for('main.upgrade') }}" class="btn btn-sm btn-warning">
-                            Upgrade Plan
-                        </a>
+                    {% if usage_stats and not usage_stats.can_process %}
+                    <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:12px;margin-top:16px;text-align:center">
+                        <strong style="color:#f59e0b">Limit Reached:</strong>
+                        <span style="color:var(--sub)">{{ usage_stats.message }}</span>
+                        <a href="{{ url_for('main.upgrade') }}" style="color:#f59e0b;margin-left:8px">Upgrade your plan</a>
                     </div>
                     {% endif %}
                 </div>
-            </div>
-            {% endif %}
 
-            <div class="card shadow-sm">
-                <div class="card-header bg-white border-bottom">
-                    <h2 class="mb-1">
-                        <svg width="24" height="24" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                            <path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 1-1 0v-3A1.5 1.5 0 0 1 1.5 0h3a.5.5 0 0 1 0 1h-3zM11 .5a.5.5 0 0 1 .5-.5h3A1.5 1.5 0 0 1 16 1.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5zM.5 11a.5.5 0 0 1 .5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 1 0 1h-3A1.5 1.5 0 0 1 0 14.5v-3a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 1 .5-.5z"/>
-                            <path d="M3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zM3 6a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 6zm0 2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/>
-                        </svg>
-                        Upload Receipt
-                    </h2>
-                    <p class="text-muted mb-0">
-                        Upload a photo or scan of your receipt to automatically extract items and prices with AI.
-                    </p>
+                <!-- Image Preview -->
+                <div id="image-preview" style="display:none;margin-bottom:24px">
+                    <label style="color:var(--text);font-weight:600;font-size:14px;display:block;margin-bottom:8px">Preview</label>
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:16px;text-align:center;background:rgba(0,0,0,0.02)">
+                        <img id="preview-img" src="" alt="Receipt preview" style="max-width:100%;max-height:400px;border-radius:4px">
+                    </div>
                 </div>
-                <div class="card-body p-4">
-                    <!-- Upload Form -->
-                    <form method="POST" enctype="multipart/form-data" id="upload-form">
-                        <!-- Hidden file inputs -->
-                        <input
-                            type="file"
-                            id="camera-input"
-                            name="receipt_image"
-                            accept="image/*"
-                            capture="environment"
-                            style="display: none;"
-                        >
-                        <input
-                            type="file"
-                            id="file-input"
-                            name="receipt_image"
-                            accept="image/*"
-                            style="display: none;"
-                        >
 
-                        <!-- Action Buttons -->
-                        <div class="mb-4">
-                            <label class="form-label">Choose Upload Method</label>
-                            <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-lg btn-primary" id="camera-btn" {% if usage_stats and not usage_stats.can_process %}disabled{% endif %}>
-                                    <svg width="20" height="20" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                        <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.827 3h2.344a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1v6zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2z"/>
-                                        <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5zm0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
-                                    </svg>
-                                    Take Photo with Camera
-                                </button>
-                                <button type="button" class="btn btn-lg btn-outline-primary" id="file-btn" {% if usage_stats and not usage_stats.can_process %}disabled{% endif %}>
-                                    <svg width="20" height="20" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                                        <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
-                                    </svg>
-                                    Choose from Files
-                                </button>
-                            </div>
-                            {% if usage_stats and not usage_stats.can_process %}
-                            <div class="alert alert-warning mt-3 mb-0">
-                                <strong>Limit Reached:</strong> {{ usage_stats.message }}
-                                <a href="{{ url_for('main.upgrade') }}" class="alert-link">Upgrade your plan</a> for more AI OCR processing.
-                            </div>
-                            {% endif %}
-                            <div class="form-text mt-2">
-                                Supported formats: JPG, PNG, GIF, HEIC. Images are automatically compressed to ~400KB.
-                                <br>
-                                <strong>Tip:</strong> For best results, ensure the receipt is well-lit and all text is legible.
-                            </div>
-                        </div>
+                <!-- Upload Actions -->
+                <div id="upload-actions" style="display:none;gap:12px">
+                    <button type="submit" class="btn btn--success" style="flex:1" id="submit-btn">
+                        <i class="fas fa-check"></i> Upload & Process
+                    </button>
+                    <button type="button" class="btn btn--secondary" id="cancel-btn">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
 
-                        <!-- Image Preview -->
-                        <div id="image-preview" class="mb-4" style="display: none;">
-                            <label class="form-label">Preview</label>
-                            <div class="border rounded p-2 text-center">
-                                <img id="preview-img" src="" alt="Receipt preview" style="max-width: 100%; max-height: 400px;">
+                <!-- Loading State -->
+                <div id="upload-progress" style="display:none;margin-top:24px">
+                    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:16px">
+                        <div style="display:flex;align-items:center;gap:16px">
+                            <div class="spinner-border" style="width:24px;height:24px;border-width:3px;color:#3b82f6" role="status">
+                                <span class="visually-hidden">Loading...</span>
                             </div>
-                        </div>
-
-                        <!-- Upload Button (shown after selecting image) -->
-                        <div id="upload-actions" class="d-flex gap-2" style="display: none;">
-                            <button type="submit" class="btn btn-success btn-lg flex-fill" id="upload-btn">
-                                <svg width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                    <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
-                                </svg>
-                                Upload & Process
-                            </button>
-                            <button type="button" class="btn btn-outline-secondary" id="cancel-btn">Change Image</button>
-                        </div>
-
-                        <!-- Loading State -->
-                        <div id="upload-progress" class="mt-4" style="display: none;">
-                            <div class="alert alert-info">
-                                <div class="d-flex align-items-center">
-                                    <div class="spinner-border spinner-border-sm me-3" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                    <div>
-                                        <strong>Processing receipt...</strong>
-                                        <br>
-                                        <small>Uploading image and extracting text. This may take a few seconds.</small>
-                                    </div>
-                                </div>
+                            <div style="flex:1">
+                                <strong style="color:var(--text);display:block;margin-bottom:4px">Processing receipt...</strong>
+                                <small id="progress-text" style="color:var(--sub);font-size:13px">Uploading image and extracting text...</small>
                             </div>
-                        </div>
-                    </form>
-
-                    <!-- Info Section -->
-                    <div class="mt-5 p-4 bg-light rounded border">
-                        <h5 class="mb-3">
-                            <svg width="20" height="20" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
-                            </svg>
-                            How AI Receipt Processing Works
-                        </h5>
-                        <ol class="mb-0 ps-3">
-                            <li class="mb-2">
-                                <strong>📸 Upload:</strong> Take a photo or upload an existing image of your receipt
-                            </li>
-                            <li class="mb-2">
-                                <strong>🤖 AI Extract:</strong> GPT-4 Vision AI automatically reads items, quantities, prices, and totals with high accuracy
-                            </li>
-                            <li class="mb-2">
-                                <strong>✏️ Review:</strong> Check the extracted data and make corrections if needed
-                            </li>
-                            <li class="mb-0">
-                                <strong>🔗 Associate:</strong> Link items to your inventory or record as expenses for tracking
-                            </li>
-                        </ol>
-                        <div class="mt-3 pt-3 border-top">
-                            <small class="text-muted">
-                                <svg width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                                    <path d="M8.864.046C7.908-.193 7.02.53 6.956 1.466c-.072 1.051-.23 2.016-.428 2.59-.125.36-.479 1.013-1.04 1.639-.557.623-1.282 1.178-2.131 1.41C2.685 7.288 2 7.87 2 8.72v4.001c0 .845.682 1.464 1.448 1.545 1.07.114 1.564.415 2.068.723l.048.03c.272.165.578.348.97.484.397.136.861.217 1.466.217h3.5c.937 0 1.599-.477 1.934-1.064a1.86 1.86 0 0 0 .254-.912c0-.152-.023-.312-.077-.464.201-.263.38-.578.488-.901.11-.33.172-.762.004-1.149.069-.13.12-.269.159-.403.077-.27.113-.568.113-.857 0-.288-.036-.585-.113-.856a2.144 2.144 0 0 0-.138-.362 1.9 1.9 0 0 0 .234-1.734c-.206-.592-.682-1.1-1.2-1.272-.847-.282-1.803-.276-2.516-.211a9.84 9.84 0 0 0-.443.05 9.365 9.365 0 0 0-.062-4.509A1.38 1.38 0 0 0 9.125.111L8.864.046zM11.5 14.721H8c-.51 0-.863-.069-1.14-.164-.281-.097-.506-.228-.776-.393l-.04-.024c-.555-.339-1.198-.731-2.49-.868-.333-.036-.554-.29-.554-.55V8.72c0-.254.226-.543.62-.65 1.095-.3 1.977-.996 2.614-1.708.635-.71 1.064-1.475 1.238-1.978.243-.7.407-1.768.482-2.85.025-.362.36-.594.667-.518l.262.066c.16.04.258.143.288.255a8.34 8.34 0 0 1-.145 4.725.5.5 0 0 0 .595.644l.003-.001.014-.003.058-.014a8.908 8.908 0 0 1 1.036-.157c.663-.06 1.457-.054 2.11.164.175.058.45.3.57.65.107.308.087.67-.266 1.022l-.353.353.353.354c.043.043.105.141.154.315.048.167.075.37.075.581 0 .212-.027.414-.075.582-.05.174-.111.272-.154.315l-.353.353.353.354c.047.047.109.177.005.488a2.224 2.224 0 0 1-.505.805l-.353.353.353.354c.006.005.041.05.041.17a.866.866 0 0 1-.121.416c-.165.288-.503.56-1.066.56z"/>
-                                </svg>
-                                Powered by OpenAI GPT-4 Vision for best-in-class accuracy
-                            </small>
                         </div>
                     </div>
+                </div>
+            </form>
+
+            <!-- Info Section -->
+            <div style="margin-top:40px;padding:24px;background:rgba(59,130,246,0.03);border:1px solid rgba(59,130,246,0.1);border-radius:8px">
+                <h5 style="color:var(--text);font-size:16px;margin-bottom:16px;font-weight:600">
+                    <i class="fas fa-info-circle" style="color:#3b82f6;margin-right:8px"></i>
+                    How AI Receipt Processing Works
+                </h5>
+                <ol style="margin:0;padding-left:20px;color:var(--sub);line-height:1.8">
+                    <li style="margin-bottom:8px">
+                        <strong style="color:var(--text)">Upload:</strong> Take a photo or upload an existing image of your receipt
+                    </li>
+                    <li style="margin-bottom:8px">
+                        <strong style="color:var(--text)">AI Extract:</strong> GPT-4 Vision AI automatically reads items, quantities, prices, and totals with high accuracy
+                    </li>
+                    <li style="margin-bottom:8px">
+                        <strong style="color:var(--text)">Review:</strong> Check the extracted data and make corrections if needed
+                    </li>
+                    <li style="margin-bottom:0">
+                        <strong style="color:var(--text)">Associate:</strong> Link items to your inventory or record as expenses for tracking
+                    </li>
+                </ol>
+                <div style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(59,130,246,0.1)">
+                    <small style="color:var(--sub);font-size:12px">
+                        <i class="fas fa-bolt" style="color:#3b82f6;margin-right:4px"></i>
+                        Powered by OpenAI GPT-4 Vision for best-in-class accuracy
+                    </small>
                 </div>
             </div>
         </div>
     </div>
+
 </div>
+
+<!-- Include heic2any library for HEIC conversion -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
 
 <script>
 /**
- * Compress image to target size (~400KB) before upload
+ * Convert HEIC/HEIF to JPEG using heic2any
+ */
+async function convertHEICtoJPEG(file) {
+    try {
+        console.log('Converting HEIC to JPEG...');
+        const convertedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.9
+        });
+
+        // Convert blob to File
+        const convertedFile = new File(
+            [convertedBlob],
+            file.name.replace(/\.(heic|heif)$/i, '.jpg'),
+            { type: 'image/jpeg' }
+        );
+
+        console.log('HEIC converted to JPEG successfully');
+        return convertedFile;
+    } catch (error) {
+        console.error('HEIC conversion error:', error);
+        throw new Error('Failed to convert HEIC image. Please try a different format.');
+    }
+}
+
+/**
+ * Compress image to target size (~400KB)
  */
 function compressImage(file, maxSizeKB = 400) {
     return new Promise((resolve, reject) => {
@@ -207,7 +217,6 @@ function compressImage(file, maxSizeKB = 400) {
                 let height = img.height;
 
                 // Calculate scaling to reduce file size
-                // iPhone photos are typically 3000x4000px, we'll resize to max 1600px
                 const MAX_DIMENSION = 1600;
 
                 if (width > height && width > MAX_DIMENSION) {
@@ -265,18 +274,14 @@ function compressImage(file, maxSizeKB = 400) {
     });
 }
 
-// Button handlers
-document.getElementById('camera-btn').addEventListener('click', function() {
-    document.getElementById('camera-input').click();
-});
-
-document.getElementById('file-btn').addEventListener('click', function() {
+// Single button handler
+document.getElementById('upload-btn-trigger').addEventListener('click', function() {
     document.getElementById('file-input').click();
 });
 
-// Handle file selection from both inputs
-function handleFileSelect(e) {
-    const file = e.target.files[0];
+// Handle file selection
+async function handleFileSelect(e) {
+    let file = e.target.files[0];
     if (!file) {
         document.getElementById('image-preview').style.display = 'none';
         document.getElementById('upload-actions').style.display = 'none';
@@ -285,19 +290,29 @@ function handleFileSelect(e) {
 
     // Show original file info
     const fileSizeKB = Math.round(file.size / 1024);
-    console.log(`Original file: ${file.name} - ${fileSizeKB}KB`);
+    console.log(`Selected file: ${file.name} - ${fileSizeKB}KB`);
 
-    // Check if it's HEIC (browsers can't display HEIC natively)
+    // Check if it's HEIC and convert to JPEG immediately
     const isHEIC = file.name.toLowerCase().match(/\.(heic|heif)$/);
 
-    if (isHEIC) {
-        // Show placeholder for HEIC files
-        const previewImg = document.getElementById('preview-img');
-        previewImg.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2Y4ZjlmYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNDUlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM2Yzc1N2QiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkhFSUMgSW1hZ2UgU2VsZWN0ZWQ8L3RleHQ+PHRleHQgeD0iNTAlIiB5PSI1NSUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzZjNzU3ZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+JyArIGZpbGUubmFtZSArICcgKCcgKyBmaWxlU2l6ZUtCICsgJ0tCKTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjY1JSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjNmM3NTdkIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DbGljayBVcGxvYWQgdG8gY29udmVydCB0byBKUEVHPC90ZXh0Pjwvc3ZnPg==';
-        document.getElementById('image-preview').style.display = 'block';
-        document.getElementById('upload-actions').style.display = 'flex';
-    } else {
-        // Show preview for regular images
+    try {
+        if (isHEIC) {
+            // Show conversion progress
+            const progressDiv = document.getElementById('upload-progress');
+            const progressText = document.getElementById('progress-text');
+            progressDiv.style.display = 'block';
+            progressText.textContent = 'Converting HEIC to JPEG...';
+
+            // Convert HEIC to JPEG
+            file = await convertHEICtoJPEG(file);
+
+            // Hide progress
+            progressDiv.style.display = 'none';
+
+            console.log(`Converted to: ${file.name} - ${Math.round(file.size / 1024)}KB`);
+        }
+
+        // Show preview
         const reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('preview-img').src = e.target.result;
@@ -305,25 +320,25 @@ function handleFileSelect(e) {
             document.getElementById('upload-actions').style.display = 'flex';
         };
         reader.readAsDataURL(file);
+
+        // Store the converted file for upload
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        document.getElementById('file-input').files = dataTransfer.files;
+
+    } catch (error) {
+        alert(error.message);
+        document.getElementById('file-input').value = '';
+        document.getElementById('image-preview').style.display = 'none';
+        document.getElementById('upload-actions').style.display = 'none';
+        document.getElementById('upload-progress').style.display = 'none';
     }
-
-    // Copy file to the other input to ensure form submission works
-    const otherInput = e.target.id === 'camera-input' ?
-        document.getElementById('file-input') :
-        document.getElementById('camera-input');
-
-    // Create a new FileList with the selected file
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
-    otherInput.files = dataTransfer.files;
 }
 
-document.getElementById('camera-input').addEventListener('change', handleFileSelect);
 document.getElementById('file-input').addEventListener('change', handleFileSelect);
 
 // Cancel button - reset everything
 document.getElementById('cancel-btn').addEventListener('click', function() {
-    document.getElementById('camera-input').value = '';
     document.getElementById('file-input').value = '';
     document.getElementById('image-preview').style.display = 'none';
     document.getElementById('upload-actions').style.display = 'none';
@@ -331,12 +346,10 @@ document.getElementById('cancel-btn').addEventListener('click', function() {
 
 // Form submission with compression
 document.getElementById('upload-form').addEventListener('submit', async function(e) {
-    e.preventDefault(); // Prevent default submission
+    e.preventDefault();
 
-    // Get file from whichever input has it
-    const cameraInput = document.getElementById('camera-input');
     const fileInput = document.getElementById('file-input');
-    const originalFile = cameraInput.files[0] || fileInput.files[0];
+    const originalFile = fileInput.files[0];
 
     if (!originalFile) {
         alert('Please select a file to upload.');
@@ -344,9 +357,13 @@ document.getElementById('upload-form').addEventListener('submit', async function
     }
 
     // Show loading state
-    const uploadBtn = document.getElementById('upload-btn');
+    const submitBtn = document.getElementById('submit-btn');
     const progressDiv = document.getElementById('upload-progress');
-    uploadBtn.disabled = true;
+    const progressText = document.getElementById('progress-text');
+    const uploadActions = document.getElementById('upload-actions');
+
+    submitBtn.disabled = true;
+    uploadActions.style.display = 'none';
     progressDiv.style.display = 'block';
 
     try {
@@ -355,19 +372,16 @@ document.getElementById('upload-form').addEventListener('submit', async function
         let fileToUpload = originalFile;
 
         if (fileSizeKB > 500) {
-            progressDiv.querySelector('small').textContent =
-                `Compressing image (${Math.round(fileSizeKB)}KB → ~400KB)...`;
+            progressText.textContent = `Compressing image (${Math.round(fileSizeKB)}KB → ~400KB)...`;
 
             fileToUpload = await compressImage(originalFile, 400);
 
             const compressedSizeKB = Math.round(fileToUpload.size / 1024);
-            console.log(`Compressed: ${fileSizeKB}KB → ${compressedSizeKB}KB`);
+            console.log(`Compressed: ${Math.round(fileSizeKB)}KB → ${compressedSizeKB}KB`);
 
-            progressDiv.querySelector('small').textContent =
-                `Uploading (${compressedSizeKB}KB) and extracting text...`;
+            progressText.textContent = `Uploading (${compressedSizeKB}KB) and processing with AI...`;
         } else {
-            progressDiv.querySelector('small').textContent =
-                'Uploading image and extracting text...';
+            progressText.textContent = 'Uploading image and processing with AI...';
         }
 
         // Create FormData with compressed image
@@ -390,7 +404,8 @@ document.getElementById('upload-form').addEventListener('submit', async function
     } catch (error) {
         console.error('Upload error:', error);
         alert(`Upload failed: ${error.message}`);
-        uploadBtn.disabled = false;
+        submitBtn.disabled = false;
+        uploadActions.style.display = 'flex';
         progressDiv.style.display = 'none';
     }
 });

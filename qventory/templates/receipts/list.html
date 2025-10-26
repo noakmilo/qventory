@@ -2,70 +2,63 @@
 
 {% block title %}Receipts - Qventory{% endblock %}
 
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Receipts</span>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid mt-4">
+<div class="container page-shell page-shell--large">
+
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>Receipts</h1>
-        <a href="{{ url_for('receipts.upload') }}" class="btn btn-primary">
-            <svg width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
-                <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-            </svg>
-            Upload Receipt
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:30px;flex-wrap:wrap;gap:16px">
+        <div>
+            <h1 style="color:var(--text);font-size:28px;margin-bottom:8px">
+                <i class="fas fa-receipt"></i> Receipts
+            </h1>
+            <p style="color:var(--sub);font-size:14px">
+                Manage your receipts and track inventory purchases with AI-powered OCR
+            </p>
+        </div>
+        <a href="{{ url_for('receipts.upload') }}" class="btn btn--primary">
+            <i class="fas fa-plus"></i> Upload Receipt
         </a>
     </div>
 
     <!-- Statistics -->
-    <div class="row mb-4">
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0">{{ stats.total_receipts }}</h3>
-                    <small class="text-muted">Total</small>
-                </div>
-            </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px">
+        <div class="metric-card">
+            <div class="metric-label">Total</div>
+            <div class="metric-value">{{ stats.total_receipts }}</div>
         </div>
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0">{{ stats.extracted }}</h3>
-                    <small class="text-muted">Extracted</small>
-                </div>
-            </div>
+        <div class="metric-card">
+            <div class="metric-label">Extracted</div>
+            <div class="metric-value" style="color:#3b82f6">{{ stats.extracted }}</div>
         </div>
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0">{{ stats.partially_associated }}</h3>
-                    <small class="text-muted">In Progress</small>
-                </div>
-            </div>
+        <div class="metric-card">
+            <div class="metric-label">In Progress</div>
+            <div class="metric-value" style="color:#f59e0b">{{ stats.partially_associated }}</div>
         </div>
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0">{{ stats.completed }}</h3>
-                    <small class="text-muted">Completed</small>
-                </div>
-            </div>
+        <div class="metric-card">
+            <div class="metric-label">Completed</div>
+            <div class="metric-value" style="color:#10b981">{{ stats.completed }}</div>
         </div>
-        <div class="col-md-2">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h3 class="mb-0">{{ stats.processing }}</h3>
-                    <small class="text-muted">Processing</small>
-                </div>
-            </div>
+        <div class="metric-card">
+            <div class="metric-label">Processing</div>
+            <div class="metric-value" style="color:#8b5cf6">{{ stats.processing }}</div>
         </div>
     </div>
 
     <!-- Filters -->
-    <div class="card mb-3">
-        <div class="card-body">
-            <form method="GET" class="row g-3">
-                <div class="col-md-4">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select" onchange="this.form.submit()">
+    <div class="card" style="margin-bottom:24px">
+        <div class="card-body" style="padding:16px">
+            <form method="GET" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px">
+                <div>
+                    <label for="status" style="color:var(--text);font-weight:600;font-size:13px;display:block;margin-bottom:6px">Status</label>
+                    <select name="status" id="status" class="form-control" onchange="this.form.submit()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)">
                         <option value="all" {% if current_status == 'all' %}selected{% endif %}>All</option>
                         <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
                         <option value="processing" {% if current_status == 'processing' %}selected{% endif %}>Processing</option>
@@ -76,9 +69,9 @@
                         <option value="discarded" {% if current_status == 'discarded' %}selected{% endif %}>Discarded</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="sort" class="form-label">Sort By</label>
-                    <select name="sort" id="sort" class="form-select" onchange="this.form.submit()">
+                <div>
+                    <label for="sort" style="color:var(--text);font-weight:600;font-size:13px;display:block;margin-bottom:6px">Sort By</label>
+                    <select name="sort" id="sort" class="form-control" onchange="this.form.submit()" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)">
                         <option value="date_desc" {% if current_sort == 'date_desc' %}selected{% endif %}>Date (Newest)</option>
                         <option value="date_asc" {% if current_sort == 'date_asc' %}selected{% endif %}>Date (Oldest)</option>
                         <option value="merchant" {% if current_sort == 'merchant' %}selected{% endif %}>Merchant</option>
@@ -91,91 +84,111 @@
 
     <!-- Receipts List -->
     {% if receipts %}
-    <div class="row">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px">
         {% for receipt in receipts %}
-        <div class="col-md-6 col-lg-4 mb-4">
-            <div class="card h-100">
-                <!-- Receipt Image -->
-                <a href="{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}">
-                    <img
-                        src="{{ receipt.thumbnail_url or receipt.image_url }}"
-                        class="card-img-top"
-                        alt="Receipt"
-                        style="height: 200px; object-fit: cover;"
-                    >
-                </a>
+        <div class="card" style="height:100%;overflow:hidden;transition:transform 0.2s,box-shadow 0.2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 16px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+            <!-- Receipt Image -->
+            <a href="{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}" style="display:block;position:relative">
+                <img
+                    src="{{ receipt.thumbnail_url or receipt.image_url }}"
+                    alt="Receipt"
+                    style="width:100%;height:200px;object-fit:cover;display:block"
+                >
+                <!-- Status Badge Overlay -->
+                <div style="position:absolute;top:12px;right:12px">
+                    {% if receipt.status == 'completed' %}
+                    <span style="background:#10b981;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-check-circle"></i> Completed
+                    </span>
+                    {% elif receipt.status == 'partially_associated' %}
+                    <span style="background:#f59e0b;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-clock"></i> In Progress
+                    </span>
+                    {% elif receipt.status == 'extracted' %}
+                    <span style="background:#3b82f6;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-eye"></i> Ready
+                    </span>
+                    {% elif receipt.status == 'processing' %}
+                    <span style="background:#8b5cf6;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-spinner fa-spin"></i> Processing
+                    </span>
+                    {% elif receipt.status == 'failed' %}
+                    <span style="background:#ef4444;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-exclamation-circle"></i> Failed
+                    </span>
+                    {% elif receipt.status == 'discarded' %}
+                    <span style="background:#6b7280;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        <i class="fas fa-trash"></i> Discarded
+                    </span>
+                    {% else %}
+                    <span style="background:#6b7280;color:white;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;box-shadow:0 2px 4px rgba(0,0,0,0.2)">
+                        {{ receipt.status }}
+                    </span>
+                    {% endif %}
+                </div>
+            </a>
 
-                <div class="card-body">
-                    <!-- Merchant Name -->
-                    <h5 class="card-title">
-                        {{ receipt.merchant_name or 'Unknown Merchant' }}
-                    </h5>
+            <div class="card-body" style="padding:16px">
+                <!-- Merchant Name -->
+                <h5 style="color:var(--text);font-size:16px;font-weight:600;margin-bottom:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                    {{ receipt.merchant_name or 'Unknown Merchant' }}
+                </h5>
 
-                    <!-- Receipt Details -->
-                    <p class="card-text small text-muted">
-                        {% if receipt.receipt_date %}
-                        <strong>Date:</strong> {{ receipt.receipt_date.strftime('%b %d, %Y') }}<br>
-                        {% endif %}
-                        {% if receipt.total_amount %}
-                        <strong>Total:</strong> ${{ "%.2f"|format(receipt.total_amount) }}<br>
-                        {% endif %}
-                        <strong>Uploaded:</strong> {{ receipt.uploaded_at|timeago }}<br>
-                        <strong>Items:</strong> {{ receipt.items_count }}
-                    </p>
-
-                    <!-- Status Badge -->
-                    <div class="mb-2">
-                        {% if receipt.status == 'completed' %}
-                        <span class="badge bg-success">Completed</span>
-                        {% elif receipt.status == 'partially_associated' %}
-                        <span class="badge bg-warning">In Progress</span>
-                        {% elif receipt.status == 'extracted' %}
-                        <span class="badge bg-info">Ready to Review</span>
-                        {% elif receipt.status == 'processing' %}
-                        <span class="badge bg-primary">Processing...</span>
-                        {% elif receipt.status == 'failed' %}
-                        <span class="badge bg-danger">Failed</span>
-                        {% elif receipt.status == 'discarded' %}
-                        <span class="badge bg-secondary">Discarded</span>
-                        {% else %}
-                        <span class="badge bg-secondary">{{ receipt.status }}</span>
-                        {% endif %}
-                    </div>
-
-                    <!-- Progress Bar -->
-                    {% if receipt.items_count > 0 %}
-                    <div class="mb-2">
-                        <small class="text-muted">
-                            {{ receipt.associated_items_count }}/{{ receipt.items_count }} items associated
-                        </small>
-                        <div class="progress" style="height: 5px;">
-                            <div
-                                class="progress-bar"
-                                role="progressbar"
-                                style="width: {{ receipt.association_progress }}%"
-                                aria-valuenow="{{ receipt.association_progress }}"
-                                aria-valuemin="0"
-                                aria-valuemax="100"
-                            ></div>
-                        </div>
+                <!-- Receipt Details -->
+                <div style="color:var(--sub);font-size:13px;margin-bottom:12px;line-height:1.6">
+                    {% if receipt.receipt_date %}
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span><i class="fas fa-calendar" style="width:14px;margin-right:6px"></i>Date:</span>
+                        <strong style="color:var(--text)">{{ receipt.receipt_date.strftime('%b %d, %Y') }}</strong>
                     </div>
                     {% endif %}
-
-                    <!-- Actions -->
-                    <div class="d-flex gap-2">
-                        <a
-                            href="{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}"
-                            class="btn btn-sm btn-primary flex-fill"
-                        >
-                            View Details
-                        </a>
-                        <button
-                            class="btn btn-sm btn-outline-danger"
-                            onclick="deleteReceipt({{ receipt.id }})"
-                        >
-                            Delete
-                        </button>
+                    {% if receipt.total_amount %}
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span><i class="fas fa-dollar-sign" style="width:14px;margin-right:6px"></i>Total:</span>
+                        <strong style="color:#10b981">${{ "%.2f"|format(receipt.total_amount) }}</strong>
                     </div>
+                    {% endif %}
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+                        <span><i class="fas fa-clock" style="width:14px;margin-right:6px"></i>Uploaded:</span>
+                        <span>{{ receipt.uploaded_at|timeago }}</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between">
+                        <span><i class="fas fa-list" style="width:14px;margin-right:6px"></i>Items:</span>
+                        <span>{{ receipt.items_count }}</span>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                {% if receipt.items_count > 0 %}
+                <div style="margin-bottom:12px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                        <small style="color:var(--sub);font-size:12px">Association Progress</small>
+                        <small style="color:var(--text);font-weight:600;font-size:12px">{{ receipt.association_progress }}%</small>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.05);height:6px;border-radius:3px;overflow:hidden">
+                        <div
+                            style="background:{% if receipt.association_progress == 100 %}#10b981{% elif receipt.association_progress > 0 %}#f59e0b{% else %}#cbd5e1{% endif %};height:100%;width:{{ receipt.association_progress }}%;transition:width 0.3s"
+                        ></div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Actions -->
+                <div style="display:flex;gap:8px">
+                    <a
+                        href="{{ url_for('receipts.view_receipt', receipt_id=receipt.id) }}"
+                        class="btn btn--primary"
+                        style="flex:1;font-size:13px;padding:8px 12px"
+                    >
+                        <i class="fas fa-eye"></i> View
+                    </a>
+                    <button
+                        class="btn btn--danger"
+                        onclick="deleteReceipt({{ receipt.id }})"
+                        style="font-size:13px;padding:8px 12px"
+                    >
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -183,15 +196,18 @@
     </div>
     {% else %}
     <!-- Empty State -->
-    <div class="text-center py-5">
-        <svg width="64" height="64" fill="currentColor" class="text-muted mb-3" viewBox="0 0 16 16">
-            <path d="M1.5 1a.5.5 0 0 0-.5.5v3a.5.5 0 0 1-1 0v-3A1.5 1.5 0 0 1 1.5 0h3a.5.5 0 0 1 0 1h-3zM11 .5a.5.5 0 0 1 .5-.5h3A1.5 1.5 0 0 1 16 1.5v3a.5.5 0 0 1-1 0v-3a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5zM.5 11a.5.5 0 0 1 .5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 1 0 1h-3A1.5 1.5 0 0 1 0 14.5v-3a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v3a1.5 1.5 0 0 1-1.5 1.5h-3a.5.5 0 0 1 0-1h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 1 .5-.5z"/>
-        </svg>
-        <h4>No receipts yet</h4>
-        <p class="text-muted">Upload your first receipt to get started</p>
-        <a href="{{ url_for('receipts.upload') }}" class="btn btn-primary">Upload Receipt</a>
+    <div class="card" style="text-align:center;padding:60px 20px">
+        <div style="color:var(--sub);margin-bottom:20px">
+            <i class="fas fa-receipt" style="font-size:64px;opacity:0.3"></i>
+        </div>
+        <h4 style="color:var(--text);font-size:20px;margin-bottom:8px">No receipts yet</h4>
+        <p style="color:var(--sub);font-size:14px;margin-bottom:24px">Upload your first receipt to get started with AI-powered processing</p>
+        <a href="{{ url_for('receipts.upload') }}" class="btn btn--primary">
+            <i class="fas fa-upload"></i> Upload Receipt
+        </a>
     </div>
     {% endif %}
+
 </div>
 
 <script>

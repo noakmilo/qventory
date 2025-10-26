@@ -130,7 +130,7 @@ function initializeAssociationButtons() {
     // Associate with inventory
     document.querySelectorAll('.associate-inventory-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
-            const receiptItemId = parseInt(this.dataset.receiptItemId);
+            const receiptItemId = this.dataset.receiptItemId;
             const inventoryItemId = selectedItems.get(receiptItemId);
 
             if (!inventoryItemId) {
@@ -151,7 +151,7 @@ function initializeAssociationButtons() {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
                     body: new URLSearchParams({
-                        receipt_item_id: receiptItemId,
+                        receipt_item_id: parseInt(receiptItemId),
                         association_type: 'inventory',
                         inventory_item_id: inventoryItemId,
                         update_cost: updateCost
@@ -177,54 +177,19 @@ function initializeAssociationButtons() {
         });
     });
 
-    // Record as expense
+    // Record as expense - open modal instead of prompts
     document.querySelectorAll('.record-expense-btn').forEach(btn => {
-        btn.addEventListener('click', async function() {
-            const receiptItemId = parseInt(this.dataset.receiptItemId);
+        btn.addEventListener('click', function() {
+            const receiptItemId = this.dataset.receiptItemId;
             const description = this.dataset.description;
             const amount = parseFloat(this.dataset.amount);
 
-            // Simple prompt for expense details (could be modal in production)
-            const expenseDescription = prompt('Expense description:', description) || description;
-            const expenseAmount = parseFloat(prompt('Expense amount:', amount.toFixed(2))) || amount;
-            const expenseCategory = prompt('Category (optional):', 'Receipt Item') || 'Receipt Item';
-
-            if (!expenseDescription || expenseAmount <= 0) {
-                return;
-            }
-
-            this.disabled = true;
-            this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Creating...';
-
-            try {
-                const response = await fetch(`/receipts/${getReceiptId()}/associate`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        receipt_item_id: receiptItemId,
-                        association_type: 'expense',
-                        expense_description: expenseDescription,
-                        expense_amount: expenseAmount,
-                        expense_category: expenseCategory
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    window.location.reload();
-                } else {
-                    alert('Expense creation failed: ' + (data.error || 'Unknown error'));
-                    this.disabled = false;
-                    this.innerHTML = 'Record as Expense';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Expense creation failed. Please try again.');
-                this.disabled = false;
-                this.innerHTML = 'Record as Expense';
+            // Open the expense modal (defined in view.html)
+            if (typeof openExpenseModal === 'function') {
+                openExpenseModal(receiptItemId, description, amount);
+            } else {
+                console.error('openExpenseModal function not found');
+                alert('Error: Expense modal not available');
             }
         });
     });

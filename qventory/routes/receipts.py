@@ -342,14 +342,33 @@ def associate_item(receipt_id):
             expense_description = request.form.get('expense_description') or receipt_item.final_description
             expense_amount = request.form.get('expense_amount', type=float) or float(receipt_item.final_total_price or 0)
             expense_category = request.form.get('expense_category', 'Receipt Item')
+            expense_date_str = request.form.get('expense_date')
+            expense_notes = request.form.get('expense_notes', '')
+
+            # Parse expense date if provided
+            if expense_date_str:
+                try:
+                    from datetime import datetime as dt
+                    expense_date = dt.strptime(expense_date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    expense_date = receipt.receipt_date or datetime.utcnow().date()
+            else:
+                expense_date = receipt.receipt_date or datetime.utcnow().date()
+
+            # Combine notes
+            notes = expense_notes if expense_notes else ''
+            if notes:
+                notes += f"\n\nFrom receipt #{receipt.id}"
+            else:
+                notes = f"From receipt #{receipt.id}"
 
             expense = Expense(
                 user_id=current_user.id,
                 description=expense_description,
                 amount=Decimal(str(expense_amount)),
                 category=expense_category,
-                date=receipt.receipt_date or datetime.utcnow().date(),
-                notes=f"From receipt #{receipt.id}"
+                date=expense_date,
+                notes=notes
             )
             db.session.add(expense)
             db.session.flush()
