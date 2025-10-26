@@ -33,7 +33,10 @@ class ReceiptUsage(db.Model):
 
     # Relationships
     user = db.relationship("User", backref="receipt_usage")
-    receipt = db.relationship("Receipt", backref="usage_record", uselist=False)
+    receipt = db.relationship(
+        "Receipt",
+        back_populates="usage_record"
+    )
 
     @staticmethod
     def get_usage_today(user_id: int) -> int:

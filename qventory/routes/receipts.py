@@ -541,10 +541,9 @@ def delete_receipt(receipt_id):
         processor = ReceiptImageProcessor(user_id=current_user.id)
         processor.delete_receipt(receipt.image_public_id)
 
-        # Manually delete receipt_usage records first to avoid FK constraint issues
-        # Use synchronize_session=False to prevent SQLAlchemy from trying to update relationships
-        from qventory.models.receipt_usage import ReceiptUsage
-        ReceiptUsage.query.filter_by(receipt_id=receipt_id).delete(synchronize_session=False)
+        # Delete usage record explicitly (relationship cascade handles delete-orphan too)
+        if receipt.usage_record:
+            db.session.delete(receipt.usage_record)
 
         # Delete receipt (cascade will delete receipt_items)
         db.session.delete(receipt)

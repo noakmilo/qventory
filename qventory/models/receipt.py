@@ -71,6 +71,13 @@ class Receipt(db.Model):
         lazy='dynamic',
         cascade='all, delete-orphan'
     )
+    usage_record = db.relationship(
+        'ReceiptUsage',
+        back_populates='receipt',
+        uselist=False,
+        cascade='all, delete-orphan',
+        single_parent=True
+    )
 
     def __repr__(self):
         return f'<Receipt {self.id} - {self.merchant_name} - {self.status}>'
