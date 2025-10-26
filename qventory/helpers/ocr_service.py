@@ -2,12 +2,14 @@
 OCR Service for extracting text and structured data from receipt images.
 
 Supports multiple providers:
-- Google Cloud Vision API (recommended, most accurate)
+- OpenAI GPT-4 Vision (recommended, most accurate for receipts)
+- Google Cloud Vision API (good for general OCR)
 - Tesseract OCR (free, local processing)
 - Mock OCR (testing/development)
 
 Configuration via environment variables:
-- OCR_PROVIDER: 'google_vision', 'tesseract', 'mock' (default: 'mock')
+- OCR_PROVIDER: 'openai_vision', 'google_vision', 'tesseract', 'mock' (default: 'openai_vision')
+- OPENAI_API_KEY: API key for OpenAI (required for openai_vision)
 - GOOGLE_VISION_API_KEY: API key for Google Vision
 """
 import os
@@ -59,10 +61,10 @@ class OCRService:
         Initialize OCR service.
 
         Args:
-            provider: 'google_vision', 'tesseract', or 'mock'.
+            provider: 'openai_vision', 'google_vision', 'tesseract', or 'mock'.
                      If None, reads from OCR_PROVIDER env var.
         """
-        self.provider = provider or os.environ.get('OCR_PROVIDER', 'mock')
+        self.provider = provider or os.environ.get('OCR_PROVIDER', 'openai_vision')
         logger.info(f"OCRService initialized with provider: {self.provider}")
 
     def extract_receipt_data(self, image_url: str) -> OCRResult:
@@ -78,7 +80,9 @@ class OCRService:
         result = OCRResult()
 
         try:
-            if self.provider == 'google_vision':
+            if self.provider == 'openai_vision':
+                result = self._extract_openai_vision(image_url)
+            elif self.provider == 'google_vision':
                 result = self._extract_google_vision(image_url)
             elif self.provider == 'tesseract':
                 result = self._extract_tesseract(image_url)
@@ -90,6 +94,158 @@ class OCRService:
 
         except Exception as e:
             logger.exception(f"OCR extraction failed: {e}")
+            result.error = str(e)
+
+        return result
+
+    def _extract_openai_vision(self, image_url: str) -> OCRResult:
+        """
+        Extract receipt data using OpenAI GPT-4 Vision API.
+
+        Requires: pip install openai
+        Environment: OPENAI_API_KEY
+        """
+        result = OCRResult()
+
+        try:
+            import openai
+            import json
+
+            # Get API key
+            api_key = os.environ.get('OPENAI_API_KEY')
+            if not api_key:
+                result.error = "OPENAI_API_KEY not set in environment variables"
+                logger.error(result.error)
+                return result
+
+            # Initialize OpenAI client
+            client = openai.OpenAI(api_key=api_key)
+
+            # Create the prompt for structured extraction
+            prompt = """You are a receipt OCR expert. Extract ALL information from this receipt image and return it in valid JSON format.
+
+IMPORTANT: Return ONLY valid JSON, no other text before or after.
+
+Extract the following fields:
+1. merchant_name: The store/merchant name
+2. receipt_date: Date in YYYY-MM-DD format
+3. receipt_number: Receipt/transaction number
+4. subtotal: Subtotal amount (number only, no $)
+5. tax_amount: Tax amount (number only, no $)
+6. total_amount: Total amount (number only, no $)
+7. line_items: Array of items purchased, each with:
+   - line_number: Sequential number starting from 1
+   - description: Item description
+   - quantity: Quantity purchased (integer)
+   - unit_price: Price per unit (number)
+   - total_price: Total for this line (number)
+
+Example JSON format:
+{
+  "merchant_name": "TARGET STORE #1234",
+  "receipt_date": "2025-10-25",
+  "receipt_number": "987654321",
+  "subtotal": 136.94,
+  "tax_amount": 12.15,
+  "total_amount": 149.09,
+  "line_items": [
+    {
+      "line_number": 1,
+      "description": "USB Flash Drive 64GB",
+      "quantity": 1,
+      "unit_price": 19.99,
+      "total_price": 19.99
+    },
+    {
+      "line_number": 2,
+      "description": "Wireless Mouse",
+      "quantity": 1,
+      "unit_price": 24.99,
+      "total_price": 24.99
+    }
+  ]
+}
+
+If you cannot extract a field with confidence, use null. Extract as much as possible."""
+
+            # Make API call
+            response = client.chat.completions.create(
+                model="gpt-4o",  # GPT-4 Turbo with vision
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": image_url,
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=2000,
+                temperature=0.1  # Low temperature for more consistent extraction
+            )
+
+            # Extract the response
+            content = response.choices[0].message.content.strip()
+
+            # Try to extract JSON from response (sometimes GPT adds markdown)
+            json_str = content
+            if "```json" in content:
+                json_str = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                json_str = content.split("```")[1].split("```")[0].strip()
+
+            # Parse JSON
+            data = json.loads(json_str)
+
+            # Populate result
+            result.merchant_name = data.get('merchant_name')
+            result.receipt_number = data.get('receipt_number')
+            result.subtotal = Decimal(str(data['subtotal'])) if data.get('subtotal') else None
+            result.tax_amount = Decimal(str(data['tax_amount'])) if data.get('tax_amount') else None
+            result.total_amount = Decimal(str(data['total_amount'])) if data.get('total_amount') else None
+
+            # Parse date
+            if data.get('receipt_date'):
+                try:
+                    result.receipt_date = datetime.strptime(data['receipt_date'], '%Y-%m-%d')
+                except ValueError:
+                    logger.warning(f"Could not parse date: {data['receipt_date']}")
+
+            # Parse line items
+            result.line_items = []
+            for item in data.get('line_items', []):
+                result.line_items.append({
+                    'line_number': item.get('line_number'),
+                    'description': item.get('description'),
+                    'quantity': item.get('quantity', 1),
+                    'unit_price': Decimal(str(item['unit_price'])) if item.get('unit_price') else None,
+                    'total_price': Decimal(str(item['total_price'])) if item.get('total_price') else None,
+                    'confidence': 0.95  # OpenAI typically has high confidence
+                })
+
+            # Store raw text for debugging
+            result.raw_text = json.dumps(data, indent=2)
+            result.confidence = 0.95  # High confidence for GPT-4 Vision
+
+            logger.info(f"OpenAI Vision OCR completed: extracted {len(result.line_items)} items")
+
+        except ImportError:
+            result.error = "openai package not installed. Run: pip install openai"
+            logger.error(result.error)
+        except json.JSONDecodeError as e:
+            result.error = f"Failed to parse JSON response from OpenAI: {str(e)}"
+            logger.error(f"{result.error}\nResponse: {content}")
+        except Exception as e:
+            logger.exception(f"OpenAI Vision OCR failed: {e}")
             result.error = str(e)
 
         return result

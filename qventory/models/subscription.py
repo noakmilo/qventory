@@ -104,6 +104,10 @@ class PlanLimit(db.Model):
     can_use_analytics = db.Column(db.Boolean, default=False)
     can_create_listings = db.Column(db.Boolean, default=False)  # Create listings via API
 
+    # Receipt OCR Limits
+    max_receipt_ocr_per_month = db.Column(db.Integer, nullable=True)  # None = unlimited, for god/pro
+    max_receipt_ocr_per_day = db.Column(db.Integer, nullable=True)  # For free plan daily limit
+
     # Support
     support_level = db.Column(db.String(50), default='community')  # community, email, priority
 

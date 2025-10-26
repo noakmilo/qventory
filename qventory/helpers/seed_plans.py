@@ -23,6 +23,8 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': False,
             'can_create_listings': False,
+            'max_receipt_ocr_per_month': None,
+            'max_receipt_ocr_per_day': 1,  # 1 receipt with AI OCR per day
             'support_level': 'community'
         },
         {
@@ -36,6 +38,8 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
+            'max_receipt_ocr_per_month': 10,  # 10 receipts with AI OCR per month
+            'max_receipt_ocr_per_day': None,
             'support_level': 'email'
         },
         {
@@ -49,6 +53,8 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
+            'max_receipt_ocr_per_month': 50,  # 50 receipts with AI OCR per month
+            'max_receipt_ocr_per_day': None,
             'support_level': 'email'
         },
         {
@@ -62,6 +68,8 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
+            'max_receipt_ocr_per_month': 200,  # 200 receipts with AI OCR per month
+            'max_receipt_ocr_per_day': None,
             'support_level': 'priority'
         },
         {
@@ -75,6 +83,8 @@ def seed_plan_limits():
             'can_import_csv': True,
             'can_use_analytics': True,
             'can_create_listings': True,
+            'max_receipt_ocr_per_month': None,  # Unlimited
+            'max_receipt_ocr_per_day': None,  # Unlimited
             'support_level': 'priority'
         }
     ]

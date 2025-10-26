@@ -23,6 +23,7 @@ from werkzeug.utils import secure_filename
 from qventory.extensions import db
 from qventory.models.receipt import Receipt
 from qventory.models.receipt_item import ReceiptItem
+from qventory.models.receipt_usage import ReceiptUsage
 from qventory.models.item import Item
 from qventory.models.expense import Expense
 from qventory.helpers.receipt_image_processor import ReceiptImageProcessor
@@ -38,7 +39,23 @@ receipts_bp = Blueprint('receipts', __name__, url_prefix='/receipts')
 def upload():
     """Upload new receipt and trigger OCR processing."""
     if request.method == 'GET':
-        return render_template('receipts/upload.html')
+        # Get user's OCR usage stats
+        plan_limits = current_user.get_plan_limits()
+        subscription = current_user.get_subscription()
+
+        can_process, limit_message, used, limit = ReceiptUsage.can_process_receipt(current_user, plan_limits)
+
+        usage_stats = {
+            'can_process': can_process,
+            'message': limit_message,
+            'used': used,
+            'limit': limit,
+            'plan': subscription.plan,
+            'plan_display': subscription.plan.replace('_', ' ').title(),
+            'period': 'day' if plan_limits.max_receipt_ocr_per_day else 'month'
+        }
+
+        return render_template('receipts/upload.html', usage_stats=usage_stats)
 
     # POST: Handle file upload
     if 'receipt_image' not in request.files:
@@ -105,7 +122,23 @@ def upload():
         db.session.commit()
         logger.info(f"Receipt {receipt.id} uploaded by user {current_user.id}")
 
-        # Trigger OCR processing asynchronously (or synchronously for now)
+        # Check plan limits before processing OCR
+        subscription = current_user.get_subscription()
+        plan_limits = current_user.get_plan_limits()
+
+        # Check if user can process receipt with AI OCR
+        can_process, limit_message, used, limit = ReceiptUsage.can_process_receipt(current_user, plan_limits)
+
+        if not can_process:
+            # User hit their limit - save receipt without OCR processing
+            receipt.status = 'pending'
+            receipt.ocr_error_message = limit_message
+            db.session.commit()
+            flash(f'Receipt uploaded but OCR limit reached: {limit_message}. Upgrade your plan for more AI OCR processing.', 'warning')
+            logger.warning(f"User {current_user.id} hit OCR limit: {limit_message}")
+            return redirect(url_for('receipts.view_receipt', receipt_id=receipt.id))
+
+        # Trigger OCR processing
         try:
             receipt.status = 'processing'
             db.session.commit()
@@ -151,7 +184,15 @@ def upload():
                     db.session.add(receipt_item)
                     logger.debug(f"Added receipt item: {receipt_item.description}")
 
-                flash(f'Receipt uploaded successfully! Extracted {len(ocr_result.line_items)} items.', 'success')
+                # Record OCR usage
+                ReceiptUsage.record_usage(
+                    user_id=current_user.id,
+                    receipt_id=receipt.id,
+                    plan=subscription.plan,
+                    provider=ocr_service.provider
+                )
+
+                flash(f'Receipt uploaded successfully! Extracted {len(ocr_result.line_items)} items. ({used + 1}/{limit or "unlimited"} AI OCR used this {"day" if plan_limits.max_receipt_ocr_per_day else "month"}).', 'success')
                 logger.info(f"Receipt {receipt.id} processing completed successfully")
 
             db.session.commit()

@@ -14,6 +14,7 @@ from .auto_relist_rule import AutoRelistRule, AutoRelistHistory
 from .email_verification import EmailVerification
 from .receipt import Receipt
 from .receipt_item import ReceiptItem
+from .receipt_usage import ReceiptUsage
 
 __all__ = [
     'User',
@@ -34,5 +35,6 @@ __all__ = [
     'AutoRelistHistory',
     'EmailVerification',
     'Receipt',
-    'ReceiptItem'
+    'ReceiptItem',
+    'ReceiptUsage'
 ]
