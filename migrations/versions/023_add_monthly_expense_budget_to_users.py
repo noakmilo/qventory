@@ -1,7 +1,7 @@
 """add monthly_expense_budget to users
 
 Revision ID: 023_add_monthly_expense_budget
-Revises: 022_fix_receipt_usage_cascade_delete
+Revises: 021_add_receipt_ocr_limits
 Create Date: 2025-01-26 12:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '023_add_monthly_expense_budget'
-down_revision = '022_fix_receipt_usage_cascade_delete'
+down_revision = '021_add_receipt_ocr_limits'
 branch_labels = None
 depends_on = None
 
