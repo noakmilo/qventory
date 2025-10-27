@@ -56,12 +56,29 @@ def expenses_page():
         totals_by_category[category] += expense.amount
         total_amount += expense.amount
 
+    # Get current monthly budget
+    monthly_budget = float(current_user.monthly_expense_budget) if current_user.monthly_expense_budget else None
+
+    # Calculate this month's expenses for budget tracking
+    this_month_start = now.replace(day=1).date()
+    this_month_end = (now.replace(day=1) + relativedelta(months=1)).date()
+
+    this_month_expenses = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.expense_date >= this_month_start,
+        Expense.expense_date < this_month_end
+    ).all()
+
+    this_month_total = sum(e.amount for e in this_month_expenses)
+
     return render_template("expenses.html",
                          expenses=expenses,
                          categories=EXPENSE_CATEGORIES,
                          totals_by_category=totals_by_category,
                          total_amount=total_amount,
-                         range_param=range_param)
+                         range_param=range_param,
+                         monthly_budget=monthly_budget,
+                         this_month_total=float(this_month_total))
 
 
 @expenses_bp.route("/api/expenses", methods=["POST"])
@@ -163,6 +180,31 @@ def delete_expense(expense_id):
         db.session.commit()
 
         return jsonify({"ok": True, "message": "Expense deleted"})
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@expenses_bp.route("/api/budget", methods=["POST"])
+@login_required
+def update_budget():
+    """Update monthly expense budget"""
+    try:
+        data = request.get_json()
+        budget = data.get('budget')
+
+        if budget is not None:
+            current_user.monthly_expense_budget = float(budget) if budget != '' else None
+        else:
+            current_user.monthly_expense_budget = None
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "budget": float(current_user.monthly_expense_budget) if current_user.monthly_expense_budget else None
+        })
 
     except Exception as e:
         db.session.rollback()

@@ -86,6 +86,14 @@
     <div class="metric-card">
       <div class="metric-label">Net Profit</div>
       <div class="metric-value" style="color:#10b981">${{ "%.2f"|format(net_sales) }}</div>
+      {% if expenses['business_expenses'] > 0 %}
+      <div style="margin-top:8px;font-size:12px;color:#ef4444">
+        (- ${{ "%.2f"|format(expenses['business_expenses']) }} expenses)
+      </div>
+      <div style="margin-top:4px;font-size:11px;color:var(--sub)">
+        After expenses: ${{ "%.2f"|format(net_sales - expenses['business_expenses']) }}
+      </div>
+      {% endif %}
     </div>
 
     <!-- Avg Gross per Sale -->
@@ -156,6 +164,38 @@
       <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['supplies']) }}</strong>
     </div>
   </div>
+
+  <!-- Receipts Summary -->
+  {% if receipt_stats and receipt_stats.total > 0 %}
+  <div style="background:var(--card);border-radius:8px;padding:20px;margin-bottom:24px;box-shadow:0 1px 3px rgba(0,0,0,0.1)">
+    <h3 style="margin:0 0 16px 0;font-size:18px;color:var(--text);display:flex;align-items:center;gap:8px">
+      <i class="fas fa-receipt" style="color:#3b82f6"></i> Receipts Overview
+    </h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px">
+      <div style="text-align:center;padding:12px;background:var(--muted);border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:#3b82f6;margin-bottom:4px">{{ receipt_stats.total }}</div>
+        <div style="font-size:12px;color:var(--sub)">Total Receipts</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--muted);border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:#10b981;margin-bottom:4px">{{ receipt_stats.processed }}</div>
+        <div style="font-size:12px;color:var(--sub)">Processed</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--muted);border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:#f59e0b;margin-bottom:4px">{{ receipt_stats.pending }}</div>
+        <div style="font-size:12px;color:var(--sub)">Pending</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--muted);border-radius:8px">
+        <div style="font-size:24px;font-weight:700;color:#ef4444;margin-bottom:4px">${{ "%.2f"|format(receipt_stats.total_amount) }}</div>
+        <div style="font-size:12px;color:var(--sub)">Total Amount</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;text-align:center">
+      <a href="{{ url_for('receipts.receipts_list') }}" style="color:#3b82f6;text-decoration:none;font-size:13px">
+        <i class="fas fa-arrow-right"></i> View All Receipts
+      </a>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Top products -->
   <div class="analytics-top">

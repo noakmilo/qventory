@@ -13,6 +13,7 @@ class User(UserMixin, db.Model):
     email_verified = db.Column(db.Boolean, default=False, nullable=False)  # Email verification status
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)
+    monthly_expense_budget = db.Column(db.Numeric(10, 2), nullable=True)  # Monthly budget for expenses
 
     # opcional: relaciones convenientes
     items = db.relationship("Item", backref="owner", lazy="dynamic", cascade="all, delete-orphan")

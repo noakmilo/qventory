@@ -498,6 +498,37 @@ def analytics():
     # Top products by sale price
     top_sales = sorted(sales, key=lambda s: s.sold_price or 0, reverse=True)[:10]
 
+    # Query receipts in date range
+    from qventory.models.receipt import Receipt
+    receipts_query = Receipt.query.filter(
+        Receipt.user_id == current_user.id,
+        Receipt.uploaded_at >= start_date,
+        Receipt.uploaded_at < end_date
+    )
+
+    # Count receipts by status
+    total_receipts = receipts_query.count()
+    processed_receipts = receipts_query.filter(
+        Receipt.status.in_(['completed', 'partially_associated'])
+    ).count()
+    pending_receipts = receipts_query.filter(
+        Receipt.status.in_(['pending', 'processing', 'extracted'])
+    ).count()
+
+    # Calculate total from processed receipts
+    processed_receipts_list = receipts_query.filter(
+        Receipt.status.in_(['completed', 'partially_associated']),
+        Receipt.total_amount.isnot(None)
+    ).all()
+    total_receipts_amount = sum(r.total_amount for r in processed_receipts_list if r.total_amount)
+
+    receipt_stats = {
+        'total': total_receipts,
+        'processed': processed_receipts,
+        'pending': pending_receipts,
+        'total_amount': float(total_receipts_amount)
+    }
+
     return render_template("analytics.html",
                          range_param=range_param,
                          total_sales=total_sales,
@@ -517,7 +548,8 @@ def analytics():
                          new_listings_labels=new_listings_labels,
                          new_listings_counts=new_listings_counts,
                          expenses=expenses,
-                         top_sales=top_sales)
+                         top_sales=top_sales,
+                         receipt_stats=receipt_stats)
 
 
 @reports_bp.route("/api/reports/user-reports")

@@ -31,6 +31,34 @@
 
   <!-- Summary Cards -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
+    <!-- Monthly Budget Card -->
+    <div class="metric-card" style="background:linear-gradient(135deg,rgba(59,130,246,0.1) 0%,rgba(59,130,246,0.05) 100%);border:1px solid rgba(59,130,246,0.2)">
+      <div class="metric-label" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Monthly Budget</span>
+        <button onclick="openBudgetModal()" style="background:none;border:none;color:#3b82f6;cursor:pointer;padding:4px" title="Set Budget">
+          <i class="fas fa-cog"></i>
+        </button>
+      </div>
+      {% if monthly_budget %}
+        {% set budget_percent = (this_month_total / monthly_budget * 100) if monthly_budget > 0 else 0 %}
+        {% set is_over_budget = budget_percent > 100 %}
+        <div class="metric-value" style="font-size:20px;color:{% if is_over_budget %}#ef4444{% elif budget_percent > 80 %}#f59e0b{% else %}#3b82f6{% endif %}">
+          {{ "%.0f"|format(budget_percent) }}%
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--sub)">
+          ${{ "%.2f"|format(this_month_total) }} / ${{ "%.2f"|format(monthly_budget) }}
+        </div>
+        <div style="margin-top:8px;background:var(--muted);border-radius:999px;height:8px;overflow:hidden">
+          <div style="width:{{ [budget_percent, 100]|min }}%;background:{% if is_over_budget %}#ef4444{% elif budget_percent > 80 %}#f59e0b{% else %}#3b82f6{% endif %};height:100%;transition:width 0.3s"></div>
+        </div>
+      {% else %}
+        <div class="metric-value" style="font-size:16px;color:var(--sub)">Not Set</div>
+        <div style="margin-top:8px;font-size:12px;color:var(--sub)">
+          Click <i class="fas fa-cog"></i> to set budget
+        </div>
+      {% endif %}
+    </div>
+
     <div class="metric-card">
       <div class="metric-label">Total Expenses</div>
       <div class="metric-value" style="color:#ef4444">${{ "%.2f"|format(total_amount) }}</div>
@@ -213,9 +241,72 @@
   </div>
 </div>
 
+<!-- Budget Modal -->
+<div id="budgetModal" class="modal" hidden>
+  <div class="modal__backdrop" onclick="closeBudgetModal()"></div>
+  <div class="modal__dialog" style="max-width:400px">
+    <div class="modal__header">
+      <h3>Set Monthly Budget</h3>
+      <button class="modal__close" onclick="closeBudgetModal()">×</button>
+    </div>
+
+    <form id="budgetForm" onsubmit="saveBudget(event)">
+      <div class="modal__body">
+        <div class="form-group">
+          <label>Monthly Expense Budget</label>
+          <input type="number" id="budgetAmount" step="0.01" class="form-control"
+                 placeholder="0.00" value="{{ monthly_budget if monthly_budget else '' }}">
+          <small style="color:var(--sub);font-size:12px">
+            Leave empty to remove budget tracking
+          </small>
+        </div>
+      </div>
+
+      <div class="modal__footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBudgetModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Budget
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 function changeRange(range) {
   window.location.href = "{{ url_for('expenses.expenses_page') }}?range=" + range;
+}
+
+function openBudgetModal() {
+  document.getElementById('budgetModal').hidden = false;
+}
+
+function closeBudgetModal() {
+  document.getElementById('budgetModal').hidden = true;
+}
+
+async function saveBudget(e) {
+  e.preventDefault();
+
+  const budget = document.getElementById('budgetAmount').value;
+
+  try {
+    const response = await fetch('/api/budget', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ budget: budget || null })
+    });
+
+    const result = await response.json();
+
+    if (result.ok) {
+      window.location.reload();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (err) {
+    alert('Error saving budget: ' + err.message);
+  }
 }
 
 function openAddExpenseModal() {
