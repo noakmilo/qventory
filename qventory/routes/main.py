@@ -292,6 +292,14 @@ def api_update_item_inline(item_id):
                 if cost < 0:
                     return jsonify({"ok": False, "error": "Cost cannot be negative"}), 400
                 item.item_cost = cost
+
+            # IMPORTANT: If this item has been sold, update the Sale record too
+            # This ensures analytics profit calculations remain accurate
+            from qventory.models.sale import Sale
+            sales = Sale.query.filter_by(item_id=item.id, user_id=current_user.id).all()
+            for sale in sales:
+                sale.item_cost = item.item_cost
+                sale.calculate_profit()  # Recalculate gross_profit and net_profit
         elif field == "location":
             components = data.get("components") or {}
             settings = get_or_create_settings(current_user)

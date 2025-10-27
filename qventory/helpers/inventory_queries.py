@@ -168,7 +168,7 @@ SELECT
     s.item_sku AS sku,
     COALESCE(i.item_thumb, NULL) AS item_thumb,
     s.sold_price AS item_price,
-    s.item_cost,
+    COALESCE(s.item_cost, i.item_cost) AS item_cost,
     COALESCE(i.supplier, NULL) AS supplier,
     COALESCE(i.location_code, NULL) AS location_code,
     COALESCE(i.web_url, NULL) AS web_url,
@@ -185,10 +185,10 @@ SELECT
     s.marketplace,
     s.marketplace_order_id,
     s.status,
-    NULL AS A,
-    NULL AS B,
-    NULL AS S,
-    NULL AS C
+    COALESCE(i."A", NULL) AS A,
+    COALESCE(i."B", NULL) AS B,
+    COALESCE(i."S", NULL) AS S,
+    COALESCE(i."C", NULL) AS C
 FROM sales AS s
 LEFT JOIN items AS i
   ON i.id = s.item_id
