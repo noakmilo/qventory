@@ -541,10 +541,14 @@ def dashboard():
     # Calculate today's listings for motivational message
     from datetime import datetime
     from qventory.models.item import Item
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    # Count items CREATED today (added to Qventory today), not listing_date
+    # listing_date is when they were published on eBay (could be old)
+    # created_at is when they were added to Qventory (the action we want to reward)
+    # Using UTC midnight as the cutoff since created_at is stored in UTC
+    today_start_utc = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     today_listings_count = Item.query.filter(
         Item.user_id == current_user.id,
-        Item.listing_date >= today_start.date()
+        Item.created_at >= today_start_utc
     ).count()
 
     return render_template(
