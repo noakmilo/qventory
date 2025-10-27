@@ -1850,12 +1850,11 @@ def sync_ebay_inventory():
 @login_required
 def sync_ebay_sold():
     """
-    Sync sold items with eBay
-    Fetches recent sold orders and updates existing sales or creates new ones
+    Sync sold items with eBay (ASYNC via Celery)
+    Triggers a background task to fetch recent sold orders
     """
     from qventory.models.marketplace_credential import MarketplaceCredential
-    from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
-    from qventory.models.sale import Sale
+    from qventory.tasks import import_ebay_sales
 
     # Check eBay connection
     ebay_cred = MarketplaceCredential.query.filter_by(
@@ -1870,93 +1869,30 @@ def sync_ebay_sold():
             'error': 'eBay account not connected'
         }), 400
 
-    # Check plan limits before syncing
-    items_remaining = current_user.items_remaining()
-    if items_remaining is not None and items_remaining == 0:
-        return jsonify({
-            'success': False,
-            'error': 'You have reached your plan limit. Upgrade to sync more items.',
-            'upgrade_required': True
-        }), 403
-
     try:
-        # Determine historical range (None = full history up to safety window)
+        # Determine historical range
         days_back_param = request.form.get('days_back') or request.args.get('days_back')
         try:
-            sync_days_back = int(days_back_param) if days_back_param else None
+            sync_days_back = int(days_back_param) if days_back_param else 30  # Default 30 days
         except (TypeError, ValueError):
-            sync_days_back = None
+            sync_days_back = 30
 
-        # Fetch sold orders from eBay
-        result = fetch_ebay_sold_orders(current_user.id, days_back=sync_days_back)
+        # Trigger async Celery task
+        task = import_ebay_sales.delay(current_user.id, days_back=sync_days_back)
 
-        if not result['success']:
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Failed to fetch eBay sales data')
-            }), 400
-
-        sold_orders = result['orders']
-
-        if not sold_orders:
-            return jsonify({
-                'success': True,
-                'message': 'No sold orders to sync',
-                'created': 0,
-                'updated': 0
-            })
-
-        print(f"[SYNC_SOLD] Found {len(sold_orders)} sold orders", file=sys.stderr)
-
-        created_count = 0
-        updated_count = 0
-
-        for order in sold_orders:
-            # Check if sale already exists
-            existing_sale = Sale.query.filter_by(
-                user_id=current_user.id,
-                marketplace_order_id=order.get('marketplace_order_id')
-            ).first()
-
-            if existing_sale:
-                # Update existing sale
-                if order.get('sold_price'):
-                    existing_sale.sold_price = order['sold_price']
-                if order.get('marketplace_fee'):
-                    existing_sale.marketplace_fee = order['marketplace_fee']
-                if order.get('payment_processing_fee'):
-                    existing_sale.payment_processing_fee = order['payment_processing_fee']
-
-                existing_sale.updated_at = datetime.utcnow()
-                existing_sale.calculate_profit()
-                updated_count += 1
-            else:
-                # Create new sale
-                new_sale = Sale(
-                    user_id=current_user.id,
-                    **order
-                )
-                new_sale.calculate_profit()
-                db.session.add(new_sale)
-                created_count += 1
-
-        db.session.commit()
-
-        print(f"[SYNC_SOLD] Created: {created_count}, Updated: {updated_count}", file=sys.stderr)
+        print(f"[SYNC_SOLD] Started async task {task.id} for user {current_user.id}, days_back={sync_days_back}", file=sys.stderr)
 
         return jsonify({
             'success': True,
-            'message': f'Synced {created_count + updated_count} sales ({created_count} new, {updated_count} updated)',
-            'created': created_count,
-            'updated': updated_count
+            'message': f'Sales sync started! Checking last {sync_days_back} days. This may take a few minutes.',
+            'task_id': task.id
         })
 
     except Exception as e:
-        db.session.rollback()
-        print(f"[SYNC_SOLD] Error: {str(e)}", file=sys.stderr)
+        print(f"[SYNC_SOLD] Error starting task: {str(e)}", file=sys.stderr)
         return jsonify({
             'success': False,
-            'error': f'Sync failed: {str(e)}'
+            'error': f'Failed to start sync: {str(e)}'
         }), 500
 
 

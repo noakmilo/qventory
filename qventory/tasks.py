@@ -2765,32 +2765,35 @@ def sync_ebay_active_inventory_auto(self):
 @celery.task(bind=True, name='qventory.tasks.sync_ebay_sold_orders_auto')
 def sync_ebay_sold_orders_auto(self):
     """
-    Auto-sync sold orders for recently active users
-    
-    Fetches recent sold orders (last 12 hours) and updates sales database.
+    Auto-sync sold orders for recently active users (FREQUENT/QUICK SYNC)
+
+    Fetches recent sold orders (last 2 hours) and updates sales database.
     Uses batching to handle 100+ users without exceeding eBay API limits.
-    
-    Runs: Every 2 hours
-    Batch: 20 users per execution (100 users = 5 batches = 10 hour cycle)
+
+    Runs: Every 15 minutes (8x more frequent for real-time updates)
+    Batch: 20 users per execution (100 users = 5 batches = 75 minute cycle)
     API Calls: ~20-40 per execution
-    Range: Last 12 hours only (reduces API load vs full history)
-    
+    Range: Last 2 hours only (focused on recent sales for real-time updates)
+
+    Note: Complemented by sync_ebay_sold_orders_deep() which runs daily
+          to catch older sales that may have been missed.
+
     Returns:
         dict: Summary of sync operations
     """
     app = create_app()
-    
+
     with app.app_context():
         from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
         from qventory.models.sale import Sale
         from qventory.models.item import Item
         from datetime import datetime
-        
-        log_task("=== Auto-sync sold orders (last 12 hours) ===")
-        
+
+        log_task("=== Quick-sync sold orders (last 2 hours) ===")
+
         # Get active users (logged in < 24 hours)
         all_active_users = get_active_users_with_ebay(hours_since_login=24)
-        
+
         if not all_active_users:
             log_task("No active users to sync")
             return {
@@ -2799,23 +2802,23 @@ def sync_ebay_sold_orders_auto(self):
                 'sales_created': 0,
                 'sales_updated': 0
             }
-        
+
         log_task(f"Found {len(all_active_users)} active users total")
-        
+
         # Get current batch (20 users max)
         batch_users = get_user_batch(all_active_users, batch_size=20)
         log_task(f"Processing batch of {len(batch_users)} users")
-        
+
         total_created = 0
         total_updated = 0
         users_processed = 0
-        
+
         for user, credential in batch_users:
             try:
                 log_task(f"  Syncing sales for user {user.id} ({user.username})...")
-                
-                # Fetch sold orders from last 12 hours only (0.5 days)
-                result = fetch_ebay_sold_orders(user.id, days_back=0.5)
+
+                # Fetch sold orders from last 2 hours only (quick sync)
+                result = fetch_ebay_sold_orders(user.id, days_back=0.083)  # 2 hours = 0.083 days
                 
                 if not result['success']:
                     log_task(f"    ✗ Failed to fetch sold orders: {result.get('error')}")
@@ -2905,11 +2908,189 @@ def sync_ebay_sold_orders_auto(self):
                 db.session.rollback()
                 continue
         
-        log_task(f"=== Sales sync complete: {users_processed} users, {total_created} created, {total_updated} updated ===")
-        
+        log_task(f"=== Quick-sync complete: {users_processed} users, {total_created} created, {total_updated} updated ===")
+
         return {
             'success': True,
             'users_processed': users_processed,
+            'sales_created': total_created,
+            'sales_updated': total_updated
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_sold_orders_deep')
+def sync_ebay_sold_orders_deep(self):
+    """
+    Deep-sync sold orders for ALL users (DAILY CATCH-UP)
+
+    Fetches sold orders from last 7 days to catch any sales that were missed
+    by the quick-sync (e.g., older sales, downtime, missed syncs).
+
+    Runs: Daily at 3:30 AM UTC
+    Batch: ALL users with eBay connected (no batching, runs once daily)
+    API Calls: ~100-200 per execution (depending on user count)
+    Range: Last 7 days (comprehensive catch-up)
+
+    This ensures no sales are permanently missed even if:
+    - Quick-sync had downtime
+    - Sales were older when first created
+    - User was offline when sale happened
+
+    Returns:
+        dict: Summary of sync operations
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
+        from qventory.models.sale import Sale
+        from qventory.models.item import Item
+        from qventory.models.user import User
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from datetime import datetime
+
+        log_task("=== Deep-sync sold orders (last 7 days) - DAILY CATCH-UP ===")
+
+        # Get ALL users with eBay connected (no activity filter for deep sync)
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        if not credentials:
+            log_task("No users with eBay connected")
+            return {
+                'success': True,
+                'users_processed': 0,
+                'sales_created': 0,
+                'sales_updated': 0
+            }
+
+        users_with_ebay = []
+        for cred in credentials:
+            user = User.query.get(cred.user_id)
+            if user:
+                users_with_ebay.append((user, cred))
+
+        log_task(f"Found {len(users_with_ebay)} users with eBay connected")
+
+        total_created = 0
+        total_updated = 0
+        users_processed = 0
+        users_with_sales = 0
+
+        for user, credential in users_with_ebay:
+            try:
+                log_task(f"  Deep-syncing sales for user {user.id} ({user.username})...")
+
+                # Fetch sold orders from last 7 days (comprehensive catch-up)
+                result = fetch_ebay_sold_orders(user.id, days_back=7)
+
+                if not result['success']:
+                    log_task(f"    ✗ Failed to fetch sold orders: {result.get('error')}")
+                    continue
+
+                sold_orders = result['orders']
+
+                if not sold_orders:
+                    log_task(f"    No sales found")
+                    continue
+
+                created_count = 0
+                updated_count = 0
+
+                for order in sold_orders:
+                    # Check if sale already exists
+                    existing_sale = Sale.query.filter_by(
+                        user_id=user.id,
+                        marketplace_order_id=order.get('marketplace_order_id')
+                    ).first()
+
+                    # SOFT DELETE: Look up item by ebay_listing_id to get item_cost and mark as sold
+                    ebay_listing_id = order.get('ebay_listing_id')
+                    item = None
+                    item_cost = None
+
+                    if ebay_listing_id:
+                        item = Item.query.filter_by(
+                            user_id=user.id,
+                            ebay_listing_id=ebay_listing_id
+                        ).first()
+
+                        if item:
+                            # Snapshot item cost for profit calculation
+                            item_cost = item.item_cost
+
+                            # Mark item as sold (soft delete) if not already marked
+                            if not item.sold_at:
+                                item.is_active = False
+                                item.sold_at = order.get('sold_at')
+                                item.sold_price = order.get('sold_price')
+                                log_task(f"      Marked item {item.sku} as sold (soft delete)")
+
+                    if existing_sale:
+                        # Update existing sale (in case data changed)
+                        if order.get('sold_price'):
+                            existing_sale.sold_price = order.get('sold_price')
+                        if order.get('shipped_at'):
+                            existing_sale.shipped_at = order.get('shipped_at')
+                        if order.get('delivered_at'):
+                            existing_sale.delivered_at = order.get('delivered_at')
+                        if order.get('status'):
+                            existing_sale.status = order.get('status')
+
+                        updated_count += 1
+                    else:
+                        # Create new sale record
+                        sold_price = order.get('sold_price', 0)
+                        marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
+                        payment_fee = sold_price * 0.029 + 0.30  # Payment processing
+                        shipping_cost = order.get('shipping_cost', 0)
+                        total_fees = marketplace_fee + payment_fee + shipping_cost
+
+                        new_sale = Sale(
+                            user_id=user.id,
+                            item_id=item.id if item else None,
+                            item_title=order.get('item_title'),
+                            item_sku=order.get('item_sku'),
+                            item_cost=item_cost,
+                            sold_price=sold_price,
+                            marketplace=order.get('marketplace', 'ebay'),
+                            marketplace_order_id=order.get('marketplace_order_id'),
+                            marketplace_fee=marketplace_fee,
+                            payment_processing_fee=payment_fee,
+                            shipping_cost=shipping_cost,
+                            sold_at=order.get('sold_at', datetime.utcnow()),
+                            shipped_at=order.get('shipped_at'),
+                            delivered_at=order.get('delivered_at'),
+                            status=order.get('status', 'paid'),
+                            net_profit=(sold_price - total_fees - (item_cost or 0)) if item_cost else None
+                        )
+
+                        db.session.add(new_sale)
+                        created_count += 1
+
+                db.session.commit()
+
+                if created_count > 0 or updated_count > 0:
+                    log_task(f"    ✓ {created_count} created, {updated_count} updated")
+                    users_with_sales += 1
+
+                total_created += created_count
+                total_updated += updated_count
+                users_processed += 1
+
+            except Exception as e:
+                log_task(f"    ✗ Error deep-syncing sales for user {user.id}: {str(e)}")
+                db.session.rollback()
+                continue
+
+        log_task(f"=== Deep-sync complete: {users_processed} users processed, {users_with_sales} had sales, {total_created} created, {total_updated} updated ===")
+
+        return {
+            'success': True,
+            'users_processed': users_processed,
+            'users_with_sales': users_with_sales,
             'sales_created': total_created,
             'sales_updated': total_updated
         }

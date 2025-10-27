@@ -71,12 +71,20 @@ celery.conf.beat_schedule = {
     },
     'sync-sold-orders-auto': {
         'task': 'qventory.tasks.sync_ebay_sold_orders_auto',
-        'schedule': crontab(minute=0, hour='*/2'),  # Every 2 hours (00:00, 02:00, 04:00, etc.)
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes (more frequent for real-time updates)
         'options': {
-            'expires': 7080,  # Expire after 118 minutes (before next execution)
+            'expires': 840,  # Expire after 14 minutes (before next execution)
+        }
+    },
+    'sync-sold-orders-deep': {
+        'task': 'qventory.tasks.sync_ebay_sold_orders_deep',
+        'schedule': crontab(hour=3, minute=30),  # Every day at 3:30 AM UTC (catch older sales)
+        'options': {
+            'expires': 3600,  # Expire after 1 hour if not picked up
         }
     },
 }
+
 
 if __name__ == '__main__':
     celery.start()
