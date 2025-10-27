@@ -530,6 +530,15 @@ def dashboard():
     setattr(pending_tasks, "plan_max_items", plan_max_items)
     setattr(pending_tasks, "upgrade_threshold", upgrade_threshold)
 
+    # Calculate today's listings for motivational message
+    from datetime import datetime
+    from qventory.models.item import Item
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_listings_count = Item.query.filter(
+        Item.user_id == current_user.id,
+        Item.listing_date >= today_start.date()
+    ).count()
+
     return render_template(
         "dashboard_home.html",
         settings=s,
@@ -542,7 +551,8 @@ def dashboard():
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
         upgrade_task_dismiss_key=f"upgrade_task_dismissed_{current_user.id}",
-        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}",
+        today_listings_count=today_listings_count
     )
 
 

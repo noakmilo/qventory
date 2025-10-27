@@ -12,6 +12,166 @@
     <p class="page-subtitle">Your inventory at a glance</p>
   </div>
 
+  <!-- Motivational Message -->
+  <div class="motivational-banner" id="motivationalBanner" style="
+    background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(147,51,234,0.1) 100%);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    animation: slideIn 0.5s ease-out;
+  ">
+    <div style="font-size: 32px;">
+      <span id="motivationalEmoji">🚀</span>
+    </div>
+    <div style="flex: 1;">
+      <div style="font-weight: 600; color: var(--text); margin-bottom: 4px;" id="motivationalTitle">
+        Great job today!
+      </div>
+      <div style="font-size: 14px; color: var(--sub);" id="motivationalMessage">
+        Loading...
+      </div>
+    </div>
+    <div style="
+      background: rgba(59,130,246,0.15);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 700;
+      color: #3b82f6;
+      font-size: 18px;
+    " id="motivationalCount">
+      {{ today_listings_count }}
+    </div>
+  </div>
+
+  <style>
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+
+  <script>
+    (function() {
+      const count = {{ today_listings_count }};
+      const banner = document.getElementById('motivationalBanner');
+      const emoji = document.getElementById('motivationalEmoji');
+      const title = document.getElementById('motivationalTitle');
+      const message = document.getElementById('motivationalMessage');
+
+      // Messages for 0 listings (humorísticos + motivacionales)
+      const zeroMessages = [
+        {
+          emoji: '😴',
+          title: 'Zero listings today?',
+          message: 'Even your inventory is wondering if you forgot about it... Time to wake up and list something! 💪'
+        },
+        {
+          emoji: '🦗',
+          title: 'Crickets...',
+          message: 'Your listing dashboard is so quiet, you can hear the echoes. Let\'s break the silence and add some heat! 🔥'
+        },
+        {
+          emoji: '🎯',
+          title: 'Mission: List Something',
+          message: 'Zero listings = zero sales potential. Today is the perfect day to turn that around. You got this! 💪'
+        },
+        {
+          emoji: '⏰',
+          title: 'Tick tock...',
+          message: 'The day isn\'t over yet! Even one listing can make a difference. Your future self will thank you! 🙌'
+        },
+        {
+          emoji: '🌱',
+          title: 'Plant the seed today',
+          message: 'Every listing is like planting a money tree. Zero listings = zero trees. Let\'s get gardening! 🌳'
+        },
+        {
+          emoji: '💤',
+          title: 'Sleeping on opportunities?',
+          message: 'Your competitors are listing while you\'re resting. Time to get back in the game! ⚡'
+        }
+      ];
+
+      // Messages for 1+ listings (motivacionales)
+      const positiveMessages = [
+        {
+          emoji: '🔥',
+          title: 'You\'re on fire!',
+          message: 'listings added today! Keep that momentum going - you\'re building something great! 🚀'
+        },
+        {
+          emoji: '💪',
+          title: 'Beast mode activated!',
+          message: 'listings today! That\'s what we call consistent hustle. Your inventory is looking better already! ✨'
+        },
+        {
+          emoji: '⚡',
+          title: 'Lightning fast!',
+          message: 'new listings today! You\'re not just working, you\'re CRUSHING it. Keep up the amazing work! 🎯'
+        },
+        {
+          emoji: '🎯',
+          title: 'Bullseye!',
+          message: 'listings added! You\'re hitting your targets and building momentum. Success loves consistency! 🌟'
+        },
+        {
+          emoji: '🚀',
+          title: 'To the moon!',
+          message: 'listings today! Every item is a potential sale. You\'re setting yourself up for success! 💰'
+        },
+        {
+          emoji: '💎',
+          title: 'Diamond hands!',
+          message: 'listings today! You\'re building your empire one item at a time. Consistency is key! 👑'
+        },
+        {
+          emoji: '⭐',
+          title: 'Shining bright!',
+          message: 'new listings! Your dedication shows. Keep grinding and watch your business grow! 📈'
+        },
+        {
+          emoji: '🏆',
+          title: 'Champion vibes!',
+          message: 'listings added today! Winners show up every day. You\'re proving you\'re in it to win it! 💯'
+        }
+      ];
+
+      let selectedMessage;
+
+      if (count === 0) {
+        // Random zero message
+        selectedMessage = zeroMessages[Math.floor(Math.random() * zeroMessages.length)];
+      } else {
+        // Random positive message
+        selectedMessage = positiveMessages[Math.floor(Math.random() * positiveMessages.length)];
+        selectedMessage.message = count + ' ' + selectedMessage.message;
+      }
+
+      // Update banner
+      emoji.textContent = selectedMessage.emoji;
+      title.textContent = selectedMessage.title;
+      message.textContent = selectedMessage.message;
+
+      // Change banner color for zero listings
+      if (count === 0) {
+        banner.style.background = 'linear-gradient(135deg, rgba(239,68,68,0.1) 0%, rgba(251,146,60,0.1) 100%)';
+        banner.style.borderColor = 'rgba(239,68,68,0.3)';
+        document.getElementById('motivationalCount').style.background = 'rgba(239,68,68,0.15)';
+        document.getElementById('motivationalCount').style.color = '#ef4444';
+      }
+    })();
+  </script>
+
   <!-- Pending Tasks Section (Only show if there are tasks) -->
   {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
   <section class="dashboard-section pending-tasks-section">
