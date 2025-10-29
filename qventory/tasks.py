@@ -2494,17 +2494,19 @@ def poll_user_listings(credential):
 
             # Extract data from parsed item (note: parse_ebay_inventory_item returns fields in root, not nested in 'product')
             title = parsed_with_images.get('title', 'eBay Item')
-            sku = parsed_with_images.get('ebay_sku') or generate_sku()
+            ebay_custom_sku = parsed_with_images.get('ebay_sku')  # This is the location code (B1S1C1) from eBay
             price = parsed_with_images.get('item_price')
             listing_url = parsed_with_images.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
             item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
 
+            # IMPORTANT: sku field must be Qventory's unique SKU (20251029-A3B4)
+            # ebay_sku field stores eBay's custom SKU (B1S1C1) for location sync
             new_item = Item(
                 user_id=user_id,
                 title=title[:500] if title else 'eBay Item',
-                sku=sku[:50] if sku else generate_sku(),
+                sku=generate_sku(),  # Always generate unique Qventory SKU
                 ebay_listing_id=item_id,
-                ebay_sku=sku[:100] if sku else None,
+                ebay_sku=ebay_custom_sku[:100] if ebay_custom_sku else None,  # Store eBay's location code
                 listing_link=listing_url,
                 item_price=price,
                 item_thumb=item_thumb,  # Cloudinary URL

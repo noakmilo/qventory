@@ -7,7 +7,7 @@ class Item(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
     title = db.Column(db.String, nullable=False)
-    sku = db.Column(db.String, unique=True, nullable=False)
+    sku = db.Column(db.String, unique=True, nullable=False)  # Qventory's unique SKU (20251029-A3B4)
     description = db.Column(db.Text, nullable=True)  # Descripción detallada
 
     # Identificadores externos
