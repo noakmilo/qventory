@@ -349,7 +349,7 @@ class TaxCalculator:
         # Receipt-based expenses (from ReceiptItem associated with Expense)
         receipt_expenses = db.session.query(
             func.sum(ReceiptItem.final_total_price)
-        ).join(
+        ).select_from(ReceiptItem).join(
             Receipt, ReceiptItem.receipt_id == Receipt.id
         ).filter(
             Receipt.user_id == self.user_id,
