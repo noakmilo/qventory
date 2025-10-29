@@ -77,6 +77,35 @@ def create_app():
     app.register_blueprint(admin_webhooks_bp)
     app.register_blueprint(admin_logs_bp)
 
+    # ==================== ACTIVITY TRACKING MIDDLEWARE ====================
+    @app.before_request
+    def update_user_activity():
+        """
+        Update last_activity timestamp for authenticated users
+
+        This tracks ANY authenticated request (not just explicit logins).
+        Used by polling system to determine if a user is "active" and should
+        have their eBay inventory checked for new items.
+
+        Throttled to 5-minute updates to reduce DB writes.
+        """
+        from flask_login import current_user
+        from datetime import datetime, timedelta
+
+        if current_user.is_authenticated:
+            now = datetime.utcnow()
+
+            # Throttle: only update if last_activity is None or older than 5 minutes
+            # This reduces DB writes from every request to ~12 per hour max
+            if not current_user.last_activity or (now - current_user.last_activity) > timedelta(minutes=5):
+                try:
+                    current_user.last_activity = now
+                    db.session.commit()
+                except Exception as e:
+                    # Don't break the request if activity tracking fails
+                    db.session.rollback()
+                    print(f"[ACTIVITY_TRACKING] Error updating last_activity: {e}")
+
     # Register template filters
     @app.template_filter('timeago')
     def timeago_filter(dt):

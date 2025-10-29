@@ -83,6 +83,7 @@
             <th>Email</th>
             <th>Items</th>
             <th>Status</th>
+            <th>Last Activity</th>
             <th>Last Login</th>
             <th>Created</th>
             <th>Actions</th>
@@ -109,6 +110,16 @@
                 <span class="tag" style="background:rgba(156,163,175,0.15);border-color:rgba(156,163,175,0.3);color:#9ca3af;">
                   <i class="fas fa-circle"></i> Empty
                 </span>
+              {% endif %}
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">
+              {% if stat.user.last_activity %}
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <span style="color:var(--text);">{{ stat.user.last_activity.strftime('%Y-%m-%d') }}</span>
+                  <span style="color:var(--sub);font-size:10px;">{{ stat.user.last_activity.strftime('%H:%M:%S') }}</span>
+                </div>
+              {% else %}
+                <span style="color:#9ca3af;font-style:italic;">Never</span>
               {% endif %}
             </td>
             <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">

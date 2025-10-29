@@ -2324,12 +2324,15 @@ def should_poll_user(user, credential):
 
     SCALABLE ADAPTIVE POLLING (optimized for 100+ users):
     - VERY active (item in last hour): poll every 60s
-    - Active (login < 6 hours): poll every 5 minutes
-    - Normal (login < 24 hours): poll every 15 minutes
-    - Semi-active (login < 7 days): poll every hour
+    - Active (activity < 6 hours): poll every 5 minutes
+    - Normal (activity < 24 hours): poll every 15 minutes
+    - Semi-active (activity < 7 days): poll every hour
     - Inactive: poll every 6 hours
 
     This reduces API load from ~200k/day to ~20k/day with 100 users.
+
+    IMPORTANT: Uses last_activity (any authenticated request) not last_login (explicit login).
+    This properly handles users with long-lived session cookies (30 days).
 
     Args:
         user: User object
@@ -2355,19 +2358,20 @@ def should_poll_user(user, credential):
     if very_recent_activity:
         return True  # Poll every 60s (task frequency)
 
-    # TIER 2: ACTIVE - User logged in < 6 hours → Poll every 5 minutes
-    if user.last_login and (now - user.last_login) < timedelta(hours=6):
+    # TIER 2: ACTIVE - User activity < 6 hours → Poll every 5 minutes
+    # Uses last_activity (any request) not last_login (explicit login)
+    if user.last_activity and (now - user.last_activity) < timedelta(hours=6):
         return (now - last_poll) >= timedelta(minutes=5)
 
-    # TIER 3: NORMAL - User logged in < 24 hours → Poll every 15 minutes
-    if user.last_login and (now - user.last_login) < timedelta(hours=24):
+    # TIER 3: NORMAL - User activity < 24 hours → Poll every 15 minutes
+    if user.last_activity and (now - user.last_activity) < timedelta(hours=24):
         return (now - last_poll) >= timedelta(minutes=15)
 
-    # TIER 4: SEMI-ACTIVE - User logged in < 7 days → Poll every hour
-    if user.last_login and (now - user.last_login) < timedelta(days=7):
+    # TIER 4: SEMI-ACTIVE - User activity < 7 days → Poll every hour
+    if user.last_activity and (now - user.last_activity) < timedelta(days=7):
         return (now - last_poll) >= timedelta(hours=1)
 
-    # TIER 5: INACTIVE - User logged in > 7 days → Poll every 6 hours
+    # TIER 5: INACTIVE - User activity > 7 days → Poll every 6 hours
     return (now - last_poll) >= timedelta(hours=6)
 
 
