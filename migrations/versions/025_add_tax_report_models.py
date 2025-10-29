@@ -17,8 +17,14 @@ depends_on = None
 
 
 def upgrade():
-    # Create tax_reports table
-    op.create_table(
+    # Check if table already exists
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_tables = inspector.get_table_names()
+
+    # Create tax_reports table only if it doesn't exist
+    if 'tax_reports' not in existing_tables:
+        op.create_table(
         'tax_reports',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -108,14 +114,15 @@ def upgrade():
 
         # Constraints
         sa.UniqueConstraint('user_id', 'tax_year', 'report_type', 'quarter', name='unique_user_tax_report')
-    )
+        )
 
-    # Create indexes
-    op.create_index('idx_tax_reports_user_year', 'tax_reports', ['user_id', 'tax_year'])
-    op.create_index(op.f('ix_tax_reports_tax_year'), 'tax_reports', ['tax_year'], unique=False)
+        # Create indexes
+        op.create_index('idx_tax_reports_user_year', 'tax_reports', ['user_id', 'tax_year'])
+        op.create_index(op.f('ix_tax_reports_tax_year'), 'tax_reports', ['tax_year'], unique=False)
 
-    # Create tax_report_exports table
-    op.create_table(
+    # Create tax_report_exports table only if it doesn't exist
+    if 'tax_report_exports' not in existing_tables:
+        op.create_table(
         'tax_report_exports',
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('tax_report_id', sa.Integer(), nullable=False),
@@ -136,11 +143,26 @@ def upgrade():
         # Foreign keys
         sa.ForeignKeyConstraint(['tax_report_id'], ['tax_reports.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE')
-    )
+        )
 
 
 def downgrade():
-    op.drop_table('tax_report_exports')
-    op.drop_index('idx_tax_reports_user_year', table_name='tax_reports')
-    op.drop_index(op.f('ix_tax_reports_tax_year'), table_name='tax_reports')
-    op.drop_table('tax_reports')
+    # Check if tables exist before dropping
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    existing_tables = inspector.get_table_names()
+
+    if 'tax_report_exports' in existing_tables:
+        op.drop_table('tax_report_exports')
+
+    if 'tax_reports' in existing_tables:
+        # Check if indexes exist before dropping
+        try:
+            op.drop_index('idx_tax_reports_user_year', table_name='tax_reports')
+        except:
+            pass
+        try:
+            op.drop_index(op.f('ix_tax_reports_tax_year'), table_name='tax_reports')
+        except:
+            pass
+        op.drop_table('tax_reports')
