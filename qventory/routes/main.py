@@ -2384,6 +2384,67 @@ def delete_item(item_id):
     return redirect(url_for("main.dashboard"))
 
 
+@main_bp.route("/sale/<int:sale_id>/update_cost", methods=["POST"])
+@login_required
+def update_sale_cost(sale_id):
+    """
+    Update item_cost for a sale and recalculate profit
+    This is used from the sold items view where users need to add cost to sold items
+    """
+    from qventory.models.sale import Sale
+
+    sale = Sale.query.filter_by(id=sale_id, user_id=current_user.id).first_or_404()
+
+    # Get item_cost from request (supports both JSON and form data)
+    if request.is_json:
+        item_cost = request.json.get('item_cost')
+    else:
+        item_cost = request.form.get('item_cost')
+
+    # Parse and validate item_cost
+    try:
+        if item_cost is not None and item_cost != '':
+            item_cost = float(item_cost)
+            if item_cost < 0:
+                if request.is_json:
+                    return jsonify({"ok": False, "error": "Item cost cannot be negative"}), 400
+                flash("Item cost cannot be negative.", "error")
+                return redirect(request.referrer or url_for("main.inventory_sold"))
+        else:
+            item_cost = None
+    except (ValueError, TypeError):
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Invalid item cost format"}), 400
+        flash("Invalid item cost format.", "error")
+        return redirect(request.referrer or url_for("main.inventory_sold"))
+
+    # Update sale's item_cost
+    sale.item_cost = item_cost
+
+    # If there's a linked item, update its cost too
+    if sale.item_id:
+        item = Item.query.filter_by(id=sale.item_id, user_id=current_user.id).first()
+        if item and item_cost is not None:
+            item.item_cost = item_cost
+
+    # Recalculate profit with new cost
+    sale.calculate_profit()
+
+    db.session.commit()
+
+    if request.is_json:
+        return jsonify({
+            "ok": True,
+            "sale_id": sale.id,
+            "item_cost": sale.item_cost,
+            "gross_profit": sale.gross_profit,
+            "net_profit": sale.net_profit
+        })
+
+    flash("Item cost updated and profit recalculated.", "ok")
+    return redirect(request.referrer or url_for("main.inventory_sold"))
+
+
 @main_bp.route("/items/bulk_delete", methods=["POST"])
 @login_required
 def bulk_delete_items():

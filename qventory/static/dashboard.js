@@ -711,17 +711,42 @@ async function submitInlineForm(container, form, display) {
   }
 
   try {
-    const response = await fetch(`/api/items/${itemId}/inline`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    // SPECIAL CASE: If we're in sold view and editing item_cost, use sale update endpoint
+    // In sold view, the itemId is actually the sale_id (because sold view shows sales, not items)
+    const isSoldView = window.location.pathname.includes('/sold') || document.querySelector('[data-view-type="sold"]');
+    const isItemCostField = field === 'item_cost';
 
-    const data = await response.json();
-    if (!response.ok || !data.ok) {
-      throw new Error(data.error || 'Failed to update item');
+    let response, data;
+
+    if (isSoldView && isItemCostField) {
+      // Update sale's item_cost via new endpoint
+      response = await fetch(`/sale/${itemId}/update_cost`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ item_cost: payload.value })
+      });
+      data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to update item cost');
+      }
+      // Transform response to match expected format
+      data.field = 'item_cost';
+      data.item_cost = data.item_cost;
+    } else {
+      // Normal item inline edit
+      response = await fetch(`/api/items/${itemId}/inline`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to update item');
+      }
     }
 
     // Update only the specific field instead of replacing entire row
