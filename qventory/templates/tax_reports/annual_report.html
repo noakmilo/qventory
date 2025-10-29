@@ -22,17 +22,20 @@
 
             <div class="dropdown" style="position: relative;">
                 <button class="btn btn-primary" onclick="toggleExportMenu()" style="padding: 0.75rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
-                    📥 Export Report ▼
+                    <i class="fas fa-download" style="margin-right: 0.5rem;"></i>Export Report <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem;"></i>
                 </button>
                 <div id="exportMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 200px; z-index: 100;">
+                    <a href="{{ url_for('tax_reports.export_pdf', report_id=report.id) }}" style="display: block; padding: 0.75rem 1rem; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border);">
+                        <i class="fas fa-file-pdf" style="margin-right: 0.5rem; color: #ef4444;"></i>Export PDF (Print)
+                    </a>
                     <a href="{{ url_for('tax_reports.export_csv', report_id=report.id) }}" style="display: block; padding: 0.75rem 1rem; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border);">
-                        📄 Export CSV
+                        <i class="fas fa-file-csv" style="margin-right: 0.5rem; color: #10b981;"></i>Export CSV
                     </a>
                     <a href="{{ url_for('tax_reports.export_schedule_c', report_id=report.id) }}" style="display: block; padding: 0.75rem 1rem; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border);">
-                        📋 Schedule C (JSON)
+                        <i class="fas fa-file-alt" style="margin-right: 0.5rem;"></i>Schedule C (JSON)
                     </a>
                     <a href="{{ url_for('tax_reports.export_quickbooks_iif', report_id=report.id) }}" style="display: block; padding: 0.75rem 1rem; text-decoration: none; color: var(--text);">
-                        💼 QuickBooks (IIF)
+                        <i class="fas fa-file-invoice" style="margin-right: 0.5rem;"></i>QuickBooks (IIF)
                     </a>
                 </div>
             </div>
@@ -40,8 +43,11 @@
     </div>
 
     {% if report.validation_warnings and report.validation_warnings|length > 0 %}
-    <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
-        <h3 style="margin: 0 0 0.5rem 0; color: #92400e;">⚠️ Data Quality Warnings ({{ report.validation_warnings|length }})</h3>
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border); border-left: 4px solid #f59e0b; padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h3 style="margin: 0 0 0.5rem 0; color: var(--text-primary);">
+            <i class="fas fa-exclamation-triangle" style="color: #f59e0b; margin-right: 0.5rem;"></i>
+            Data Quality Warnings ({{ report.validation_warnings|length }})
+        </h3>
         <div id="warningsContainer">
             {% for warning in report.validation_warnings[:3] %}
             <div style="margin: 0.5rem 0; padding: 0.5rem; background: white; border-radius: 4px;">

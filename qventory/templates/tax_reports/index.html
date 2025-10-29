@@ -46,8 +46,9 @@
                 </a>
 
                 {% if annual_report.validation_warnings and annual_report.validation_warnings|length > 0 %}
-                <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 0.9rem;">
-                    <strong>⚠️ {{ annual_report.validation_warnings|length }} warning(s)</strong>
+                <div style="margin-top: 1rem; padding: 0.75rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; color: var(--text-primary);">
+                    <i class="fas fa-exclamation-triangle" style="color: #f59e0b; margin-right: 0.5rem;"></i>
+                    <strong>{{ annual_report.validation_warnings|length }} Data Quality Warning(s)</strong>
                 </div>
                 {% endif %}
             {% else %}
@@ -85,29 +86,31 @@
         <h2 style="margin: 0 0 1rem 0;">Quick Actions</h2>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
             <a href="{{ url_for('tax_reports.multi_year_comparison', year=current_year) }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📈</div>
+                <i class="fas fa-chart-line" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; color: var(--primary);"></i>
                 <strong>Multi-Year Comparison</strong>
             </a>
 
             <a href="{{ url_for('receipts.upload') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📸</div>
+                <i class="fas fa-camera" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; color: var(--primary);"></i>
                 <strong>Upload Receipts</strong>
             </a>
 
             <a href="{{ url_for('expenses.expenses_page') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">💳</div>
+                <i class="fas fa-credit-card" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; color: var(--primary);"></i>
                 <strong>Manage Expenses</strong>
             </a>
 
             <a href="{{ url_for('reports.analytics') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                <i class="fas fa-chart-bar" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; color: var(--primary);"></i>
                 <strong>Sales Analytics</strong>
             </a>
         </div>
     </div>
 
     <div style="margin-top: 2rem; padding: 1.5rem; background: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 8px;">
-        <h3 style="margin: 0 0 0.5rem 0; color: #0c4a6e;">💡 Tax Preparation Checklist</h3>
+        <h3 style="margin: 0 0 0.5rem 0; color: #0c4a6e;">
+            <i class="fas fa-lightbulb" style="margin-right: 0.5rem;"></i>Tax Preparation Checklist
+        </h3>
         <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: #0c4a6e;">
             <li>Ensure all sales have cost of goods sold (COGS) data</li>
             <li>Associate all receipts with inventory items or expenses</li>

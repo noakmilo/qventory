@@ -8,6 +8,7 @@ from datetime import datetime
 import io
 import csv
 import json
+import os
 from qventory.models.tax_report import TaxReport, TaxReportExport
 from qventory.helpers.tax_calculator import TaxCalculator, get_or_create_tax_report
 from qventory.extensions import db
@@ -19,6 +20,11 @@ tax_reports_bp = Blueprint('tax_reports', __name__, url_prefix='/tax-reports')
 @login_required
 def index():
     """Tax reports dashboard - list all available reports"""
+    # Restrict to paid users only
+    if not current_user.is_premium:
+        flash('Tax Reports are available for Premium, Pro, and Early Adopter users only. Upgrade your plan to access this feature.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     current_year = datetime.now().year
 
     # Get all user's tax reports
@@ -41,6 +47,11 @@ def index():
 @login_required
 def annual_report(year):
     """View annual tax report for specific year"""
+    # Restrict to paid users only
+    if not current_user.is_premium:
+        flash('Tax Reports are available for Premium, Pro, and Early Adopter users only.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     # Get or generate report
     report = get_or_create_tax_report(current_user.id, year)
 
@@ -424,92 +435,306 @@ def export_quickbooks_iif(report_id):
     )
 
 
-@tax_reports_bp.route('/api/<int:report_id>/tax-optimization')
+@tax_reports_bp.route('/export/<int:report_id>/pdf')
 @login_required
-def get_tax_optimization_suggestions(report_id):
+def export_pdf(report_id):
     """
-    AI-powered tax optimization suggestions
-    IMPROVEMENT: Smart tax advice
+    Export tax report as PDF for printing
     """
+    # Restrict to paid users only
+    if not current_user.is_premium:
+        flash('PDF export is available for Premium users only.', 'error')
+        return redirect(url_for('main.dashboard'))
+
     report = TaxReport.query.filter_by(
         id=report_id,
         user_id=current_user.id
     ).first_or_404()
 
-    suggestions = []
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 
-    # Check if user is tracking all deductible expenses
-    if report.total_business_expenses < (report.gross_sales_revenue * 0.1):
-        suggestions.append({
-            'category': 'expenses',
+        # Create PDF in memory
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72,
+                               topMargin=72, bottomMargin=18)
+
+        # Container for PDF elements
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#667eea'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=14,
+            textColor=colors.HexColor('#667eea'),
+            spaceAfter=12
+        )
+
+        # Title
+        elements.append(Paragraph(f"Tax Report - {report.tax_year}", title_style))
+        elements.append(Paragraph(f"Generated: {datetime.now().strftime('%B %d, %Y')}", styles['Normal']))
+        elements.append(Spacer(1, 20))
+
+        # Revenue Summary
+        elements.append(Paragraph("Revenue Summary", heading_style))
+        revenue_data = [
+            ['Description', 'Amount'],
+            ['Gross Sales Revenue', f'${report.gross_sales_revenue:,.2f}'],
+            ['Shipping Revenue', f'${report.shipping_revenue:,.2f}'],
+            ['Refunds', f'-${report.total_refunds:,.2f}'],
+            ['Returns', f'-${report.total_returns:,.2f}'],
+            ['Business Income', f'${report.business_income:,.2f}'],
+        ]
+        revenue_table = Table(revenue_data, colWidths=[4*inch, 2*inch])
+        revenue_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(revenue_table)
+        elements.append(Spacer(1, 20))
+
+        # Expenses
+        elements.append(Paragraph("Expenses", heading_style))
+        expense_data = [
+            ['Category', 'Amount'],
+            ['Cost of Goods Sold (COGS)', f'${report.total_cogs:,.2f}'],
+            ['Business Expenses', f'${report.total_business_expenses:,.2f}'],
+            ['Total Expenses', f'${report.total_expenses:,.2f}'],
+        ]
+        expense_table = Table(expense_data, colWidths=[4*inch, 2*inch])
+        expense_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(expense_table)
+        elements.append(Spacer(1, 20))
+
+        # Net Profit
+        elements.append(Paragraph("Net Profit/Loss", heading_style))
+        profit_data = [
+            ['Description', 'Amount'],
+            ['Gross Profit', f'${report.gross_profit:,.2f}'],
+            ['Net Profit', f'${report.net_profit:,.2f}'],
+        ]
+        profit_table = Table(profit_data, colWidths=[4*inch, 2*inch])
+        profit_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(profit_table)
+        elements.append(Spacer(1, 20))
+
+        # Tax Estimates
+        elements.append(Paragraph("Estimated Tax Obligations", heading_style))
+        tax_data = [
+            ['Description', 'Amount'],
+            ['Self-Employment Tax', f'${report.estimated_self_employment_tax:,.2f}'],
+            ['Income Tax', f'${report.estimated_income_tax:,.2f}'],
+            ['Quarterly Tax Payment', f'${report.estimated_quarterly_tax:,.2f}'],
+        ]
+        tax_table = Table(tax_data, colWidths=[4*inch, 2*inch])
+        tax_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        elements.append(tax_table)
+        elements.append(Spacer(1, 20))
+
+        # Footer
+        elements.append(Spacer(1, 40))
+        disclaimer = Paragraph(
+            "<b>Disclaimer:</b> This report is for informational purposes only. Consult a qualified tax professional for tax advice.",
+            styles['Normal']
+        )
+        elements.append(disclaimer)
+
+        # Build PDF
+        doc.build(elements)
+
+        # Record export
+        export_record = TaxReportExport(
+            tax_report_id=report.id,
+            user_id=current_user.id,
+            export_format='pdf',
+            exported_at=datetime.utcnow()
+        )
+        db.session.add(export_record)
+
+        if not report.exported_formats:
+            report.exported_formats = []
+        if 'pdf' not in report.exported_formats:
+            report.exported_formats.append('pdf')
+        report.last_exported_at = datetime.utcnow()
+        db.session.commit()
+
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'tax_report_{report.tax_year}_qventory.pdf'
+        )
+
+    except Exception as e:
+        flash(f'Error generating PDF: {str(e)}', 'error')
+        return redirect(url_for('tax_reports.annual_report', year=report.tax_year))
+
+
+@tax_reports_bp.route('/api/<int:report_id>/tax-optimization')
+@login_required
+def get_tax_optimization_suggestions(report_id):
+    """
+    AI-powered tax optimization suggestions using ChatGPT
+    """
+    # Restrict to paid users only
+    if not current_user.is_premium:
+        return jsonify({'error': 'This feature is available for Premium users only'}), 403
+
+    report = TaxReport.query.filter_by(
+        id=report_id,
+        user_id=current_user.id
+    ).first_or_404()
+
+    try:
+        import openai
+
+        # Get API key
+        api_key = os.environ.get('OPENAI_API_KEY')
+        if not api_key:
+            return jsonify({'error': 'OpenAI API key not configured'}), 500
+
+        # Initialize OpenAI client
+        client = openai.OpenAI(api_key=api_key)
+
+        # Prepare report data for AI analysis
+        report_summary = f"""
+Tax Year: {report.tax_year}
+Business Type: Online Reseller (eBay/Depop)
+
+Financial Summary:
+- Gross Sales Revenue: ${report.gross_sales_revenue:,.2f}
+- Total Sales Count: {report.total_sales_count}
+- Cost of Goods Sold (COGS): ${report.total_cogs:,.2f}
+- Business Expenses: ${report.total_business_expenses:,.2f}
+- Net Profit: ${report.net_profit:,.2f}
+
+Data Quality:
+- COGS Items Count: {report.cogs_items_count}
+- COGS Missing Count: {report.cogs_missing_count}
+- Expense Categories: {', '.join(report.expense_categories_breakdown.keys()) if report.expense_categories_breakdown else 'None tracked'}
+- Data Completeness Score: {report.data_completeness_score:.0f}%
+
+Tax Estimates:
+- Self-Employment Tax: ${report.estimated_self_employment_tax:,.2f}
+- Income Tax: ${report.estimated_income_tax:,.2f}
+- Quarterly Tax Payment: ${report.estimated_quarterly_tax:,.2f}
+"""
+
+        # Call ChatGPT for tax optimization suggestions
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a tax optimization expert specializing in small online reselling businesses (eBay, Depop, etc.). Provide 3-5 specific, actionable tax optimization tips based on the business data provided. Focus on legitimate deductions, expense tracking, and tax planning strategies. Format each tip with: priority (high/medium/low), category, title, description, and specific action steps."
+                },
+                {
+                    "role": "user",
+                    "content": f"Analyze this reseller's tax report and provide optimization suggestions:\n\n{report_summary}"
+                }
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+
+        ai_response = response.choices[0].message.content
+
+        # Parse AI response and structure it
+        suggestions = [{
+            'category': 'ai_tips',
             'priority': 'high',
-            'title': 'Low Expense Tracking Detected',
-            'description': 'Your business expenses are less than 10% of revenue. You may be missing deductible expenses.',
-            'action': 'Review common deductions: office supplies, storage rent, shipping materials, software subscriptions',
-            'potential_savings': float(report.gross_sales_revenue * 0.05 * 0.25)  # Estimate 5% more expenses, 25% tax rate
+            'title': 'AI-Powered Tax Optimization Tips',
+            'description': ai_response,
+            'action': 'Review these personalized recommendations for your business'
+        }]
+
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions
         })
 
-    # Check for missing COGS
-    if report.cogs_missing_count > 0:
-        potential_cogs = report.cogs_missing_count * (report.total_cogs / max(report.cogs_items_count, 1))
-        potential_savings = potential_cogs * 0.25  # 25% tax rate
-        suggestions.append({
-            'category': 'cogs',
-            'priority': 'high',
-            'title': 'Missing Cost of Goods Sold Data',
-            'description': f'{report.cogs_missing_count} items are missing cost information',
-            'action': 'Add purchase costs to reduce taxable income',
-            'potential_savings': float(potential_savings)
+    except Exception as e:
+        print(f"Error generating AI tips: {e}")
+        # Fallback to basic suggestions if AI fails
+        suggestions = []
+
+        if report.cogs_missing_count > 0:
+            suggestions.append({
+                'category': 'cogs',
+                'priority': 'high',
+                'title': 'Missing Cost of Goods Sold Data',
+                'description': f'{report.cogs_missing_count} items are missing cost information',
+                'action': 'Add purchase costs to reduce taxable income'
+            })
+
+        if report.total_business_expenses < (report.gross_sales_revenue * 0.1):
+            suggestions.append({
+                'category': 'expenses',
+                'priority': 'high',
+                'title': 'Low Expense Tracking',
+                'description': 'Your expenses seem low. You may be missing deductible expenses.',
+                'action': 'Review: office supplies, storage, shipping materials, software'
+            })
+
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions,
+            'fallback': True
         })
-
-    # Home office deduction suggestion
-    suggestions.append({
-        'category': 'deductions',
-        'priority': 'medium',
-        'title': 'Consider Home Office Deduction',
-        'description': 'If you use part of your home exclusively for business, you may qualify for home office deduction',
-        'action': 'Simplified method: $5 per sq ft (max 300 sq ft = $1,500)',
-        'potential_savings': 375.0  # $1,500 * 25% tax rate
-    })
-
-    # Mileage tracking
-    if not report.expense_categories_breakdown or 'Transportation' not in report.expense_categories_breakdown:
-        suggestions.append({
-            'category': 'deductions',
-            'priority': 'medium',
-            'title': 'Track Business Mileage',
-            'description': 'Trips for sourcing inventory, shipping, and business errands are deductible',
-            'action': f'Standard mileage rate for {report.tax_year}: $0.67/mile',
-            'potential_savings': 250.0  # Estimate
-        })
-
-    # Quarterly tax payments
-    if report.estimated_quarterly_tax and report.estimated_quarterly_tax > 1000:
-        suggestions.append({
-            'category': 'tax_planning',
-            'priority': 'high',
-            'title': 'Make Quarterly Estimated Tax Payments',
-            'description': 'Avoid penalties by paying estimated taxes quarterly',
-            'action': f'Pay ${report.estimated_quarterly_tax:,.2f} per quarter (April 15, June 15, Sept 15, Jan 15)',
-            'penalty_avoidance': float(report.estimated_quarterly_tax * 4 * 0.05)  # 5% penalty estimate
-        })
-
-    # Retirement contributions
-    if report.net_profit > 10000:
-        suggestions.append({
-            'category': 'tax_planning',
-            'priority': 'medium',
-            'title': 'Consider SEP IRA or Solo 401(k)',
-            'description': 'Self-employed retirement contributions are tax-deductible',
-            'action': f'You could contribute up to ${min(report.net_profit * 0.20, 66000):,.2f} to a SEP IRA',
-            'potential_savings': float(min(report.net_profit * 0.20, 66000) * 0.25)
-        })
-
-    return jsonify({
-        'success': True,
-        'suggestions': suggestions,
-        'total_potential_savings': sum(s.get('potential_savings', 0) for s in suggestions)
-    })
 
 
 @tax_reports_bp.route('/comparison/<int:year>')
