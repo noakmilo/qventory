@@ -24,7 +24,7 @@
                 <button class="btn btn-primary" onclick="toggleExportMenu()" style="padding: 0.75rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
                     <i class="fas fa-download" style="margin-right: 0.5rem;"></i>Export Report <i class="fas fa-chevron-down" style="margin-left: 0.5rem; font-size: 0.8rem;"></i>
                 </button>
-                <div id="exportMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); min-width: 200px; z-index: 100;">
+                <div id="exportMenu" style="display: none; position: absolute; right: 0; top: 100%; margin-top: 0.5rem; background: var(--card, #1a1d2e); border: 1px solid var(--border, #2d3748); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.3); min-width: 220px; z-index: 100;">
                     <a href="{{ url_for('tax_reports.export_pdf', report_id=report.id) }}" style="display: block; padding: 0.75rem 1rem; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border);">
                         <i class="fas fa-file-pdf" style="margin-right: 0.5rem; color: #ef4444;"></i>Export PDF (Print)
                     </a>
@@ -474,9 +474,9 @@ async function loadTaxOptimization() {
                                 </span>
                             ` : ''}
                         </div>
-                        <p style="margin: 0.5rem 0; color: var(--sub); font-size: 0.9rem;">
+                        <div style="margin: 0.5rem 0; color: var(--sub); font-size: 0.9rem; white-space: pre-wrap; line-height: 1.6;">
                             ${suggestion.description}
-                        </p>
+                        </div>
                         <div style="margin-top: 0.5rem; padding: 0.5rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.85rem;">
                             <strong>Action:</strong> ${suggestion.action}
                         </div>
@@ -591,4 +591,14 @@ function showAllWarnings() {
     document.getElementById('warningsContainer').innerHTML = html;
 }
 </script>
+
+<style>
+#exportMenu a {
+    transition: background-color 0.2s ease;
+}
+
+#exportMenu a:hover {
+    background-color: var(--bg-hover, #252a3d) !important;
+}
+</style>
 {% endblock %}
