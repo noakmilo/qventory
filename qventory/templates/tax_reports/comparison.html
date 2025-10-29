@@ -1,0 +1,374 @@
+{% extends "base_new.html" %}
+
+{% block title %}Multi-Year Tax Comparison - Qventory{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1600px; margin: 2rem auto; padding: 0 2rem;">
+    <div style="margin-bottom: 2rem;">
+        <a href="{{ url_for('tax_reports.index') }}" style="color: var(--sub); text-decoration: none; font-size: 0.9rem; margin-bottom: 0.5rem; display: inline-block;">
+            ← Back to Tax Reports
+        </a>
+        <h1 style="margin: 0;">Multi-Year Tax Comparison</h1>
+        <p style="color: var(--sub); margin: 0.5rem 0 0 0;">
+            Analyze your business trends across {{ years|length }} years
+        </p>
+    </div>
+
+    <div style="background: var(--bg-secondary); border-radius: 12px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+        <h2 style="margin: 0 0 1.5rem 0;">Year-Over-Year Revenue Trends</h2>
+        <canvas id="revenueChart" style="max-height: 400px;"></canvas>
+    </div>
+
+    <div style="background: var(--bg-secondary); border-radius: 12px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+        <h2 style="margin: 0 0 1.5rem 0;">Profitability Comparison</h2>
+        <canvas id="profitChart" style="max-height: 400px;"></canvas>
+    </div>
+
+    <div style="background: var(--bg-secondary); border-radius: 12px; padding: 2rem; border: 1px solid var(--border); margin-bottom: 2rem;">
+        <h2 style="margin: 0 0 1.5rem 0;">Detailed Comparison</h2>
+
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                <thead>
+                    <tr style="background: var(--bg-primary); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 1rem; text-align: left;">Metric</th>
+                        {% for year in years %}
+                        <th style="padding: 1rem; text-align: right;">{{ year }}</th>
+                        {% endfor %}
+                        <th style="padding: 1rem; text-align: right;">Change</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Business Income</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report %}
+                                ${{ '{:,.2f}'.format(report.business_income or 0) }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if reports[0] and reports[1] and reports[0].business_income and reports[1].business_income %}
+                                {% set change = ((reports[0].business_income - reports[1].business_income) / reports[1].business_income * 100) %}
+                                <span style="color: {% if change > 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Total Sales</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report %}
+                                {{ report.total_sales_count or 0 }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if reports[0] and reports[1] and reports[0].total_sales_count and reports[1].total_sales_count %}
+                                {% set change = ((reports[0].total_sales_count - reports[1].total_sales_count) / reports[1].total_sales_count * 100) %}
+                                <span style="color: {% if change > 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Cost of Goods Sold</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report %}
+                                ${{ '{:,.2f}'.format(report.total_cogs or 0) }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if reports[0] and reports[1] and reports[0].total_cogs and reports[1].total_cogs %}
+                                {% set change = ((reports[0].total_cogs - reports[1].total_cogs) / reports[1].total_cogs * 100) %}
+                                <span style="color: {% if change < 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border); background: var(--bg-primary);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Gross Profit</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right; font-weight: bold;">
+                            {% if report %}
+                                ${{ '{:,.2f}'.format(report.gross_profit or 0) }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right; font-weight: bold;">
+                            {% if reports[0] and reports[1] and reports[0].gross_profit and reports[1].gross_profit %}
+                                {% set change = ((reports[0].gross_profit - reports[1].gross_profit) / reports[1].gross_profit * 100) %}
+                                <span style="color: {% if change > 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Total Expenses</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report %}
+                                ${{ '{:,.2f}'.format(report.total_expenses or 0) }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if reports[0] and reports[1] and reports[0].total_expenses and reports[1].total_expenses %}
+                                {% set change = ((reports[0].total_expenses - reports[1].total_expenses) / reports[1].total_expenses * 100) %}
+                                <span style="color: {% if change < 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 2px solid var(--border); background: var(--bg-primary);">
+                        <td style="padding: 0.75rem; font-weight: bold;">Net Profit</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right; font-weight: bold;">
+                            {% if report %}
+                                <span style="color: {% if report.net_profit >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    ${{ '{:,.2f}'.format(report.net_profit or 0) }}
+                                </span>
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right; font-weight: bold;">
+                            {% if reports[0] and reports[1] and reports[0].net_profit and reports[1].net_profit %}
+                                {% set change = ((reports[0].net_profit - reports[1].net_profit) / reports[1].net_profit * 100) %}
+                                <span style="color: {% if change > 0 %}#10b981{% else %}#ef4444{% endif %};">
+                                    {% if change > 0 %}+{% endif %}{{ '{:.1f}'.format(change) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem;">Profit Margin %</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report and report.business_income > 0 %}
+                                {{ '{:.1f}'.format((report.net_profit / report.business_income * 100) if report.business_income else 0) }}%
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">-</td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem;">Average Sale Price</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report and report.total_sales_count > 0 %}
+                                ${{ '{:,.2f}'.format((report.gross_sales_revenue / report.total_sales_count) if report.total_sales_count else 0) }}
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">-</td>
+                    </tr>
+
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.75rem;">Data Completeness</td>
+                        {% for report in reports %}
+                        <td style="padding: 0.75rem; text-align: right;">
+                            {% if report %}
+                                <span style="color: {% if report.data_completeness_score >= 90 %}#10b981{% elif report.data_completeness_score >= 70 %}#f59e0b{% else %}#ef4444{% endif %};">
+                                    {{ '{:.0f}'.format(report.data_completeness_score or 0) }}%
+                                </span>
+                            {% else %}
+                                <span style="color: var(--sub);">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                        <td style="padding: 0.75rem; text-align: right;">-</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 2rem;">
+        {% for i in range(years|length) %}
+            {% if reports[i] %}
+            <div style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+                <h3 style="margin: 0 0 1rem 0;">{{ years[i] }} Highlights</h3>
+                <div style="margin-bottom: 0.75rem;">
+                    <div style="color: var(--sub); font-size: 0.85rem;">Total Revenue</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: #667eea;">
+                        ${{ '{:,.2f}'.format(reports[i].business_income or 0) }}
+                    </div>
+                </div>
+                <div style="margin-bottom: 0.75rem;">
+                    <div style="color: var(--sub); font-size: 0.85rem;">Net Profit</div>
+                    <div style="font-size: 1.5rem; font-weight: bold; color: {% if reports[i].net_profit >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+                        ${{ '{:,.2f}'.format(reports[i].net_profit or 0) }}
+                    </div>
+                </div>
+                <a href="{{ url_for('tax_reports.annual_report', year=years[i]) }}" style="display: block; text-align: center; padding: 0.75rem; background: var(--primary); color: white; border-radius: 8px; text-decoration: none; margin-top: 1rem;">
+                    View Full Report
+                </a>
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const years = {{ years|tojson|safe }};
+const reports = {{ reports|tojson|safe }};
+
+// Revenue trend chart
+const revenueData = reports.map(r => r ? (r.business_income || 0) : 0);
+const cogsData = reports.map(r => r ? (r.total_cogs || 0) : 0);
+const expensesData = reports.map(r => r ? (r.total_expenses || 0) : 0);
+
+new Chart(document.getElementById('revenueChart'), {
+    type: 'line',
+    data: {
+        labels: years,
+        datasets: [
+            {
+                label: 'Business Income',
+                data: revenueData,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'COGS',
+                data: cogsData,
+                borderColor: '#f5576c',
+                backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'Total Expenses',
+                data: expensesData,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                tension: 0.4,
+                fill: true
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'top'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': $' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Profit comparison chart
+const grossProfitData = reports.map(r => r ? (r.gross_profit || 0) : 0);
+const netProfitData = reports.map(r => r ? (r.net_profit || 0) : 0);
+
+new Chart(document.getElementById('profitChart'), {
+    type: 'bar',
+    data: {
+        labels: years,
+        datasets: [
+            {
+                label: 'Gross Profit',
+                data: grossProfitData,
+                backgroundColor: '#4facfe'
+            },
+            {
+                label: 'Net Profit',
+                data: netProfitData,
+                backgroundColor: '#10b981'
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                position: 'top'
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.dataset.label + ': $' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                }
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    callback: function(value) {
+                        return '$' + value.toLocaleString();
+                    }
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

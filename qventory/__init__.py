@@ -10,6 +10,7 @@ from .routes.webhooks import webhook_bp
 from .routes.webhooks_platform import platform_webhook_bp
 from .routes.admin_webhooks import admin_webhooks_bp
 from .routes.admin_logs import admin_logs_bp
+from .routes.tax_reports import tax_reports_bp
 
 def _maybe_seed_demo():
     """
@@ -76,6 +77,7 @@ def create_app():
     app.register_blueprint(platform_webhook_bp)
     app.register_blueprint(admin_webhooks_bp)
     app.register_blueprint(admin_logs_bp)
+    app.register_blueprint(tax_reports_bp)
 
     # ==================== ACTIVITY TRACKING MIDDLEWARE ====================
     @app.before_request

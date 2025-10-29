@@ -15,6 +15,7 @@ from .email_verification import EmailVerification
 from .receipt import Receipt
 from .receipt_item import ReceiptItem
 from .receipt_usage import ReceiptUsage
+from .tax_report import TaxReport, TaxReportExport
 
 __all__ = [
     'User',
@@ -36,5 +37,7 @@ __all__ = [
     'EmailVerification',
     'Receipt',
     'ReceiptItem',
-    'ReceiptUsage'
+    'ReceiptUsage',
+    'TaxReport',
+    'TaxReportExport'
 ]

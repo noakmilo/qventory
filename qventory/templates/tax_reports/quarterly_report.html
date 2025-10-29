@@ -1,0 +1,95 @@
+{% extends "tax_reports/annual_report.html" %}
+
+{% block title %}Q{{ quarter }} {{ year }} Tax Report - Qventory{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin: 2rem auto; padding: 0 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <a href="{{ url_for('tax_reports.index') }}" style="color: var(--sub); text-decoration: none; font-size: 0.9rem; margin-bottom: 0.5rem; display: inline-block;">
+                ← Back to Tax Reports
+            </a>
+            <h1 style="margin: 0;">Q{{ quarter }} {{ year }} Tax Report</h1>
+            <p style="color: var(--sub); margin: 0.5rem 0 0 0;">
+                Quarterly Report:
+                {% if quarter == 1 %}January 1 - March 31{% endif %}
+                {% if quarter == 2 %}April 1 - June 30{% endif %}
+                {% if quarter == 3 %}July 1 - September 30{% endif %}
+                {% if quarter == 4 %}October 1 - December 31{% endif %}
+                <br>
+                Last updated: {{ report.last_updated_at.strftime('%B %d, %Y at %I:%M %p') if report.last_updated_at else 'N/A' }}
+            </p>
+        </div>
+
+        <div style="display: flex; gap: 1rem;">
+            <a href="{{ url_for('tax_reports.annual_report', year=year) }}" class="btn" style="padding: 0.75rem 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; text-decoration: none;">
+                📅 View Full Year
+            </a>
+
+            <button onclick="refreshReport()" class="btn" style="padding: 0.75rem 1.5rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer;">
+                🔄 Refresh Data
+            </button>
+        </div>
+    </div>
+
+    <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h3 style="margin: 0 0 0.5rem 0; color: #1e40af;">💡 Quarterly Estimated Tax Payment</h3>
+        <p style="margin: 0.5rem 0; color: #1e3a8a;">
+            Based on Q{{ quarter }} earnings, your estimated quarterly tax payment is:
+        </p>
+        <div style="font-size: 2rem; font-weight: bold; color: #1e40af; margin: 0.5rem 0;">
+            ${{ '{:,.2f}'.format(report.estimated_quarterly_tax or 0) }}
+        </div>
+        <p style="margin: 0.5rem 0 0 0; color: #1e3a8a; font-size: 0.9rem;">
+            Due date:
+            {% if quarter == 1 %}April 15, {{ year }}{% endif %}
+            {% if quarter == 2 %}June 15, {{ year }}{% endif %}
+            {% if quarter == 3 %}September 15, {{ year }}{% endif %}
+            {% if quarter == 4 %}January 15, {{ year + 1 }}{% endif %}
+        </p>
+    </div>
+
+    {{ super() }}
+</div>
+
+<script>
+async function refreshReport() {
+    if (!confirm('This will regenerate the report with the latest data. Continue?')) {
+        return;
+    }
+
+    const button = event.target;
+    button.disabled = true;
+    button.textContent = '🔄 Refreshing...';
+
+    try {
+        const response = await fetch('/tax-reports/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                year: {{ year }},
+                quarter: {{ quarter }},
+                regenerate: true
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error refreshing report: ' + data.error);
+            button.disabled = false;
+            button.textContent = '🔄 Refresh Data';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error refreshing report');
+        button.disabled = false;
+        button.textContent = '🔄 Refresh Data';
+    }
+}
+</script>
+{% endblock %}

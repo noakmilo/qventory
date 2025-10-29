@@ -1,0 +1,195 @@
+{% extends "base_new.html" %}
+
+{% block title %}Tax Reports - Qventory{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 1400px; margin: 2rem auto; padding: 0 2rem;">
+    <div class="page-header">
+        <h1>Tax Reports</h1>
+        <p style="color: var(--sub); margin-top: 0.5rem;">
+            Organize your data for tax preparation with comprehensive reports superior to competitors
+        </p>
+    </div>
+
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 2rem; margin: 2rem 0; color: white;">
+        <h2 style="margin: 0 0 1rem 0; font-size: 1.5rem;">Why Qventory Tax Reports Are Superior</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">✓</div>
+                <strong>Automatic COGS Calculation</strong>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                    Unlike Flipwise, we automatically calculate Cost of Goods Sold from your receipts and item costs
+                </p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                <strong>Visual Analytics</strong>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                    Interactive charts and year-over-year comparisons to understand your business trends
+                </p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">💡</div>
+                <strong>AI Tax Optimization</strong>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                    Smart suggestions to maximize deductions and reduce tax liability
+                </p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📥</div>
+                <strong>Multiple Export Formats</strong>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                    Export to CSV, Schedule C JSON, QuickBooks IIF, and PDF
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 3rem;">
+        {% for year in available_years %}
+        <div class="card" style="background: var(--bg-secondary); border-radius: 12px; padding: 1.5rem; border: 1px solid var(--border);">
+            <h3 style="margin: 0 0 1rem 0; font-size: 1.5rem;">{{ year }} Tax Year</h3>
+
+            {% set annual_report = reports | selectattr('tax_year', 'equalto', year) | selectattr('report_type', 'equalto', 'annual') | first %}
+
+            {% if annual_report %}
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--sub);">Business Income</span>
+                        <strong style="color: #10b981;">${{ '{:,.2f}'.format(annual_report.business_income or 0) }}</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--sub);">Net Profit</span>
+                        <strong style="color: {% if annual_report.net_profit >= 0 %}#10b981{% else %}#ef4444{% endif %};">
+                            ${{ '{:,.2f}'.format(annual_report.net_profit or 0) }}
+                        </strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span style="color: var(--sub);">Data Quality</span>
+                        <strong style="color: {% if annual_report.data_completeness_score >= 90 %}#10b981{% elif annual_report.data_completeness_score >= 70 %}#f59e0b{% else %}#ef4444{% endif %};">
+                            {{ '{:.0f}'.format(annual_report.data_completeness_score or 0) }}%
+                        </strong>
+                    </div>
+                    <div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--sub);">
+                        Last updated: {{ annual_report.last_updated_at.strftime('%b %d, %Y') if annual_report.last_updated_at else 'N/A' }}
+                    </div>
+                </div>
+
+                <a href="{{ url_for('tax_reports.annual_report', year=year) }}" class="btn btn-primary" style="width: 100%; text-align: center; text-decoration: none; display: block; padding: 0.75rem; background: var(--primary); color: white; border-radius: 8px;">
+                    View Full Report
+                </a>
+
+                {% if annual_report.validation_warnings and annual_report.validation_warnings|length > 0 %}
+                <div style="margin-top: 1rem; padding: 0.75rem; background: #fef3c7; border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 0.9rem;">
+                    <strong>⚠️ {{ annual_report.validation_warnings|length }} warning(s)</strong>
+                </div>
+                {% endif %}
+            {% else %}
+                <p style="color: var(--sub); margin-bottom: 1.5rem;">
+                    No report generated yet for {{ year }}
+                </p>
+
+                <button onclick="generateReport({{ year }})" class="btn btn-primary" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    Generate {{ year }} Report
+                </button>
+            {% endif %}
+
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                <h4 style="font-size: 0.9rem; color: var(--sub); margin: 0 0 0.5rem 0;">Quarterly Reports</h4>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
+                    {% for q in [1, 2, 3, 4] %}
+                        {% set q_report = reports | selectattr('tax_year', 'equalto', year) | selectattr('quarter', 'equalto', q) | first %}
+                        {% if q_report %}
+                            <a href="{{ url_for('tax_reports.quarterly_report', year=year, quarter=q) }}" style="text-decoration: none; padding: 0.5rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; text-align: center; font-size: 0.85rem;">
+                                Q{{ q }}
+                            </a>
+                        {% else %}
+                            <button onclick="generateReport({{ year }}, {{ q }})" style="padding: 0.5rem; background: transparent; border: 1px dashed var(--border); border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: var(--sub);">
+                                Q{{ q }}
+                            </button>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div style="background: var(--bg-secondary); border-radius: 12px; padding: 2rem; border: 1px solid var(--border);">
+        <h2 style="margin: 0 0 1rem 0;">Quick Actions</h2>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <a href="{{ url_for('tax_reports.multi_year_comparison', year=current_year) }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📈</div>
+                <strong>Multi-Year Comparison</strong>
+            </a>
+
+            <a href="{{ url_for('receipts.upload') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📸</div>
+                <strong>Upload Receipts</strong>
+            </a>
+
+            <a href="{{ url_for('expenses.index') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">💳</div>
+                <strong>Manage Expenses</strong>
+            </a>
+
+            <a href="{{ url_for('reports.analytics') }}" class="action-card" style="text-decoration: none; padding: 1rem; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; text-align: center;">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                <strong>Sales Analytics</strong>
+            </a>
+        </div>
+    </div>
+
+    <div style="margin-top: 2rem; padding: 1.5rem; background: #e0f2fe; border-left: 4px solid #0284c7; border-radius: 8px;">
+        <h3 style="margin: 0 0 0.5rem 0; color: #0c4a6e;">💡 Tax Preparation Checklist</h3>
+        <ul style="margin: 0.5rem 0 0 0; padding-left: 1.5rem; color: #0c4a6e;">
+            <li>Ensure all sales have cost of goods sold (COGS) data</li>
+            <li>Associate all receipts with inventory items or expenses</li>
+            <li>Review expense categories for accuracy</li>
+            <li>Download reports and send to your CPA</li>
+            <li>Consider quarterly estimated tax payments if net profit > $1,000</li>
+        </ul>
+        <p style="margin: 1rem 0 0 0; font-size: 0.9rem; color: #0c4a6e;">
+            <strong>Disclaimer:</strong> Qventory helps organize your data for tax preparation, but is not tax software and does not provide tax advice.
+            We recommend consulting a CPA to ensure accurate and compliant filings.
+        </p>
+    </div>
+</div>
+
+<script>
+async function generateReport(year, quarter = null) {
+    const button = event.target;
+    button.disabled = true;
+    button.textContent = 'Generating...';
+
+    try {
+        const response = await fetch('/tax-reports/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ year, quarter })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            if (quarter) {
+                window.location.href = `/tax-reports/${year}/quarterly/${quarter}`;
+            } else {
+                window.location.href = `/tax-reports/${year}`;
+            }
+        } else {
+            alert('Error generating report: ' + data.error);
+            button.disabled = false;
+            button.textContent = quarter ? `Q${quarter}` : `Generate ${year} Report`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error generating report');
+        button.disabled = false;
+        button.textContent = quarter ? `Q${quarter}` : `Generate ${year} Report`;
+    }
+}
+</script>
+{% endblock %}
