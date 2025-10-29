@@ -20,9 +20,9 @@ tax_reports_bp = Blueprint('tax_reports', __name__, url_prefix='/tax-reports')
 @login_required
 def index():
     """Tax reports dashboard - list all available reports"""
-    # Restrict to paid users only
-    if not current_user.is_premium:
-        flash('Tax Reports are available for Premium, Pro, and Early Adopter users only. Upgrade your plan to access this feature.', 'error')
+    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
+    if not current_user.is_premium and not current_user.is_god_mode:
+        flash('Tax Reports are available for Premium and Pro users only. Upgrade your plan to access this feature.', 'error')
         return redirect(url_for('main.dashboard'))
 
     current_year = datetime.now().year
@@ -47,9 +47,9 @@ def index():
 @login_required
 def annual_report(year):
     """View annual tax report for specific year"""
-    # Restrict to paid users only
-    if not current_user.is_premium:
-        flash('Tax Reports are available for Premium, Pro, and Early Adopter users only.', 'error')
+    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
+    if not current_user.is_premium and not current_user.is_god_mode:
+        flash('Tax Reports are available for Premium and Pro users only.', 'error')
         return redirect(url_for('main.dashboard'))
 
     # Get or generate report
@@ -441,9 +441,9 @@ def export_pdf(report_id):
     """
     Export tax report as PDF for printing
     """
-    # Restrict to paid users only
-    if not current_user.is_premium:
-        flash('PDF export is available for Premium users only.', 'error')
+    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
+    if not current_user.is_premium and not current_user.is_god_mode:
+        flash('PDF export is available for Premium and Pro users only.', 'error')
         return redirect(url_for('main.dashboard'))
 
     report = TaxReport.query.filter_by(
@@ -630,9 +630,9 @@ def get_tax_optimization_suggestions(report_id):
     """
     AI-powered tax optimization suggestions using ChatGPT
     """
-    # Restrict to paid users only
-    if not current_user.is_premium:
-        return jsonify({'error': 'This feature is available for Premium users only'}), 403
+    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
+    if not current_user.is_premium and not current_user.is_god_mode:
+        return jsonify({'error': 'This feature is available for Premium and Pro users only'}), 403
 
     report = TaxReport.query.filter_by(
         id=report_id,
