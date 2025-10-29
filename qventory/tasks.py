@@ -3058,6 +3058,13 @@ def sync_ebay_sold_orders_deep(self):
                         if order.get('status'):
                             existing_sale.status = order.get('status')
 
+                        # Update item_cost if we found it and it wasn't set before
+                        if item_cost is not None and existing_sale.item_cost is None:
+                            existing_sale.item_cost = item_cost
+
+                        # Recalculate profit and update timestamp (consistency with quick sync)
+                        existing_sale.updated_at = datetime.utcnow()
+                        existing_sale.calculate_profit()
                         updated_count += 1
                     else:
                         # Create new sale record
@@ -3065,7 +3072,6 @@ def sync_ebay_sold_orders_deep(self):
                         marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
                         payment_fee = sold_price * 0.029 + 0.30  # Payment processing
                         shipping_cost = order.get('shipping_cost', 0)
-                        total_fees = marketplace_fee + payment_fee + shipping_cost
 
                         new_sale = Sale(
                             user_id=user.id,
@@ -3082,10 +3088,11 @@ def sync_ebay_sold_orders_deep(self):
                             sold_at=order.get('sold_at', datetime.utcnow()),
                             shipped_at=order.get('shipped_at'),
                             delivered_at=order.get('delivered_at'),
-                            status=order.get('status', 'paid'),
-                            net_profit=(sold_price - total_fees - (item_cost or 0)) if item_cost else None
+                            status=order.get('status', 'paid')
                         )
 
+                        # Use calculate_profit() method for consistency with other sync tasks
+                        new_sale.calculate_profit()
                         db.session.add(new_sale)
                         created_count += 1
 
