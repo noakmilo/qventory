@@ -1,4 +1,18 @@
 from flask import Flask
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables before importing Config
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # Try production path
+    prod_env = Path('/opt/qventory/qventory/.env')
+    if prod_env.exists():
+        load_dotenv(prod_env)
+
 from .config import Config
 from .extensions import db, login_manager, migrate
 from .routes import main_bp, auth_bp, auto_relist_bp
