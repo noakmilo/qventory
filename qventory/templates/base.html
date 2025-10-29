@@ -62,6 +62,10 @@
         <span class="nav-text">Logout</span>
       </a>
       {% else %}
+      <a class="btn nav-btn" href="{{ url_for('auth.register') }}">
+        <i class="fas fa-user-plus"></i>
+        <span class="nav-text">Register</span>
+      </a>
       <a class="btn nav-btn" href="{{ url_for('auth.login') }}">
         <i class="fas fa-sign-in-alt"></i>
         <span class="nav-text">Login</span>
