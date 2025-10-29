@@ -9,7 +9,6 @@ from qventory.models.sale import Sale
 from qventory.models.expense import Expense
 from qventory.models.item import Item
 from qventory.models.receipt import Receipt
-from qventory.models.receipt_item import ReceiptItem
 from qventory.models.tax_report import TaxReport
 from qventory.extensions import db
 
@@ -325,9 +324,9 @@ class TaxCalculator:
     def calculate_business_expenses(self):
         """
         Calculate business expenses by category
-        IMPROVEMENT: Integration with Receipt OCR data
+        All expense data comes from the Expense model (already includes processed receipt data)
         """
-        # Direct expenses from Expense model
+        # Get all expenses from Expense model
         expenses = Expense.query.filter(
             Expense.user_id == self.user_id,
             Expense.expense_date >= self.start_date,
@@ -346,23 +345,8 @@ class TaxCalculator:
                 category_breakdown[category] = Decimal('0.00')
             category_breakdown[category] += amount
 
-        # Receipt-based expenses (from ReceiptItem associated with Expense)
-        receipt_expenses = db.session.query(
-            func.sum(ReceiptItem.final_total_price)
-        ).select_from(ReceiptItem).join(
-            Receipt, ReceiptItem.receipt_id == Receipt.id
-        ).filter(
-            Receipt.user_id == self.user_id,
-            Receipt.receipt_date >= self.start_date,
-            Receipt.receipt_date <= self.end_date,
-            ReceiptItem.expense_id.isnot(None)  # Associated with expense
-        ).scalar()
-
-        receipt_total = float(receipt_expenses) if receipt_expenses else 0.0
-
         return {
             'total': float(total_expenses),
-            'receipt_based': receipt_total,
             'by_category': {k: float(v) for k, v in category_breakdown.items()},
             'count': len(expenses)
         }
