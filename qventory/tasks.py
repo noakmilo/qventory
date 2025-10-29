@@ -2559,29 +2559,42 @@ def poll_user_listings(credential):
 
 def get_active_users_with_ebay(hours_since_login=24):
     """
-    Get users who logged in recently and have active eBay credentials
-    
+    Get users who were recently active and have active eBay credentials
+
     Used by auto-sync tasks to filter only recently active users.
     This reduces API load and focuses on users who are actively using the platform.
-    
+
+    IMPORTANT: Uses last_activity (any authenticated request) not last_login (explicit login).
+    This properly handles users with long-lived session cookies (30 days).
+
     Args:
-        hours_since_login (int): Max hours since last login (default 24)
-    
+        hours_since_login (int): Max hours since last activity (default 24)
+                                 Note: Parameter name kept for backward compatibility
+
     Returns:
         list: List of tuples (user, credential)
     """
     from qventory.models.user import User
     from qventory.models.marketplace_credential import MarketplaceCredential
     from datetime import datetime, timedelta
-    
+
     cutoff_time = datetime.utcnow() - timedelta(hours=hours_since_login)
-    
-    # Get users with recent login
+
+    # Get users with recent activity (any authenticated request)
+    # This includes users with valid session cookies who haven't logged in recently
     active_users = User.query.filter(
-        User.last_login.isnot(None),
-        User.last_login > cutoff_time
+        User.last_activity.isnot(None),
+        User.last_activity > cutoff_time
     ).all()
-    
+
+    # Fallback: if no users with last_activity, try last_login
+    # This handles migration period where last_activity might not be populated yet
+    if not active_users:
+        active_users = User.query.filter(
+            User.last_login.isnot(None),
+            User.last_login > cutoff_time
+        ).all()
+
     # Get their eBay credentials if active
     result = []
     for user in active_users:
@@ -2590,10 +2603,10 @@ def get_active_users_with_ebay(hours_since_login=24):
             marketplace='ebay',
             is_active=True
         ).first()
-        
+
         if credential:
             result.append((user, credential))
-    
+
     return result
 
 
