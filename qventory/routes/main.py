@@ -1716,10 +1716,10 @@ def sync_ebay_inventory():
     # DEBUG: Log user role and god mode status
     print(f"[SYNC_INVENTORY] User {current_user.id} - role: {current_user.role}, is_god_mode: {current_user.is_god_mode}", file=sys.stderr)
 
-    if not current_user.is_god_mode:
-        # Check plan limits
-        plan_limits = current_user.get_plan_limits()
+    # Get plan limits (needed for both checks and later sync limiting)
+    plan_limits = current_user.get_plan_limits()
 
+    if not current_user.is_god_mode:
         # Verify the user can use marketplace integrations
         if plan_limits.max_marketplace_integrations == 0:
             return jsonify({
@@ -1752,8 +1752,8 @@ def sync_ebay_inventory():
             )
         )
 
-        # Limit sync to plan limits
-        if plan_limits.max_items is not None:
+        # Limit sync to plan limits (only for non-god users)
+        if not current_user.is_god_mode and plan_limits.max_items is not None:
             # Only sync up to the plan limit
             items_to_sync = items_query.limit(plan_limits.max_items).all()
         else:
