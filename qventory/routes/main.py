@@ -1712,30 +1712,35 @@ def sync_ebay_inventory():
             'error': 'eBay account not connected'
         }), 400
 
-    # Check plan limits
-    plan_limits = current_user.get_plan_limits()
+    # God mode bypasses all plan limits
+    # DEBUG: Log user role and god mode status
+    print(f"[SYNC_INVENTORY] User {current_user.id} - role: {current_user.role}, is_god_mode: {current_user.is_god_mode}", file=sys.stderr)
 
-    # Verify the user can use marketplace integrations
-    if plan_limits.max_marketplace_integrations == 0:
-        return jsonify({
-            'success': False,
-            'error': 'Marketplace syncing is not available on your plan. Upgrade to sync with eBay.',
-            'upgrade_required': True
-        }), 403
+    if not current_user.is_god_mode:
+        # Check plan limits
+        plan_limits = current_user.get_plan_limits()
 
-    # Check how many items they're trying to sync vs their plan limit
-    current_item_count = Item.query.filter_by(user_id=current_user.id).count()
-
-    # Free plan should only sync up to their max_items limit
-    if plan_limits.max_items is not None:
-        if current_item_count >= plan_limits.max_items:
+        # Verify the user can use marketplace integrations
+        if plan_limits.max_marketplace_integrations == 0:
             return jsonify({
                 'success': False,
-                'error': f'You have reached your plan limit ({plan_limits.max_items} items). Upgrade to sync more items.',
-                'upgrade_required': True,
-                'current_count': current_item_count,
-                'max_allowed': plan_limits.max_items
+                'error': 'Marketplace syncing is not available on your plan. Upgrade to sync with eBay.',
+                'upgrade_required': True
             }), 403
+
+        # Check how many items they're trying to sync vs their plan limit
+        current_item_count = Item.query.filter_by(user_id=current_user.id).count()
+
+        # Free plan should only sync up to their max_items limit
+        if plan_limits.max_items is not None:
+            if current_item_count >= plan_limits.max_items:
+                return jsonify({
+                    'success': False,
+                    'error': f'You have reached your plan limit ({plan_limits.max_items} items). Upgrade to sync more items.',
+                    'upgrade_required': True,
+                    'current_count': current_item_count,
+                    'max_allowed': plan_limits.max_items
+                }), 403
 
     try:
         # Get all items with eBay listing IDs
