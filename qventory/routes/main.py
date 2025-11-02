@@ -44,6 +44,7 @@ from ..helpers.inventory_queries import (
     fetch_active_items,
     fetch_sold_items,
     fetch_ended_items,
+    fetch_fulfillment_orders,
     fetch_fulfillment_in_transit,
     fetch_fulfillment_delivered,
     detect_thumbnail_mismatches,

@@ -259,7 +259,8 @@ WHERE {where_clause}
 """
 
 # In Transit: Orders that have been shipped but not yet delivered
-FULFILLMENT_IN_TRANSIT_SQL = """
+# Unified fulfillment query - filters by status
+FULFILLMENT_ORDERS_SQL = """
 SELECT
     s.id,
     s.user_id,
@@ -286,59 +287,33 @@ LEFT JOIN items AS i
   ON i.id = s.item_id
  AND i.user_id = s.user_id
 WHERE s.user_id = :user_id
-  AND s.shipped_at IS NOT NULL
-  AND s.delivered_at IS NULL
-ORDER BY s.shipped_at DESC NULLS LAST, s.id DESC
+  AND (:status_filter IS NULL OR s.status = :status_filter)
+  AND (:shipped_only IS NULL OR (s.shipped_at IS NOT NULL AND s.delivered_at IS NULL))
+  AND (:delivered_only IS NULL OR s.delivered_at IS NOT NULL)
+ORDER BY
+  CASE
+    WHEN s.delivered_at IS NOT NULL THEN s.delivered_at
+    WHEN s.shipped_at IS NOT NULL THEN s.shipped_at
+    ELSE s.sold_at
+  END DESC NULLS LAST,
+  s.id DESC
 LIMIT :limit OFFSET :offset;
 """
 
-FULFILLMENT_IN_TRANSIT_COUNT_SQL = """
+FULFILLMENT_ORDERS_COUNT_SQL = """
 SELECT COUNT(*)
 FROM sales AS s
 WHERE s.user_id = :user_id
-  AND s.shipped_at IS NOT NULL
-  AND s.delivered_at IS NULL;
+  AND (:status_filter IS NULL OR s.status = :status_filter)
+  AND (:shipped_only IS NULL OR (s.shipped_at IS NOT NULL AND s.delivered_at IS NULL))
+  AND (:delivered_only IS NULL OR s.delivered_at IS NOT NULL);
 """
 
-# Delivered: Orders that have been delivered
-FULFILLMENT_DELIVERED_SQL = """
-SELECT
-    s.id,
-    s.user_id,
-    s.item_id,
-    s.marketplace,
-    s.marketplace_order_id,
-    s.item_title,
-    s.item_sku,
-    s.buyer_username,
-    s.ebay_buyer_username,
-    s.carrier,
-    s.tracking_number,
-    s.sold_price,
-    s.shipping_cost,
-    s.shipped_at,
-    s.delivered_at,
-    s.status,
-    COALESCE(s.item_title, i.title) AS resolved_title,
-    COALESCE(s.item_sku, i.sku)     AS resolved_sku,
-    i.item_thumb,
-    i.location_code
-FROM sales AS s
-LEFT JOIN items AS i
-  ON i.id = s.item_id
- AND i.user_id = s.user_id
-WHERE s.user_id = :user_id
-  AND s.delivered_at IS NOT NULL
-ORDER BY s.delivered_at DESC NULLS LAST, s.id DESC
-LIMIT :limit OFFSET :offset;
-"""
-
-FULFILLMENT_DELIVERED_COUNT_SQL = """
-SELECT COUNT(*)
-FROM sales AS s
-WHERE s.user_id = :user_id
-  AND s.delivered_at IS NOT NULL;
-"""
+# Legacy queries (kept for backward compatibility, but now use unified approach)
+FULFILLMENT_IN_TRANSIT_SQL = FULFILLMENT_ORDERS_SQL
+FULFILLMENT_IN_TRANSIT_COUNT_SQL = FULFILLMENT_ORDERS_COUNT_SQL
+FULFILLMENT_DELIVERED_SQL = FULFILLMENT_ORDERS_SQL
+FULFILLMENT_DELIVERED_COUNT_SQL = FULFILLMENT_ORDERS_COUNT_SQL
 
 THUMBNAIL_MISMATCH_SQL = """
 WITH thumbs AS (
@@ -482,6 +457,53 @@ def fetch_ended_items(
     return items, total
 
 
+def fetch_fulfillment_orders(
+    session: Session,
+    *,
+    user_id: int,
+    status_filter: Optional[str] = None,
+    shipped_only: bool = False,
+    delivered_only: bool = False,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[SimpleNamespace], int]:
+    """
+    Unified fulfillment query - fetch orders with flexible filtering
+
+    Args:
+        session: Database session
+        user_id: User ID to filter by
+        status_filter: Filter by specific status ('shipped', 'delivered', 'completed', etc.)
+        shipped_only: If True, only show shipped but not delivered (in transit)
+        delivered_only: If True, only show delivered orders
+        limit: Max results to return
+        offset: Pagination offset
+
+    Returns:
+        Tuple of (orders list, total count)
+    """
+    query_params = {
+        "user_id": user_id,
+        "status_filter": status_filter,
+        "shipped_only": True if shipped_only else None,
+        "delivered_only": True if delivered_only else None,
+        "limit": limit,
+        "offset": offset
+    }
+
+    items = _rows_to_objects(session.execute(text(FULFILLMENT_ORDERS_SQL), query_params))
+
+    count_params = {
+        "user_id": user_id,
+        "status_filter": status_filter,
+        "shipped_only": True if shipped_only else None,
+        "delivered_only": True if delivered_only else None
+    }
+    total = session.execute(text(FULFILLMENT_ORDERS_COUNT_SQL), count_params).scalar_one()
+
+    return items, total
+
+
 def fetch_fulfillment_in_transit(
     session: Session,
     *,
@@ -489,11 +511,14 @@ def fetch_fulfillment_in_transit(
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
-    """Fetch orders that are shipped but not yet delivered (delivered_at IS NULL)"""
-    query_params = {"user_id": user_id, "limit": limit, "offset": offset}
-    items = _rows_to_objects(session.execute(text(FULFILLMENT_IN_TRANSIT_SQL), query_params))
-    total = session.execute(text(FULFILLMENT_IN_TRANSIT_COUNT_SQL), {"user_id": user_id}).scalar_one()
-    return items, total
+    """Fetch orders that are shipped but not yet delivered (LEGACY - uses unified query)"""
+    return fetch_fulfillment_orders(
+        session,
+        user_id=user_id,
+        shipped_only=True,
+        limit=limit,
+        offset=offset
+    )
 
 
 def fetch_fulfillment_delivered(
@@ -503,11 +528,14 @@ def fetch_fulfillment_delivered(
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
-    """Fetch orders that have been delivered (delivered_at IS NOT NULL)"""
-    query_params = {"user_id": user_id, "limit": limit, "offset": offset}
-    items = _rows_to_objects(session.execute(text(FULFILLMENT_DELIVERED_SQL), query_params))
-    total = session.execute(text(FULFILLMENT_DELIVERED_COUNT_SQL), {"user_id": user_id}).scalar_one()
-    return items, total
+    """Fetch orders that have been delivered (LEGACY - uses unified query)"""
+    return fetch_fulfillment_orders(
+        session,
+        user_id=user_id,
+        delivered_only=True,
+        limit=limit,
+        offset=offset
+    )
 
 
 def detect_thumbnail_mismatches(session: Session, *, user_id: int) -> List[SimpleNamespace]:
