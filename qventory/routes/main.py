@@ -388,13 +388,15 @@ def inventory_stream():
 
         # Use the captured Flask app to create context
         with flask_app.app_context():
-            # Send initial count - use efficient SQL query instead of ORM .count()
-            result = db.session.execute(
-                text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
-                {"user_id": uid}
-            )
-            initial_count = result.scalar()
-            db.session.commit()  # Close transaction to avoid idle in transaction
+            try:
+                # Send initial count - use efficient SQL query instead of ORM .count()
+                result = db.session.execute(
+                    text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                    {"user_id": uid}
+                )
+                initial_count = result.scalar()
+            finally:
+                db.session.remove()  # Completely close session to avoid idle in transaction
 
             yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
 
@@ -404,13 +406,15 @@ def inventory_stream():
                 try:
                     time.sleep(5)
 
-                    # Use efficient SQL query
-                    result = db.session.execute(
-                        text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
-                        {"user_id": uid}
-                    )
-                    current_count = result.scalar()
-                    db.session.commit()  # Close transaction to avoid idle in transaction
+                    # Use efficient SQL query with fresh session each time
+                    try:
+                        result = db.session.execute(
+                            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                            {"user_id": uid}
+                        )
+                        current_count = result.scalar()
+                    finally:
+                        db.session.remove()  # Completely close session to avoid idle in transaction
 
                     if current_count != last_count:
                         yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"

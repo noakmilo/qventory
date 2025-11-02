@@ -817,10 +817,6 @@ document.addEventListener('DOMContentLoaded', function() {
       eventSource.close();
     }
 
-    // TEMPORARILY DISABLED SSE - debugging performance issues
-    console.log('[SSE] SSE temporarily disabled for debugging');
-    return;
-
     console.log('[SSE] Connecting to inventory stream...');
     eventSource = new EventSource('/api/inventory/stream');
 
