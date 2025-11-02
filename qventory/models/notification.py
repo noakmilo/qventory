@@ -33,7 +33,7 @@ class Notification(db.Model):
     read_at = db.Column(db.DateTime)
 
     # Relationships
-    user = db.relationship('User', backref=db.backref('notifications', lazy='dynamic'))
+    user = db.relationship('User', backref=db.backref('notifications', lazy='dynamic', cascade='all, delete-orphan'))
 
     def __repr__(self):
         return f'<Notification {self.id}: {self.type} for user {self.user_id}>'
