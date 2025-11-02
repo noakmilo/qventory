@@ -28,3 +28,12 @@ class Config:
 
     # PostgreSQL Database URL (required)
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
+
+    # SQLAlchemy Engine Options - optimize connection pooling and prevent idle transactions
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_size': 10,              # Max connections in pool per worker
+        'pool_recycle': 3600,         # Recycle connections after 1 hour
+        'pool_pre_ping': True,        # Verify connections before using (detect stale connections)
+        'max_overflow': 5,            # Allow 5 extra connections beyond pool_size
+        'pool_timeout': 30,           # Timeout waiting for connection from pool
+    }

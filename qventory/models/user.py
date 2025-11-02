@@ -139,7 +139,10 @@ class User(UserMixin, db.Model):
         if limits.max_items is None:
             return None
 
-        current_count = self.items.count()
+        # Efficient count query - only count IDs instead of loading all columns
+        from sqlalchemy import func
+        from ..models.item import Item
+        current_count = db.session.query(func.count(Item.id)).filter(Item.user_id == self.id).scalar()
         return max(0, limits.max_items - current_count)
 
     @property
