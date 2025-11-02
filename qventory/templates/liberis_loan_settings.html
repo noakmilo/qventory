@@ -1,12 +1,22 @@
-{% extends "layout.html" %}
-{% block title %}Liberis Loan Settings{% endblock %}
+{% extends "base_new.html" %}
+{% block title %}Liberis Loan - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.expenses_list') }}">Expenses</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Liberis Loan</span>
+</nav>
+{% endblock %}
 
 {% block content %}
-<div style="max-width:900px;margin:0 auto;padding:var(--space-4);">
+<div class="container page-shell page-shell--large">
 
   <!-- Header -->
   <div style="margin-bottom:var(--space-6);">
-    <h1 style="font-size:var(--fs-2xl);margin:0 0 var(--space-2) 0;">
+    <h1 style="font-size:var(--fs-2xl);margin:0 0 var(--space-2) 0;color:var(--text);">
       <i class="fas fa-hand-holding-usd"></i> Liberis Loan Management
     </h1>
     <p style="color:var(--sub);margin:0;">
@@ -53,7 +63,7 @@
     <div style="background:rgba(0,0,0,0.3);border-radius:6px;padding:var(--space-3);margin-bottom:var(--space-4);">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="color:var(--sub);font-size:var(--fs-sm);">Remaining to pay</span>
-        <span style="font-size:var(--fs-xl);font-weight:600;color:#fbbf24;">
+        <span style="font-size:var(--fs-xl);font-weight:600;color:#10b981;">
           ${{ "%.2f"|format(active_loan.remaining_amount) }}
         </span>
       </div>
@@ -155,7 +165,7 @@
         </div>
 
         <!-- Submit -->
-        <button type="submit" class="btn" style="background:#22c55e;color:#000;padding:var(--space-3);">
+        <button type="submit" class="btn" style="background:#10b981;color:#fff;padding:var(--space-3);">
           <i class="fas fa-check"></i> Create Loan
         </button>
       </div>
@@ -226,8 +236,8 @@
 
   <!-- Back Link -->
   <div style="margin-top:var(--space-5);text-align:center;">
-    <a href="{{ url_for('main.settings') }}" style="color:var(--link);text-decoration:none;">
-      <i class="fas fa-arrow-left"></i> Back to Settings
+    <a href="{{ url_for('main.expenses_list') }}" style="color:var(--link);text-decoration:none;">
+      <i class="fas fa-arrow-left"></i> Back to Expenses
     </a>
   </div>
 

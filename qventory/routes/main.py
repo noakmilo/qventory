@@ -3743,7 +3743,7 @@ def mark_all_notifications_read():
 
 # ==================== LIBERIS LOAN MANAGEMENT ====================
 
-@main_bp.route("/settings/liberis-loan", methods=["GET", "POST"])
+@main_bp.route("/expenses/liberis-loan", methods=["GET", "POST"])
 @login_required
 def liberis_loan_settings():
     """Manage Liberis loan (eBay Seller Capital)"""
