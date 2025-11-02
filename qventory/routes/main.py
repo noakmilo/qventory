@@ -384,14 +384,16 @@ def inventory_stream():
 
     def generate(uid, flask_app):
         import json
+        from sqlalchemy import text
 
         # Use the captured Flask app to create context
         with flask_app.app_context():
-            # Send initial count
-            initial_count = Item.query.filter_by(
-                user_id=uid,
-                is_active=True
-            ).count()
+            # Send initial count - use efficient SQL query instead of ORM .count()
+            result = db.session.execute(
+                text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                {"user_id": uid}
+            )
+            initial_count = result.scalar()
 
             yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
 
@@ -401,10 +403,12 @@ def inventory_stream():
                 try:
                     time.sleep(5)
 
-                    current_count = Item.query.filter_by(
-                        user_id=uid,
-                        is_active=True
-                    ).count()
+                    # Use efficient SQL query
+                    result = db.session.execute(
+                        text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                        {"user_id": uid}
+                    )
+                    current_count = result.scalar()
 
                     if current_count != last_count:
                         yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"

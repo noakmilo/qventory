@@ -111,7 +111,13 @@ class User(UserMixin, db.Model):
         if limits.max_items is None:
             return True
 
-        current_count = self.items.count()
+        # Efficient count query - use same optimization as items_remaining()
+        from sqlalchemy import text
+        result = db.session.execute(
+            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id"),
+            {"user_id": self.id}
+        )
+        current_count = result.scalar()
         return (current_count + count) <= limits.max_items
 
     def can_add_marketplace(self) -> bool:
