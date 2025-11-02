@@ -1082,10 +1082,46 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
             result['error'] = f"EndItem failed: {end_result.get('error')}"
             return result
 
-    # Wait between end and relist
+    # Wait between end and relist, then verify item is actually ended
     delay = rule.withdraw_publish_delay_seconds or 30
-    log_relist(f"  ⏱ Waiting {delay} seconds...")
+    log_relist(f"  ⏱ Waiting {delay} seconds for eBay to process EndItem...")
     time.sleep(delay)
+
+    # CRITICAL: Verify item is actually ended before attempting relist
+    # eBay may take time to process EndItem, and RelistItem will fail if item is still active
+    log_relist(f"  → Verifying item is ended...")
+    max_verification_attempts = 3
+    verification_delay = 10  # seconds between checks
+
+    for attempt in range(1, max_verification_attempts + 1):
+        item_check = get_item_details_trading_api(user_id, item_id)
+
+        if item_check['success']:
+            item_status = item_check['item'].get('listing_status', 'Unknown')
+            log_relist(f"  Attempt {attempt}/{max_verification_attempts}: Item status = {item_status}")
+
+            # Item is ended/completed - safe to relist
+            if item_status in ['Ended', 'Completed']:
+                log_relist(f"  ✓ Item confirmed ended, proceeding to relist")
+                break
+
+            # Item still active - wait and retry
+            if attempt < max_verification_attempts:
+                log_relist(f"  ⏱ Item still active, waiting {verification_delay}s before retry...")
+                time.sleep(verification_delay)
+        else:
+            # Can't verify status - log warning and proceed
+            log_relist(f"  ⚠ Could not verify item status (attempt {attempt}): {item_check.get('error')}")
+            if attempt < max_verification_attempts:
+                time.sleep(verification_delay)
+
+    # Final check after all attempts
+    final_check = get_item_details_trading_api(user_id, item_id)
+    if final_check['success']:
+        final_status = final_check['item'].get('listing_status', 'Unknown')
+        if final_status not in ['Ended', 'Completed']:
+            log_relist(f"  ✗ Item still showing as '{final_status}' after {max_verification_attempts} attempts")
+            log_relist(f"  ⚠ Proceeding with relist anyway - eBay may reject if still active")
 
     # Step 3: Relist Item (with optional changes)
     log_relist(f"  → Step 2/2: Relisting item...")
