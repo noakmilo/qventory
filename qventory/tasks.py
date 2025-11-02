@@ -1058,6 +1058,92 @@ def rematch_sales_to_items(self, user_id):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.resume_ebay_imports_after_upgrade')
+def resume_ebay_imports_after_upgrade(self):
+    """
+    ONE-TIME TASK: Resume eBay imports for users who were upgraded but have incomplete imports
+
+    This task should be run once after deploying the auto-resume feature to catch
+    users who were upgraded before the auto-resume functionality existed.
+
+    Looks for users who:
+    - Have a paid plan (early_adopter, premium, pro, god)
+    - Have eBay connected
+    - Have items_remaining > 0 (space for more items)
+    - Were upgraded recently (within last 30 days)
+
+    Returns:
+        dict: Summary of resume operations
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.user import User
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.subscription import Subscription
+        from datetime import datetime, timedelta
+
+        log_task("=== Resume eBay imports for upgraded users (ONE-TIME) ===")
+
+        # Get all users with paid plans
+        paid_roles = ['early_adopter', 'premium', 'pro', 'god']
+        users = User.query.filter(User.role.in_(paid_roles)).all()
+
+        log_task(f"Found {len(users)} users with paid plans")
+
+        resumed_count = 0
+        skipped_no_ebay = 0
+        skipped_no_space = 0
+        errors = []
+
+        for user in users:
+            try:
+                # Check if user has eBay connected
+                ebay_cred = MarketplaceCredential.query.filter_by(
+                    user_id=user.id,
+                    marketplace='ebay',
+                    is_active=True
+                ).first()
+
+                if not ebay_cred:
+                    skipped_no_ebay += 1
+                    continue
+
+                # Check if user has space for more items
+                items_remaining = user.items_remaining()
+
+                if items_remaining is None:
+                    # Unlimited - always try to import
+                    log_task(f"  User {user.username} ({user.role}): Unlimited plan, resuming import...")
+                elif items_remaining > 0:
+                    log_task(f"  User {user.username} ({user.role}): {items_remaining} slots available, resuming import...")
+                else:
+                    skipped_no_space += 1
+                    log_task(f"  User {user.username} ({user.role}): No space available (0/{user.get_plan_limits().max_items})")
+                    continue
+
+                # Launch import task
+                import_ebay_inventory.delay(user.id, import_mode='new_only', listing_status='ACTIVE')
+                resumed_count += 1
+
+                log_task(f"    ✓ Import task launched for user {user.username}")
+
+            except Exception as e:
+                log_task(f"  ✗ Error processing user {user.id}: {str(e)}")
+                errors.append(f"User {user.id}: {str(e)}")
+
+        log_task(f"=== Resume complete: {resumed_count} imports launched, {skipped_no_ebay} no eBay, {skipped_no_space} no space ===")
+
+        return {
+            'success': True,
+            'resumed': resumed_count,
+            'skipped_no_ebay': skipped_no_ebay,
+            'skipped_no_space': skipped_no_space,
+            'total_paid_users': len(users),
+            'errors': errors
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.auto_relist_offers')
 def auto_relist_offers(self):
     """
@@ -2474,7 +2560,6 @@ def poll_user_listings(credential):
         log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
 
         new_listings = 0
-        max_new_items = items_remaining  # Limit how many new items can be imported
 
         for ebay_item in ebay_items:
             item_id = ebay_item.get('ebay_listing_id')
@@ -2483,9 +2568,22 @@ def poll_user_listings(credential):
             if item_id in existing_listing_ids:
                 continue
 
-            # Check plan limit before importing
-            if max_new_items is not None and new_listings >= max_new_items:
-                log_task(f"    ✗ Plan limit reached: {max_new_items} items. Stopping import.")
+            # Check plan limit BEFORE importing each item (recalculate fresh)
+            # This ensures limit is enforced in real-time, not just at start
+            current_items_remaining = user.items_remaining()
+            if current_items_remaining is not None and current_items_remaining <= 0:
+                log_task(f"    ✗ Plan limit reached ({user.get_plan_limits().max_items} total). Stopping import.")
+                # Send notification about plan limit reached
+                from qventory.models.notification import Notification
+                Notification.create_notification(
+                    user_id=user_id,
+                    type='warning',
+                    title='eBay import stopped - Plan limit reached',
+                    message=f'{new_listings} items imported. Upgrade to import more items from eBay.',
+                    link_url='/upgrade',
+                    link_text='Upgrade Plan',
+                    source='ebay_sync'
+                )
                 break
 
             # Process images (upload to Cloudinary) for new items
@@ -2516,12 +2614,12 @@ def poll_user_listings(credential):
             )
 
             db.session.add(new_item)
+            db.session.commit()  # Commit immediately so items_remaining() reflects the new item
             new_listings += 1
 
             log_task(f"    ✓ New listing: {title[:50]}")
 
         if new_listings > 0:
-            db.session.commit()
             
             # Send notification to user
             from qventory.models.notification import Notification

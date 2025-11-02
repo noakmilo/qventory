@@ -54,6 +54,26 @@
       </div>
     </div>
 
+    <!-- ONE-TIME: Resume eBay imports for upgraded users -->
+    <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#fbbf24;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-play-circle"></i> Resume eBay Imports (One-Time Action)
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            This will resume eBay imports for all users who were upgraded but have incomplete imports.
+            Run this once after deploying the auto-resume feature.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_resume_ebay_imports') }}" onsubmit="return confirm('This will launch import tasks for all upgraded users with eBay connected. Continue?');">
+          <button type="submit" class="btn" style="background:#fbbf24;color:#000;white-space:nowrap;">
+            <i class="fas fa-rocket"></i> Launch Resume Task
+          </button>
+        </form>
+      </div>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->

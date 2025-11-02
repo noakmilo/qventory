@@ -378,36 +378,42 @@ def inventory_stream():
     """
     def generate():
         import json
+        from flask import copy_current_request_context
 
-        # Send initial count
-        initial_count = Item.query.filter_by(
-            user_id=current_user.id,
-            is_active=True
-        ).count()
+        # Store user_id to avoid accessing current_user outside context
+        user_id = current_user.id
 
-        yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
+        # Wrap generator logic with app context
+        with current_app.app_context():
+            # Send initial count
+            initial_count = Item.query.filter_by(
+                user_id=user_id,
+                is_active=True
+            ).count()
 
-        # Keep connection alive and check for changes every 5 seconds
-        last_count = initial_count
-        while True:
-            try:
-                time.sleep(5)
+            yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
 
-                current_count = Item.query.filter_by(
-                    user_id=current_user.id,
-                    is_active=True
-                ).count()
+            # Keep connection alive and check for changes every 5 seconds
+            last_count = initial_count
+            while True:
+                try:
+                    time.sleep(5)
 
-                if current_count != last_count:
-                    yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"
-                    last_count = current_count
-                else:
-                    # Send heartbeat to keep connection alive
-                    yield f": heartbeat\n\n"
+                    current_count = Item.query.filter_by(
+                        user_id=user_id,
+                        is_active=True
+                    ).count()
 
-            except Exception as e:
-                current_app.logger.error(f"SSE error: {str(e)}")
-                break
+                    if current_count != last_count:
+                        yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"
+                        last_count = current_count
+                    else:
+                        # Send heartbeat to keep connection alive
+                        yield f": heartbeat\n\n"
+
+                except Exception as e:
+                    current_app.logger.error(f"SSE error: {str(e)}")
+                    break
 
     return Response(generate(), mimetype='text/event-stream')
 
@@ -1470,6 +1476,7 @@ def import_csv():
         skipped_count = 0
         duplicate_count = 0
         matched_and_updated_count = 0  # New: items updated by title match
+        limit_reached_count = 0  # Track items skipped due to plan limit
 
         # Build a dictionary of existing items indexed by normalized title
         existing_items_by_title = {}
@@ -1541,6 +1548,12 @@ def import_csv():
                 updated_count += 1
 
             elif not existing_item_by_sku:
+                # Check if user can add more items (plan limit)
+                if not current_user.can_add_items():
+                    limit_reached_count += 1
+                    # Stop importing and notify user
+                    break
+
                 # Crear nuevo item
                 new_item = Item(user_id=current_user.id, **parsed_data)
                 db.session.add(new_item)
@@ -1578,7 +1591,13 @@ def import_csv():
         if skipped_count > 0:
             messages.append(f"{skipped_count} rows skipped")
 
-        flash(f"Import completed: {', '.join(messages)}.", "ok")
+        # Show appropriate message based on whether limit was reached
+        if limit_reached_count > 0:
+            remaining = current_user.items_remaining()
+            plan_name = "Premium or Pro" if not current_user.is_premium else "current"
+            flash(f"Import stopped: Plan limit reached. {', '.join(messages)}. Upgrade to {plan_name} plan for more items.", "error")
+        else:
+            flash(f"Import completed: {', '.join(messages)}.", "ok")
 
     except Exception as e:
         db.session.rollback()
@@ -3199,11 +3218,68 @@ def admin_change_user_role(user_id):
         return redirect(url_for('main.admin_users_roles'))
 
     old_role = user.role
+
+    # Detect if this is an upgrade (more items allowed)
+    from qventory.models.subscription import PlanLimit
+    old_limits = PlanLimit.query.filter_by(plan=old_role).first()
+    new_limits = PlanLimit.query.filter_by(plan=new_role).first()
+
+    is_upgrade = False
+    if old_limits and new_limits:
+        old_max = old_limits.max_items if old_limits.max_items is not None else float('inf')
+        new_max = new_limits.max_items if new_limits.max_items is not None else float('inf')
+        is_upgrade = new_max > old_max
+
+    # Update role
     user.role = new_role
+
+    # Also update subscription plan to keep them in sync
+    from qventory.models.subscription import Subscription
+    subscription = Subscription.query.filter_by(user_id=user_id).first()
+    if subscription:
+        subscription.plan = new_role
+        subscription.updated_at = datetime.utcnow()
+
     db.session.commit()
 
-    flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
+    # If upgraded and user has eBay connected, auto-resume import
+    if is_upgrade:
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        ebay_cred = MarketplaceCredential.query.filter_by(
+            user_id=user_id,
+            marketplace='ebay',
+            is_active=True
+        ).first()
+
+        if ebay_cred:
+            # Launch background import to fetch remaining eBay listings
+            from qventory.tasks import import_ebay_inventory
+            task = import_ebay_inventory.delay(user_id, import_mode='new_only', listing_status='ACTIVE')
+            flash(f"User '{user.username}' upgraded from '{old_role}' to '{new_role}'. Auto-importing remaining eBay listings...", "ok")
+        else:
+            flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
+    else:
+        flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
+
     return redirect(url_for('main.admin_users_roles'))
+
+
+@main_bp.route("/admin/resume-ebay-imports", methods=["POST"])
+@require_admin
+def admin_resume_ebay_imports():
+    """
+    ONE-TIME: Resume eBay imports for all upgraded users who have incomplete imports
+
+    This should be run once after deploying the auto-resume feature to catch
+    users who were upgraded before this functionality existed.
+    """
+    from qventory.tasks import resume_ebay_imports_after_upgrade
+
+    # Launch the one-time task
+    task = resume_ebay_imports_after_upgrade.delay()
+
+    flash(f"Resume task launched (Task ID: {task.id}). Check logs for results. This will import remaining eBay listings for all upgraded users with space available.", "ok")
+    return redirect(url_for('main.admin_dashboard'))
 
 
 @main_bp.route("/admin/tokens/config")

@@ -35,8 +35,11 @@ class User(UserMixin, db.Model):
         """Get user's subscription (creates free plan if none exists)"""
         from .subscription import Subscription
 
-        if hasattr(self, 'subscription') and self.subscription:
-            return self.subscription
+        # Always query fresh data to avoid caching issues after plan upgrades
+        subscription = Subscription.query.filter_by(user_id=self.id).first()
+
+        if subscription:
+            return subscription
 
         # Create free subscription if none exists
         subscription = Subscription(
