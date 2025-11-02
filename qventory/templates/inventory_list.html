@@ -817,6 +817,12 @@ document.addEventListener('DOMContentLoaded', function() {
       eventSource.close();
     }
 
+    // SSE PERMANENTLY DISABLED - caused database "idle in transaction" issues
+    // The SSE endpoint was leaving database connections open, causing timeouts
+    // Users can use manual page refresh to see updates
+    console.log('[SSE] SSE disabled - use manual refresh to see inventory updates');
+    return;
+
     console.log('[SSE] Connecting to inventory stream...');
     eventSource = new EventSource('/api/inventory/stream');
 
