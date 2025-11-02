@@ -5,7 +5,7 @@
 <nav class="breadcrumb">
   <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
   <span class="breadcrumb-separator">/</span>
-  <a href="{{ url_for('main.expenses_list') }}">Expenses</a>
+  <a href="{{ url_for('expenses.expenses_page') }}">Expenses</a>
   <span class="breadcrumb-separator">/</span>
   <span class="breadcrumb-current">Liberis Loan</span>
 </nav>
@@ -236,7 +236,7 @@
 
   <!-- Back Link -->
   <div style="margin-top:var(--space-5);text-align:center;">
-    <a href="{{ url_for('main.expenses_list') }}" style="color:var(--link);text-decoration:none;">
+    <a href="{{ url_for('expenses.expenses_page') }}" style="color:var(--link);text-decoration:none;">
       <i class="fas fa-arrow-left"></i> Back to Expenses
     </a>
   </div>
