@@ -125,7 +125,23 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         if existing_item:
                             match_method = "ebay_listing_id"
 
-                    # Second try: Match by exact title (least reliable)
+                    # Second try: Match by inactive item with this listing_id in notes (relisted item)
+                    # This preserves supplier and other Qventory data when items are relisted
+                    if not existing_item and ebay_listing_id:
+                        # Look for inactive items where notes contains "new listing ID: {ebay_listing_id}"
+                        inactive_relisted = Item.query.filter_by(
+                            user_id=user_id,
+                            is_active=False
+                        ).filter(
+                            Item.notes.like(f'%new listing ID: {ebay_listing_id}%')
+                        ).first()
+
+                        if inactive_relisted:
+                            log_task(f"  ✓ Found relisted item (Qventory ID: {inactive_relisted.id}, preserving supplier)")
+                            existing_item = inactive_relisted
+                            match_method = "relisted_item"
+
+                    # Third try: Match by exact title (least reliable, fallback only)
                     if not existing_item and ebay_title:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
@@ -158,6 +174,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 start_time = parsed_with_images.get('listing_start_time')
                             if not end_time and parsed_with_images.get('listing_end_time'):
                                 end_time = parsed_with_images.get('listing_end_time')
+
+                            # REACTIVATE item if it was marked inactive (from relist)
+                            if not existing_item.is_active and match_method == "relisted_item":
+                                log_task(f"  ↻ Reactivating relisted item (preserving supplier: {existing_item.supplier_id})")
+                                existing_item.is_active = True
 
                             # Update eBay-specific fields
                             existing_item.synced_from_ebay = True
@@ -1409,9 +1430,10 @@ def auto_relist_offers(self):
 
                     rule.mark_success(new_listing_id)
 
-                    # DELETE OLD ITEM FROM INVENTORY
-                    # After successful relist, delete the old item from Qventory inventory
-                    # so it will be re-imported fresh on next polling cycle (every 60s)
+                    # MARK OLD ITEM AS INACTIVE (preserve supplier and other Qventory data)
+                    # After successful relist, mark the old item as inactive
+                    # The import task will find this inactive item and update it with the new listing_id
+                    # This preserves supplier, purchase_date, and other Qventory-specific fields
                     old_listing_id = result.get('old_listing_id')
                     if old_listing_id:
                         try:
@@ -1422,15 +1444,19 @@ def auto_relist_offers(self):
                             ).first()
 
                             if old_item:
-                                log_task(f"  Deleting old item from inventory (listing_id: {old_listing_id}, sku: {old_item.sku})")
-                                db.session.delete(old_item)
+                                log_task(f"  Marking old item as inactive (listing_id: {old_listing_id}, sku: {old_item.sku})")
+                                old_item.is_active = False
+                                # Store the new listing ID in notes so import can match it
+                                timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                                relist_note = f"\n[{timestamp}] Relisted with new listing ID: {new_listing_id}"
+                                old_item.notes = (old_item.notes or '') + relist_note
                                 db.session.flush()  # Flush to database but don't commit yet
-                                log_task(f"  ✓ Old item deleted - will be re-imported fresh on next polling cycle")
+                                log_task(f"  ✓ Old item marked inactive - will be reactivated on next import (preserving supplier)")
                             else:
-                                log_task(f"  No item found with listing_id {old_listing_id} to delete")
-                        except Exception as delete_err:
-                            log_task(f"  ⚠ Error deleting old item (non-fatal): {delete_err}")
-                            # Don't fail the whole relist if deletion fails
+                                log_task(f"  No item found with listing_id {old_listing_id} to mark inactive")
+                        except Exception as mark_err:
+                            log_task(f"  ⚠ Error marking old item inactive (non-fatal): {mark_err}")
+                            # Don't fail the whole relist if marking inactive fails
                             import traceback
                             log_task(f"  Traceback: {traceback.format_exc()}")
 
