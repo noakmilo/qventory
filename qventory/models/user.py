@@ -140,9 +140,13 @@ class User(UserMixin, db.Model):
             return None
 
         # Efficient count query - only count IDs instead of loading all columns
-        from sqlalchemy import func
-        from ..models.item import Item
-        current_count = db.session.query(func.count(Item.id)).filter(Item.user_id == self.id).scalar()
+        # Use text query to avoid ORM overhead and potential circular imports
+        from sqlalchemy import text
+        result = db.session.execute(
+            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id"),
+            {"user_id": self.id}
+        )
+        current_count = result.scalar()
         return max(0, limits.max_items - current_count)
 
     @property

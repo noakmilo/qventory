@@ -744,9 +744,11 @@ def inventory_sold():
         "C": [],  # distinct(Item.C) if s.enable_C else [],
     }
 
-    plan_limits = current_user.get_plan_limits()
-    items_remaining = current_user.items_remaining()
-    plan_max_items = getattr(plan_limits, "max_items", None) if plan_limits else None
+    # Sold items view doesn't need plan limits (items are already sold)
+    # Skip expensive items_remaining() calculation
+    plan_limits = None
+    items_remaining = None
+    plan_max_items = None
 
     return render_template(
         "inventory_list.html",
