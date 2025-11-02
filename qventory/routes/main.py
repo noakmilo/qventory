@@ -376,18 +376,18 @@ def inventory_stream():
     Server-Sent Events stream for inventory updates
     Sends updates when items are added/removed
     """
-    def generate():
-        import json
-        from flask import copy_current_request_context
+    # IMPORTANT: Capture user_id BEFORE entering the generator
+    # current_user is only available in the request context, not in the generator
+    user_id = current_user.id
 
-        # Store user_id to avoid accessing current_user outside context
-        user_id = current_user.id
+    def generate(uid):
+        import json
 
         # Wrap generator logic with app context
         with current_app.app_context():
             # Send initial count
             initial_count = Item.query.filter_by(
-                user_id=user_id,
+                user_id=uid,
                 is_active=True
             ).count()
 
@@ -400,7 +400,7 @@ def inventory_stream():
                     time.sleep(5)
 
                     current_count = Item.query.filter_by(
-                        user_id=user_id,
+                        user_id=uid,
                         is_active=True
                     ).count()
 
@@ -415,7 +415,7 @@ def inventory_stream():
                     current_app.logger.error(f"SSE error: {str(e)}")
                     break
 
-    return Response(generate(), mimetype='text/event-stream')
+    return Response(generate(user_id), mimetype='text/event-stream')
 
 
 @main_bp.route("/api/items/recent")
