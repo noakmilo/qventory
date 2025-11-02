@@ -480,8 +480,19 @@ def relist_item_trading_api(user_id: int, item_id: str, changes: dict = None) ->
 
     app_id = os.environ.get('EBAY_CLIENT_ID')
 
+    # Get item from database to preserve location_code (Custom SKU)
+    from qventory.models.item import Item
+    item = Item.query.filter_by(user_id=user_id, ebay_listing_id=item_id).first()
+
     # Build Item element with changes
     item_xml_parts = [f'<ItemID>{item_id}</ItemID>']
+
+    # IMPORTANT: Preserve Custom SKU (location_code) during relist
+    if item and item.location_code:
+        # Escape XML special characters in location_code
+        location = str(item.location_code).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        item_xml_parts.append(f'<SKU>{location}</SKU>')
+        log_relist(f"  Preserving Custom SKU (location): {item.location_code}")
 
     if changes:
         if 'price' in changes:
