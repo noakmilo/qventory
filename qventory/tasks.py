@@ -3226,3 +3226,93 @@ def sync_ebay_sold_orders_deep(self):
             'sales_created': total_created,
             'sales_updated': total_updated
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.process_recurring_expenses')
+def process_recurring_expenses(self):
+    """
+    Process recurring expenses - creates new expense entries for active recurring expenses
+    Should be run daily via cron/celerybeat
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.expense import Expense
+        from datetime import date, datetime
+
+        log_task("=== Processing recurring expenses ===")
+
+        today = date.today()
+        current_day = today.day
+
+        # Find all active recurring expenses
+        recurring_expenses = Expense.query.filter(
+            Expense.is_recurring == True
+        ).all()
+
+        log_task(f"Found {len(recurring_expenses)} recurring expenses to check")
+
+        created_count = 0
+
+        for expense in recurring_expenses:
+            # Skip if not active
+            if not expense.is_active_recurring:
+                continue
+
+            # Check if we should create an expense today
+            should_create = False
+
+            if expense.recurring_frequency == 'monthly':
+                # Check if today matches the recurring day
+                if expense.recurring_day and expense.recurring_day == current_day:
+                    should_create = True
+            elif expense.recurring_frequency == 'weekly':
+                # Check if today's weekday matches
+                if expense.recurring_day and today.weekday() == expense.recurring_day:
+                    should_create = True
+            elif expense.recurring_frequency == 'yearly':
+                # Check if today matches month/day of original expense
+                if (expense.expense_date.month == today.month and
+                    expense.expense_date.day == current_day):
+                    should_create = True
+
+            if not should_create:
+                continue
+
+            # Check if we already created this expense today (avoid duplicates)
+            existing = Expense.query.filter(
+                Expense.user_id == expense.user_id,
+                Expense.description == expense.description,
+                Expense.amount == expense.amount,
+                Expense.expense_date == today,
+                Expense.category == expense.category
+            ).first()
+
+            if existing:
+                log_task(f"  Skipping {expense.description} for user {expense.user_id} - already exists for today")
+                continue
+
+            # Create new expense entry
+            new_expense = Expense(
+                user_id=expense.user_id,
+                description=expense.description,
+                amount=expense.amount,
+                category=expense.category,
+                expense_date=today,
+                is_recurring=False,  # The copy is not recurring itself
+                notes=f"Auto-created from recurring expense #{expense.id}"
+            )
+
+            db.session.add(new_expense)
+            created_count += 1
+            log_task(f"  ✓ Created {expense.description} (${expense.amount}) for user {expense.user_id}")
+
+        db.session.commit()
+
+        log_task(f"=== Recurring expenses complete: {created_count} expenses created ===")
+
+        return {
+            'success': True,
+            'created': created_count,
+            'total_checked': len(recurring_expenses)
+        }

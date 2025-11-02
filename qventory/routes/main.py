@@ -3283,6 +3283,22 @@ def admin_resume_ebay_imports():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/process-recurring-expenses", methods=["POST"])
+@require_admin
+def admin_process_recurring_expenses():
+    """
+    Manually trigger recurring expenses processing
+    Useful for testing or if the daily cron failed
+    """
+    from qventory.tasks import process_recurring_expenses
+
+    # Launch the task
+    task = process_recurring_expenses.delay()
+
+    flash(f"Recurring expenses task launched (Task ID: {task.id}). This will create expense entries for all active recurring expenses due today.", "ok")
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/tokens/config")
 @require_admin
 def admin_token_config():

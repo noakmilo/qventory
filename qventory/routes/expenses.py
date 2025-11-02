@@ -71,6 +71,10 @@ def expenses_page():
 
     this_month_total = sum(e.amount for e in this_month_expenses)
 
+    # Get active Liberis loan
+    from qventory.models.liberis_loan import LiberisLoan
+    liberis_loan = LiberisLoan.get_active_loan(current_user.id)
+
     return render_template("expenses.html",
                          expenses=expenses,
                          categories=EXPENSE_CATEGORIES,
@@ -78,7 +82,8 @@ def expenses_page():
                          total_amount=total_amount,
                          range_param=range_param,
                          monthly_budget=monthly_budget,
-                         this_month_total=float(this_month_total))
+                         this_month_total=float(this_month_total),
+                         liberis_loan=liberis_loan)
 
 
 @expenses_bp.route("/api/expenses", methods=["POST"])
