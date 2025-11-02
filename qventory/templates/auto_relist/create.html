@@ -21,6 +21,28 @@
     </p>
   </div>
 
+  <!-- IMPORTANT WARNING: Data Loss on Relist -->
+  <div style="margin-bottom:24px;padding:16px;background:rgba(251, 191, 36, 0.1);border:2px solid #fbbf24;border-radius:8px;">
+    <div style="display:flex;gap:12px;">
+      <i class="fas fa-exclamation-triangle" style="color:#fbbf24;font-size:20px;flex-shrink:0;margin-top:2px;"></i>
+      <div>
+        <h3 style="color:#fbbf24;font-size:14px;font-weight:600;margin:0 0 8px 0;">
+          Important: Qventory Data Limitations
+        </h3>
+        <p style="color:var(--text);font-size:13px;margin:0;line-height:1.5;">
+          When an item is relisted on eBay, it receives a <strong>new eBay listing ID</strong>.
+          Since eBay doesn't have a "supplier" field, when the relisted item is reimported to Qventory,
+          it will be treated as a new item and the original <strong>supplier</strong> assignment will be lost.
+        </p>
+        <p style="color:var(--text);font-size:13px;margin:8px 0 0 0;line-height:1.5;">
+          <strong>What's preserved:</strong> Location code (Custom SKU), title, price, and images.
+          <br>
+          <strong>What's lost:</strong> Supplier, purchase date, and other Qventory-specific data.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <form method="POST" action="{{ url_for('auto_relist.create_rule') }}">
     <!-- Mode Selection -->
     <div class="card" style="margin-bottom:24px;">
