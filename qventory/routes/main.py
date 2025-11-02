@@ -728,18 +728,20 @@ def inventory_sold():
     #         len(sale_title_mismatches),
     #     )
 
-    def distinct(col):
-        return [
-            r[0] for r in db.session.query(col)
-            .filter(col.isnot(None), Item.user_id == current_user.id)
-            .distinct().order_by(col.asc()).all()
-        ]
+    # FIXME: These distinct queries scan the entire items table and are very slow
+    # Sold items view doesn't need these filter options - disabling for performance
+    # def distinct(col):
+    #     return [
+    #         r[0] for r in db.session.query(col)
+    #         .filter(col.isnot(None), Item.user_id == current_user.id)
+    #         .distinct().order_by(col.asc()).all()
+    #     ]
 
     options = {
-        "A": distinct(Item.A) if s.enable_A else [],
-        "B": distinct(Item.B) if s.enable_B else [],
-        "S": distinct(Item.S) if s.enable_S else [],
-        "C": distinct(Item.C) if s.enable_C else [],
+        "A": [],  # distinct(Item.A) if s.enable_A else [],
+        "B": [],  # distinct(Item.B) if s.enable_B else [],
+        "S": [],  # distinct(Item.S) if s.enable_S else [],
+        "C": [],  # distinct(Item.C) if s.enable_C else [],
     }
 
     plan_limits = current_user.get_plan_limits()
