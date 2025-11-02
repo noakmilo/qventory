@@ -394,6 +394,7 @@ def inventory_stream():
                 {"user_id": uid}
             )
             initial_count = result.scalar()
+            db.session.commit()  # Close transaction to avoid idle in transaction
 
             yield f"data: {json.dumps({'count': initial_count, 'type': 'initial'})}\n\n"
 
@@ -409,6 +410,7 @@ def inventory_stream():
                         {"user_id": uid}
                     )
                     current_count = result.scalar()
+                    db.session.commit()  # Close transaction to avoid idle in transaction
 
                     if current_count != last_count:
                         yield f"data: {json.dumps({'count': current_count, 'type': 'update'})}\n\n"
