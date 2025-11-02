@@ -811,16 +811,47 @@ document.addEventListener('DOMContentLoaded', function() {
   let reconnectTimeout = null;
   let lastCheckTimestamp = new Date().toISOString();
 
-  function setupSSE() {
-    // Cleanup existing connection
-    if (eventSource) {
-      eventSource.close();
+  function setupPolling() {
+    // Use simple polling instead of SSE - more reliable, no database connection issues
+    console.log('[Polling] Starting inventory polling every 15 seconds...');
+
+    async function checkForUpdates() {
+      try {
+        const response = await fetch('/api/inventory/count');
+        if (!response.ok) throw new Error('Failed to fetch count');
+
+        const data = await response.json();
+        console.log('[Polling] Current count:', data.count);
+
+        if (data.count !== currentCount) {
+          console.log(`[Polling] Count changed: ${currentCount} → ${data.count}`);
+          const diff = data.count - currentCount;
+
+          // Only fetch and insert new items if count increased
+          if (diff > 0) {
+            fetchAndInsertNewItems();
+          } else {
+            // If count decreased, show notification
+            showNotification(diff);
+          }
+
+          currentCount = data.count;
+        }
+      } catch (e) {
+        console.error('[Polling] Error:', e);
+      }
     }
 
-    // SSE PERMANENTLY DISABLED - caused database "idle in transaction" issues
-    // The SSE endpoint was leaving database connections open, causing timeouts
-    // Users can use manual page refresh to see updates
-    console.log('[SSE] SSE disabled - use manual refresh to see inventory updates');
+    // Check immediately
+    checkForUpdates();
+
+    // Then check every 15 seconds
+    setInterval(checkForUpdates, 15000);
+  }
+
+  function setupSSE() {
+    // SSE disabled - using polling instead
+    setupPolling();
     return;
 
     console.log('[SSE] Connecting to inventory stream...');

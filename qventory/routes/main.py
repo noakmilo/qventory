@@ -370,12 +370,34 @@ def api_update_item_inline(item_id):
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@main_bp.route("/api/inventory/count")
+@login_required
+def inventory_count():
+    """
+    Simple endpoint to get current inventory count
+    Used for polling instead of SSE (more reliable, no connection issues)
+    """
+    from sqlalchemy import text
+
+    try:
+        result = db.session.execute(
+            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+            {"user_id": current_user.id}
+        )
+        count = result.scalar()
+        return jsonify({"count": count})
+    except Exception as e:
+        current_app.logger.error(f"Error getting inventory count: {str(e)}")
+        return jsonify({"error": "Failed to get count"}), 500
+
+
 @main_bp.route("/api/inventory/stream")
 @login_required
 def inventory_stream():
     """
     Server-Sent Events stream for inventory updates
-    Sends updates when items are added/removed
+    DEPRECATED: Causes database "idle in transaction" issues
+    Use /api/inventory/count with polling instead
     """
     # IMPORTANT: Capture user_id AND app BEFORE entering the generator
     # current_user and current_app are only available in the request context
