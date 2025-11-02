@@ -718,13 +718,15 @@ def inventory_sold():
 
     pagination = _build_pagination_metadata(total_items, page, per_page)
 
-    sale_title_mismatches = detect_sale_title_mismatches(db.session, user_id=current_user.id)
-    if sale_title_mismatches:
-        current_app.logger.warning(
-            "Sale title mismatches detected for user %s (sample of %d)",
-            current_user.id,
-            len(sale_title_mismatches),
-        )
+    # FIXME: This query is causing severe performance issues (4+ minute timeouts)
+    # Commenting out until we can optimize it or add proper indexes
+    # sale_title_mismatches = detect_sale_title_mismatches(db.session, user_id=current_user.id)
+    # if sale_title_mismatches:
+    #     current_app.logger.warning(
+    #         "Sale title mismatches detected for user %s (sample of %d)",
+    #         current_user.id,
+    #         len(sale_title_mismatches),
+    #     )
 
     def distinct(col):
         return [
