@@ -85,7 +85,7 @@
                     style="display:none"
                 >
 
-                <!-- Upload Button with Native Menu -->
+                <!-- Upload Button with Action Sheet -->
                 <div style="margin-bottom:24px">
                     <button
                         type="button"
@@ -97,6 +97,57 @@
                         <i class="fas fa-camera" style="font-size:20px;margin-right:12px"></i>
                         Upload or Take a Photo
                     </button>
+
+                    <!-- Mobile Action Sheet -->
+                    <div id="upload-action-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-card);border-top:1px solid var(--border);border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(0,0,0,0.15);z-index:10000;animation:slideUp 0.25s ease-out">
+                        <div style="padding:8px 16px;border-bottom:1px solid var(--border)">
+                            <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:8px auto"></div>
+                            <h3 style="color:var(--text);font-size:16px;font-weight:600;margin:8px 0">Upload Receipt</h3>
+                        </div>
+                        <div style="padding:8px">
+                            <button type="button" class="upload-option" data-action="camera" style="width:100%;display:flex;align-items:center;gap:16px;padding:16px;border:none;background:none;color:var(--text);font-size:16px;cursor:pointer;border-radius:8px;transition:background 0.15s">
+                                <div style="width:44px;height:44px;background:rgba(59,130,246,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center">
+                                    <i class="fas fa-camera" style="color:#3b82f6;font-size:20px"></i>
+                                </div>
+                                <span style="flex:1;text-align:left;font-weight:500">Take Photo</span>
+                            </button>
+                            <button type="button" class="upload-option" data-action="gallery" style="width:100%;display:flex;align-items:center;gap:16px;padding:16px;border:none;background:none;color:var(--text);font-size:16px;cursor:pointer;border-radius:8px;transition:background 0.15s">
+                                <div style="width:44px;height:44px;background:rgba(139,92,246,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center">
+                                    <i class="fas fa-images" style="color:#8b5cf6;font-size:20px"></i>
+                                </div>
+                                <span style="flex:1;text-align:left;font-weight:500">Choose from Gallery</span>
+                            </button>
+                            <button type="button" class="upload-option" data-action="files" style="width:100%;display:flex;align-items:center;gap:16px;padding:16px;border:none;background:none;color:var(--text);font-size:16px;cursor:pointer;border-radius:8px;transition:background 0.15s">
+                                <div style="width:44px;height:44px;background:rgba(16,185,129,0.1);border-radius:50%;display:flex;align-items:center;justify-content:center">
+                                    <i class="fas fa-folder-open" style="color:#10b981;font-size:20px"></i>
+                                </div>
+                                <span style="flex:1;text-align:left;font-weight:500">Browse Files</span>
+                            </button>
+                        </div>
+                        <div style="padding:8px">
+                            <button type="button" id="action-sheet-cancel" style="width:100%;padding:16px;border:none;background:var(--hover);color:var(--text);font-size:16px;font-weight:500;cursor:pointer;border-radius:8px">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Backdrop for action sheet -->
+                    <div id="upload-action-backdrop" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;animation:fadeIn 0.25s ease-out"></div>
+
+                    <style>
+                        @keyframes slideUp {
+                            from { transform: translateY(100%); }
+                            to { transform: translateY(0); }
+                        }
+                        @keyframes fadeIn {
+                            from { opacity: 0; }
+                            to { opacity: 1; }
+                        }
+                        .upload-option:hover {
+                            background: var(--hover) !important;
+                        }
+                    </style>
+
                     <div style="text-align:center;margin-top:12px">
                         <small style="color:var(--sub);font-size:13px">
                             <i class="fas fa-check-circle" style="color:#10b981;margin-right:4px"></i>
@@ -320,24 +371,61 @@ function isMobileDevice() {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 }
 
-// Upload button handler - shows native picker on mobile
-document.getElementById('upload-btn-trigger').addEventListener('click', function() {
-    // On mobile, show action sheet with camera and gallery options
-    if (isMobileDevice()) {
-        // Create a simple menu using native file picker
-        // The browser will show native options including "Camera" and "Choose from Library"
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*,.heic,.heif';
-        input.capture = 'environment'; // Suggests camera as default option
+// Show/hide action sheet
+function showActionSheet() {
+    document.getElementById('upload-action-backdrop').style.display = 'block';
+    document.getElementById('upload-action-sheet').style.display = 'block';
+    document.body.style.overflow = 'hidden'; // Prevent scrolling
+}
 
-        input.onchange = handleFileSelect;
-        input.click();
+function hideActionSheet() {
+    document.getElementById('upload-action-backdrop').style.display = 'none';
+    document.getElementById('upload-action-sheet').style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+// Upload button handler - shows action sheet on mobile, file picker on desktop
+document.getElementById('upload-btn-trigger').addEventListener('click', function() {
+    if (isMobileDevice()) {
+        // On mobile, show custom action sheet
+        showActionSheet();
     } else {
         // On desktop, just open file picker
         document.getElementById('file-input-gallery').click();
     }
 });
+
+// Handle action sheet options
+document.querySelectorAll('.upload-option').forEach(button => {
+    button.addEventListener('click', function() {
+        const action = this.getAttribute('data-action');
+        hideActionSheet();
+
+        // Create appropriate file input based on action
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,.heic,.heif';
+
+        if (action === 'camera') {
+            // Force camera
+            input.capture = 'environment';
+        } else if (action === 'gallery') {
+            // No capture attribute = allows gallery selection
+            // Accept only images
+            input.accept = 'image/*,.heic,.heif';
+        } else if (action === 'files') {
+            // Browse files - same as gallery but makes intent clearer
+            input.accept = 'image/*,.heic,.heif';
+        }
+
+        input.onchange = handleFileSelect;
+        input.click();
+    });
+});
+
+// Cancel action sheet
+document.getElementById('action-sheet-cancel').addEventListener('click', hideActionSheet);
+document.getElementById('upload-action-backdrop').addEventListener('click', hideActionSheet);
 
 // Handle file selection
 async function handleFileSelect(e) {

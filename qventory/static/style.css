@@ -3514,3 +3514,78 @@ body.modal-open{ overflow:hidden; touch-action:none; }
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ===== ITEM ACTIONS DROPDOWN MENU ===== */
+.item-actions-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.item-actions-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  min-width: 200px;
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Dark mode support for dropdown */
+[data-theme="dark"] .item-actions-menu,
+[data-theme="dark"] .item-action-option {
+  background: #1e293b !important;
+  color: #e2e8f0 !important;
+}
+
+[data-theme="dark"] .item-action-option:hover {
+  background: #334155 !important;
+}
+
+/* Reduce table cell padding on mobile */
+@media (max-width: 720px) {
+  td {
+    padding: 10px 8px !important;
+    font-size: 13px;
+  }
+
+  th {
+    padding: 10px 8px !important;
+    font-size: 10px;
+  }
+
+  /* Make dropdown menu slightly smaller on mobile */
+  .item-actions-menu {
+    min-width: 180px;
+  }
+
+  .item-action-option {
+    padding: 9px 12px !important;
+    font-size: 13px !important;
+    gap: 8px !important;
+  }
+
+  .item-action-option i {
+    font-size: 14px !important;
+  }
+
+  /* Reduce button padding */
+  .btn.settingsbtn {
+    padding: 4px 8px !important;
+    margin: 1px !important;
+  }
+
+  /* Reduce tag padding */
+  .tag {
+    padding: 4px 7px;
+    font-size: 11px;
+  }
+
+  /* Tighter spacing for thumb-wrap */
+  .thumb-wrap {
+    width: 32px !important;
+    height: 32px !important;
+  }
+}
