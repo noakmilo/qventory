@@ -52,7 +52,7 @@
             <th>Title</th>
             <th>SKU</th>
             <th class="mobile-hide">Supplier</th>
-            <th class="mobile-hide">Cost</th>
+            <th>Cost</th>
             <th>Price</th>
             <th class="mobile-hide">ROI</th>
             <th>Location</th>
@@ -79,7 +79,7 @@
               <td><span class="tag itsku">{{ it.sku }}</span></td>
 
               <td class="mobile-hide">{% if it.supplier %}<span class="tag">{{ it.supplier }}</span>{% else %}—{% endif %}</td>
-              <td class="mobile-hide">{% if it.item_cost %}<span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>{% else %}—{% endif %}</td>
+              <td>{% if it.item_cost %}<span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>{% else %}—{% endif %}</td>
               <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
               <td class="mobile-hide">{% if has_price and has_cost %}<span class="tag">ROI {{ roi|round(0) }}%</span>{% else %}—{% endif %}</td>
 

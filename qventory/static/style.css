@@ -3530,29 +3530,20 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   border-radius: 8px;
   overflow: hidden;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Dark mode support for dropdown */
-[data-theme="dark"] .item-actions-menu,
-[data-theme="dark"] .item-action-option {
-  background: #1e293b !important;
-  color: #e2e8f0 !important;
-}
-
-[data-theme="dark"] .item-action-option:hover {
-  background: #334155 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* Reduce table cell padding on mobile */
 @media (max-width: 720px) {
   td {
-    padding: 10px 8px !important;
+    padding: 10px 20px !important;
     font-size: 13px;
   }
 
   th {
-    padding: 10px 8px !important;
+    padding: 10px 20px !important;
     font-size: 10px;
   }
 
