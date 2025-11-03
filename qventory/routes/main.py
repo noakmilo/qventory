@@ -2423,7 +2423,8 @@ def edit_item(item_id):
         else:
             flash("Item updated.", "ok")
 
-        return redirect(url_for("main.dashboard"))
+        # Redirect back to the page user was on (active, sold, etc.)
+        return redirect(request.referrer or url_for("main.dashboard"))
     return render_template("edit_item.html", item=it, settings=s, cloudinary_enabled=cloudinary_enabled)
 
 
@@ -2440,7 +2441,8 @@ def delete_item(item_id):
     db.session.delete(it)
     db.session.commit()
     flash("Item deleted.", "ok")
-    return redirect(url_for("main.dashboard"))
+    # Redirect back to the page user was on (active, sold, etc.)
+    return redirect(request.referrer or url_for("main.dashboard"))
 
 
 @main_bp.route("/sale/<int:sale_id>/update_cost", methods=["POST"])
@@ -3018,7 +3020,8 @@ def print_item(item_id):
                 os.unlink(tmp_path)
             except Exception:
                 pass
-            return redirect(url_for("main.dashboard"))
+            # Redirect back to the page user was on (active, sold, etc.)
+            return redirect(request.referrer or url_for("main.dashboard"))
         else:
             flash("Printing failed. Downloading the label instead.", "error")
             return send_file(
