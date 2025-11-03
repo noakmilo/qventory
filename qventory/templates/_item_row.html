@@ -156,38 +156,67 @@
           <i class="fas fa-lock"></i> Sold (Read-only)
         </span>
       {% else %}
-        {# Active items: Show all action buttons #}
-        <button class="btn settingsbtn ai-research-btn"
-                data-item-id="{{ it.id }}"
-                data-item-title="{{ it.title }}"
-                title="AI Market Research">
-          <i class="fas fa-robot"></i>
-        </button>
-        <button class="btn settingsbtn profit-calc-btn"
-                data-item-id="{{ it.id }}"
-                data-item-title="{{ it.title }}"
-                data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
-                data-item-price="{{ it.item_price if it.item_price else '' }}"
-                title="Profit Calculator">
-          <i class="fas fa-calculator"></i>
-        </button>
-        {% if it.ebay_listing_id %}
-        <button class="btn settingsbtn sync-to-ebay-btn"
-                data-item-id="{{ it.id }}"
-                data-ebay-listing-id="{{ it.ebay_listing_id }}"
-                data-location-code="{{ it.location_code if it.location_code else '' }}"
-                title="Sync location to eBay Custom SKU"
-                style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
-          <i class="fab fa-ebay"></i>
-        </button>
-        {% endif %}
-        <a class="btn settingsbtn" href="{{ url_for('main.edit_item', item_id=it.id) }}"><i class="fas fa-edit"></i></a>
-        <form style="display:inline" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
-          <button class="btn settingsbtn" type="submit"><i class="fas fa-print"></i></button>
-        </form>
-        <form style="display:inline" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
-          <button class="btn settingsbtn" type="submit"><i class="fas fa-trash-alt"></i></button>
-        </form>
+        {# Active items: Dropdown menu with all actions #}
+        <div class="item-actions-dropdown" style="position:relative;display:inline-block">
+          <button class="btn settingsbtn" type="button" onclick="toggleItemActionsMenu(this)" title="Actions">
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+          <div class="item-actions-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);min-width:220px;z-index:1000">
+            <button class="item-action-option ai-research-btn"
+                    data-item-id="{{ it.id }}"
+                    data-item-title="{{ it.title }}"
+                    type="button"
+                    style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:none;background:none;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+              <i class="fas fa-robot" style="width:18px;color:#8b5cf6;font-size:16px"></i>
+              <span>AI Market Research</span>
+            </button>
+            <button class="item-action-option profit-calc-btn"
+                    data-item-id="{{ it.id }}"
+                    data-item-title="{{ it.title }}"
+                    data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
+                    data-item-price="{{ it.item_price if it.item_price else '' }}"
+                    type="button"
+                    style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:none;background:none;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+              <i class="fas fa-calculator" style="width:18px;color:#10b981;font-size:16px"></i>
+              <span>Profit Calculator</span>
+            </button>
+            {% if it.ebay_listing_id %}
+            <button class="item-action-option sync-to-ebay-btn"
+                    data-item-id="{{ it.id }}"
+                    data-ebay-listing-id="{{ it.ebay_listing_id }}"
+                    data-location-code="{{ it.location_code if it.location_code else '' }}"
+                    type="button"
+                    style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:none;background:none;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+              <i class="fab fa-ebay" style="width:18px;color:#E53238;font-size:16px"></i>
+              <span>Sync to eBay</span>
+            </button>
+            {% endif %}
+            <div style="height:1px;background:var(--border);margin:6px 0"></div>
+            <a class="item-action-option"
+               href="{{ url_for('main.edit_item', item_id=it.id) }}"
+               style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;color:var(--text);font-size:14px;text-decoration:none;transition:background 0.15s">
+              <i class="fas fa-edit" style="width:18px;color:#3b82f6;font-size:16px"></i>
+              <span>Edit Item</span>
+            </a>
+            <form style="margin:0" method="post" action="{{ url_for('main.print_item', item_id=it.id) }}">
+              <button class="item-action-option"
+                      type="submit"
+                      style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:none;background:none;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+                <i class="fas fa-print" style="width:18px;color:#6b7280;font-size:16px"></i>
+                <span>Print Label</span>
+              </button>
+            </form>
+            <div style="height:1px;background:var(--border);margin:6px 0"></div>
+            <form style="margin:0" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
+              <button class="item-action-option"
+                      type="submit"
+                      style="width:100%;display:flex;align-items:center;gap:12px;padding:12px 16px;border:none;background:none;color:#ef4444;font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+                <i class="fas fa-trash-alt" style="width:18px;font-size:16px"></i>
+                <span>Delete Item</span>
+              </button>
+            </form>
+          </div>
+        </div>
       {% endif %}
     {% else %}
     <span class="tag">Login to edit</span>

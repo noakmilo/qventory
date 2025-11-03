@@ -1445,4 +1445,75 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
+<script>
+/* ===== ITEM ACTIONS DROPDOWN MENU ===== */
+function toggleItemActionsMenu(button) {
+  const dropdown = button.closest('.item-actions-dropdown');
+  const menu = dropdown.querySelector('.item-actions-menu');
+  const isOpen = menu.style.display === 'block';
+
+  // Close all other dropdowns first
+  document.querySelectorAll('.item-actions-menu').forEach(m => {
+    m.style.display = 'none';
+  });
+
+  // Toggle current dropdown
+  menu.style.display = isOpen ? 'none' : 'block';
+
+  // Prevent closing when clicking inside the menu
+  if (!isOpen) {
+    setTimeout(() => {
+      document.addEventListener('click', closeAllMenus);
+    }, 0);
+  }
+}
+
+function closeAllMenus(e) {
+  // Don't close if clicking on a dropdown trigger
+  if (e && e.target.closest('.item-actions-dropdown button[onclick]')) {
+    return;
+  }
+
+  document.querySelectorAll('.item-actions-menu').forEach(menu => {
+    menu.style.display = 'none';
+  });
+
+  document.removeEventListener('click', closeAllMenus);
+}
+
+// Add hover effects to menu items
+document.addEventListener('DOMContentLoaded', function() {
+  // Delegate hover events to avoid issues with dynamically loaded rows
+  document.addEventListener('mouseover', function(e) {
+    const option = e.target.closest('.item-action-option');
+    if (option) {
+      option.style.background = 'var(--hover)';
+    }
+  });
+
+  document.addEventListener('mouseout', function(e) {
+    const option = e.target.closest('.item-action-option');
+    if (option) {
+      option.style.background = 'none';
+    }
+  });
+
+  // Close menu when clicking an action
+  document.addEventListener('click', function(e) {
+    const option = e.target.closest('.item-action-option');
+    if (option) {
+      // Close the menu after a brief delay to allow the action to execute
+      setTimeout(closeAllMenus, 100);
+    }
+  });
+});
+
+// Close on escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeAllMenus();
+  }
+});
+</script>
+
 {% endblock %}
