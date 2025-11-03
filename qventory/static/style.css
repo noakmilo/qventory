@@ -3535,6 +3535,46 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   -webkit-backdrop-filter: blur(10px);
 }
 
+/* ===== OPTIMIZE COST AND PRICE COLUMNS WIDTH ===== */
+/* Cost column (7th column) and Price column (8th column) */
+th:nth-child(7),
+th:nth-child(8),
+td:nth-child(7),
+td:nth-child(8) {
+  width: 100px;
+  max-width: 110px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Reduce padding in inline-edit display for COST/PRICE */
+td:nth-child(7) .inline-edit__display,
+td:nth-child(8) .inline-edit__display {
+  padding: 4px 8px;
+  font-size: 13px;
+  display: inline-block;
+}
+
+/* Compact tags inside COST/PRICE columns */
+td:nth-child(7) .tag,
+td:nth-child(8) .tag {
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* Reduce icon size in COST/PRICE tags */
+td:nth-child(7) .tag i,
+td:nth-child(8) .tag i {
+  font-size: 11px;
+}
+
+/* Optimize input width when editing COST/PRICE */
+td:nth-child(7) .inline-edit__form input,
+td:nth-child(8) .inline-edit__form input {
+  max-width: 85px;
+  font-size: 13px;
+}
+
 /* Reduce table cell padding on mobile */
 @media (max-width: 720px) {
   td {
@@ -3578,5 +3618,38 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   .thumb-wrap {
     width: 32px !important;
     height: 32px !important;
+  }
+
+  /* COST and PRICE columns - more compact on mobile */
+  th:nth-child(7),
+  th:nth-child(8),
+  td:nth-child(7),
+  td:nth-child(8) {
+    width: 75px !important;
+    max-width: 85px !important;
+  }
+
+  td:nth-child(7) .inline-edit__display,
+  td:nth-child(8) .inline-edit__display {
+    padding: 3px 6px !important;
+    font-size: 12px !important;
+  }
+
+  td:nth-child(7) .tag,
+  td:nth-child(8) .tag {
+    padding: 2px 5px !important;
+    font-size: 11px !important;
+  }
+
+  /* Hide icons in COST/PRICE on mobile to save space */
+  td:nth-child(7) .tag i,
+  td:nth-child(8) .tag i {
+    display: none;
+  }
+
+  td:nth-child(7) .inline-edit__form input,
+  td:nth-child(8) .inline-edit__form input {
+    max-width: 65px !important;
+    font-size: 12px !important;
   }
 }
