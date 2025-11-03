@@ -68,17 +68,24 @@
 
             <!-- Upload Form -->
             <form method="POST" enctype="multipart/form-data" id="upload-form">
-                <!-- Hidden file input -->
+                <!-- Hidden file inputs - separate for camera and gallery -->
                 <input
                     type="file"
-                    id="file-input"
+                    id="file-input-camera"
                     name="receipt_image"
-                    accept="image/*,.heic,.heif"
+                    accept="image/*"
                     capture="environment"
                     style="display:none"
                 >
+                <input
+                    type="file"
+                    id="file-input-gallery"
+                    name="receipt_image"
+                    accept="image/*,.heic,.heif"
+                    style="display:none"
+                >
 
-                <!-- Single Upload Button -->
+                <!-- Upload Button with Native Menu -->
                 <div style="margin-bottom:24px">
                     <button
                         type="button"
@@ -308,9 +315,28 @@ function compressImage(file, maxSizeKB = 400) {
     });
 }
 
-// Single button handler
+// Detect if mobile device
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Upload button handler - shows native picker on mobile
 document.getElementById('upload-btn-trigger').addEventListener('click', function() {
-    document.getElementById('file-input').click();
+    // On mobile, show action sheet with camera and gallery options
+    if (isMobileDevice()) {
+        // Create a simple menu using native file picker
+        // The browser will show native options including "Camera" and "Choose from Library"
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,.heic,.heif';
+        input.capture = 'environment'; // Suggests camera as default option
+
+        input.onchange = handleFileSelect;
+        input.click();
+    } else {
+        // On desktop, just open file picker
+        document.getElementById('file-input-gallery').click();
+    }
 });
 
 // Handle file selection
@@ -374,25 +400,26 @@ async function handleFileSelect(e) {
         };
         reader.readAsDataURL(file);
 
-        // Store the converted file for upload
+        // Store the file globally for form submission
+        window.selectedReceiptFile = file;
+
+        // Also update the hidden input for non-JS fallback
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(file);
-        document.getElementById('file-input').files = dataTransfer.files;
+        const hiddenInput = document.getElementById('file-input-gallery');
+        if (hiddenInput) hiddenInput.files = dataTransfer.files;
 
     } catch (error) {
         alert(error.message);
-        document.getElementById('file-input').value = '';
         document.getElementById('image-preview').style.display = 'none';
         document.getElementById('upload-actions').style.display = 'none';
         document.getElementById('upload-progress').style.display = 'none';
     }
 }
 
-document.getElementById('file-input').addEventListener('change', handleFileSelect);
-
 // Cancel button - reset everything
 document.getElementById('cancel-btn').addEventListener('click', function() {
-    document.getElementById('file-input').value = '';
+    window.selectedReceiptFile = null;
     document.getElementById('image-preview').style.display = 'none';
     document.getElementById('upload-actions').style.display = 'none';
 });
@@ -401,8 +428,11 @@ document.getElementById('cancel-btn').addEventListener('click', function() {
 document.getElementById('upload-form').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const fileInput = document.getElementById('file-input');
-    const originalFile = fileInput.files[0];
+    const originalFile = window.selectedReceiptFile;
+    if (!originalFile) {
+        alert('Please select a file to upload.');
+        return;
+    }
 
     if (!originalFile) {
         alert('Please select a file to upload.');
