@@ -606,6 +606,13 @@ def import_ebay_sales(self, user_id, days_back=None):
                         if item and item.item_cost:
                             existing_sale.item_cost = item.item_cost
 
+                        # Mark item as sold if not already marked
+                        if item and not item.sold_at:
+                            item.is_active = False
+                            item.sold_at = sold_at
+                            item.sold_price = sold_price
+                            log_task(f"    → Marked item as sold (soft delete)")
+
                         existing_sale.calculate_profit()
                         updated_count += 1
                         log_task(f"  Updated sale: {title[:50]}")
@@ -634,6 +641,13 @@ def import_ebay_sales(self, user_id, days_back=None):
                             ebay_transaction_id=ebay_transaction_id,
                             ebay_buyer_username=buyer_username
                         )
+
+                        # Mark item as sold if not already marked
+                        if item and not item.sold_at:
+                            item.is_active = False
+                            item.sold_at = sold_at
+                            item.sold_price = sold_price
+                            log_task(f"    → Marked item as sold (soft delete)")
 
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
@@ -1727,6 +1741,13 @@ def process_item_sold_event(event):
             ebay_buyer_username=buyer_username,
             buyer_username=buyer_username
         )
+
+        # Mark item as sold if not already marked
+        if item and not item.sold_at:
+            item.is_active = False
+            item.sold_at = datetime.utcnow()
+            item.sold_price = sold_price
+            log_task(f"  → Marked item as sold (soft delete)")
 
         new_sale.calculate_profit()
         db.session.add(new_sale)
