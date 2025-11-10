@@ -16,9 +16,6 @@
         <p style="color:var(--sub);">Manage all users and their inventory</p>
       </div>
       <div class="admin-actions">
-        <a href="{{ url_for('admin_logs.logs_console') }}" class="btn">
-          <i class="fas fa-terminal"></i> System Logs
-        </a>
         <a href="{{ url_for('main.admin_users_roles') }}" class="btn">
           <i class="fas fa-user-tag"></i> User Roles
         </a>
@@ -89,6 +86,27 @@
         <form method="POST" action="{{ url_for('main.admin_process_recurring_expenses') }}" onsubmit="return confirm('This will create expense entries for all recurring expenses due today. Continue?');">
           <button type="submit" class="btn" style="background:#10b981;color:#fff;white-space:nowrap;">
             <i class="fas fa-play"></i> Run Now
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Sync and Purge eBay Items -->
+    <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#ef4444;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-broom"></i> Sync & Purge Inactive eBay Items
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Syncs all eBay accounts and marks items as inactive if they no longer exist on eBay.
+            This cleanup task helps resolve issues from duplicates and items that got stuck as active.
+            <strong>Recommended after bug fixes deployment.</strong>
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_sync_and_purge_items') }}" onsubmit="return confirm('This will sync ALL eBay accounts and mark inactive items that no longer exist on eBay. This may take several minutes. Continue?');">
+          <button type="submit" class="btn" style="background:#ef4444;color:#fff;white-space:nowrap;">
+            <i class="fas fa-sync"></i> Sync & Purge
           </button>
         </form>
       </div>

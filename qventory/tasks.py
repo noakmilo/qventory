@@ -3363,3 +3363,112 @@ def process_recurring_expenses(self):
             'created': created_count,
             'total_checked': len(recurring_expenses)
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_and_purge_inactive_items')
+def sync_and_purge_inactive_items(self):
+    """
+    Admin task: Sync all eBay accounts and purge items that are no longer active on eBay
+
+    This task:
+    1. Finds all users with eBay connected
+    2. Syncs their eBay inventory to get current active listings
+    3. Marks items as inactive if they no longer exist on eBay
+    4. Optionally deletes items that have been inactive for too long
+
+    Returns:
+        dict with sync and purge results
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.user import User
+        from qventory.models.item import Item
+        from qventory.helpers.ebay_inventory import get_all_inventory
+        from sqlalchemy import and_
+
+        log_task("=== ADMIN: Starting eBay sync and purge task ===")
+
+        # Find all users with eBay connected
+        users_with_ebay = User.query.filter(
+            User.ebay_access_token.isnot(None),
+            User.ebay_access_token != ''
+        ).all()
+
+        log_task(f"Found {len(users_with_ebay)} users with eBay connected")
+
+        total_synced = 0
+        total_marked_inactive = 0
+        total_purged = 0
+        users_processed = 0
+
+        for user in users_with_ebay:
+            try:
+                log_task(f"\n--- Processing user {user.id}: {user.username} ---")
+
+                # Get current active listings from eBay
+                log_task(f"  Fetching active listings from eBay...")
+                ebay_result = get_all_inventory(user.id, listing_status='ACTIVE')
+
+                if not ebay_result['success']:
+                    log_task(f"  ✗ Failed to fetch eBay inventory: {ebay_result.get('error')}")
+                    continue
+
+                ebay_items = ebay_result['items']
+                log_task(f"  Found {len(ebay_items)} active listings on eBay")
+
+                # Get all active items in our database for this user
+                db_items = Item.query.filter_by(
+                    user_id=user.id,
+                    is_active=True
+                ).filter(
+                    Item.ebay_listing_id.isnot(None),
+                    Item.ebay_listing_id != ''
+                ).all()
+
+                log_task(f"  Database has {len(db_items)} active items with eBay listing IDs")
+
+                # Create a set of active eBay listing IDs for fast lookup
+                active_ebay_listing_ids = set()
+                for ebay_item in ebay_items:
+                    listing_id = ebay_item.get('listing_id') or ebay_item.get('ebay_listing_id')
+                    if listing_id:
+                        active_ebay_listing_ids.add(str(listing_id))
+
+                # Check each database item against eBay
+                marked_inactive = 0
+                for db_item in db_items:
+                    if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
+                        # Item no longer active on eBay
+                        db_item.is_active = False
+                        log_task(f"    ⊗ Marked inactive: {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
+                        marked_inactive += 1
+                        total_marked_inactive += 1
+
+                # Commit changes for this user
+                db.session.commit()
+                log_task(f"  ✓ User {user.username}: {marked_inactive} items marked as inactive")
+
+                total_synced += len(ebay_items)
+                users_processed += 1
+
+            except Exception as e:
+                log_task(f"  ✗ Error processing user {user.id}: {str(e)}")
+                import traceback
+                log_task(f"  Traceback: {traceback.format_exc()}")
+                db.session.rollback()
+                continue
+
+        log_task(f"\n=== Sync and purge complete ===")
+        log_task(f"Users processed: {users_processed}/{len(users_with_ebay)}")
+        log_task(f"Total eBay items synced: {total_synced}")
+        log_task(f"Total items marked inactive: {total_marked_inactive}")
+
+        return {
+            'success': True,
+            'users_processed': users_processed,
+            'total_users': len(users_with_ebay),
+            'items_synced': total_synced,
+            'items_marked_inactive': total_marked_inactive,
+            'items_purged': total_purged
+        }

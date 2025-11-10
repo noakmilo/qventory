@@ -3341,6 +3341,26 @@ def admin_process_recurring_expenses():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/sync-and-purge-items", methods=["POST"])
+@require_admin
+def admin_sync_and_purge_items():
+    """
+    Sync all eBay accounts and purge items that are no longer active
+
+    This will:
+    1. Find all users with eBay connected
+    2. Sync their eBay inventory
+    3. Mark items as inactive if they no longer exist on eBay
+    """
+    from qventory.tasks import sync_and_purge_inactive_items
+
+    # Launch the task
+    task = sync_and_purge_inactive_items.delay()
+
+    flash(f"Sync and purge task launched (Task ID: {task.id}). This will sync all eBay accounts and mark inactive items. Check logs for results.", "ok")
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/tokens/config")
 @require_admin
 def admin_token_config():
