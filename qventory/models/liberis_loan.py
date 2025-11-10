@@ -92,10 +92,11 @@ class LiberisLoan(db.Model):
         """
         from qventory.models.sale import Sale
 
+        # Include all valid sale statuses (exclude only cancelled, refunded, returned)
         sales = Sale.query.filter(
             Sale.user_id == self.user_id,
             Sale.sold_at >= datetime.combine(self.start_date, datetime.min.time()),
-            Sale.status.in_(['completed', 'shipped', 'paid'])
+            Sale.status.notin_(['cancelled', 'refunded', 'returned'])
         ).all()
 
         total_paid = 0

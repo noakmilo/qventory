@@ -191,6 +191,13 @@
       </div>
       {% endif %}
     </div>
+
+    <!-- Recalculate Button -->
+    <div style="margin-top:12px;text-align:right">
+      <button onclick="recalculateLiberis()" class="btn" style="font-size:12px;padding:8px 12px">
+        <i class="fas fa-sync-alt"></i> Recalculate Progress
+      </button>
+    </div>
   </div>
   {% endif %}
 
@@ -534,6 +541,40 @@ new Chart(listingsCtx, {
     }
   }
 });
+
+// Recalculate Liberis loan progress
+async function recalculateLiberis() {
+  const btn = event.target.closest('button');
+  const originalContent = btn.innerHTML;
+
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Recalculating...';
+
+    const response = await fetch('/expenses/api/liberis/recalculate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      // Reload page to show updated progress
+      window.location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to recalculate'));
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
+    }
+  } catch (error) {
+    console.error('Error recalculating Liberis:', error);
+    alert('Error: ' + error.message);
+    btn.innerHTML = originalContent;
+    btn.disabled = false;
+  }
+}
 </script>
 
 {% endblock %}

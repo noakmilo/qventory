@@ -214,3 +214,31 @@ def update_budget():
     except Exception as e:
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@expenses_bp.route("/api/liberis/recalculate", methods=["POST"])
+@login_required
+def recalculate_liberis_loan():
+    """Manually recalculate Liberis loan repayment progress"""
+    try:
+        from qventory.models.liberis_loan import LiberisLoan
+
+        liberis_loan = LiberisLoan.get_active_loan(current_user.id)
+
+        if not liberis_loan:
+            return jsonify({"ok": False, "error": "No active Liberis loan found"}), 404
+
+        # Recalculate
+        liberis_loan.recalculate_paid_amount()
+
+        return jsonify({
+            "ok": True,
+            "paid_amount": float(liberis_loan.paid_amount),
+            "total_amount": float(liberis_loan.total_amount),
+            "progress_percentage": float(liberis_loan.progress_percentage),
+            "remaining_amount": float(liberis_loan.remaining_amount)
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 400
