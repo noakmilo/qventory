@@ -3361,6 +3361,22 @@ def admin_sync_and_purge_items():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/resync-all-inventory", methods=["POST"])
+@require_admin
+def admin_resync_all_inventory():
+    """
+    Global action: deduplicate every eBay inventory and launch a sync_all import.
+    """
+    from qventory.tasks import resync_all_inventories_and_purge
+
+    task = resync_all_inventories_and_purge.delay()
+    flash(
+        f"Full resync task launched (Task ID: {task.id}). All eBay inventories will be deduplicated and synced.",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/tokens/config")
 @require_admin
 def admin_token_config():

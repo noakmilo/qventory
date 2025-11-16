@@ -112,6 +112,26 @@
       </div>
     </div>
 
+    <!-- Full Resync + Dedup -->
+    <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-database"></i> Full Inventory Resync & Dedup
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Launches a global task that purges duplicated listings (by eBay listing ID) for every account and runs a sync_all import.
+            Use this after large incidents to ensure every user mirrors the latest eBay data without duplicates.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_resync_all_inventory') }}" onsubmit="return confirm('This task will deduplicate EVERY eBay inventory and run a sync_all import for every account. It can take a long time. Continue?');">
+          <button type="submit" class="btn" style="background:#3b82f6;color:#fff;white-space:nowrap;">
+            <i class="fas fa-redo-alt"></i> Run Full Resync
+          </button>
+        </form>
+      </div>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->

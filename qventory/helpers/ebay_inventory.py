@@ -315,6 +315,65 @@ def get_active_listings(user_id, limit=200, offset=0):
     }
 
 
+def _normalize_listing_key(item):
+    """Generate a deduplication key for an eBay item payload."""
+    listing_id = item.get('ebay_listing_id') or item.get('listing_id')
+    if listing_id:
+        return f"id:{str(listing_id).strip()}"
+
+    product = item.get('product')
+    if isinstance(product, dict):
+        title = product.get('title') or ''
+    else:
+        title = item.get('title', '')
+    normalized_title = ' '.join(title.split()).lower()
+    sku = (item.get('sku') or item.get('ebay_sku') or '').strip().lower()
+    price = item.get('item_price')
+    source = item.get('source', 'unknown')
+    return f"title:{normalized_title}|sku:{sku}|price:{price}|source:{source}"
+
+
+def deduplicate_ebay_items(items):
+    """
+    Remove duplicate listings returned by eBay APIs.
+
+    Duplicates primarily use ebay_listing_id/listing_id, but we fall back to
+    title+SKU+price+source when IDs are missing.
+    """
+    seen = set()
+    deduped = []
+    duplicates = []
+
+    for item in items:
+        try:
+            key = _normalize_listing_key(item or {})
+        except Exception as exc:
+            log_inv(f"⚠️  Could not generate dedup key, keeping item. Error: {exc}")
+            key = None
+
+        if key and key in seen:
+            duplicates.append(item)
+            continue
+
+        if key:
+            seen.add(key)
+        deduped.append(item)
+
+    if duplicates:
+        log_inv(f"⚠️  Removed {len(duplicates)} duplicate listings from eBay payload")
+        sample = duplicates[:5]
+        for dup in sample:
+            listing_id = dup.get('ebay_listing_id') or dup.get('listing_id') or 'N/A'
+            product = dup.get('product') if isinstance(dup.get('product'), dict) else {}
+            title = product.get('title') or dup.get('title') or ''
+            source = dup.get('source', 'unknown')
+            log_inv(f"     Duplicate listing {listing_id}: {title[:70]} (source={source})")
+        if len(duplicates) > len(sample):
+            log_inv(f"     ...and {len(duplicates) - len(sample)} more duplicates trimmed")
+
+    return deduped, duplicates
+
+
 def get_all_inventory(user_id, max_items=1000):
     """
     Get all inventory items (paginated)
@@ -421,7 +480,8 @@ def get_all_inventory(user_id, max_items=1000):
                 browse_items = get_seller_listings_browse_api(user_id, max_items=max_items)
                 if browse_items:
                     log_inv(f"Browse API returned {len(browse_items)} items")
-                    return browse_items
+                    deduped_browse, _ = deduplicate_ebay_items(browse_items)
+                    return deduped_browse[:max_items]
             except Exception as browse_error:
                 log_inv(f"ERROR in Browse API fallback: {str(browse_error)}")
 
@@ -432,14 +492,16 @@ def get_all_inventory(user_id, max_items=1000):
                 # Result is just items list when collect_failures=False
                 if result:
                     log_inv(f"Trading API returned {len(result)} active listings")
-                    return result
+                    deduped_trading, _ = deduplicate_ebay_items(result)
+                    return deduped_trading[:max_items]
             except Exception as trading_error:
                 log_inv(f"ERROR in Trading API fallback: {str(trading_error)}")
 
             # Return empty if all APIs fail
             return []
 
-    return all_items[:max_items]
+    deduped_items, _ = deduplicate_ebay_items(all_items)
+    return deduped_items[:max_items]
 
 
 def get_ebay_orders(user_id, days_back=None, max_orders=5000, start_date=None, end_date=None):
@@ -790,6 +852,14 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
         if len(failed_items) > 0:
             log_inv(f"  ⚠️  {len(failed_items)} items failed to parse and will be stored for retry")
     log_inv(f"=" * 60)
+
+    # Deduplicate before returning
+    deduped_items, duplicates = deduplicate_ebay_items(all_items)
+    if duplicates:
+        log_inv(f"Trading API deduplication complete: {len(deduped_items)} unique items returned")
+    else:
+        log_inv("Trading API returned unique listings (no duplicates detected)")
+    all_items = deduped_items
 
     if collect_failures:
         return all_items[:max_items], failed_items

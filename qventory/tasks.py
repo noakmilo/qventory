@@ -3,6 +3,7 @@ Celery Background Tasks for Qventory
 """
 import sys
 from datetime import datetime
+from sqlalchemy import func
 from qventory.celery_app import celery
 from qventory.extensions import db
 from qventory import create_app
@@ -33,7 +34,13 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         from qventory.models.item import Item
         from qventory.models.failed_import import FailedImport
         from qventory.models.user import User
-        from qventory.helpers.ebay_inventory import get_all_inventory, parse_ebay_inventory_item, get_listing_time_details, get_active_listings_trading_api
+        from qventory.helpers.ebay_inventory import (
+            get_all_inventory,
+            parse_ebay_inventory_item,
+            get_listing_time_details,
+            get_active_listings_trading_api,
+            deduplicate_ebay_items
+        )
         from qventory.helpers import generate_sku
 
         log_task(f"=== Starting eBay import for user {user_id} ===")
@@ -82,7 +89,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             # Fetch inventory from eBay using Trading API with failure collection
             log_task("Fetching inventory from eBay API...")
             ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
-            log_task(f"Fetched {len(ebay_items)} items from eBay")
+            log_task(f"Fetched {len(ebay_items)} unique items from eBay")
+            ebay_items, duplicate_entries = deduplicate_ebay_items(ebay_items)
+            if duplicate_entries:
+                log_task(f"Removed {len(duplicate_entries)} duplicate entries before processing")
             log_task(f"Failed to parse: {len(failed_items)} items")
 
             job.total_items = len(ebay_items)
@@ -3471,4 +3481,163 @@ def sync_and_purge_inactive_items(self):
             'items_synced': total_synced,
             'items_marked_inactive': total_marked_inactive,
             'items_purged': total_purged
+        }
+
+
+def purge_duplicate_items_for_user(user_id):
+    """
+    Remove duplicate synced items for a specific user.
+
+    Duplicates are identified via repeated eBay listing IDs to avoid deleting
+    legitimately duplicated manual entries.
+    """
+    from qventory.models.item import Item
+    from qventory.helpers.image_processor import delete_cloudinary_image
+
+    duplicate_listing_ids = (
+        db.session.query(Item.ebay_listing_id)
+        .filter(
+            Item.user_id == user_id,
+            Item.synced_from_ebay.is_(True),
+            Item.ebay_listing_id.isnot(None),
+            Item.ebay_listing_id != ''
+        )
+        .group_by(Item.ebay_listing_id)
+        .having(func.count(Item.id) > 1)
+        .all()
+    )
+
+    purged_items = 0
+    duplicate_groups = 0
+
+    for (listing_id,) in duplicate_listing_ids:
+        items = Item.query.filter_by(
+            user_id=user_id,
+            ebay_listing_id=listing_id
+        ).order_by(
+            Item.updated_at.desc(),
+            Item.id.desc()
+        ).all()
+
+        if not items:
+            continue
+
+        duplicate_groups += 1
+
+        # Keep the most recently updated record and delete the rest
+        for duplicate in items[1:]:
+            if duplicate.item_thumb:
+                try:
+                    delete_cloudinary_image(duplicate.item_thumb)
+                except Exception as cleanup_error:
+                    log_task(f"WARNING: Failed to remove Cloudinary image for item {duplicate.id}: {cleanup_error}")
+            db.session.delete(duplicate)
+            purged_items += 1
+
+    if purged_items:
+        db.session.commit()
+
+    return purged_items, duplicate_groups
+
+
+@celery.task(bind=True, name='qventory.tasks.resync_all_inventories_and_purge')
+def resync_all_inventories_and_purge(self):
+    """
+    Admin task: purge duplicated eBay listings per account and resync every inventory.
+
+    Runs a sync_all import per user so that existing listings are updated even if
+    they already exist in Qventory.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+
+        log_task("=== ADMIN: Starting full inventory resync & dedup task ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        total_accounts = len(credentials)
+        log_task(f"Found {total_accounts} active eBay credentials to process")
+
+        summary = []
+        total_purged = 0
+
+        for idx, credential in enumerate(credentials, start=1):
+            user = credential.owner or User.query.get(credential.user_id)
+            if not user:
+                log_task(f"[{idx}/{total_accounts}] Skipping credential {credential.id}: user not found")
+                continue
+
+            log_task(f"[{idx}/{total_accounts}] Processing user {user.username} (ID {user.id})")
+
+            purged_items = 0
+            duplicate_groups = 0
+            try:
+                purged_items, duplicate_groups = purge_duplicate_items_for_user(user.id)
+                total_purged += purged_items
+                if purged_items:
+                    log_task(f"  ✓ Removed {purged_items} duplicate items ({duplicate_groups} listing IDs)")
+                else:
+                    log_task("  No duplicate listings detected for this account")
+            except Exception as purge_error:
+                db.session.rollback()
+                log_task(f"  ✗ Error removing duplicates for user {user.username}: {purge_error}")
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'purged': 0,
+                    'error': f"purge_failed: {purge_error}"
+                })
+                continue
+
+            try:
+                import_result = import_ebay_inventory.run(
+                    user.id,
+                    import_mode='sync_all',
+                    listing_status='ACTIVE'
+                )
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'purged': purged_items,
+                    'imported': import_result.get('imported', 0),
+                    'updated': import_result.get('updated', 0),
+                    'skipped': import_result.get('skipped', 0)
+                })
+                log_task(f"  ✓ Resync complete: {import_result.get('imported', 0)} imported / {import_result.get('updated', 0)} updated")
+            except Exception as import_error:
+                db.session.rollback()
+                log_task(f"  ✗ Error resyncing inventory for user {user.username}: {import_error}")
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'purged': purged_items,
+                    'error': f"import_failed: {import_error}"
+                })
+
+            if hasattr(self, 'request') and self.request.id:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total_accounts,
+                        'last_user': user.username,
+                        'total_purged': total_purged
+                    }
+                )
+
+        log_task("=== Full inventory resync finished ===")
+        log_task(f"Total duplicates purged: {total_purged}")
+        log_task(f"Accounts processed: {len(summary)}/{total_accounts}")
+
+        return {
+            'success': True,
+            'accounts_found': total_accounts,
+            'accounts_processed': len(summary),
+            'total_duplicates_removed': total_purged,
+            'results': summary
         }
