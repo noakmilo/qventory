@@ -3137,6 +3137,62 @@ def admin_dashboard():
     return render_template("admin_dashboard.html", user_stats=user_stats)
 
 
+@main_bp.route("/admin/user/<int:user_id>/diagnostics")
+@require_admin
+def admin_user_diagnostics(user_id):
+    """View import diagnostics for a specific user"""
+    from qventory.models.failed_import import FailedImport
+    from qventory.models.import_job import ImportJob
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    user = User.query.get_or_404(user_id)
+
+    # Get eBay connection status
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=user_id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    # Get inventory stats
+    total_items = Item.query.filter_by(user_id=user_id).count()
+    active_items = Item.query.filter_by(user_id=user_id, is_active=True).count()
+    inactive_items = Item.query.filter_by(user_id=user_id, is_active=False).count()
+
+    # Get recent import jobs
+    recent_jobs = ImportJob.query.filter_by(user_id=user_id).order_by(
+        ImportJob.created_at.desc()
+    ).limit(10).all()
+
+    # Get failed imports (unresolved)
+    failed_imports = FailedImport.get_unresolved_for_user(user_id)
+
+    # Group failed imports by error type
+    error_summary = {}
+    for failed in failed_imports:
+        error_type = failed.error_type or 'unknown'
+        if error_type not in error_summary:
+            error_summary[error_type] = {
+                'count': 0,
+                'examples': []
+            }
+        error_summary[error_type]['count'] += 1
+        if len(error_summary[error_type]['examples']) < 3:
+            error_summary[error_type]['examples'].append(failed)
+
+    return render_template(
+        "admin_user_diagnostics.html",
+        user=user,
+        ebay_connected=ebay_cred is not None,
+        total_items=total_items,
+        active_items=active_items,
+        inactive_items=inactive_items,
+        recent_jobs=recent_jobs,
+        failed_imports=failed_imports,
+        error_summary=error_summary
+    )
+
+
 @main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
 @require_admin
 def admin_delete_user(user_id):

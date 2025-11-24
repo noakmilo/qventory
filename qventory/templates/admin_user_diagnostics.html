@@ -1,0 +1,343 @@
+{% extends "base_admin.html" %}
+{% block title %}User Diagnostics – {{ user.username }} – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="admin-breadcrumb">
+  <a href="{{ url_for('main.admin_dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Diagnostics: {{ user.username }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="card" style="width:98%;margin:0 auto;">
+    <div class="admin-header">
+      <div>
+        <h1><i class="fas fa-stethoscope"></i> Import Diagnostics</h1>
+        <p style="color:var(--sub);">User: <strong>{{ user.username }}</strong> ({{ user.email }})</p>
+      </div>
+      <div class="admin-actions">
+        <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+          <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+        <a href="{{ url_for('main.dashboard') }}?user={{ user.username }}" class="btn">
+          <i class="fas fa-eye"></i> View Items
+        </a>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Connection Status -->
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-plug"></i> Connection Status
+      </h2>
+      {% if ebay_connected %}
+        <div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.3);border-radius:8px;padding:var(--space-3);">
+          <span style="color:#4ade80;">
+            <i class="fas fa-check-circle"></i> eBay Connected
+          </span>
+        </div>
+      {% else %}
+        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-3);">
+          <span style="color:#ef4444;">
+            <i class="fas fa-times-circle"></i> eBay Not Connected
+          </span>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Inventory Stats -->
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-boxes"></i> Inventory Statistics
+      </h2>
+      <div class="admin-stats">
+        <div class="stat-card">
+          <div class="stat-value">{{ total_items }}</div>
+          <div class="stat-label">Total Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#4ade80;">{{ active_items }}</div>
+          <div class="stat-label">Active Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#9ca3af;">{{ inactive_items }}</div>
+          <div class="stat-label">Inactive Items</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" style="color:#ef4444;">{{ failed_imports|length }}</div>
+          <div class="stat-label">Failed Imports</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Failed Imports Summary -->
+    {% if error_summary %}
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-exclamation-triangle"></i> Failed Imports by Error Type
+      </h2>
+      {% for error_type, data in error_summary.items() %}
+      <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:var(--space-4);margin-bottom:var(--space-3);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-3);">
+          <h3 style="color:#ef4444;margin:0;font-size:var(--fs-base);">
+            {{ error_type }}
+          </h3>
+          <span class="tag" style="background:#ef4444;color:#fff;">{{ data.count }} items</span>
+        </div>
+
+        <div style="font-size:var(--fs-sm);color:var(--sub);">
+          <strong>Examples:</strong>
+          {% for example in data.examples %}
+          <div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:var(--space-2);margin-top:var(--space-2);font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">
+            <div><strong>Listing ID:</strong> {{ example.ebay_listing_id or 'N/A' }}</div>
+            <div><strong>Title:</strong> {{ example.ebay_title[:80] if example.ebay_title else 'N/A' }}{% if example.ebay_title and example.ebay_title|length > 80 %}...{% endif %}</div>
+            <div><strong>Error:</strong> {{ example.error_message[:150] }}{% if example.error_message|length > 150 %}...{% endif %}</div>
+            <div><strong>Created:</strong> {{ example.created_at.strftime('%Y-%m-%d %H:%M:%S') if example.created_at else 'N/A' }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Recent Import Jobs -->
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-history"></i> Recent Import Jobs
+      </h2>
+      {% if recent_jobs %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Mode</th>
+              <th>Status</th>
+              <th>Items</th>
+              <th>Imported</th>
+              <th>Updated</th>
+              <th>Skipped</th>
+              <th>Errors</th>
+              <th>Started</th>
+              <th>Completed</th>
+              <th>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for job in recent_jobs %}
+            <tr>
+              <td><code>{{ job.id }}</code></td>
+              <td>
+                <span class="tag" style="font-size:var(--fs-xs);">
+                  {{ job.import_mode or 'N/A' }}
+                </span>
+              </td>
+              <td>
+                {% if job.status == 'completed' %}
+                  <span class="tag" style="background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.3);color:#4ade80;">
+                    <i class="fas fa-check-circle"></i> {{ job.status }}
+                  </span>
+                {% elif job.status == 'failed' %}
+                  <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#ef4444;">
+                    <i class="fas fa-times-circle"></i> {{ job.status }}
+                  </span>
+                {% elif job.status == 'running' or job.status == 'processing' %}
+                  <span class="tag" style="background:rgba(59,130,246,0.15);border-color:rgba(59,130,246,0.3);color:#3b82f6;">
+                    <i class="fas fa-spinner fa-spin"></i> {{ job.status }}
+                  </span>
+                {% else %}
+                  <span class="tag">{{ job.status }}</span>
+                {% endif %}
+              </td>
+              <td style="text-align:center;">{{ job.total_items or '—' }}</td>
+              <td style="text-align:center;color:#4ade80;">{{ job.imported_count or 0 }}</td>
+              <td style="text-align:center;color:#60a5fa;">{{ job.updated_count or 0 }}</td>
+              <td style="text-align:center;color:#fbbf24;">{{ job.skipped_count or 0 }}</td>
+              <td style="text-align:center;color:#ef4444;">{{ job.error_count or 0 }}</td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') if job.started_at else '—' }}
+              </td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') if job.completed_at else '—' }}
+              </td>
+              <td style="font-size:var(--fs-xs);">
+                {% if job.started_at and job.completed_at %}
+                  {% set duration = (job.completed_at - job.started_at).total_seconds() %}
+                  {% if duration < 60 %}
+                    {{ "%.1f"|format(duration) }}s
+                  {% else %}
+                    {{ "%.1f"|format(duration / 60) }}m
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
+        <i class="fas fa-inbox" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
+        <p>No import jobs found</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- All Failed Imports Details -->
+    {% if failed_imports %}
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-list"></i> All Failed Imports (Unresolved)
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>eBay ID</th>
+              <th>Title</th>
+              <th>SKU</th>
+              <th>Error Type</th>
+              <th>Error Message</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for failed in failed_imports %}
+            <tr>
+              <td><code>{{ failed.id }}</code></td>
+              <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">
+                {{ failed.ebay_listing_id or '—' }}
+              </td>
+              <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ failed.ebay_title or '—' }}
+              </td>
+              <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">
+                {{ failed.ebay_sku or '—' }}
+              </td>
+              <td>
+                <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#ef4444;font-size:var(--fs-xs);">
+                  {{ failed.error_type or 'unknown' }}
+                </span>
+              </td>
+              <td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-xs);">
+                {{ failed.error_message[:200] if failed.error_message else '—' }}
+              </td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ failed.created_at.strftime('%Y-%m-%d %H:%M:%S') if failed.created_at else '—' }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Diagnostic Instructions -->
+    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:var(--space-4);margin-top:var(--space-5);">
+      <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+        <i class="fas fa-info-circle"></i> Understanding the Data
+      </h3>
+      <ul style="color:var(--sub);font-size:var(--fs-sm);margin:0;padding-left:var(--space-4);">
+        <li><strong>Active Items:</strong> Items currently in the user's inventory (is_active=True)</li>
+        <li><strong>Inactive Items:</strong> Sold, relisted, or manually deactivated items (is_active=False)</li>
+        <li><strong>Failed Imports:</strong> Items that couldn't be imported due to parsing errors or API issues</li>
+        <li><strong>Import Job Status:</strong>
+          <ul style="margin-top:var(--space-1);padding-left:var(--space-4);">
+            <li><code>completed</code>: Import finished successfully</li>
+            <li><code>failed</code>: Import encountered a critical error</li>
+            <li><code>running/processing</code>: Import currently in progress</li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Common Issues -->
+    <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:8px;padding:var(--space-4);margin-top:var(--space-4);">
+      <h3 style="color:#fbbf24;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+        <i class="fas fa-lightbulb"></i> Common Issues & Solutions
+      </h3>
+      <div style="color:var(--sub);font-size:var(--fs-sm);">
+        <div style="margin-bottom:var(--space-3);">
+          <strong>Missing Items (eBay has more items than Qventory):</strong>
+          <ul style="margin:var(--space-1) 0 0 var(--space-4);padding-left:var(--space-4);">
+            <li>Check "Failed Imports" - these items couldn't be parsed</li>
+            <li>Check "Skipped" count in recent jobs - items may have been skipped due to plan limits</li>
+            <li>Check if items are in draft/scheduled status on eBay (only ACTIVE listings are imported)</li>
+          </ul>
+        </div>
+        <div style="margin-bottom:var(--space-3);">
+          <strong>Duplicate Items:</strong>
+          <ul style="margin:var(--space-1) 0 0 var(--space-4);padding-left:var(--space-4);">
+            <li>Should be resolved by recent fixes (concurrency lock, is_active filter)</li>
+            <li>Use "Sync & Purge" button in admin dashboard to clean up duplicates</li>
+          </ul>
+        </div>
+        <div>
+          <strong>parsing_error in Failed Imports:</strong>
+          <ul style="margin:var(--space-1) 0 0 var(--space-4);padding-left:var(--space-4);">
+            <li>eBay API returned malformed data for these items</li>
+            <li>Check raw_data in database for details</li>
+            <li>May need manual fix or eBay support</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #60a5fa;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.stat-label {
+  font-size: var(--fs-sm);
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+</style>
+{% endblock %}
