@@ -3,7 +3,7 @@ Celery Background Tasks for Qventory
 """
 import sys
 from datetime import datetime
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from qventory.celery_app import celery
 from qventory.extensions import db
 from qventory import create_app
@@ -126,11 +126,12 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     log_task(f"  eBay Listing ID: {ebay_listing_id or 'None'}")
                     log_task(f"  eBay SKU: {ebay_sku or 'None'}")
 
-                    # First try: Match by eBay Listing ID (most reliable)
+                    # First try: Match by eBay Listing ID (ONLY active items to prevent duplicates)
                     if ebay_listing_id:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
-                            ebay_listing_id=ebay_listing_id
+                            ebay_listing_id=ebay_listing_id,
+                            is_active=True  # Only match active items to prevent duplicates
                         ).first()
                         if existing_item:
                             match_method = "ebay_listing_id"
@@ -138,17 +139,23 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     # Second try: Match by inactive item with this listing_id in notes (relisted item)
                     # This preserves supplier and other Qventory data when items are relisted
                     if not existing_item and ebay_listing_id:
-                        # Look for inactive items where notes contains "new listing ID: {ebay_listing_id}"
+                        # Look for inactive items where notes contains "Relisted as {ebay_listing_id}"
+                        # This matches the new relist format we're using
                         inactive_relisted = Item.query.filter_by(
                             user_id=user_id,
                             is_active=False
                         ).filter(
-                            Item.notes.like(f'%new listing ID: {ebay_listing_id}%')
+                            or_(
+                                Item.notes.like(f'%Relisted as {ebay_listing_id}%'),
+                                Item.notes.like(f'%new listing ID: {ebay_listing_id}%')  # Legacy format
+                            )
                         ).first()
 
                         if inactive_relisted:
-                            log_task(f"  ✓ Found relisted item (Qventory ID: {inactive_relisted.id}, preserving supplier)")
+                            log_task(f"  ✓ Found relisted item (Qventory ID: {inactive_relisted.id}, reactivating and updating)")
                             existing_item = inactive_relisted
+                            # Reactivate the item since it's active on eBay again
+                            existing_item.is_active = True
                             match_method = "relisted_item"
 
                     # Third try: Match by exact title (least reliable, fallback only)
