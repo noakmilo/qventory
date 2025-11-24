@@ -47,6 +47,21 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         log_task(f"Mode: {import_mode}, Status: {listing_status}")
         log_task(f"Task ID: {self.request.id}")
 
+        # Check if there's already an import running for this user
+        existing_job = ImportJob.query.filter_by(
+            user_id=user_id,
+            status='running'
+        ).first()
+
+        if existing_job:
+            log_task(f"⚠️  Import already running for user {user_id} (Job ID: {existing_job.id})")
+            log_task(f"⚠️  Skipping this import to prevent duplicates")
+            return {
+                'success': False,
+                'error': f'Import already in progress (Job ID: {existing_job.id})',
+                'skipped': True
+            }
+
         # Check user's plan limits
         user = User.query.get(user_id)
         if not user:

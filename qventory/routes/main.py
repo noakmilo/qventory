@@ -1705,6 +1705,21 @@ def import_ebay():
 
     try:
         from qventory.tasks import import_ebay_complete as import_task
+        from qventory.models.import_job import ImportJob
+
+        # Check if there's already an import running for this user
+        existing_job = ImportJob.query.filter_by(
+            user_id=current_user.id,
+            status='running'
+        ).first()
+
+        if existing_job:
+            log_import(f"⚠️  Import already running (Job ID: {existing_job.id})")
+            return jsonify({
+                "ok": False,
+                "error": "An import is already in progress. Please wait for it to finish.",
+                "job_id": existing_job.id
+            }), 409  # 409 Conflict
 
         import_mode = request.form.get('import_mode', 'sync_all')
         listing_status = request.form.get('listing_status', 'ACTIVE')
