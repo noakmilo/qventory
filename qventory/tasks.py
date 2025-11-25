@@ -173,11 +173,13 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             existing_item.is_active = True
                             match_method = "relisted_item"
 
-                    # Third try: Match by exact title (least reliable, fallback only)
-                    if not existing_item and ebay_title:
+                    # Third try: Match by exact title (ONLY if no listing_id, least reliable fallback)
+                    # This prevents false matches when items have the same title but different listing IDs
+                    if not existing_item and ebay_title and not ebay_listing_id:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
-                            title=ebay_title
+                            title=ebay_title,
+                            is_active=True  # Only match active items to prevent duplicates
                         ).first()
                         if existing_item:
                             match_method = "title"
@@ -258,6 +260,19 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 start_time = parsed_with_images.get('listing_start_time')
                             if not end_time and parsed_with_images.get('listing_end_time'):
                                 end_time = parsed_with_images.get('listing_end_time')
+
+                            # FINAL SAFETY CHECK: Verify no duplicate exists before creating
+                            # This prevents race conditions where item was created between checks
+                            final_listing_id = parsed_with_images.get('ebay_listing_id')
+                            if final_listing_id:
+                                duplicate_check = Item.query.filter_by(
+                                    user_id=user_id,
+                                    ebay_listing_id=final_listing_id
+                                ).first()
+                                if duplicate_check:
+                                    log_task(f"  ⚠️  DUPLICATE DETECTED during final check! Item already exists (ID: {duplicate_check.id}). Skipping creation.")
+                                    skipped_count += 1
+                                    continue
 
                             new_sku = generate_sku()
                             new_item = Item(
