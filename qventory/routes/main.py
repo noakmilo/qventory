@@ -1708,9 +1708,9 @@ def import_ebay():
         from qventory.models.import_job import ImportJob
 
         # Check if there's already an import running for this user
-        existing_job = ImportJob.query.filter_by(
-            user_id=current_user.id,
-            status='running'
+        existing_job = ImportJob.query.filter(
+            ImportJob.user_id == current_user.id,
+            ImportJob.status.in_(['pending', 'processing'])
         ).first()
 
         if existing_job:

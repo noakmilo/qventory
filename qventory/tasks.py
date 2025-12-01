@@ -48,9 +48,9 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         log_task(f"Task ID: {self.request.id}")
 
         # Check if there's already an import running for this user
-        existing_job = ImportJob.query.filter_by(
-            user_id=user_id,
-            status='running'
+        existing_job = ImportJob.query.filter(
+            ImportJob.user_id == user_id,
+            ImportJob.status.in_(['pending', 'processing'])
         ).first()
 
         if existing_job:

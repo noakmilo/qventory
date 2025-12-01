@@ -1,8 +1,16 @@
 from datetime import datetime
+from sqlalchemy import UniqueConstraint
 from ..extensions import db
 
 class Item(db.Model):
     __tablename__ = "items"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "ebay_listing_id",
+            name="uq_items_user_ebay_listing",
+        ),
+    )
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
