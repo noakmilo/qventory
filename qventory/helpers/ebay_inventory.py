@@ -408,39 +408,30 @@ def get_all_inventory(user_id, max_items=1000):
 
         offset += limit
 
-    # If Inventory API returned 0 items, try Offers API (for traditional listings)
-    if len(all_items) == 0:
-        log_inv("Inventory API returned 0 items, trying Offers API for traditional listings...")
+    # If Inventory API is partial or empty, enrich with Offers/Trading to avoid missing legacy listings
+    try_offers = len(all_items) < max_items
 
+    if try_offers:
         try:
             offset = 0
             while len(all_items) < max_items:
                 result = get_active_listings(user_id, limit=limit, offset=offset)
                 offers = result['offers']
 
-                log_inv(f"Offers API returned {len(offers)} offers (total: {result['total']})")
+                log_inv(f"Offers API returned {len(offers)} offers (total: {result.get('total', 'unknown')})")
 
                 if not offers:
                     break
 
                 # Convert offers to inventory-like format
                 for offer in offers:
-                    # Get SKU from offer
                     sku = offer.get('sku', '')
-
-                    # Extract listing data from offer
                     listing_id = offer.get('listingId')
                     pricing = offer.get('pricingSummary', {})
                     price_value = pricing.get('price', {}).get('value', 0)
-
-                    # Get quantity available
-                    quantity_limit = offer.get('quantityLimitPerBuyer', 0)
                     available_quantity = offer.get('availableQuantity', 0)
-
-                    # Try to get listing details if available
                     listing = offer.get('listing', {})
 
-                    # Build item data structure similar to inventory items
                     item_data = {
                         'sku': sku,
                         'product': {
@@ -459,46 +450,30 @@ def get_all_inventory(user_id, max_items=1000):
                         'item_price': float(price_value) if price_value else 0,
                         'ebay_url': f"https://www.ebay.com/itm/{listing_id}" if listing_id else None,
                         'listing_status': offer.get('status', 'UNKNOWN'),
-                        'source': 'offers_api'  # Mark as coming from offers API
+                        'source': 'offers_api'
                     }
 
                     all_items.append(item_data)
 
-                if len(all_items) >= result['total']:
+                if len(all_items) >= result.get('total', max_items):
                     break
 
                 offset += limit
 
-            log_inv(f"Offers API fallback complete: fetched {len(all_items)} offers")
+            log_inv(f"Offers API augmentation complete: total aggregated items={len(all_items)}")
 
         except Exception as e:
-            log_inv(f"ERROR in Offers API fallback: {str(e)}")
+            log_inv(f"ERROR in Offers API augmentation: {str(e)}")
 
-            # Third fallback: Try Browse API with seller search
-            log_inv("Offers API failed, trying Browse API with seller search...")
-            try:
-                browse_items = get_seller_listings_browse_api(user_id, max_items=max_items)
-                if browse_items:
-                    log_inv(f"Browse API returned {len(browse_items)} items")
-                    deduped_browse, _ = deduplicate_ebay_items(browse_items)
-                    return deduped_browse[:max_items]
-            except Exception as browse_error:
-                log_inv(f"ERROR in Browse API fallback: {str(browse_error)}")
-
-            # Fourth fallback: Try Trading API GetMyeBaySelling for active listings
-            log_inv("Browse API failed, trying Trading API GetMyeBaySelling...")
-            try:
-                result = get_active_listings_trading_api(user_id, max_items=max_items, collect_failures=False)
-                # Result is just items list when collect_failures=False
-                if result:
-                    log_inv(f"Trading API returned {len(result)} active listings")
-                    deduped_trading, _ = deduplicate_ebay_items(result)
-                    return deduped_trading[:max_items]
-            except Exception as trading_error:
-                log_inv(f"ERROR in Trading API fallback: {str(trading_error)}")
-
-            # Return empty if all APIs fail
-            return []
+    # Final fallback: Trading API if we still have room
+    if len(all_items) < max_items:
+        try:
+            trading_items = get_active_listings_trading_api(user_id, max_items=max_items, collect_failures=False)
+            if trading_items:
+                log_inv(f"Trading API returned {len(trading_items)} active listings")
+                all_items.extend(trading_items)
+        except Exception as trading_error:
+            log_inv(f"ERROR in Trading API fallback: {str(trading_error)}")
 
     deduped_items, _ = deduplicate_ebay_items(all_items)
     return deduped_items[:max_items]

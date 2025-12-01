@@ -101,14 +101,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             job.started_at = datetime.utcnow()
             db.session.commit()
 
-            # Fetch inventory from eBay using Trading API with failure collection
-            log_task("Fetching inventory from eBay API...")
-            ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
-            log_task(f"Fetched {len(ebay_items)} unique items from eBay")
+            # Fetch inventory from eBay using multi-API fallback (Inventory + Offers + Trading)
+            log_task("Fetching inventory from eBay API (Inventory/Offers/Trading)...")
+            ebay_items = get_all_inventory(user_id, max_items=1000)
+            failed_items = []  # get_all_inventory already returns normalized items
             ebay_items, duplicate_entries = deduplicate_ebay_items(ebay_items)
+            log_task(f"Fetched {len(ebay_items)} unique items from eBay")
             if duplicate_entries:
                 log_task(f"Removed {len(duplicate_entries)} duplicate entries before processing")
-            log_task(f"Failed to parse: {len(failed_items)} items")
 
             job.total_items = len(ebay_items)
             db.session.commit()
