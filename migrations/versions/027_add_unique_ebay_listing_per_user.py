@@ -1,6 +1,6 @@
 """Add unique ebay listing per user
 
-Revision ID: 027_add_unique_ebay_listing_per_user
+Revision ID: 027_unique_ebay_listing
 Revises: 026_add_liberis_loan_tracking
 Create Date: 2025-11-05
 """
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '027_add_unique_ebay_listing_per_user'
+revision = '027_unique_ebay_listing'
 down_revision = '026_add_liberis_loan_tracking'
 branch_labels = None
 depends_on = None
