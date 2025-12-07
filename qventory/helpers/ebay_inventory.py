@@ -403,7 +403,9 @@ def get_all_inventory(user_id, max_items=1000):
 
         all_items.extend(items)
 
-        if len(all_items) >= result['total']:
+        # Keep paginating until a page returns fewer than the requested limit
+        # (eBay's reported "total" can be inaccurate/mismatched).
+        if len(items) < limit:
             break
 
         offset += limit
@@ -455,7 +457,8 @@ def get_all_inventory(user_id, max_items=1000):
 
                     all_items.append(item_data)
 
-                if len(all_items) >= result.get('total', max_items):
+                # Keep paginating while we receive full pages; "total" can be unreliable.
+                if len(offers) < limit:
                     break
 
                 offset += limit
