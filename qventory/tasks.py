@@ -2910,23 +2910,58 @@ def sync_ebay_active_inventory_auto(self):
                     log_task(f"    No items to sync")
                     continue
                 
-                # Fetch current data from eBay
-                result = fetch_ebay_inventory_offers(user.id)
-                
-                if not result['success']:
-                    log_task(f"    ✗ Failed to fetch eBay data: {result.get('error')}")
+                # Fetch ALL active offers (API is paginated to 200 items per page)
+                offers = []
+                offset = 0
+                page_size = 200
+                page_number = 1
+                max_pages = 50  # Safety guard to avoid infinite loops
+                fetched_all_offers = True
+                total_from_api = None
+
+                while True:
+                    result = fetch_ebay_inventory_offers(user.id, limit=page_size, offset=offset)
+
+                    if not result['success']:
+                        log_task(f"    ✗ Failed to fetch eBay data: {result.get('error')}")
+                        offers = None
+                        break
+
+                    page_offers = result.get('offers', []) or []
+                    total_from_api = result.get('total') or total_from_api or len(page_offers)
+
+                    offers.extend(page_offers)
+                    log_task(f"    Page {page_number}: {len(page_offers)} offers (total so far {len(offers)}/{total_from_api})")
+
+                    # Stop conditions: last page, reached reported total, or safety page cap
+                    if len(page_offers) < page_size:
+                        break
+                    if total_from_api and len(offers) >= total_from_api:
+                        break
+                    if page_number >= max_pages:
+                        fetched_all_offers = False
+                        log_task(f"    WARNING: reached max pages ({max_pages}) with {len(offers)} offers; skipping inactive marking to avoid false positives")
+                        break
+
+                    offset += page_size
+                    page_number += 1
+
+                if offers is None:
                     continue
-                
+
                 offers_by_listing = {
                     offer.get('ebay_listing_id'): offer
-                    for offer in result['offers']
+                    for offer in offers
                     if offer.get('ebay_listing_id')
                 }
                 offers_by_sku = {
                     offer.get('ebay_sku'): offer
-                    for offer in result['offers']
+                    for offer in offers
                     if offer.get('ebay_sku')
                 }
+
+                if not fetched_all_offers:
+                    log_task("    Incomplete data fetched; items not found in this batch will remain active")
                 
                 updated_count = 0
                 deleted_count = 0
@@ -2953,11 +2988,13 @@ def sync_ebay_active_inventory_auto(self):
                             item.is_active = False
                             updated_count += 1
                     else:
-                        # SOFT DELETE: Item no longer on eBay (sold/removed) - mark as inactive
-                        # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
-                        if item.is_active:
-                            item.is_active = False
-                            deleted_count += 1
+                        # Only mark items inactive if we are confident we fetched the full offer set
+                        if fetched_all_offers:
+                            # SOFT DELETE: Item no longer on eBay (sold/removed) - mark as inactive
+                            # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
+                            if item.is_active:
+                                item.is_active = False
+                                deleted_count += 1
                 
                 db.session.commit()
                 
