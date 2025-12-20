@@ -3607,6 +3607,19 @@ def reactivate_inactive_ebay_items(self):
                     offer_data = offers_by_sku.get(item.ebay_sku)
 
                 if offer_data:
+                    listing_id = offer_data.get('ebay_listing_id')
+                    if listing_id:
+                        existing = Item.query.filter(
+                            Item.user_id == user.id,
+                            Item.ebay_listing_id == str(listing_id),
+                            Item.id != item.id
+                        ).first()
+                        if existing:
+                            log_task(
+                                f"  ⚠️  Skipping reactivation for item {item.id}: "
+                                f"listing_id {listing_id} already belongs to item {existing.id}"
+                            )
+                            continue
                     item.is_active = True
                     item.synced_from_ebay = True
                     item.last_ebay_sync = datetime.utcnow()
@@ -3614,8 +3627,8 @@ def reactivate_inactive_ebay_items(self):
                         item.item_price = offer_data['item_price']
                     if offer_data.get('ebay_url') and not item.ebay_url:
                         item.ebay_url = offer_data['ebay_url']
-                    if not item.ebay_listing_id and offer_data.get('ebay_listing_id'):
-                        item.ebay_listing_id = offer_data['ebay_listing_id']
+                    if not item.ebay_listing_id and listing_id:
+                        item.ebay_listing_id = listing_id
                     if not item.ebay_sku and offer_data.get('ebay_sku'):
                         item.ebay_sku = offer_data['ebay_sku']
                     reactivated += 1
