@@ -45,8 +45,6 @@ from ..helpers.inventory_queries import (
     fetch_sold_items,
     fetch_ended_items,
     fetch_fulfillment_orders,
-    fetch_fulfillment_in_transit,
-    fetch_fulfillment_delivered,
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
 )
@@ -877,84 +875,56 @@ def inventory_sold():
 @main_bp.route("/fulfillment")
 @login_required
 def fulfillment():
-    """Show shipped and delivered orders with independent pagination"""
+    """Show fulfillment orders in a single table"""
     from ..models.sale import Sale
 
-    # Get pagination params for "in transit" table
+    # Pagination params for unified table
     try:
-        transit_page = int(request.args.get("transit_page", 1))
+        page = int(request.args.get("page", 1))
     except (TypeError, ValueError):
-        transit_page = 1
-    transit_page = max(transit_page, 1)
+        page = 1
+    page = max(page, 1)
 
     try:
-        transit_per_page = int(request.args.get("transit_per_page", 20))
+        per_page = int(request.args.get("per_page", 20))
     except (TypeError, ValueError):
-        transit_per_page = 20
-    if transit_per_page not in PAGE_SIZES:
-        transit_per_page = 20
-    transit_offset = (transit_page - 1) * transit_per_page
+        per_page = 20
+    if per_page not in PAGE_SIZES:
+        per_page = 20
+    offset = (page - 1) * per_page
 
-    # Get pagination params for "delivered" table
-    try:
-        delivered_page = int(request.args.get("delivered_page", 1))
-    except (TypeError, ValueError):
-        delivered_page = 1
-    delivered_page = max(delivered_page, 1)
-
-    try:
-        delivered_per_page = int(request.args.get("delivered_per_page", 20))
-    except (TypeError, ValueError):
-        delivered_per_page = 20
-    if delivered_per_page not in PAGE_SIZES:
-        delivered_per_page = 20
-    delivered_offset = (delivered_page - 1) * delivered_per_page
-
-    # Fetch in transit orders (shipped but not delivered)
-    shipped_orders, shipped_total = fetch_fulfillment_in_transit(
+    orders, total_orders = fetch_fulfillment_orders(
         db.session,
         user_id=current_user.id,
-        limit=transit_per_page,
-        offset=transit_offset,
-    )
-
-    # Fetch delivered orders
-    delivered_orders, delivered_total = fetch_fulfillment_delivered(
-        db.session,
-        user_id=current_user.id,
-        limit=delivered_per_page,
-        offset=delivered_offset,
+        fulfillment_only=True,
+        limit=per_page,
+        offset=offset,
     )
 
     # Resolve titles and SKUs
-    for order in shipped_orders:
+    for order in orders:
         if getattr(order, "resolved_title", None):
             order.item_title = order.resolved_title
         if getattr(order, "resolved_sku", None):
             order.item_sku = order.resolved_sku
 
-    for order in delivered_orders:
-        if getattr(order, "resolved_title", None):
-            order.item_title = order.resolved_title
-        if getattr(order, "resolved_sku", None):
-            order.item_sku = order.resolved_sku
+    shipped_count = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.shipped_at.isnot(None),
+        Sale.delivered_at.is_(None)
+    ).count()
 
-    # Build independent pagination for in transit table
-    transit_pagination = _build_independent_pagination(
-        total_items=shipped_total,
-        page=transit_page,
-        per_page=transit_per_page,
-        page_param="transit_page",
-        per_page_param="transit_per_page",
-    )
+    delivered_count = Sale.query.filter(
+        Sale.user_id == current_user.id,
+        Sale.delivered_at.isnot(None)
+    ).count()
 
-    # Build independent pagination for delivered table
-    delivered_pagination = _build_independent_pagination(
-        total_items=delivered_total,
-        page=delivered_page,
-        per_page=delivered_per_page,
-        page_param="delivered_page",
-        per_page_param="delivered_per_page",
+    pagination = _build_independent_pagination(
+        total_items=total_orders,
+        page=page,
+        per_page=per_page,
+        page_param="page",
+        per_page_param="per_page",
     )
 
     # Calculate total value across all fulfilled orders
@@ -965,13 +935,12 @@ def fulfillment():
 
     return render_template(
         "fulfillment.html",
-        shipped_orders=shipped_orders,
-        delivered_orders=delivered_orders,
-        shipped_count=shipped_total,
-        delivered_count=delivered_total,
+        fulfillment_orders=orders,
+        shipped_count=shipped_count,
+        delivered_count=delivered_count,
+        total_orders=total_orders,
         total_value=total_value or 0,
-        transit_pagination=transit_pagination,
-        delivered_pagination=delivered_pagination,
+        fulfillment_pagination=pagination,
         shippo_enabled=False,
         shippo_errors=[],
         shippo_last_update=None,
@@ -1192,11 +1161,13 @@ def sync_ebay_orders():
                     existing_sale.shipped_at = sale_data.get('shipped_at') or existing_sale.shipped_at
                     existing_sale.status = sale_data.get('status') or existing_sale.status
 
-                    # CRITICAL: Always update delivered_at from eBay if FULFILLED
+                    # Update delivered_at from eBay (clear it if not delivered)
                     delivered_value = sale_data.get('delivered_at')
                     if delivered_value:
                         existing_sale.delivered_at = delivered_value
                         print(f"[FULFILLMENT_SYNC] Updated delivered_at for {sale_data['marketplace_order_id']}: {delivered_value}", file=sys.stderr)
+                    else:
+                        existing_sale.delivered_at = None
 
                     existing_sale.updated_at = datetime.utcnow()
 
@@ -1896,7 +1867,21 @@ def sync_ebay_inventory():
 
                 # Backfill listing ID / SKU when missing locally
                 if not item.ebay_listing_id and offer_data.get('ebay_listing_id'):
-                    item.ebay_listing_id = offer_data['ebay_listing_id']
+                    listing_id = str(offer_data['ebay_listing_id'])
+                    with db.session.no_autoflush:
+                        existing = Item.query.filter(
+                            Item.user_id == current_user.id,
+                            Item.ebay_listing_id == listing_id,
+                            Item.id != item.id
+                        ).first()
+                    if existing:
+                        print(
+                            f"[SYNC_INVENTORY] Skipping listing_id {listing_id} for item {item.id}: "
+                            f"already on item {existing.id}",
+                            file=sys.stderr
+                        )
+                    else:
+                        item.ebay_listing_id = listing_id
                 if not item.ebay_sku and offer_data.get('ebay_sku'):
                     item.ebay_sku = offer_data['ebay_sku']
 

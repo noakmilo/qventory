@@ -288,6 +288,7 @@ LEFT JOIN items AS i
  AND i.user_id = s.user_id
 WHERE s.user_id = :user_id
   AND (:status_filter IS NULL OR s.status = :status_filter)
+  AND (:fulfillment_only IS NULL OR (s.shipped_at IS NOT NULL OR s.delivered_at IS NOT NULL))
   AND (:shipped_only IS NULL OR (s.shipped_at IS NOT NULL AND s.delivered_at IS NULL))
   AND (:delivered_only IS NULL OR s.delivered_at IS NOT NULL)
 ORDER BY
@@ -305,6 +306,7 @@ SELECT COUNT(*)
 FROM sales AS s
 WHERE s.user_id = :user_id
   AND (:status_filter IS NULL OR s.status = :status_filter)
+  AND (:fulfillment_only IS NULL OR (s.shipped_at IS NOT NULL OR s.delivered_at IS NOT NULL))
   AND (:shipped_only IS NULL OR (s.shipped_at IS NOT NULL AND s.delivered_at IS NULL))
   AND (:delivered_only IS NULL OR s.delivered_at IS NOT NULL);
 """
@@ -462,6 +464,7 @@ def fetch_fulfillment_orders(
     *,
     user_id: int,
     status_filter: Optional[str] = None,
+    fulfillment_only: bool = False,
     shipped_only: bool = False,
     delivered_only: bool = False,
     limit: int = 20,
@@ -485,6 +488,7 @@ def fetch_fulfillment_orders(
     query_params = {
         "user_id": user_id,
         "status_filter": status_filter,
+        "fulfillment_only": True if fulfillment_only else None,
         "shipped_only": True if shipped_only else None,
         "delivered_only": True if delivered_only else None,
         "limit": limit,
@@ -496,6 +500,7 @@ def fetch_fulfillment_orders(
     count_params = {
         "user_id": user_id,
         "status_filter": status_filter,
+        "fulfillment_only": True if fulfillment_only else None,
         "shipped_only": True if shipped_only else None,
         "delivered_only": True if delivered_only else None
     }
