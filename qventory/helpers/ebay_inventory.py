@@ -1767,7 +1767,7 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         order_fulfillment_status = order_data.get('orderFulfillmentStatus', '')
 
         if order_fulfillment_status == 'FULFILLED':
-            status = 'completed'
+            status = 'shipped'
 
             # Fallback shipped date
             modified_date_str = order_data.get('lastModifiedDate', '')
@@ -1775,7 +1775,7 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                 shipped_at = _parse_ebay_datetime(modified_date_str)
             if not shipped_at:
                 shipped_at = _parse_ebay_datetime(order_data.get('creationDate', ''))
-            delivered_at = _parse_ebay_datetime(order_data.get('lastModifiedDate', '')) or shipped_at
+            delivered_at = None
 
             # Try to get detailed fulfillment info if user_id provided
             fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
@@ -1799,6 +1799,8 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                         delivered_date_str = shipment_tracking.get('actualDeliveryDate', '')
                         if delivered_date_str:
                             delivered_at = _parse_ebay_datetime(delivered_date_str)
+                            status = 'completed'
+
                         tracking_status = (
                             shipment_tracking.get('deliveryStatus')
                             or shipment_tracking.get('status')
@@ -1816,21 +1818,14 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                             'DELIVERED_TO_RECIPIENT',
                             'COMPLETED',
                         }
-                        in_transit_statuses = {
-                            'IN_TRANSIT',
-                            'INTRANSIT',
-                            'SHIPPED',
-                            'OUT_FOR_DELIVERY',
-                            'OUT_FOR_DELIVER',
-                        }
-                        if tracking_status in delivered_statuses and not delivered_at:
+                        mark_as_received = fulfillment_details.get('markAsReceived')
+                        if not delivered_at and (tracking_status in delivered_statuses or mark_as_received):
+                            status = 'completed'
                             delivered_at = _parse_ebay_datetime(
-                                fulfillment_details.get('lastModifiedDate')
+                                fulfillment_details.get('actualDeliveryDate')
+                                or fulfillment_details.get('lastModifiedDate')
                                 or order_data.get('lastModifiedDate')
-                            ) or shipped_at
-                        if tracking_status in in_transit_statuses:
-                            status = 'shipped'
-                            delivered_at = None
+                            )
 
             # Fallback: extract tracking from href if API call failed
             if not tracking_number and fulfillment_hrefs:
