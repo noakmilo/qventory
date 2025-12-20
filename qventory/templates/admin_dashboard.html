@@ -112,6 +112,26 @@
       </div>
     </div>
 
+    <!-- Reactivate Incorrectly Inactive eBay Items -->
+    <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-undo-alt"></i> Reactivate eBay Items Marked Inactive
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Scans all connected eBay accounts and reactivates items that are still active on eBay but were marked inactive in Qventory.
+            Use this after fixing sync logic to restore affected inventory.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_reactivate_ebay_items') }}" onsubmit="return confirm('This will scan ALL eBay accounts and reactivate items still active on eBay. Continue?');">
+          <button type="submit" class="btn" style="background:#60a5fa;color:#fff;white-space:nowrap;">
+            <i class="fas fa-undo"></i> Reactivate Items
+          </button>
+        </form>
+      </div>
+    </div>
+
     <!-- Full Resync + Dedup -->
     <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">

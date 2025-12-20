@@ -2866,7 +2866,7 @@ def sync_ebay_active_inventory_auto(self):
     
     with app.app_context():
         from qventory.models.item import Item
-        from qventory.helpers.ebay_inventory import fetch_ebay_inventory_offers
+        from qventory.helpers.ebay_inventory import fetch_active_listings_snapshot
         from sqlalchemy import or_
         
         log_task("=== Auto-sync active inventory ===")
@@ -2910,44 +2910,16 @@ def sync_ebay_active_inventory_auto(self):
                     log_task(f"    No items to sync")
                     continue
                 
-                # Fetch ALL active offers (API is paginated to 200 items per page)
-                offers = []
-                offset = 0
-                page_size = 200
-                page_number = 1
-                max_pages = 50  # Safety guard to avoid infinite loops
-                fetched_all_offers = True
-                total_from_api = None
+                snapshot = fetch_active_listings_snapshot(user.id)
 
-                while True:
-                    result = fetch_ebay_inventory_offers(user.id, limit=page_size, offset=offset)
-
-                    if not result['success']:
-                        log_task(f"    ✗ Failed to fetch eBay data: {result.get('error')}")
-                        offers = None
-                        break
-
-                    page_offers = result.get('offers', []) or []
-                    total_from_api = result.get('total') or total_from_api or len(page_offers)
-
-                    offers.extend(page_offers)
-                    log_task(f"    Page {page_number}: {len(page_offers)} offers (total so far {len(offers)}/{total_from_api})")
-
-                    # Stop conditions: last page, reached reported total, or safety page cap
-                    if len(page_offers) < page_size:
-                        break
-                    if total_from_api and len(offers) >= total_from_api:
-                        break
-                    if page_number >= max_pages:
-                        fetched_all_offers = False
-                        log_task(f"    WARNING: reached max pages ({max_pages}) with {len(offers)} offers; skipping inactive marking to avoid false positives")
-                        break
-
-                    offset += page_size
-                    page_number += 1
-
-                if offers is None:
+                if not snapshot['success']:
+                    log_task(f"    ✗ Failed to fetch eBay data: {snapshot.get('error')}")
                     continue
+
+                offers = snapshot.get('offers', [])
+                can_mark_inactive = snapshot.get('can_mark_inactive', False)
+                sources = ', '.join(snapshot.get('sources', [])) or 'unknown'
+                log_task(f"    Sources: {sources} | offers: {len(offers)} | can_mark_inactive={can_mark_inactive}")
 
                 offers_by_listing = {
                     offer.get('ebay_listing_id'): offer
@@ -2960,8 +2932,8 @@ def sync_ebay_active_inventory_auto(self):
                     if offer.get('ebay_sku')
                 }
 
-                if not fetched_all_offers:
-                    log_task("    Incomplete data fetched; items not found in this batch will remain active")
+                if not can_mark_inactive:
+                    log_task("    Incomplete data (no Trading API); items not found will remain active")
                 
                 updated_count = 0
                 deleted_count = 0
@@ -2989,7 +2961,7 @@ def sync_ebay_active_inventory_auto(self):
                             updated_count += 1
                     else:
                         # Only mark items inactive if we are confident we fetched the full offer set
-                        if fetched_all_offers:
+                        if can_mark_inactive:
                             # SOFT DELETE: Item no longer on eBay (sold/removed) - mark as inactive
                             # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
                             if item.is_active:
@@ -3555,6 +3527,131 @@ def sync_and_purge_inactive_items(self):
             'items_synced': total_synced,
             'items_marked_inactive': total_marked_inactive,
             'items_purged': total_purged
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.reactivate_inactive_ebay_items')
+def reactivate_inactive_ebay_items(self):
+    """
+    Admin task: Reactivate items marked inactive but still active on eBay.
+
+    Checks all active eBay credentials and reactivates items whose listing IDs or
+    SKUs are present in the current active listing snapshot.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.item import Item
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+        from qventory.helpers.ebay_inventory import fetch_active_listings_snapshot
+
+        log_task("=== ADMIN: Reactivating inactive eBay items ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        total_accounts = len(credentials)
+        log_task(f"Found {total_accounts} active eBay credentials to process")
+
+        summary = []
+        total_reactivated = 0
+
+        for idx, credential in enumerate(credentials, start=1):
+            user = credential.owner or User.query.get(credential.user_id)
+            if not user:
+                log_task(f"[{idx}/{total_accounts}] Skipping credential {credential.id}: user not found")
+                continue
+
+            log_task(f"[{idx}/{total_accounts}] Checking user {user.username} (ID {user.id})")
+
+            snapshot = fetch_active_listings_snapshot(user.id)
+            if not snapshot['success']:
+                log_task(f"  ✗ Failed to fetch eBay snapshot: {snapshot.get('error')}")
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'reactivated': 0,
+                    'error': snapshot.get('error')
+                })
+                continue
+
+            offers = snapshot.get('offers', [])
+            offers_by_listing = {
+                str(offer.get('ebay_listing_id')): offer
+                for offer in offers
+                if offer.get('ebay_listing_id')
+            }
+            offers_by_sku = {
+                offer.get('ebay_sku'): offer
+                for offer in offers
+                if offer.get('ebay_sku')
+            }
+
+            inactive_items = Item.query.filter(
+                Item.user_id == user.id,
+                Item.is_active.is_(False),
+                or_(
+                    Item.ebay_listing_id.isnot(None),
+                    Item.ebay_sku.isnot(None)
+                )
+            ).all()
+
+            reactivated = 0
+            for item in inactive_items:
+                offer_data = None
+                if item.ebay_listing_id:
+                    offer_data = offers_by_listing.get(str(item.ebay_listing_id))
+                if not offer_data and item.ebay_sku:
+                    offer_data = offers_by_sku.get(item.ebay_sku)
+
+                if offer_data:
+                    item.is_active = True
+                    item.synced_from_ebay = True
+                    item.last_ebay_sync = datetime.utcnow()
+                    if offer_data.get('item_price'):
+                        item.item_price = offer_data['item_price']
+                    if offer_data.get('ebay_url') and not item.ebay_url:
+                        item.ebay_url = offer_data['ebay_url']
+                    if not item.ebay_listing_id and offer_data.get('ebay_listing_id'):
+                        item.ebay_listing_id = offer_data['ebay_listing_id']
+                    if not item.ebay_sku and offer_data.get('ebay_sku'):
+                        item.ebay_sku = offer_data['ebay_sku']
+                    reactivated += 1
+
+            if reactivated:
+                db.session.commit()
+                total_reactivated += reactivated
+                log_task(f"  ✓ Reactivated {reactivated} items")
+            else:
+                log_task("  No items to reactivate")
+
+            summary.append({
+                'user_id': user.id,
+                'username': user.username,
+                'reactivated': reactivated
+            })
+
+            if hasattr(self, 'request') and self.request.id:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total_accounts,
+                        'last_user': user.username,
+                        'total_reactivated': total_reactivated
+                    }
+                )
+
+        log_task("=== Reactivation sweep finished ===")
+        log_task(f"Total items reactivated: {total_reactivated}")
+
+        return {
+            'success': True,
+            'accounts_found': total_accounts,
+            'total_reactivated': total_reactivated,
+            'results': summary
         }
 
 

@@ -1470,6 +1470,101 @@ def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
             }
 
 
+def _normalize_trading_item_to_offer(item):
+    """Normalize Trading API item into offer-like payload for sync flows."""
+    listing_id = item.get('ebay_listing_id') or item.get('listing_id')
+    sku = item.get('sku') or item.get('ebay_sku')
+    return {
+        'item_price': item.get('item_price'),
+        'ebay_url': item.get('ebay_url'),
+        'ebay_listing_id': listing_id,
+        'ebay_offer_id': item.get('ebay_offer_id'),
+        'listing_status': item.get('listing_status', 'ACTIVE'),
+        'ebay_sku': sku,
+        'title': item.get('title'),
+        'description': item.get('description'),
+        'item_quantity': item.get('quantity', 0),
+        'raw_offer': item
+    }
+
+
+def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5000):
+    """
+    Fetch a complete snapshot of active listings using Offers API + Trading fallback.
+
+    Returns:
+        dict: {
+            'success': bool,
+            'offers': list[dict],
+            'total': int,
+            'sources': list[str],
+            'can_mark_inactive': bool,
+            'error': str (optional)
+        }
+    """
+    offers = []
+    total_from_api = None
+    offset = 0
+    page_number = 1
+    sources = []
+
+    while True:
+        result = fetch_ebay_inventory_offers(user_id, limit=limit, offset=offset)
+        if not result['success']:
+            return result
+
+        sources = sources or ['offers_api']
+        page_offers = result.get('offers', []) or []
+        total_from_api = result.get('total') or total_from_api or len(page_offers)
+        offers.extend(page_offers)
+
+        if len(page_offers) < limit:
+            break
+        if total_from_api and len(offers) >= total_from_api:
+            break
+        if page_number >= max_pages:
+            log_inv(f"Offers API pagination hit max pages ({max_pages}); snapshot may be incomplete")
+            break
+
+        offset += limit
+        page_number += 1
+
+    trading_success = False
+    try:
+        trading_items = get_active_listings_trading_api(
+            user_id,
+            max_items=max_items,
+            collect_failures=False
+        )
+        if trading_items:
+            trading_success = True
+            sources.append('trading_api')
+            trading_offers = [_normalize_trading_item_to_offer(item) for item in trading_items]
+            offers.extend(trading_offers)
+    except Exception as exc:
+        log_inv(f"Trading API augmentation failed: {exc}")
+
+    deduped = []
+    seen = set()
+    for offer in offers:
+        listing_id = offer.get('ebay_listing_id')
+        sku = offer.get('ebay_sku')
+        key = f"id:{listing_id}" if listing_id else f"sku:{sku}" if sku else None
+        if key and key in seen:
+            continue
+        if key:
+            seen.add(key)
+        deduped.append(offer)
+
+    return {
+        'success': True,
+        'offers': deduped,
+        'total': total_from_api or len(deduped),
+        'sources': sources,
+        'can_mark_inactive': trading_success
+    }
+
+
 def fetch_shipping_fulfillment_details(user_id, fulfillment_href):
     """
     Fetch detailed shipping/tracking info from a fulfillment href

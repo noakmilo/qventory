@@ -1771,7 +1771,7 @@ def sync_ebay_inventory():
     Updates prices, status, and other details for items already in database
     """
     from qventory.models.marketplace_credential import MarketplaceCredential
-    from qventory.helpers.ebay_inventory import fetch_ebay_inventory_offers, parse_offer_to_item_data
+    from qventory.helpers.ebay_inventory import fetch_active_listings_snapshot
 
     # Check eBay connection
     ebay_cred = MarketplaceCredential.query.filter_by(
@@ -1842,8 +1842,8 @@ def sync_ebay_inventory():
 
         print(f"[SYNC_INVENTORY] Found {len(items_to_sync)} items to sync", file=sys.stderr)
 
-        # Fetch current data from eBay
-        result = fetch_ebay_inventory_offers(current_user.id)
+        # Fetch current data from eBay (Offers + Trading snapshot)
+        result = fetch_active_listings_snapshot(current_user.id)
 
         if not result['success']:
             return jsonify({
@@ -1861,11 +1861,14 @@ def sync_ebay_inventory():
             for offer in result['offers']
             if offer.get('ebay_sku')
         }
+        can_mark_inactive = result.get('can_mark_inactive', False)
+        sources = ', '.join(result.get('sources', [])) or 'unknown'
+        print(f"[SYNC_INVENTORY] Sources: {sources} | offers: {len(result.get('offers', []))} | can_mark_inactive={can_mark_inactive}", file=sys.stderr)
 
         # Update each item
         updated_count = 0
         deleted_count = 0
-        items_to_delete = []
+        skipped_inactive = 0
 
         for item in items_to_sync:
             offer_data = None
@@ -1910,22 +1913,26 @@ def sync_ebay_inventory():
                     if not item.is_active:
                         item.is_active = True
             else:
-                # SOFT DELETE: Item no longer exists on eBay (sold/removed) - mark as inactive
-                print(f"[SYNC_INVENTORY] Item no longer on eBay, marking inactive: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
-                if item.is_active:
-                    item.is_active = False
-                    deleted_count += 1
+                if can_mark_inactive:
+                    # SOFT DELETE: Item no longer exists on eBay (sold/removed) - mark as inactive
+                    print(f"[SYNC_INVENTORY] Item no longer on eBay, marking inactive: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
+                    if item.is_active:
+                        item.is_active = False
+                        deleted_count += 1
+                else:
+                    skipped_inactive += 1
 
         db.session.commit()
 
-        print(f"[SYNC_INVENTORY] Updated {updated_count} items, marked {deleted_count} items as inactive", file=sys.stderr)
+        print(f"[SYNC_INVENTORY] Updated {updated_count} items, marked {deleted_count} items as inactive (skipped inactive: {skipped_inactive})", file=sys.stderr)
 
         return jsonify({
             'success': True,
             'message': f'Synced {len(items_to_sync)} items: {updated_count} updated, {deleted_count} marked inactive (sold/inactive on eBay)',
             'total': len(items_to_sync),
             'updated': updated_count,
-            'deleted': deleted_count
+            'deleted': deleted_count,
+            'inactive_skipped': skipped_inactive
         })
 
     except Exception as e:
@@ -3429,6 +3436,17 @@ def admin_sync_and_purge_items():
     task = sync_and_purge_inactive_items.delay()
 
     flash(f"Sync and purge task launched (Task ID: {task.id}). This will sync all eBay accounts and mark inactive items. Check logs for results.", "ok")
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/reactivate-ebay-items", methods=["POST"])
+@require_admin
+def admin_reactivate_ebay_items():
+    """Reactivate items marked inactive that are still active on eBay."""
+    from qventory.tasks import reactivate_inactive_ebay_items
+
+    task = reactivate_inactive_ebay_items.delay()
+    flash(f"Reactivation task launched (Task ID: {task.id}). This will scan all eBay accounts and reactivate items still active on eBay.", "ok")
     return redirect(url_for('main.admin_dashboard'))
 
 
