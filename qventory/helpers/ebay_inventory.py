@@ -1799,6 +1799,31 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                         if delivered_date_str:
                             delivered_at = _parse_ebay_datetime(delivered_date_str)
                             status = 'completed'
+                        else:
+                            tracking_status = (
+                                shipment_tracking.get('deliveryStatus')
+                                or shipment_tracking.get('status')
+                                or shipment_tracking.get('trackingStatus')
+                                or shipment_tracking.get('shipmentStatus')
+                                or fulfillment_details.get('deliveryStatus')
+                                or ''
+                            )
+                            tracking_status = str(tracking_status).upper()
+                            delivered_statuses = {
+                                'DELIVERED',
+                                'DELIVERY_SUCCESS',
+                                'DELIVERED_TO_BUYER',
+                                'DELIVERED_TO_CUSTOMER',
+                                'DELIVERED_TO_RECIPIENT',
+                                'COMPLETED',
+                            }
+                            if tracking_status in delivered_statuses:
+                                status = 'completed'
+                                if not delivered_at:
+                                    delivered_at = _parse_ebay_datetime(
+                                        fulfillment_details.get('lastModifiedDate')
+                                        or order_data.get('lastModifiedDate')
+                                    ) or shipped_at
 
             # Fallback: extract tracking from href if API call failed
             if not tracking_number and fulfillment_hrefs:

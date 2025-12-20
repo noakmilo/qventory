@@ -1075,18 +1075,19 @@ def debug_ebay_order():
             fulfillment_hrefs = order.get('fulfillmentHrefs', [])
             for href in fulfillment_hrefs[:1]:  # Just first one to avoid too many requests
                 details = fetch_shipping_fulfillment_details(current_user.id, href)
-                if details:
-                    order_info['fulfillment_details'].append({
-                        'href': href,
-                        'shipped_date': details.get('shippedDate'),
-                        'line_items': [
-                            {
-                                'line_item_id': li.get('lineItemId'),
-                                'shipment_tracking': li.get('shipmentTracking', {})
-                            }
-                            for li in details.get('lineItems', [])
-                        ]
-                    })
+                    if details:
+                        order_info['fulfillment_details'].append({
+                            'href': href,
+                            'shipped_date': details.get('shippedDate'),
+                            'delivery_status': details.get('deliveryStatus'),
+                            'line_items': [
+                                {
+                                    'line_item_id': li.get('lineItemId'),
+                                    'shipment_tracking': li.get('shipmentTracking', {})
+                                }
+                                for li in details.get('lineItems', [])
+                            ]
+                        })
 
             debug_orders.append(order_info)
 
