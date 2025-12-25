@@ -141,6 +141,28 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     log_task(f"  eBay Listing ID: {ebay_listing_id or 'None'}")
                     log_task(f"  eBay SKU: {ebay_sku or 'None'}")
 
+                    # Fallback: if SKU (Custom Label) is missing, fetch from Trading API by listing_id
+                    if not parsed.get('location_code') and ebay_listing_id:
+                        try:
+                            from qventory.helpers.ebay_relist import get_item_details_trading_api
+                            from qventory.helpers import is_valid_location_code, parse_location_code
+                            trading_result = get_item_details_trading_api(user_id, ebay_listing_id)
+                            trading_sku = (trading_result.get('item', {}) or {}).get('sku')
+                            if trading_sku:
+                                log_task(f"  ↳ Trading API SKU fallback: {trading_sku}")
+                                ebay_item['sku'] = trading_sku
+                                ebay_item['ebay_sku'] = trading_sku
+                                parsed['ebay_sku'] = trading_sku
+                                parsed['location_code'] = trading_sku
+                                if is_valid_location_code(trading_sku):
+                                    comps = parse_location_code(trading_sku)
+                                    parsed['location_A'] = comps.get('A')
+                                    parsed['location_B'] = comps.get('B')
+                                    parsed['location_S'] = comps.get('S')
+                                    parsed['location_C'] = comps.get('C')
+                        except Exception as fallback_err:
+                            log_task(f"  ⚠ Trading API SKU fallback failed: {fallback_err}")
+
                     # First try: Match by eBay Listing ID (ONLY active items to prevent duplicates)
                     if ebay_listing_id:
                         existing_item = Item.query.filter_by(
