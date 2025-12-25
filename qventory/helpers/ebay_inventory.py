@@ -1173,13 +1173,7 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
                 item_thumb = ebay_image_url  # Fallback to original URL
         elif images:
             item_thumb = images[0]  # Use original URL if not processing
-        sku = (
-            ebay_item.get('sku')
-            or ebay_item.get('ebay_sku')
-            or ebay_item.get('custom_sku')
-            or ebay_item.get('custom_label')
-            or ''
-        )
+        sku = ebay_item.get('sku', '')
         availability = ebay_item.get('availability', {})
         quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
@@ -1242,14 +1236,8 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         elif images:
             item_thumb = images[0]  # Use original URL if not processing
 
-        # Get SKU
-        sku = (
-            ebay_item.get('sku')
-            or ebay_item.get('ebay_sku')
-            or ebay_item.get('custom_sku')
-            or ebay_item.get('custom_label')
-            or ''
-        )
+        # Get SKU (Custom Label from Trading API uses Item.SKU)
+        sku = ebay_item.get('sku', '')
 
         # Get availability
         availability = ebay_item.get('availability', {})

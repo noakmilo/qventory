@@ -141,8 +141,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     log_task(f"  eBay Listing ID: {ebay_listing_id or 'None'}")
                     log_task(f"  eBay SKU: {ebay_sku or 'None'}")
 
-                    # Fallback: if SKU (Custom Label) is missing, fetch from Trading API by listing_id
-                    if not parsed.get('location_code') and ebay_listing_id:
+                    # Trading API is the source of truth for Custom Label (Item.SKU)
+                    if ebay_listing_id and ebay_item.get('source') != 'trading_api':
                         try:
                             from qventory.helpers.ebay_relist import get_item_details_trading_api
                             from qventory.helpers import is_valid_location_code, parse_location_code
