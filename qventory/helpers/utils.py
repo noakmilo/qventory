@@ -291,14 +291,26 @@ def build_qr_batch_pdf(codes, settings, make_link, *, dpi=300):
             mask='auto'
         )
 
-        text_val = f"Location: {code or ''}"
-        font_size = 12.0
-        min_size = 8.0
-        while font_size > min_size and c.stringWidth(text_val, TEXT_FONT, font_size) > text_w:
-            font_size -= 0.5
-        c.setFont(TEXT_FONT, font_size)
-        text_y = y_qr + (qr_side / 2.0) - (font_size / 2.0)
-        c.drawString(text_x, text_y, text_val)
+        label_text = "Location:"
+        code_text = code or ""
+
+        label_font = 10.0
+        code_font = 16.0
+
+        while label_font > 7.0 and c.stringWidth(label_text, TEXT_FONT, label_font) > text_w:
+            label_font -= 0.5
+
+        while code_font > 10.0 and c.stringWidth(code_text, TEXT_FONT, code_font) > text_w:
+            code_font -= 0.5
+
+        total_text_h = label_font + 4 + code_font
+        text_top = y_qr + (qr_side / 2.0) + (total_text_h / 2.0)
+
+        c.setFont(TEXT_FONT, label_font)
+        c.drawString(text_x, text_top - label_font, label_text)
+
+        c.setFont(TEXT_FONT, code_font)
+        c.drawString(text_x, text_top - label_font - 4 - code_font, code_text)
 
     c.save()
     buf.seek(0)
