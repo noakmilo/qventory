@@ -2982,6 +2982,22 @@ def _build_item_label_pdf(it, settings) -> bytes:
             trimmed = trimmed[:-1]
         return (trimmed + ellipsis) if trimmed else ellipsis
 
+    def wrap_text(text, font_name, size, max_width):
+        words = text.split()
+        if not words:
+            return [""]
+        lines = []
+        current = words[0]
+        for word in words[1:]:
+            trial = f"{current} {word}"
+            if c.stringWidth(trial, font_name, size) <= max_width:
+                current = trial
+            else:
+                lines.append(current)
+                current = word
+        lines.append(current)
+        return lines
+
     sku = it.sku or ""
     qr = qrcode.QRCode(
         version=None,
@@ -2996,16 +3012,30 @@ def _build_item_label_pdf(it, settings) -> bytes:
         qr_img = qr_img.convert('RGB')
     c.drawImage(ImageReader(qr_img), x_qr, y_qr, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
-    title_fs = fit_font(title, "Helvetica-Bold", 8.5, 6.5, text_w)
-    sku_fs = fit_font(sku, "Helvetica-Bold", 16, 10, text_w)
+    sku_fs = fit_font(sku, "Helvetica-Bold", 11, 8, text_w)
+    sku_y = y_qr + 3 * mm
 
-    title_text = ellipsize_to_width(title, "Helvetica-Bold", title_fs, text_w)
+    available_title_height = (y_qr + qr_size) - (sku_y + sku_fs + 1 * mm)
+    title_fs = min(8.5, max(6.0, available_title_height / 2.6))
 
-    title_y = y_qr + qr_size - 1.2 * mm
-    sku_y = y_qr + (qr_size / 2.0) - (sku_fs / 2.0)
+    lines = wrap_text(title, "Helvetica-Bold", title_fs, text_w)
+    line_height = title_fs * 1.15
+    max_lines = max(1, int(available_title_height // line_height))
 
+    while len(lines) > max_lines and title_fs > 6.0:
+        title_fs -= 0.5
+        lines = wrap_text(title, "Helvetica-Bold", title_fs, text_w)
+        line_height = title_fs * 1.15
+        max_lines = max(1, int(available_title_height // line_height))
+
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = ellipsize_to_width(lines[-1], "Helvetica-Bold", title_fs, text_w)
+
+    start_y = y_qr + qr_size - title_fs
     c.setFont("Helvetica-Bold", title_fs)
-    c.drawString(text_x, title_y, title_text)
+    for idx, line in enumerate(lines):
+        c.drawString(text_x, start_y - (idx * line_height), line)
 
     c.setFont("Helvetica-Bold", sku_fs)
     c.drawString(text_x, sku_y, sku)
