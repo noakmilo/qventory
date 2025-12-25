@@ -258,9 +258,8 @@ def build_qr_batch_pdf(codes, settings, make_link, *, dpi=300):
     LABEL_W_PT = mm_to_pt(40.0)
     LABEL_H_PT = mm_to_pt(30.0)
 
-    GAP    = mm_to_pt(1.5)
+    GAP = mm_to_pt(2.0)
     TEXT_FONT = "Helvetica-Bold"
-    TEXT_SIZE = 8
 
     cols = max(1, int((page_w - 2 * margin) // LABEL_W_PT))
     rows = max(1, int((page_h - 2 * margin) // LABEL_H_PT))
@@ -285,35 +284,35 @@ def build_qr_batch_pdf(codes, settings, make_link, *, dpi=300):
         x0 = left + col * LABEL_W_PT
         y0 = bottom + row * LABEL_H_PT
 
-        text_val = f"Location: {code or ''}"
-        c.setFont(TEXT_FONT, TEXT_SIZE)
-        text_w = c.stringWidth(text_val, TEXT_FONT, TEXT_SIZE)
-        text_h = TEXT_SIZE
-
         inner_w = LABEL_W_PT
         inner_h = LABEL_H_PT
-
-        qr_max_side = min(inner_w, inner_h - GAP - text_h)
-        qr_max_side = max(mm_to_pt(16.0), qr_max_side)
+        qr_side = mm_to_pt(18.0)
+        x_qr = x0
+        y_qr = y0 + (inner_h - qr_side) / 2.0
+        text_x = x_qr + qr_side + GAP
+        text_w = (x0 + inner_w) - text_x
 
         link = make_link(code)
-        qr_img = _make_qr_pil(link, target_side_pt=qr_max_side, dpi=dpi, border=2)
-
-        block_h = qr_max_side + GAP + text_h
-        block_y0 = y0 + (LABEL_H_PT - block_h) / 2.0
+        qr_img = _make_qr_pil(link, target_side_pt=qr_side, dpi=dpi, border=2)
 
         c.drawImage(
             ImageReader(qr_img),
-            x0 + (LABEL_W_PT - qr_max_side) / 2.0,
-            block_y0 + text_h + GAP,
-            width=qr_max_side,
-            height=qr_max_side,
+            x_qr,
+            y_qr,
+            width=qr_side,
+            height=qr_side,
             preserveAspectRatio=True,
             mask='auto'
         )
 
-        c.setFont(TEXT_FONT, TEXT_SIZE)
-        c.drawCentredString(x0 + LABEL_W_PT / 2.0, block_y0, text_val)
+        text_val = f"Location: {code or ''}"
+        font_size = 12.0
+        min_size = 8.0
+        while font_size > min_size and c.stringWidth(text_val, TEXT_FONT, font_size) > text_w:
+            font_size -= 0.5
+        c.setFont(TEXT_FONT, font_size)
+        text_y = y_qr + (qr_side / 2.0) - (font_size / 2.0)
+        c.drawString(text_x, text_y, text_val)
 
     c.save()
     buf.seek(0)

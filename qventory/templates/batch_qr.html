@@ -44,4 +44,42 @@
   </form>
   <p class="tag">Tip: use ranges like 1-5 or comma lists like 1,4,9.</p>
 </div>
+
+{% if location_tree and location_tree|length %}
+<div class="card" style="margin-top:20px;">
+  <h2>Active Inventory Locations</h2>
+  <p style="color:var(--text-secondary);font-size:13px;margin-bottom:14px;">
+    Print labels for locations detected in your active inventory.
+  </p>
+
+  {% macro render_tree(nodes) %}
+    <ul style="list-style:none;margin:0;padding-left:14px;border-left:1px solid var(--border);">
+      {% for key, node in nodes.items() %}
+      <li style="padding:6px 0;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <span style="font-weight:600;">
+            {{ location_labels.get(node.level, node.level) }} {{ node.value }}
+          </span>
+          <span class="tag">{{ node.count }}</span>
+          {% if node.code %}
+          <a class="btn"
+             href="{{ url_for('main.qr_location_print_preview', code=node.code) }}"
+             target="_blank"
+             rel="noopener"
+             style="padding:6px 12px;font-size:12px;">
+            Print Label
+          </a>
+          {% endif %}
+        </div>
+        {% if node.children and node.children|length %}
+          {{ render_tree(node.children) }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  {% endmacro %}
+
+  {{ render_tree(location_tree) }}
+</div>
+{% endif %}
 {% endblock %}

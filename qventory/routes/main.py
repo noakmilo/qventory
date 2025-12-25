@@ -2783,7 +2783,48 @@ def settings():
 def qr_batch():
     s = get_or_create_settings(current_user)
     if request.method == "GET":
-        return render_template("batch_qr.html", settings=s)
+        labels = s.labels_map()
+        enabled_levels = list(s.enabled_levels())
+
+        rows = (
+            Item.query.filter_by(user_id=current_user.id, is_active=True)
+            .with_entities(Item.location_code)
+            .filter(Item.location_code.isnot(None), Item.location_code != "")
+            .distinct()
+            .all()
+        )
+        location_codes = sorted({row[0] for row in rows if row[0]})
+
+        tree = {}
+        for code in location_codes:
+            parts = parse_location_code(code)
+            current = tree
+            for idx, level in enumerate(enabled_levels):
+                value = parts.get(level)
+                if not value:
+                    break
+                node = current.get(value)
+                if not node:
+                    node = {
+                        "level": level,
+                        "value": value,
+                        "children": {},
+                        "code": None,
+                        "count": 0,
+                    }
+                    current[value] = node
+                node["count"] += 1
+                if idx == len(enabled_levels) - 1 or not parts.get(enabled_levels[idx + 1]):
+                    node["code"] = code
+                    break
+                current = node["children"]
+
+        return render_template(
+            "batch_qr.html",
+            settings=s,
+            location_tree=tree,
+            location_labels=labels,
+        )
 
     valsA = parse_values(request.form.get("A") or "") if s.enable_A else [""]
     valsB = parse_values(request.form.get("B") or "") if s.enable_B else [""]
@@ -2818,6 +2859,40 @@ def qr_batch():
                              username=current_user.username, code=code, _external=True)
     )
     return send_file(pdf_buf, mimetype="application/pdf", as_attachment=True, download_name="qr_labels.pdf")
+
+
+@main_bp.route("/qr/location/print/<code>")
+@login_required
+def qr_location_print(code):
+    s = get_or_create_settings(current_user)
+    from ..helpers.utils import build_qr_batch_pdf
+
+    pdf_buf = build_qr_batch_pdf(
+        [code], s,
+        lambda c: url_for(
+            "main.public_view_location",
+            username=current_user.username,
+            code=c,
+            _external=True
+        )
+    )
+    return send_file(
+        pdf_buf,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"qr_{code}.pdf"
+    )
+
+
+@main_bp.route("/qr/location/print/<code>/preview")
+@login_required
+def qr_location_print_preview(code):
+    pdf_url = url_for("main.qr_location_print", code=code)
+    return render_template(
+        "print_label.html",
+        item=None,
+        pdf_url=pdf_url,
+    )
 
 
 # ---------------------- Rutas públicas por username ----------------------
