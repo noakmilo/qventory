@@ -16,7 +16,6 @@ from urllib.parse import urlparse, parse_qs
 import csv
 from datetime import datetime, date
 import hashlib
-import uuid
 
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
@@ -2795,6 +2794,7 @@ def qr_batch():
             .all()
         )
         location_codes = sorted({row[0] for row in rows if row[0]})
+        total_location_items = len(location_codes)
 
         tree = {}
         for code in location_codes:
@@ -2831,6 +2831,7 @@ def qr_batch():
             settings=s,
             location_tree=tree,
             location_labels=labels,
+            total_location_items=total_location_items,
         )
 
     valsA = parse_values(request.form.get("A") or "") if s.enable_A else [""]
@@ -2868,39 +2869,19 @@ def qr_batch():
     return send_file(pdf_buf, mimetype="application/pdf", as_attachment=True, download_name="qr_labels.pdf")
 
 
-@main_bp.route("/qr/batch/preview", methods=["POST"])
+@main_bp.route("/qr/batch/print-selected", methods=["POST"])
 @login_required
-def qr_batch_preview():
+def qr_batch_print_selected():
     s = get_or_create_settings(current_user)
-    valsA = parse_values(request.form.get("A") or "") if s.enable_A else [""]
-    valsB = parse_values(request.form.get("B") or "") if s.enable_B else [""]
-    valsS = parse_values(request.form.get("S") or "") if s.enable_S else [""]
-    valsC = parse_values(request.form.get("C") or "") if s.enable_C else [""]
-
-    if s.enable_A and not valsA: valsA = [""]
-    if s.enable_B and not valsB: valsB = [""]
-    if s.enable_S and not valsS: valsS = [""]
-    if s.enable_C and not valsC: valsC = [""]
-
-    combos = []
-    for a in valsA:
-        for b in valsB:
-            for s_ in valsS:
-                for c in valsC:
-                    code = compose_location_code(
-                        A=a or None, B=b or None, S=s_ or None, C=c or None,
-                        enabled=tuple(s.enabled_levels())
-                    )
-                    if code:
-                        combos.append(code)
-
-    if not combos:
-        flash("No codes generated. Please provide at least one value.", "error")
+    codes = request.form.getlist("location_codes")
+    codes = [c for c in codes if c]
+    if not codes:
+        flash("Select at least one location to print.", "error")
         return redirect(url_for("main.qr_batch"))
 
     from ..helpers.utils import build_qr_batch_pdf
     pdf_buf = build_qr_batch_pdf(
-        combos, s,
+        codes, s,
         lambda code: url_for(
             "main.public_view_location",
             username=current_user.username,
@@ -2908,30 +2889,7 @@ def qr_batch_preview():
             _external=True
         )
     )
-
-    tmp = tempfile.NamedTemporaryFile(prefix=f"qventory_qr_batch_{current_user.id}_", suffix=".pdf", delete=False)
-    tmp.write(pdf_buf.getvalue())
-    tmp.close()
-    token = os.path.basename(tmp.name)
-    pdf_url = url_for("main.qr_batch_pdf", token=token)
-    return render_template("print_label.html", item=None, pdf_url=pdf_url)
-
-
-@main_bp.route("/qr/batch/pdf/<token>")
-@login_required
-def qr_batch_pdf(token):
-    if not token.startswith(f"qventory_qr_batch_{current_user.id}_"):
-        return redirect(url_for("main.qr_batch"))
-    path = os.path.join(tempfile.gettempdir(), token)
-    if not os.path.exists(path):
-        flash("Batch PDF expired. Please regenerate.", "error")
-        return redirect(url_for("main.qr_batch"))
-    return send_file(
-        path,
-        mimetype="application/pdf",
-        as_attachment=False,
-        download_name="qr_labels.pdf"
-    )
+    return send_file(pdf_buf, mimetype="application/pdf", as_attachment=True, download_name="qr_labels.pdf")
 
 
 @main_bp.route("/qr/location/print/<code>")

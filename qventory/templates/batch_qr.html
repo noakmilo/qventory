@@ -12,7 +12,7 @@
 {% block content %}
 <div class="card">
   <h2>Generate QR Labels (Batch)</h2>
-  <form method="post" action="{{ url_for('main.qr_batch_preview') }}" target="_blank" class="grid cols-4">
+  <form method="post" class="grid cols-4">
     {% if settings.enable_A %}
     <div>
       <label>{{ settings.label_A }} values (e.g., 1-3 or 1,3,7)</label>
@@ -52,18 +52,29 @@
     Print labels for locations detected in your active inventory.
   </p>
 
+  <form method="post" action="{{ url_for('main.qr_batch_print_selected') }}" target="_blank">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn" type="submit">Print Selected</button>
+      <button class="btn" type="button" id="printAllBtn">Print All</button>
+      <button class="btn" type="button" id="selectAllBtn">Select All</button>
+      <button class="btn" type="button" id="deselectAllBtn">Deselect All</button>
+    </div>
+
   {% macro render_tree(nodes) %}
     <ul style="list-style:none;margin:0;padding-left:14px;border-left:1px solid var(--border);">
       {% for key, node in nodes.items() %}
       <li style="padding:6px 0;">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <span style="font-weight:600;">
-            {{ location_labels.get(node.level, node.level) }} {{ node.value }}
-          </span>
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" name="location_codes" value="{{ node.code }}" class="location-checkbox">
+            <span style="font-weight:600;">
+              {{ location_labels.get(node.level, node.level) }} {{ node.value }}
+            </span>
+          </label>
           <span class="tag">{{ node.count }}</span>
           {% if node.code %}
           <a class="btn"
-             href="{{ url_for('main.qr_location_print_preview', code=node.code) }}"
+             href="{{ url_for('main.qr_location_print', code=node.code) }}"
              target="_blank"
              rel="noopener"
              style="padding:6px 12px;font-size:12px;">
@@ -80,6 +91,41 @@
   {% endmacro %}
 
   {{ render_tree(location_tree) }}
+  </form>
+</div>
+{% elif total_location_items == 0 %}
+<div class="card" style="margin-top:20px;">
+  <h2>No locations available</h2>
+  <p style="color:var(--text-secondary);font-size:13px;margin-bottom:10px;">
+    Assign locations to your active listings to generate printable location labels.
+  </p>
+  <a class="btn" href="{{ url_for('main.inventory_active') }}">Go to Active Listings</a>
 </div>
 {% endif %}
+
+<script>
+  (function () {
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    const printAllBtn = document.getElementById('printAllBtn');
+    const checkboxes = () => Array.from(document.querySelectorAll('.location-checkbox'));
+
+    if (selectAllBtn) {
+      selectAllBtn.addEventListener('click', () => {
+        checkboxes().forEach(cb => { cb.checked = true; });
+      });
+    }
+    if (deselectAllBtn) {
+      deselectAllBtn.addEventListener('click', () => {
+        checkboxes().forEach(cb => { cb.checked = false; });
+      });
+    }
+    if (printAllBtn) {
+      printAllBtn.addEventListener('click', () => {
+        checkboxes().forEach(cb => { cb.checked = true; });
+        printAllBtn.closest('form').submit();
+      });
+    }
+  })();
+</script>
 {% endblock %}
