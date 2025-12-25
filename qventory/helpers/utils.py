@@ -252,43 +252,29 @@ def qr_label_image(code, human_text, link, qr_px=None, *, dpi=300):
 # =========================
 
 def build_qr_batch_pdf(codes, settings, make_link, *, dpi=300):
-    page_w, page_h = letter
-    margin = 18
-
     LABEL_W_PT = mm_to_pt(40.0)
     LABEL_H_PT = mm_to_pt(30.0)
 
     GAP = mm_to_pt(2.0)
     TEXT_FONT = "Helvetica-Bold"
 
-    cols = max(1, int((page_w - 2 * margin) // LABEL_W_PT))
-    rows = max(1, int((page_h - 2 * margin) // LABEL_H_PT))
-    grid_w = cols * LABEL_W_PT
-    grid_h = rows * LABEL_H_PT
-    left = (page_w - grid_w) / 2.0
-    bottom = (page_h - grid_h) / 2.0
-
     buf = io.BytesIO()
-    c = rl_canvas.Canvas(buf, pagesize=letter)
+    c = rl_canvas.Canvas(buf, pagesize=(LABEL_W_PT, LABEL_H_PT))
     c.setAuthor("Qventory")
     c.setTitle("QR Labels 40x30mm")
 
     for i, code in enumerate(codes):
-        if i > 0 and i % (cols * rows) == 0:
+        if i > 0:
             c.showPage()
 
-        idx = i % (cols * rows)
-        row = rows - 1 - (idx // cols)
-        col = idx % cols
-
-        x0 = left + col * LABEL_W_PT
-        y0 = bottom + row * LABEL_H_PT
+        x0 = 0
+        y0 = 0
 
         inner_w = LABEL_W_PT
         inner_h = LABEL_H_PT
         qr_side = mm_to_pt(18.0)
-        x_qr = x0
-        y_qr = y0 + (inner_h - qr_side) / 2.0
+        x_qr = 0
+        y_qr = (inner_h - qr_side) / 2.0
         text_x = x_qr + qr_side + GAP
         text_w = (x0 + inner_w) - text_x
 
