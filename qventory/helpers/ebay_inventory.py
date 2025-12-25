@@ -1780,26 +1780,43 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
             # Try to get detailed fulfillment info if user_id provided
             fulfillment_hrefs = order_data.get('fulfillmentHrefs', [])
             if fulfillment_hrefs and user_id:
-                href = fulfillment_hrefs[0]
-                fulfillment_details = fetch_shipping_fulfillment_details(user_id, href)
+                delivered_statuses = {
+                    'DELIVERED',
+                    'DELIVERY_SUCCESS',
+                    'DELIVERED_TO_BUYER',
+                    'DELIVERED_TO_CUSTOMER',
+                    'DELIVERED_TO_RECIPIENT',
+                    'COMPLETED',
+                }
+                delivery_evidence = False
+                last_delivery_hint = None
 
-                if fulfillment_details:
-                    # Extract tracking info from fulfillment details
+                for href in fulfillment_hrefs:
+                    fulfillment_details = fetch_shipping_fulfillment_details(user_id, href)
+                    if not fulfillment_details:
+                        continue
+
+                    # Get actual shipped date (overrides fallback)
+                    shipped_date_str = fulfillment_details.get('shippedDate', '')
+                    if shipped_date_str:
+                        shipped_at = _parse_ebay_datetime(shipped_date_str)
+
+                    mark_as_received = fulfillment_details.get('markAsReceived')
+                    if mark_as_received:
+                        delivery_evidence = True
+
+                    # Extract tracking info from fulfillment details (all line items)
                     line_items = fulfillment_details.get('lineItems', [])
-                    if line_items:
-                        shipment_tracking = line_items[0].get('shipmentTracking', {})
-                        tracking_number = shipment_tracking.get('trackingNumber', '')
+                    for line_item in line_items:
+                        shipment_tracking = line_item.get('shipmentTracking', {})
+                        if not tracking_number:
+                            tracking_number = shipment_tracking.get('trackingNumber', '')
 
-                        # Get actual shipped date (overrides fallback)
-                        shipped_date_str = fulfillment_details.get('shippedDate', '')
-                        if shipped_date_str:
-                            shipped_at = _parse_ebay_datetime(shipped_date_str)
-
-                        # Get delivery date if available (overrides fallback)
                         delivered_date_str = shipment_tracking.get('actualDeliveryDate', '')
                         if delivered_date_str:
                             delivered_at = _parse_ebay_datetime(delivered_date_str)
-                            status = 'completed'
+                            delivery_evidence = True
+                            break
 
                         tracking_status = (
                             shipment_tracking.get('deliveryStatus')
@@ -1810,22 +1827,21 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
                             or ''
                         )
                         tracking_status = str(tracking_status).upper()
-                        delivered_statuses = {
-                            'DELIVERED',
-                            'DELIVERY_SUCCESS',
-                            'DELIVERED_TO_BUYER',
-                            'DELIVERED_TO_CUSTOMER',
-                            'DELIVERED_TO_RECIPIENT',
-                            'COMPLETED',
-                        }
-                        mark_as_received = fulfillment_details.get('markAsReceived')
-                        if not delivered_at and (tracking_status in delivered_statuses or mark_as_received):
-                            status = 'completed'
-                            delivered_at = _parse_ebay_datetime(
+                        if tracking_status in delivered_statuses:
+                            delivery_evidence = True
+                            last_delivery_hint = (
                                 fulfillment_details.get('actualDeliveryDate')
                                 or fulfillment_details.get('lastModifiedDate')
                                 or order_data.get('lastModifiedDate')
                             )
+
+                    if delivered_at:
+                        break
+
+                if delivery_evidence:
+                    status = 'completed'
+                    if not delivered_at:
+                        delivered_at = _parse_ebay_datetime(last_delivery_hint)
 
             # Fallback: extract tracking from href if API call failed
             if not tracking_number and fulfillment_hrefs:
