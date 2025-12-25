@@ -2956,19 +2956,31 @@ def _build_item_label_pdf(it, settings) -> bytes:
     inner_w = W - 2 * m
     inner_h = H - 2 * m
 
-    title_fs = 8
-    loc_fs = 8
-    leading = 1.2
-    title_h = title_fs * leading
-    loc_h = loc_fs * leading
+    qr_size = 18 * mm
+    gap_qr_text = 2 * mm
+    x_qr = m
+    y_qr = m + (inner_h - qr_size) / 2.0
 
-    gap_qr_title = 1.5 * mm
-    gap_title_loc = 0.8 * mm
+    text_x = x_qr + qr_size + gap_qr_text
+    text_w = W - m - text_x
 
-    qr_size = 15 * mm
+    title = (it.title or "").strip()
+    sku = (it.sku or "-").strip()
 
-    block_h = qr_size + gap_qr_title + title_h + gap_title_loc + loc_h
-    y0 = m + (inner_h - block_h) / 2.0
+    def fit_font(text, font_name, base_size, min_size, max_width):
+        size = base_size
+        while size > min_size and c.stringWidth(text, font_name, size) > max_width:
+            size -= 0.5
+        return size
+
+    def ellipsize_to_width(text, font_name, size, max_width):
+        if c.stringWidth(text, font_name, size) <= max_width:
+            return text
+        ellipsis = "..."
+        trimmed = text
+        while trimmed and c.stringWidth(trimmed + ellipsis, font_name, size) > max_width:
+            trimmed = trimmed[:-1]
+        return (trimmed + ellipsis) if trimmed else ellipsis
 
     sku = it.sku or ""
     qr = qrcode.QRCode(
@@ -2982,18 +2994,21 @@ def _build_item_label_pdf(it, settings) -> bytes:
     qr_img = qr.make_image(fill_color="black", back_color="white")
     if getattr(qr_img, "mode", None) != 'RGB':
         qr_img = qr_img.convert('RGB')
-    x_qr = m + (inner_w - qr_size) / 2.0
-    c.drawImage(ImageReader(qr_img), x_qr, y0, width=qr_size, height=qr_size, preserveAspectRatio=True)
+    c.drawImage(ImageReader(qr_img), x_qr, y_qr, width=qr_size, height=qr_size, preserveAspectRatio=True)
 
-    title = _ellipsize(it.title or "", 20)
+    title_fs = fit_font(title, "Helvetica-Bold", 8.5, 6.5, text_w)
+    sku_fs = fit_font(sku, "Helvetica-Bold", 16, 10, text_w)
+
+    title_text = ellipsize_to_width(title, "Helvetica-Bold", title_fs, text_w)
+
+    title_y = y_qr + qr_size - 1.2 * mm
+    sku_y = y_qr + (qr_size / 2.0) - (sku_fs / 2.0)
+
     c.setFont("Helvetica-Bold", title_fs)
-    y_title = y0 + qr_size + gap_qr_title + title_fs
-    c.drawCentredString(W / 2.0, y_title, title)
+    c.drawString(text_x, title_y, title_text)
 
-    loc = it.location_code or "-"
-    c.setFont("Helvetica", loc_fs)
-    y_loc = y0 + qr_size + gap_qr_title + title_h + gap_title_loc + loc_fs
-    c.drawCentredString(W / 2.0, y_loc, loc)
+    c.setFont("Helvetica-Bold", sku_fs)
+    c.drawString(text_x, sku_y, sku)
 
     c.showPage()
     c.save()
