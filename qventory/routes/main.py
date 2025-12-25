@@ -16,6 +16,7 @@ from urllib.parse import urlparse, parse_qs
 import csv
 from datetime import datetime, date
 import hashlib
+import uuid
 
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
@@ -2799,10 +2800,12 @@ def qr_batch():
         for code in location_codes:
             parts = parse_location_code(code)
             current = tree
-            for idx, level in enumerate(enabled_levels):
+            accum = {}
+            for level in enabled_levels:
                 value = parts.get(level)
                 if not value:
                     break
+                accum[level] = value
                 node = current.get(value)
                 if not node:
                     node = {
@@ -2814,9 +2817,13 @@ def qr_batch():
                     }
                     current[value] = node
                 node["count"] += 1
-                if idx == len(enabled_levels) - 1 or not parts.get(enabled_levels[idx + 1]):
-                    node["code"] = code
-                    break
+                node["code"] = compose_location_code(
+                    A=accum.get("A"),
+                    B=accum.get("B"),
+                    S=accum.get("S"),
+                    C=accum.get("C"),
+                    enabled=tuple(enabled_levels),
+                )
                 current = node["children"]
 
         return render_template(
@@ -2861,23 +2868,85 @@ def qr_batch():
     return send_file(pdf_buf, mimetype="application/pdf", as_attachment=True, download_name="qr_labels.pdf")
 
 
+@main_bp.route("/qr/batch/preview", methods=["POST"])
+@login_required
+def qr_batch_preview():
+    s = get_or_create_settings(current_user)
+    valsA = parse_values(request.form.get("A") or "") if s.enable_A else [""]
+    valsB = parse_values(request.form.get("B") or "") if s.enable_B else [""]
+    valsS = parse_values(request.form.get("S") or "") if s.enable_S else [""]
+    valsC = parse_values(request.form.get("C") or "") if s.enable_C else [""]
+
+    if s.enable_A and not valsA: valsA = [""]
+    if s.enable_B and not valsB: valsB = [""]
+    if s.enable_S and not valsS: valsS = [""]
+    if s.enable_C and not valsC: valsC = [""]
+
+    combos = []
+    for a in valsA:
+        for b in valsB:
+            for s_ in valsS:
+                for c in valsC:
+                    code = compose_location_code(
+                        A=a or None, B=b or None, S=s_ or None, C=c or None,
+                        enabled=tuple(s.enabled_levels())
+                    )
+                    if code:
+                        combos.append(code)
+
+    if not combos:
+        flash("No codes generated. Please provide at least one value.", "error")
+        return redirect(url_for("main.qr_batch"))
+
+    from ..helpers.utils import build_qr_batch_pdf
+    pdf_buf = build_qr_batch_pdf(
+        combos, s,
+        lambda code: url_for(
+            "main.public_view_location",
+            username=current_user.username,
+            code=code,
+            _external=True
+        )
+    )
+
+    tmp = tempfile.NamedTemporaryFile(prefix=f"qventory_qr_batch_{current_user.id}_", suffix=".pdf", delete=False)
+    tmp.write(pdf_buf.getvalue())
+    tmp.close()
+    token = os.path.basename(tmp.name)
+    pdf_url = url_for("main.qr_batch_pdf", token=token)
+    return render_template("print_label.html", item=None, pdf_url=pdf_url)
+
+
+@main_bp.route("/qr/batch/pdf/<token>")
+@login_required
+def qr_batch_pdf(token):
+    if not token.startswith(f"qventory_qr_batch_{current_user.id}_"):
+        return redirect(url_for("main.qr_batch"))
+    path = os.path.join(tempfile.gettempdir(), token)
+    if not os.path.exists(path):
+        flash("Batch PDF expired. Please regenerate.", "error")
+        return redirect(url_for("main.qr_batch"))
+    return send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name="qr_labels.pdf"
+    )
+
+
 @main_bp.route("/qr/location/print/<code>")
 @login_required
 def qr_location_print(code):
     s = get_or_create_settings(current_user)
-    from ..helpers.utils import build_qr_batch_pdf
-
-    pdf_buf = build_qr_batch_pdf(
-        [code], s,
-        lambda c: url_for(
-            "main.public_view_location",
-            username=current_user.username,
-            code=c,
-            _external=True
-        )
+    link = url_for(
+        "main.public_view_location",
+        username=current_user.username,
+        code=code,
+        _external=True
     )
+    pdf_bytes = _build_location_label_pdf(code, link)
     return send_file(
-        pdf_buf,
+        io.BytesIO(pdf_bytes),
         mimetype="application/pdf",
         as_attachment=False,
         download_name=f"qr_{code}.pdf"
@@ -3114,6 +3183,57 @@ def _build_item_label_pdf(it, settings) -> bytes:
 
     c.setFont("Helvetica-Bold", sku_fs)
     c.drawString(text_x, sku_y, sku)
+
+    c.showPage()
+    c.save()
+    pdf_bytes = buf.getvalue()
+    buf.close()
+    return pdf_bytes
+
+
+def _build_location_label_pdf(code: str, link: str) -> bytes:
+    W = 40 * mm
+    H = 30 * mm
+
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=(W, H))
+
+    m = 3 * mm
+    inner_w = W - 2 * m
+    inner_h = H - 2 * m
+
+    qr_size = 18 * mm
+    gap_qr_text = 2 * mm
+    x_qr = m
+    y_qr = m + (inner_h - qr_size) / 2.0
+
+    text_x = x_qr + qr_size + gap_qr_text
+    text_w = W - m - text_x
+
+    def fit_font(text, font_name, base_size, min_size, max_width):
+        size = base_size
+        while size > min_size and c.stringWidth(text, font_name, size) > max_width:
+            size -= 0.5
+        return size
+
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=1,
+    )
+    qr.add_data(link)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    if getattr(qr_img, "mode", None) != 'RGB':
+        qr_img = qr_img.convert('RGB')
+    c.drawImage(ImageReader(qr_img), x_qr, y_qr, width=qr_size, height=qr_size, preserveAspectRatio=True)
+
+    text = f"Location: {code}"
+    font_size = fit_font(text, "Helvetica-Bold", 12, 8, text_w)
+    text_y = y_qr + (qr_size / 2.0) - (font_size / 2.0)
+    c.setFont("Helvetica-Bold", font_size)
+    c.drawString(text_x, text_y, text)
 
     c.showPage()
     c.save()
