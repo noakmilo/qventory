@@ -338,11 +338,35 @@ def deduplicate_ebay_items(items):
     Remove duplicate listings returned by eBay APIs.
 
     Duplicates primarily use ebay_listing_id/listing_id, but we fall back to
-    title+SKU+price+source when IDs are missing.
+    title+SKU+price+source when IDs are missing. When duplicates are found,
+    we merge missing fields (e.g., SKU from Trading API) into the first item.
     """
-    seen = set()
-    deduped = []
+    seen = {}
+    order = []
     duplicates = []
+    deduped = []
+
+    def merge_missing(target, incoming):
+        if not isinstance(target, dict) or not isinstance(incoming, dict):
+            return
+        for field in [
+            'sku', 'ebay_sku', 'ebay_listing_id', 'listing_id',
+            'ebay_url', 'item_price', 'listing_status',
+            'listing_start_time', 'listing_end_time'
+        ]:
+            if not target.get(field) and incoming.get(field):
+                target[field] = incoming.get(field)
+
+        target_product = target.get('product')
+        incoming_product = incoming.get('product')
+        if isinstance(target_product, dict) and isinstance(incoming_product, dict):
+            for field in ['title', 'description']:
+                if not target_product.get(field) and incoming_product.get(field):
+                    target_product[field] = incoming_product.get(field)
+            if (not target_product.get('imageUrls')) and incoming_product.get('imageUrls'):
+                target_product['imageUrls'] = incoming_product.get('imageUrls')
+        elif not target.get('product') and isinstance(incoming_product, dict):
+            target['product'] = incoming_product
 
     for item in items:
         try:
@@ -353,11 +377,19 @@ def deduplicate_ebay_items(items):
 
         if key and key in seen:
             duplicates.append(item)
+            merge_missing(seen[key], item)
             continue
 
         if key:
-            seen.add(key)
-        deduped.append(item)
+            seen[key] = item
+            order.append(key)
+        else:
+            deduped.append(item)
+
+    for key in order:
+        item = seen.get(key)
+        if item:
+            deduped.append(item)
 
     if duplicates:
         log_inv(f"⚠️  Removed {len(duplicates)} duplicate listings from eBay payload")
