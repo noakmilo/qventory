@@ -258,13 +258,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 existing_item.ebay_sku = ebay_sku
                             if start_time:
                                 existing_item.listing_date = start_time.date()
-                            # Update location fields if SKU is a valid Qventory location code
-                            if parsed_with_images.get('location_code'):
-                                existing_item.location_code = parsed_with_images.get('location_code')
-                                existing_item.A = parsed_with_images.get('location_A')
-                                existing_item.B = parsed_with_images.get('location_B')
-                                existing_item.S = parsed_with_images.get('location_S')
-                                existing_item.C = parsed_with_images.get('location_C')
+                            # Always overwrite location_code from eBay Custom SKU when provided
+                            location_code = parsed_with_images.get('location_code') or parsed.get('location_code')
+                            if location_code is not None:
+                                existing_item.location_code = location_code
+                                existing_item.A = parsed_with_images.get('location_A') or parsed.get('location_A')
+                                existing_item.B = parsed_with_images.get('location_B') or parsed.get('location_B')
+                                existing_item.S = parsed_with_images.get('location_S') or parsed.get('location_S')
+                                existing_item.C = parsed_with_images.get('location_C') or parsed.get('location_C')
 
                             updated_count += 1
                             log_task(f"  → Updated existing item")
