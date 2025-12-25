@@ -3101,6 +3101,32 @@ def print_item(item_id):
         )
 
 
+@main_bp.route("/item/<int:item_id>/print/pdf", methods=["GET"])
+@login_required
+def print_item_pdf(item_id):
+    it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+    s = get_or_create_settings(current_user)
+    pdf_bytes = _build_item_label_pdf(it, s)
+    return send_file(
+        io.BytesIO(pdf_bytes),
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=f"label_{it.sku}.pdf",
+    )
+
+
+@main_bp.route("/item/<int:item_id>/print/preview", methods=["GET"])
+@login_required
+def print_item_preview(item_id):
+    it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+    pdf_url = url_for("main.print_item_pdf", item_id=item_id)
+    return render_template(
+        "print_label.html",
+        item=it,
+        pdf_url=pdf_url,
+    )
+
+
 # ==================== ADMIN BACKOFFICE ====================
 
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")

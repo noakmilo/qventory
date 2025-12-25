@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Print Label</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #fff;
+      }
+      #labelPdf {
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe id="labelPdf" src="{{ pdf_url }}"></iframe>
+    <script>
+      (function () {
+        const iframe = document.getElementById('labelPdf');
+        let printed = false;
+
+        function triggerPrint() {
+          if (printed) return;
+          printed = true;
+          try {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+          } catch (err) {
+            window.print();
+          }
+        }
+
+        iframe.addEventListener('load', function () {
+          setTimeout(triggerPrint, 200);
+        });
+
+        window.addEventListener('load', function () {
+          setTimeout(triggerPrint, 500);
+        });
+      })();
+    </script>
+  </body>
+</html>
