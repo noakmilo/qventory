@@ -1143,15 +1143,14 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
 
-        # Check if eBay Custom SKU is a valid Qventory location code
+        # Always store eBay Custom SKU as location_code (location only; not a matching key)
         location_components = {}
-        location_code = None
+        location_code = sku or None
         if sku and is_valid_location_code(sku):
             log_inv(f"Detected valid location code in eBay SKU: {sku}")
             location_components = parse_location_code(sku)
-            location_code = sku
-        else:
-            log_inv(f"eBay SKU '{sku}' is not a valid location code format")
+        elif sku:
+            log_inv(f"eBay SKU '{sku}' is not a valid location code format (stored as location_code)")
 
         return {
             'title': title,
@@ -1213,15 +1212,14 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         # Get condition
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
 
-        # Check if eBay Custom SKU is a valid Qventory location code
+        # Always store eBay Custom SKU as location_code (location only; not a matching key)
         location_components = {}
-        location_code = None
+        location_code = sku or None
         if sku and is_valid_location_code(sku):
             log_inv(f"Detected valid location code in eBay SKU: {sku}")
             location_components = parse_location_code(sku)
-            location_code = sku
-        else:
-            log_inv(f"eBay SKU '{sku}' is not a valid location code format")
+        elif sku:
+            log_inv(f"eBay SKU '{sku}' is not a valid location code format (stored as location_code)")
 
         return {
             'title': title,

@@ -606,11 +606,12 @@ def import_ebay_sales(self, user_id, days_back=None):
                     item = None
                     match_method = None
 
-                    # Strategy 1: Match by SKU
-                    if sku:
-                        item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+                    # Strategy 1: Match by eBay listing ID
+                    ebay_listing_id = sale_data.get('ebay_listing_id')
+                    if ebay_listing_id:
+                        item = Item.query.filter_by(user_id=user_id, ebay_listing_id=ebay_listing_id).first()
                         if item:
-                            match_method = "ebay_sku"
+                            match_method = "ebay_listing_id"
 
                     # Strategy 2: Match by exact title
                     if not item and title:
@@ -1090,17 +1091,11 @@ def rematch_sales_to_items(self, user_id):
                 # Strategy 1: Match by eBay Listing ID (if available)
                 # We don't have this in Sale model, so skip
 
-                # Strategy 2: Match by SKU
-                if not item and sku:
-                    # Try eBay SKU first
-                    item = Item.query.filter_by(user_id=user_id, ebay_sku=sku).first()
+                # Strategy 2: Match by SKU (non-eBay only)
+                if not item and sku and sale.marketplace != 'ebay':
+                    item = Item.query.filter_by(user_id=user_id, sku=sku).first()
                     if item:
-                        match_method = "ebay_sku"
-                    else:
-                        # Try Qventory SKU
-                        item = Item.query.filter_by(user_id=user_id, sku=sku).first()
-                        if item:
-                            match_method = "qventory_sku"
+                        match_method = "qventory_sku"
 
                 # Strategy 3: Match by exact title
                 if not item and title:
@@ -2907,10 +2902,7 @@ def sync_ebay_active_inventory_auto(self):
                 # Get items with eBay listings
                 items_to_sync = Item.query.filter(
                     Item.user_id == user.id,
-                    or_(
-                        Item.ebay_listing_id.isnot(None),
-                        Item.ebay_sku.isnot(None)
-                    )
+                    Item.ebay_listing_id.isnot(None)
                 ).all()
                 
                 if not items_to_sync:
@@ -2933,11 +2925,6 @@ def sync_ebay_active_inventory_auto(self):
                     for offer in offers
                     if offer.get('ebay_listing_id')
                 }
-                offers_by_sku = {
-                    offer.get('ebay_sku'): offer
-                    for offer in offers
-                    if offer.get('ebay_sku')
-                }
 
                 if not can_mark_inactive:
                     log_task("    Incomplete data (no Trading API); items not found will remain active")
@@ -2950,8 +2937,6 @@ def sync_ebay_active_inventory_auto(self):
 
                     if item.ebay_listing_id and item.ebay_listing_id in offers_by_listing:
                         offer_data = offers_by_listing[item.ebay_listing_id]
-                    elif item.ebay_sku and item.ebay_sku in offers_by_sku:
-                        offer_data = offers_by_sku[item.ebay_sku]
 
                     if offer_data:
                         # Item still exists - update price
@@ -3590,19 +3575,11 @@ def reactivate_inactive_ebay_items(self):
                 for offer in offers
                 if offer.get('ebay_listing_id')
             }
-            offers_by_sku = {
-                offer.get('ebay_sku'): offer
-                for offer in offers
-                if offer.get('ebay_sku')
-            }
 
             inactive_items = Item.query.filter(
                 Item.user_id == user.id,
                 Item.is_active.is_(False),
-                or_(
-                    Item.ebay_listing_id.isnot(None),
-                    Item.ebay_sku.isnot(None)
-                )
+                Item.ebay_listing_id.isnot(None)
             ).all()
 
             reactivated = 0
@@ -3610,8 +3587,6 @@ def reactivate_inactive_ebay_items(self):
                 offer_data = None
                 if item.ebay_listing_id:
                     offer_data = offers_by_listing.get(str(item.ebay_listing_id))
-                if not offer_data and item.ebay_sku:
-                    offer_data = offers_by_sku.get(item.ebay_sku)
 
                 if offer_data:
                     listing_id = offer_data.get('ebay_listing_id')

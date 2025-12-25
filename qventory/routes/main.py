@@ -1792,10 +1792,7 @@ def sync_ebay_inventory():
         # Get all items with eBay listing IDs
         items_query = Item.query.filter(
             Item.user_id == current_user.id,
-            or_(
-                Item.ebay_listing_id.isnot(None),
-                Item.ebay_sku.isnot(None)
-            )
+            Item.ebay_listing_id.isnot(None)
         )
 
         # Limit sync to plan limits (only for non-god users)
@@ -1828,11 +1825,6 @@ def sync_ebay_inventory():
             for offer in result['offers']
             if offer.get('ebay_listing_id')
         }
-        offers_by_sku = {
-            offer.get('ebay_sku'): offer
-            for offer in result['offers']
-            if offer.get('ebay_sku')
-        }
         can_mark_inactive = result.get('can_mark_inactive', False)
         sources = ', '.join(result.get('sources', [])) or 'unknown'
         print(f"[SYNC_INVENTORY] Sources: {sources} | offers: {len(result.get('offers', []))} | can_mark_inactive={can_mark_inactive}", file=sys.stderr)
@@ -1847,8 +1839,6 @@ def sync_ebay_inventory():
 
             if item.ebay_listing_id and item.ebay_listing_id in offers_by_listing:
                 offer_data = offers_by_listing[item.ebay_listing_id]
-            elif item.ebay_sku and item.ebay_sku in offers_by_sku:
-                offer_data = offers_by_sku[item.ebay_sku]
 
             if offer_data:
                 # Item still exists on eBay - update it
