@@ -743,9 +743,12 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
                         log_inv(f"Warning: Could not parse quantity for item, defaulting to 1: {str(e)}")
                         quantity = 1
 
-                    # SKU
+                    # SKU (fallback to first variation SKU if needed)
                     sku_elem = item_elem.find('ebay:SKU', ns)
                     sku = sku_elem.text if sku_elem is not None else ''
+                    if not sku:
+                        var_sku_elem = item_elem.find('.//ebay:Variations/ebay:Variation/ebay:SKU', ns)
+                        sku = var_sku_elem.text if var_sku_elem is not None else ''
 
                     # Image
                     picture_details = item_elem.find('ebay:PictureDetails', ns)
@@ -1170,7 +1173,13 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
                 item_thumb = ebay_image_url  # Fallback to original URL
         elif images:
             item_thumb = images[0]  # Use original URL if not processing
-        sku = ebay_item.get('sku', '')
+        sku = (
+            ebay_item.get('sku')
+            or ebay_item.get('ebay_sku')
+            or ebay_item.get('custom_sku')
+            or ebay_item.get('custom_label')
+            or ''
+        )
         availability = ebay_item.get('availability', {})
         quantity = availability.get('shipToLocationAvailability', {}).get('quantity', 0)
         condition = ebay_item.get('condition', 'USED_EXCELLENT')
@@ -1234,7 +1243,13 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             item_thumb = images[0]  # Use original URL if not processing
 
         # Get SKU
-        sku = ebay_item.get('sku', '')
+        sku = (
+            ebay_item.get('sku')
+            or ebay_item.get('ebay_sku')
+            or ebay_item.get('custom_sku')
+            or ebay_item.get('custom_label')
+            or ''
+        )
 
         # Get availability
         availability = ebay_item.get('availability', {})
