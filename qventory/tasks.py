@@ -126,6 +126,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                     parsed = parse_ebay_inventory_item(ebay_item, process_images=False)
                     ebay_sku = parsed.get('ebay_sku', '')
                     ebay_title = parsed.get('title', '')
+                    variation_skus = parsed.get('variation_skus') or []
 
                     log_task(f"  Title: {ebay_title[:50]}")
 
@@ -140,6 +141,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
                     log_task(f"  eBay Listing ID: {ebay_listing_id or 'None'}")
                     log_task(f"  eBay SKU: {ebay_sku or 'None'}")
+                    if ebay_sku or variation_skus:
+                        sku_list = []
+                        if ebay_sku:
+                            sku_list.append(ebay_sku)
+                        for sku in variation_skus:
+                            if sku and sku not in sku_list:
+                                sku_list.append(sku)
+                        log_task(f"  ✅ SKU(s) detected: {sku_list}")
 
                     # Trading API is the source of truth for Custom Label (Item.SKU)
                     if ebay_listing_id and ebay_item.get('source') != 'trading_api':

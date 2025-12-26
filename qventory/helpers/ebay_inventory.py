@@ -1205,11 +1205,12 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
         'item_price': item_price,
         'listing_start_time': ebay_item.get('listing_start_time'),
         'listing_end_time': ebay_item.get('listing_end_time'),
-        'location_code': location_code,  # Parsed location code if valid
-        'location_A': location_components.get('A'),
-        'location_B': location_components.get('B'),
-        'location_S': location_components.get('S'),
-        'location_C': location_components.get('C'),
+            'location_code': location_code,  # Parsed location code if valid
+            'location_A': location_components.get('A'),
+            'location_B': location_components.get('B'),
+            'location_S': location_components.get('S'),
+            'location_C': location_components.get('C'),
+            'variation_skus': ebay_item.get('variation_skus', []),
             'ebay_item_data': ebay_item
         }
     else:
@@ -1278,6 +1279,7 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'location_B': location_components.get('B'),
             'location_S': location_components.get('S'),
             'location_C': location_components.get('C'),
+            'variation_skus': ebay_item.get('variation_skus', []),
             'listing_start_time': ebay_item.get('listing_start_time'),
             'listing_end_time': ebay_item.get('listing_end_time'),
             'ebay_item_data': ebay_item
