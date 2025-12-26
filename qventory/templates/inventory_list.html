@@ -179,10 +179,7 @@
         </a>
         {% if view_type == 'active' %}
         <a class="btn backup-btn" href="{{ url_for('main.import_csv') }}" title="Import items from CSV">
-          <i class="fas fa-upload"></i> Import
-        </a>
-        <a class="btn backup-btn" href="{{ url_for('main.import_ebay') }}" title="Import inventory from eBay">
-          <i class="fab fa-ebay"></i> Import from eBay
+          <i class="fas fa-upload"></i> Non-eBay Import
         </a>
         {# Sync eBay (kept for later) #}
         {#
