@@ -2920,7 +2920,7 @@ def public_view_location(username, code):
     s = get_or_create_settings(user)
     parts = parse_location_code(code)
 
-    q = Item.query.filter_by(user_id=user.id)
+    q = Item.query.filter_by(user_id=user.id, is_active=True)
     if s.enable_A and "A" in parts:
         q = q.filter(Item.A == parts["A"])
     if s.enable_B and "B" in parts:

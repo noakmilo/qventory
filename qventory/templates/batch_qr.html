@@ -10,70 +10,120 @@
 {% endblock %}
 
 {% block content %}
-<div class="card">
-  <h2>Generate QR Labels (Batch)</h2>
-  <form method="post" class="grid cols-4">
-    {% if settings.enable_A %}
-    <div>
-      <label>{{ settings.label_A }} values (e.g., 1-3 or 1,3,7)</label>
-      <input class="input" type="text" name="A">
+<div class="qr-batch">
+  <div class="card qr-batch__hero">
+    <div class="qr-batch__hero-header">
+      <div>
+        <p class="qr-batch__eyebrow">QR Labels</p>
+        <h2>Batch generator</h2>
+        <p class="qr-batch__subtitle">
+          Create a clean sheet of 40×30mm labels with the exact location codes you need.
+        </p>
+      </div>
+      <div class="qr-batch__badge">
+        <span class="qr-batch__badge-dot"></span>
+        Uses your Qventory location settings
+      </div>
     </div>
-    {% endif %}
-    {% if settings.enable_B %}
-    <div>
-      <label>{{ settings.label_B }} values</label>
-      <input class="input" type="text" name="B">
+
+    <div class="qr-batch__layout">
+      <form method="post" class="qr-batch__form">
+        <div class="qr-batch__fields">
+          {% if settings.enable_A %}
+          <div class="qr-batch__field">
+            <label>{{ settings.label_A }} values</label>
+            <input class="input" type="text" name="A" placeholder="1-3 or 1,3,7">
+          </div>
+          {% endif %}
+          {% if settings.enable_B %}
+          <div class="qr-batch__field">
+            <label>{{ settings.label_B }} values</label>
+            <input class="input" type="text" name="B" placeholder="1-5 or 2,4,6">
+          </div>
+          {% endif %}
+          {% if settings.enable_S %}
+          <div class="qr-batch__field">
+            <label>{{ settings.label_S }} values</label>
+            <input class="input" type="text" name="S" placeholder="1-10 or 1,2,4">
+          </div>
+          {% endif %}
+          {% if settings.enable_C %}
+          <div class="qr-batch__field">
+            <label>{{ settings.label_C }} values</label>
+            <input class="input" type="text" name="C" placeholder="1-8 or 1,3,5">
+          </div>
+          {% endif %}
+        </div>
+        <div class="qr-batch__actions">
+          <button class="btn btn-primary" type="submit">Build PDF</button>
+          <a class="btn btn-ghost" href="{{ url_for('main.dashboard') }}">Cancel</a>
+        </div>
+      </form>
+
+      <div class="qr-batch__tips">
+        <div class="qr-batch__tip">
+          <h3>How it works</h3>
+          <p>Enter ranges or comma lists for each enabled level. We'll combine them into location codes.</p>
+        </div>
+        <div class="qr-batch__tip">
+          <h3>Examples</h3>
+          <div class="qr-batch__chips">
+            <span class="qr-chip">1-4</span>
+            <span class="qr-chip">1,3,7</span>
+            <span class="qr-chip">2-2</span>
+            <span class="qr-chip">5,9</span>
+          </div>
+        </div>
+        <div class="qr-batch__tip qr-batch__tip--accent">
+          <p>Labels are 1 per page at 40×30mm.</p>
+        </div>
+      </div>
     </div>
-    {% endif %}
-    {% if settings.enable_S %}
-    <div>
-      <label>{{ settings.label_S }} values</label>
-      <input class="input" type="text" name="S">
-    </div>
-    {% endif %}
-    {% if settings.enable_C %}
-    <div>
-      <label>{{ settings.label_C }} values</label>
-      <input class="input" type="text" name="C">
-    </div>
-    {% endif %}
-    <div style="grid-column:1/-1">
-      <button class="btn" type="submit">Build PDF</button>
-      <a class="btn" href="{{ url_for('main.dashboard') }}">Cancel</a>
-    </div>
-  </form>
-  <p class="tag">Tip: use ranges like 1-5 or comma lists like 1,4,9.</p>
-</div>
+  </div>
 
 {% if location_tree and location_tree|length %}
-<div class="card" style="margin-top:20px;">
-  <h2>Active Inventory Locations</h2>
-  <p style="color:var(--text-secondary);font-size:13px;margin-bottom:14px;">
-    Print labels for locations detected in your active inventory.
-  </p>
+<div class="card qr-batch__locations">
+  <div class="qr-batch__locations-header">
+    <div>
+      <h2>Active inventory locations</h2>
+      <p class="qr-batch__subtitle">Print labels for locations detected in your active inventory.</p>
+    </div>
+    <div class="qr-batch__summary">
+      <div class="qr-summary">
+        <span class="qr-summary__label">Detected locations</span>
+        <span class="qr-summary__value">{{ total_location_items }}</span>
+      </div>
+      <div class="qr-summary">
+        <span class="qr-summary__label">Selected</span>
+        <span class="qr-summary__value" id="selectedCount">0</span>
+      </div>
+    </div>
+  </div>
 
   <form method="post" action="{{ url_for('main.qr_batch_print_selected') }}" target="_blank">
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-      <button class="btn" type="submit">Print Selected</button>
-      <button class="btn" type="button" id="printAllBtn">Print All</button>
-      <button class="btn" type="button" id="selectAllBtn">Select All</button>
-      <button class="btn" type="button" id="deselectAllBtn">Deselect All</button>
+    <div class="qr-batch__toolbar">
+      <div class="qr-batch__toolbar-main">
+        <button class="btn btn-primary" type="submit">Print Selected</button>
+        <button class="btn btn-outline" type="button" id="printAllBtn">Print All</button>
+      </div>
+      <div class="qr-batch__toolbar-secondary">
+        <button class="btn btn-ghost" type="button" id="selectAllBtn">Select All</button>
+        <button class="btn btn-ghost" type="button" id="deselectAllBtn">Deselect All</button>
+      </div>
     </div>
 
   {% macro render_tree(nodes) %}
-    <ul style="list-style:none;margin:0;padding-left:14px;border-left:1px solid var(--border);">
+    <ul class="qr-tree">
       {% for key, node in nodes.items() %}
-      <li style="padding:6px 0;">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-          <label style="display:flex;align-items:center;gap:8px;">
+      <li class="qr-tree__node">
+        <div class="qr-tree__row">
+          <label class="qr-tree__check">
             <input type="checkbox" name="location_codes" value="{{ node.code }}" class="location-checkbox">
-            <span style="font-weight:600;">
-              {{ location_labels.get(node.level, node.level) }} {{ node.value }}
-            </span>
+            <span class="qr-tree__label">{{ location_labels.get(node.level, node.level) }} {{ node.value }}</span>
           </label>
-          <span class="tag">{{ node.count }}</span>
+          <span class="qr-tree__count">{{ node.count }}</span>
           {% if node.code %}
-          <a class="btn"
+          <a class="btn btn-ghost"
              href="{{ url_for('main.qr_location_print', code=node.code) }}"
              target="_blank"
              rel="noopener"
@@ -94,38 +144,51 @@
   </form>
 </div>
 {% elif total_location_items == 0 %}
-<div class="card" style="margin-top:20px;">
+<div class="card qr-batch__empty">
   <h2>No locations available</h2>
-  <p style="color:var(--text-secondary);font-size:13px;margin-bottom:10px;">
+  <p class="qr-batch__subtitle">
     Assign locations to your active listings to generate printable location labels.
   </p>
-  <a class="btn" href="{{ url_for('main.inventory_active') }}">Go to Active Listings</a>
+  <a class="btn btn-primary" href="{{ url_for('main.inventory_active') }}">Go to Active Listings</a>
 </div>
 {% endif %}
+</div>
 
 <script>
   (function () {
     const selectAllBtn = document.getElementById('selectAllBtn');
     const deselectAllBtn = document.getElementById('deselectAllBtn');
     const printAllBtn = document.getElementById('printAllBtn');
+    const selectedCount = document.getElementById('selectedCount');
     const checkboxes = () => Array.from(document.querySelectorAll('.location-checkbox'));
+
+    const updateCount = () => {
+      if (!selectedCount) return;
+      selectedCount.textContent = checkboxes().filter(cb => cb.checked).length;
+    };
 
     if (selectAllBtn) {
       selectAllBtn.addEventListener('click', () => {
         checkboxes().forEach(cb => { cb.checked = true; });
+        updateCount();
       });
     }
     if (deselectAllBtn) {
       deselectAllBtn.addEventListener('click', () => {
         checkboxes().forEach(cb => { cb.checked = false; });
+        updateCount();
       });
     }
     if (printAllBtn) {
       printAllBtn.addEventListener('click', () => {
         checkboxes().forEach(cb => { cb.checked = true; });
+        updateCount();
         printAllBtn.closest('form').submit();
       });
     }
+
+    checkboxes().forEach(cb => cb.addEventListener('change', updateCount));
+    updateCount();
   })();
 </script>
 {% endblock %}
