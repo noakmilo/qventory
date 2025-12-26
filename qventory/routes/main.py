@@ -3800,7 +3800,8 @@ def privacy_policy():
 @login_required
 def profit_calculator():
     """Standalone profit calculator page"""
-    return render_template("profit_calculator.html")
+    embed = request.args.get("embed") == "1"
+    return render_template("profit_calculator.html", embed=embed)
 
 
 @main_bp.route("/api/autocomplete-items")
@@ -3953,12 +3954,12 @@ def api_ai_research():
     currency = data.get("currency") or "USD"
     print(f"Market: {market_region}, Currency: {currency}", file=sys.stderr)
 
-    # STEP 1: Scrape real eBay sold listings
-    print("📡 Scraping eBay sold listings...", file=sys.stderr)
-    from qventory.helpers.ebay_scraper import scrape_ebay_sold_listings, format_listings_for_ai
+    # STEP 1: Fetch real eBay sold listings
+    print("📡 Fetching eBay sold listings...", file=sys.stderr)
+    from qventory.helpers.ebay_api_scraper import get_sold_listings_ebay_api, format_listings_for_ai
 
-    scraped_data = scrape_ebay_sold_listings(item_title, max_results=10)
-    print(f"✓ Scraped {scraped_data.get('count', 0)} listings", file=sys.stderr)
+    scraped_data = get_sold_listings_ebay_api(item_title, max_results=10, days_back=7)
+    print(f"✓ Found {scraped_data.get('count', 0)} sold listings", file=sys.stderr)
 
     # Format scraped data for AI
     real_market_data = format_listings_for_ai(scraped_data)
@@ -4066,7 +4067,9 @@ CRITICAL RULES:
             example_listings.append({
                 'title': item['title'],
                 'price': item['price'],
-                'link': item['link']
+                'link': item['link'],
+                'sold_date': item.get('sold_date', ''),
+                'condition': item.get('condition', '')
             })
 
         return jsonify({

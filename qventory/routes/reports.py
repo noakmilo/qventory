@@ -63,7 +63,9 @@ def process_report_async(report_id):
                 examples.append({
                     'title': item['title'],
                     'price': item['price'],
-                    'link': item['link']
+                    'link': item['link'],
+                    'sold_date': item.get('sold_date', ''),
+                    'condition': item.get('condition', '')
                 })
             report.examples_json = json.dumps(examples)
             db.session.commit()
@@ -166,7 +168,7 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
                 type='success',
                 title='AI Research report is ready!',
                 message=f'Your market analysis for "{item_title[:50]}" is complete.',
-                link_url='/reports/analytics',
+                link_url='/ai-research',
                 link_text='View Report',
                 source='ai_research'
             )
@@ -190,7 +192,7 @@ RESPOND WITH ONLY THIS HTML (no ```html, no explanations):
                     type='error',
                     title='AI Research failed',
                     message=f'Failed to generate report for "{report.item_title[:50]}": {str(e)[:100]}',
-                    link_url='/reports/analytics',
+                    link_url='/ai-research',
                     link_text='Try Again',
                     source='ai_research'
                 )

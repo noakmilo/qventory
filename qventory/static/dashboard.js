@@ -313,9 +313,55 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeItemEventListeners();
 });
 
+// ==================== PROFIT CALC MODAL ====================
+
+function setupProfitCalcModal() {
+  const modal = document.getElementById('profitCalcModal');
+  if (!modal || modal.dataset.initialized) return;
+
+  modal.dataset.initialized = 'true';
+  const closeTargets = modal.querySelectorAll('[data-modal-close]');
+
+  closeTargets.forEach(target => {
+    target.addEventListener('click', closeProfitCalcModal);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !modal.hidden) {
+      closeProfitCalcModal();
+    }
+  });
+}
+
+function openProfitCalcModal(url) {
+  const modal = document.getElementById('profitCalcModal');
+  const frame = document.getElementById('profitCalcFrame');
+
+  if (!modal || !frame) return false;
+
+  frame.src = url;
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+  return true;
+}
+
+function closeProfitCalcModal() {
+  const modal = document.getElementById('profitCalcModal');
+  const frame = document.getElementById('profitCalcFrame');
+
+  if (!modal) return;
+
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+  if (frame) {
+    frame.src = 'about:blank';
+  }
+}
+
 // ==================== ACTION BUTTONS ====================
 
 function setupActionButtons() {
+  setupProfitCalcModal();
   // AI Research buttons
   document.querySelectorAll('.ai-research-btn').forEach(btn => {
     if (btn.dataset.initialized) return;
@@ -364,8 +410,10 @@ function setupActionButtons() {
       if (itemCost) params.append('cost', itemCost);
       if (itemPrice) params.append('price', itemPrice);
 
-      // Open Profit Calculator page for this item
-      window.location.href = `/profit-calculator?${params.toString()}`;
+      const url = `/profit-calculator?${params.toString()}&embed=1`;
+      if (!openProfitCalcModal(url)) {
+        window.location.href = url.replace('&embed=1', '');
+      }
     });
   });
 

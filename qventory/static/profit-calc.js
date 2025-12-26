@@ -163,7 +163,7 @@ const ProfitCalc = (function() {
     const shippingCost = parseFloat(elements.shipping.value) || 0;
 
     if (!buyPrice || !resalePrice) {
-      elements.result.innerHTML = '<p style="color:var(--err)">Please fill in Purchase Price and Resale Price.</p>';
+      elements.result.innerHTML = '<p style="color:var(--err)">Please fill in Item Cost and Listing Price.</p>';
       elements.result.style.display = 'block';
       return;
     }
@@ -343,6 +343,38 @@ const ProfitCalc = (function() {
     updateFees();
   }
 
+  function applyUrlPrefill() {
+    const params = new URLSearchParams(window.location.search);
+    let applied = false;
+
+    const title = params.get('title');
+    const cost = params.get('cost');
+    const price = params.get('price');
+
+    if (title) {
+      elements.itemName.value = title;
+      applied = true;
+    }
+
+    if (cost !== null && cost !== '') {
+      const parsedCost = parseFloat(cost);
+      if (Number.isFinite(parsedCost)) {
+        elements.buyPrice.value = parsedCost.toFixed(2);
+        applied = true;
+      }
+    }
+
+    if (price !== null && price !== '') {
+      const parsedPrice = parseFloat(price);
+      if (Number.isFinite(parsedPrice)) {
+        elements.resalePrice.value = parsedPrice.toFixed(2);
+        applied = true;
+      }
+    }
+
+    return applied;
+  }
+
   // Autocomplete functionality
   function setupAutocomplete() {
     elements.itemName.addEventListener('input', function() {
@@ -436,6 +468,9 @@ const ProfitCalc = (function() {
     initElements();
     updateCategoryOptions();
     loadFormData();
+    if (applyUrlPrefill()) {
+      saveFormData();
+    }
     renderHistory();
     setupAutocomplete();
 

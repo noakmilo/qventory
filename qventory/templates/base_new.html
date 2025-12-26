@@ -212,6 +212,20 @@
     </footer>
   </main>
 
+  <!-- Profit Calculator Modal -->
+  <div class="modal" id="profitCalcModal" hidden>
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__dialog modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="profitCalcTitle">
+      <div class="modal__header">
+        <h3 id="profitCalcTitle"><i class="fas fa-calculator"></i> Profit Calculator</h3>
+        <button class="modal__close" type="button" data-modal-close aria-label="Close">×</button>
+      </div>
+      <div class="modal__body modal__body--flush">
+        <iframe id="profitCalcFrame" title="Profit Calculator" style="width:100%;height:70vh;border:0;"></iframe>
+      </div>
+    </div>
+  </div>
+
   <!-- Mobile Sidebar Overlay -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
 

@@ -10,6 +10,25 @@
 {% endblock %}
 
 {% block content %}
+{% if embed %}
+<style>
+  .sidebar,
+  .mobile-header,
+  .footer,
+  .breadcrumb,
+  .flash-container,
+  .sidebar-overlay {
+    display: none !important;
+  }
+  .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .content-wrapper {
+    padding: 0 !important;
+  }
+</style>
+{% endif %}
 
 <div class="row">
   <div class="card page-shell page-shell--narrow" style="flex:1 1 100%;">
@@ -32,12 +51,12 @@
         <div id="autocompleteList" class="autocomplete-list"></div>
       </div>
 
-      <!-- Purchase Price -->
-      <label for="buyPrice">Purchase Price ($)</label>
+      <!-- Item Cost -->
+      <label for="buyPrice">Item Cost ($)</label>
       <input type="number" id="buyPrice" class="input" placeholder="e.g. 25" step="0.01">
 
-      <!-- Resale Price -->
-      <label for="resalePrice">Estimated Resale Price ($)</label>
+      <!-- Listing Price -->
+      <label for="resalePrice">Listing Price ($)</label>
       <input type="number" id="resalePrice" class="input" placeholder="e.g. 59.99" step="0.01">
 
       <!-- Marketplace Fees (always visible) -->
