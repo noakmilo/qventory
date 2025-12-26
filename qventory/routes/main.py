@@ -3665,13 +3665,13 @@ def admin_reactivate_ebay_items():
 @require_admin
 def admin_resync_all_inventory():
     """
-    Global action: deduplicate every eBay inventory and launch a sync_all import.
+    Global action: resync eBay inventory and backfill listing dates.
     """
-    from qventory.tasks import resync_all_inventories_and_purge
+    from qventory.tasks import resync_all_inventories_backfill_dates
 
-    task = resync_all_inventories_and_purge.delay()
+    task = resync_all_inventories_backfill_dates.delay()
     flash(
-        f"Full resync task launched (Task ID: {task.id}). All eBay inventories will be deduplicated and synced.",
+        f"Resync task launched (Task ID: {task.id}). All eBay inventories will be synced and listing dates backfilled.",
         "ok"
     )
     return redirect(url_for('main.admin_dashboard'))

@@ -3884,3 +3884,111 @@ def resync_all_inventories_and_purge(self):
             'total_duplicates_removed': total_purged,
             'results': summary
         }
+
+
+@celery.task(bind=True, name='qventory.tasks.resync_all_inventories_backfill_dates')
+def resync_all_inventories_backfill_dates(self):
+    """
+    Admin task: resync every eBay inventory and backfill listing_date from eBay.
+
+    NOTE: This does NOT deduplicate listings.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+        from qventory.models.item import Item
+
+        log_task("=== ADMIN: Starting resync + backfill listing dates (no dedup) ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        total_accounts = len(credentials)
+        log_task(f"Found {total_accounts} active eBay credentials to process")
+
+        summary = []
+        total_listing_dates = 0
+
+        for idx, credential in enumerate(credentials, start=1):
+            user = credential.owner or User.query.get(credential.user_id)
+            if not user:
+                log_task(f"[{idx}/{total_accounts}] Skipping credential {credential.id}: user not found")
+                continue
+
+            log_task(f"[{idx}/{total_accounts}] Processing user {user.username} (ID {user.id})")
+
+            try:
+                import_result = import_ebay_inventory.run(
+                    user.id,
+                    import_mode='sync_all',
+                    listing_status='ACTIVE'
+                )
+
+                listing_dates_updated = 0
+                try:
+                    from qventory.helpers.ebay_inventory import get_listing_time_details
+                    items_with_listings = Item.query.filter(
+                        Item.user_id == user.id,
+                        Item.ebay_listing_id.isnot(None)
+                    ).all()
+                    for idx_item, item in enumerate(items_with_listings, start=1):
+                        if item.listing_date:
+                            continue
+                        listing_times = get_listing_time_details(user.id, item.ebay_listing_id)
+                        start_time = listing_times.get('start_time')
+                        if start_time:
+                            item.listing_date = start_time.date()
+                            listing_dates_updated += 1
+                        if idx_item % 50 == 0:
+                            db.session.commit()
+                    if listing_dates_updated:
+                        db.session.commit()
+                        total_listing_dates += listing_dates_updated
+                        log_task(f"  ✓ Backfilled {listing_dates_updated} listing dates")
+                except Exception as listing_date_error:
+                    db.session.rollback()
+                    log_task(f"  ✗ Error backfilling listing dates for user {user.username}: {listing_date_error}")
+
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'imported': import_result.get('imported', 0),
+                    'updated': import_result.get('updated', 0),
+                    'listing_dates': listing_dates_updated,
+                    'skipped': import_result.get('skipped', 0)
+                })
+                log_task(f"  ✓ Resync complete: {import_result.get('imported', 0)} imported / {import_result.get('updated', 0)} updated")
+            except Exception as import_error:
+                db.session.rollback()
+                log_task(f"  ✗ Error resyncing inventory for user {user.username}: {import_error}")
+                summary.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'error': f"import_failed: {import_error}"
+                })
+
+            if hasattr(self, 'request') and self.request.id:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total_accounts,
+                        'last_user': user.username,
+                        'total_listing_dates': total_listing_dates
+                    }
+                )
+
+        log_task("=== Resync + backfill listing dates finished ===")
+        log_task(f"Accounts processed: {len(summary)}/{total_accounts}")
+        log_task(f"Listing dates backfilled: {total_listing_dates}")
+
+        return {
+            'success': True,
+            'accounts_found': total_accounts,
+            'accounts_processed': len(summary),
+            'total_listing_dates': total_listing_dates,
+            'results': summary
+        }

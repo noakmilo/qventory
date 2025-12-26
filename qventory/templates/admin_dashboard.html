@@ -51,112 +51,24 @@
       </div>
     </div>
 
-    <details style="margin:var(--space-4) 0;">
-      <summary style="cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:600;color:var(--text);">
-        <i class="fas fa-sliders-h"></i> Maintenance Tasks (toggle)
-      </summary>
-
-      <!-- ONE-TIME: Resume eBay imports for upgraded users -->
-      <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-          <div style="flex:1;">
-            <h3 style="color:#fbbf24;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-              <i class="fas fa-play-circle"></i> Resume eBay Imports (One-Time Action)
-            </h3>
-            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-              This will resume eBay imports for all users who were upgraded but have incomplete imports.
-              Run this once after deploying the auto-resume feature.
-            </p>
-          </div>
-          <form method="POST" action="{{ url_for('main.admin_resume_ebay_imports') }}" onsubmit="return confirm('This will launch import tasks for all upgraded users with eBay connected. Continue?');">
-            <button type="submit" class="btn" style="background:#fbbf24;color:#000;white-space:nowrap;">
-              <i class="fas fa-rocket"></i> Launch Resume Task
-            </button>
-          </form>
+    <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-database"></i> Rebuild eBay Inventory Dates (Run This)
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Launches a global task that runs a sync_all import and backfills eBay listing creation dates
+            so inventories sort chronologically.
+          </p>
         </div>
+        <form method="POST" action="{{ url_for('main.admin_resync_all_inventory') }}" onsubmit="return confirm('This task will run a sync_all import for every account and backfill listing creation dates. It can take a long time. Continue?');">
+          <button type="submit" class="btn" style="background:#3b82f6;color:#fff;white-space:nowrap;">
+            <i class="fas fa-redo-alt"></i> Rebuild Listings
+          </button>
+        </form>
       </div>
-
-      <!-- Process Recurring Expenses -->
-      <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-          <div style="flex:1;">
-            <h3 style="color:#10b981;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-              <i class="fas fa-sync-alt"></i> Process Recurring Expenses
-            </h3>
-            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-              Manually trigger recurring expense processing. This creates expense entries for all active recurring expenses due today.
-              Normally runs automatically daily at midnight.
-            </p>
-          </div>
-          <form method="POST" action="{{ url_for('main.admin_process_recurring_expenses') }}" onsubmit="return confirm('This will create expense entries for all recurring expenses due today. Continue?');">
-            <button type="submit" class="btn" style="background:#10b981;color:#fff;white-space:nowrap;">
-              <i class="fas fa-play"></i> Run Now
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Sync and Purge eBay Items -->
-      <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-          <div style="flex:1;">
-            <h3 style="color:#ef4444;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-              <i class="fas fa-broom"></i> Sync & Purge Inactive eBay Items
-            </h3>
-            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-              Syncs all eBay accounts and marks items as inactive if they no longer exist on eBay.
-              This cleanup task helps resolve issues from duplicates and items that got stuck as active.
-              <strong>Recommended after bug fixes deployment.</strong>
-            </p>
-          </div>
-          <form method="POST" action="{{ url_for('main.admin_sync_and_purge_items') }}" onsubmit="return confirm('This will sync ALL eBay accounts and mark inactive items that no longer exist on eBay. This may take several minutes. Continue?');">
-            <button type="submit" class="btn" style="background:#ef4444;color:#fff;white-space:nowrap;">
-              <i class="fas fa-sync"></i> Sync & Purge
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Reactivate Incorrectly Inactive eBay Items -->
-      <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-          <div style="flex:1;">
-            <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-              <i class="fas fa-undo-alt"></i> Reactivate eBay Items Marked Inactive
-            </h3>
-            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-              Scans all connected eBay accounts and reactivates items that are still active on eBay but were marked inactive in Qventory.
-              Use this after fixing sync logic to restore affected inventory.
-            </p>
-          </div>
-          <form method="POST" action="{{ url_for('main.admin_reactivate_ebay_items') }}" onsubmit="return confirm('This will scan ALL eBay accounts and reactivate items still active on eBay. Continue?');">
-            <button type="submit" class="btn" style="background:#60a5fa;color:#fff;white-space:nowrap;">
-              <i class="fas fa-undo"></i> Reactivate Items
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Full Resync + Dedup -->
-      <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-          <div style="flex:1;">
-            <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-              <i class="fas fa-database"></i> Full Inventory Resync & Dedup
-            </h3>
-            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-              Launches a global task that purges duplicated listings (by eBay listing ID) for every account, runs a sync_all import,
-              and backfills eBay listing creation dates so inventories sort chronologically.
-            </p>
-          </div>
-          <form method="POST" action="{{ url_for('main.admin_resync_all_inventory') }}" onsubmit="return confirm('This task will deduplicate EVERY eBay inventory, run a sync_all import for every account, and backfill listing creation dates. It can take a long time. Continue?');">
-            <button type="submit" class="btn" style="background:#3b82f6;color:#fff;white-space:nowrap;">
-              <i class="fas fa-redo-alt"></i> Run Full Resync
-            </button>
-          </form>
-        </div>
-      </div>
-    </details>
+    </div>
 
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
