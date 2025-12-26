@@ -160,6 +160,9 @@
         <div id="bulkActionsContainer" style="display:none;margin-right:10px">
           <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
             <option value="">Bulk Actions</option>
+            {% if view_type == 'active' %}
+            <option value="bulk_update">Batch Update Fields</option>
+            {% endif %}
             {# Sync to eBay (kept for later) #}
             {#
             {% if view_type == 'active' %}
@@ -453,6 +456,134 @@
         </button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Bulk Update Modal -->
+<div id="bulkEditModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="bulkEdit"></div>
+  <div class="modal__dialog modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="bulkEditTitle">
+    <div class="modal__header">
+      <h3 id="bulkEditTitle"><i class="fas fa-layer-group"></i> Batch Update Selected Items</h3>
+      <button class="modal__close" type="button" data-modal-close="bulkEdit" aria-label="Close">×</button>
+    </div>
+    <form id="bulkEditForm" class="modal__body">
+      <div style="background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--sub)">
+          <i class="fas fa-info-circle" style="color:#60a5fa;"></i>
+          Updating <strong id="bulkEditCount" style="color:#60a5fa;">0</strong> selected item(s)
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+        <button type="button" class="btn" data-bulk-preset="supplier_cost">
+          <i class="fas fa-receipt"></i> Supplier + Cost
+        </button>
+        <button type="button" class="btn" data-bulk-preset="location_sync">
+          <i class="fas fa-map-marker-alt"></i> Location + Sync
+        </button>
+        <button type="button" class="btn" data-bulk-preset="all">
+          <i class="fas fa-layer-group"></i> All Fields
+        </button>
+      </div>
+
+      <div style="display:grid;gap:16px;">
+        <div style="border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <input type="checkbox" id="bulkEditApplySupplier" name="apply_supplier">
+            <span style="font-weight:600;">Update Supplier</span>
+          </label>
+          <input type="text" name="supplier" id="bulkEditSupplier" class="input" placeholder="Supplier name" disabled>
+          <div style="font-size:12px;color:var(--sub);margin-top:6px;">Leave empty to clear supplier.</div>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <input type="checkbox" id="bulkEditApplyCost" name="apply_cost">
+            <span style="font-weight:600;">Update Cost</span>
+          </label>
+          <input type="number" name="item_cost" id="bulkEditCost" class="input" step="0.01" min="0" placeholder="0.00" disabled>
+          <div style="font-size:12px;color:var(--sub);margin-top:6px;">Use 0 if needed. Leave empty to clear.</div>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:12px;padding:14px;">
+          <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <input type="checkbox" id="bulkEditApplyLocation" name="apply_location">
+            <span style="font-weight:600;">Update Location</span>
+          </label>
+          <div class="inline-edit__grid">
+            {% if settings.enable_A %}
+            <div>
+              <label>{{ settings.label_A }}</label>
+              <select name="A" class="input bulk-edit-location" disabled>
+                <option value="">— None —</option>
+                {% for opt in options.A %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if settings.enable_B %}
+            <div>
+              <label>{{ settings.label_B }}</label>
+              <select name="B" class="input bulk-edit-location" disabled>
+                <option value="">— None —</option>
+                {% for opt in options.B %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if settings.enable_S %}
+            <div>
+              <label>{{ settings.label_S }}</label>
+              <select name="S" class="input bulk-edit-location" disabled>
+                <option value="">— None —</option>
+                {% for opt in options.S %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+
+            {% if settings.enable_C %}
+            <div>
+              <label>{{ settings.label_C }}</label>
+              <select name="C" class="input bulk-edit-location" disabled>
+                <option value="">— None —</option>
+                {% for opt in options.C %}
+                <option value="{{ opt }}">{{ opt }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+          </div>
+          <div style="margin-top:10px;font-size:12px;color:var(--sub);">
+            Location preview: <span id="bulkEditLocationPreview" style="color:#60a5fa;font-weight:600;">—</span>
+          </div>
+          <div style="margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+              <input type="checkbox" name="sync_to_ebay" id="bulkEditSyncToEbay" disabled>
+              <span style="font-size:14px;">
+                <i class="fab fa-ebay" style="color:#E53238;"></i>
+                Sync location to eBay SKU (for eBay items only)
+              </span>
+            </label>
+            <div style="font-size:12px;color:var(--sub);margin-top:4px;margin-left:28px;">
+              Updates the Custom SKU field in eBay for items with an eBay listing ID.
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="bulkEditForm" class="btn submitbtn">
+        <i class="fas fa-check"></i> Apply Selected Fields
+      </button>
+      <button type="button" class="btn" data-modal-close="bulkEdit">Cancel</button>
+    </div>
   </div>
 </div>
 

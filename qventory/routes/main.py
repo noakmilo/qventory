@@ -2686,6 +2686,127 @@ def bulk_assign_location():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@main_bp.route("/items/bulk_update_fields", methods=["POST"])
+@login_required
+def bulk_update_fields():
+    """
+    Bulk update supplier, cost, and/or location for multiple items.
+    Expects JSON: {
+        "item_ids": [1, 2, 3],
+        "apply_supplier": true/false,
+        "supplier": "value or empty",
+        "apply_cost": true/false,
+        "item_cost": "value or empty",
+        "apply_location": true/false,
+        "A": "value or null",
+        "B": "value or null",
+        "S": "value or null",
+        "C": "value or null",
+        "sync_to_ebay": true/false
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        try:
+            item_ids = [int(x) for x in data['item_ids']]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        apply_supplier = bool(data.get('apply_supplier'))
+        apply_cost = bool(data.get('apply_cost'))
+        apply_location = bool(data.get('apply_location'))
+
+        if not any([apply_supplier, apply_cost, apply_location]):
+            return jsonify({"ok": False, "error": "No fields selected for update"}), 400
+
+        # Parse supplier
+        supplier_value = None
+        if apply_supplier:
+            supplier_raw = (data.get('supplier') or '').strip()
+            supplier_value = supplier_raw if supplier_raw else None
+
+        # Parse cost
+        item_cost_value = None
+        if apply_cost:
+            cost_raw = data.get('item_cost')
+            if cost_raw is not None and str(cost_raw).strip() != '':
+                try:
+                    item_cost_value = float(cost_raw)
+                except (ValueError, TypeError):
+                    return jsonify({"ok": False, "error": "Invalid cost value"}), 400
+                if item_cost_value < 0:
+                    return jsonify({"ok": False, "error": "Cost cannot be negative"}), 400
+            else:
+                item_cost_value = None
+
+        # Parse location
+        A = data.get('A') if apply_location else None
+        B = data.get('B') if apply_location else None
+        S = data.get('S') if apply_location else None
+        C = data.get('C') if apply_location else None
+        sync_to_ebay = bool(data.get('sync_to_ebay')) if apply_location else False
+
+        from qventory.helpers import compose_location_code
+        location_code = compose_location_code(A, B, S, C) if apply_location else None
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+
+        if len(items) == 0:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        updated_count = 0
+        synced_count = 0
+
+        for item in items:
+            if apply_supplier:
+                item.supplier = supplier_value
+            if apply_cost:
+                item.item_cost = item_cost_value
+            if apply_location:
+                item.A = A
+                item.B = B
+                item.S = S
+                item.C = C
+                item.location_code = location_code
+
+                if sync_to_ebay and item.ebay_listing_id and location_code:
+                    from qventory.helpers.ebay_inventory import sync_location_to_ebay_sku
+                    success = sync_location_to_ebay_sku(current_user.id, item.ebay_listing_id, location_code)
+                    if success:
+                        synced_count += 1
+
+            updated_count += 1
+
+        db.session.commit()
+
+        message = f"Updated {updated_count} item(s)"
+        if apply_location and sync_to_ebay and synced_count > 0:
+            message += f" and synced {synced_count} to eBay"
+
+        return jsonify({
+            "ok": True,
+            "updated_count": updated_count,
+            "synced_count": synced_count,
+            "message": message
+        })
+
+    except Exception as e:
+        print(f"[BULK_UPDATE_FIELDS] Error: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @main_bp.route("/items/bulk_sync_to_ebay", methods=["POST"])
 @login_required
 def bulk_sync_to_ebay():

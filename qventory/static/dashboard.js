@@ -79,6 +79,8 @@ if (bulkActionApply) {
     } else if (action === 'assign_location') {
       // Open bulk location assignment modal
       openBulkLocationModal(itemIds);
+    } else if (action === 'bulk_update') {
+      openBulkEditModal(itemIds);
     } else if (action === 'sync_to_ebay') {
       if (!confirm(`Sync ${itemIds.length} item(s) to eBay?`)) {
         return;
@@ -196,6 +198,258 @@ if (bulkLocationForm) {
       submitBtn.innerHTML = originalText;
     }
   });
+}
+
+// ==================== BULK EDIT ====================
+
+function openBulkEditModal(itemIds) {
+  const modal = document.getElementById('bulkEditModal');
+  if (!modal) {
+    console.error('Bulk edit modal not found');
+    return;
+  }
+
+  modal.dataset.itemIds = JSON.stringify(itemIds);
+  modal.dataset.submitMode = 'custom';
+
+  const countEl = document.getElementById('bulkEditCount');
+  if (countEl) {
+    countEl.textContent = itemIds.length;
+  }
+
+  const form = document.getElementById('bulkEditForm');
+  if (form) form.reset();
+
+  setBulkEditEnabled(false);
+  updateBulkEditLocationPreview();
+
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeBulkEditModal() {
+  const modal = document.getElementById('bulkEditModal');
+  if (modal) {
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+}
+
+function setBulkEditEnabled(enabled) {
+  const supplierInput = document.getElementById('bulkEditSupplier');
+  const costInput = document.getElementById('bulkEditCost');
+  const locationInputs = document.querySelectorAll('.bulk-edit-location');
+  const syncToggle = document.getElementById('bulkEditSyncToEbay');
+
+  if (supplierInput) supplierInput.disabled = !enabled;
+  if (costInput) costInput.disabled = !enabled;
+  locationInputs.forEach(input => {
+    input.disabled = !enabled;
+  });
+  if (syncToggle) syncToggle.disabled = !enabled;
+}
+
+function updateBulkEditLocationPreview() {
+  const preview = document.getElementById('bulkEditLocationPreview');
+  if (!preview) return;
+
+  const A = document.querySelector('.bulk-edit-location[name="A"]')?.value || '';
+  const B = document.querySelector('.bulk-edit-location[name="B"]')?.value || '';
+  const S = document.querySelector('.bulk-edit-location[name="S"]')?.value || '';
+  const C = document.querySelector('.bulk-edit-location[name="C"]')?.value || '';
+
+  const parts = [];
+  if (A) parts.push(`A${A}`);
+  if (B) parts.push(`B${B}`);
+  if (S) parts.push(`S${S}`);
+  if (C) parts.push(`C${C}`);
+
+  preview.textContent = parts.length ? parts.join('') : '—';
+}
+
+function applyBulkEditPreset(preset) {
+  const supplierToggle = document.getElementById('bulkEditApplySupplier');
+  const costToggle = document.getElementById('bulkEditApplyCost');
+  const locationToggle = document.getElementById('bulkEditApplyLocation');
+  const syncToggle = document.getElementById('bulkEditSyncToEbay');
+
+  if (!supplierToggle || !costToggle || !locationToggle) return;
+
+  supplierToggle.checked = preset === 'supplier_cost' || preset === 'all';
+  costToggle.checked = preset === 'supplier_cost' || preset === 'all';
+  locationToggle.checked = preset === 'location_sync' || preset === 'all';
+
+  if (syncToggle) {
+    syncToggle.checked = preset === 'location_sync' || preset === 'all';
+    syncToggle.disabled = !locationToggle.checked;
+  }
+
+  const supplierInput = document.getElementById('bulkEditSupplier');
+  const costInput = document.getElementById('bulkEditCost');
+  const locationInputs = document.querySelectorAll('.bulk-edit-location');
+
+  if (supplierInput) supplierInput.disabled = !supplierToggle.checked;
+  if (costInput) costInput.disabled = !costToggle.checked;
+  locationInputs.forEach(input => {
+    input.disabled = !locationToggle.checked;
+  });
+
+  updateBulkEditLocationPreview();
+}
+
+function setupBulkEditToggles() {
+  const supplierToggle = document.getElementById('bulkEditApplySupplier');
+  const costToggle = document.getElementById('bulkEditApplyCost');
+  const locationToggle = document.getElementById('bulkEditApplyLocation');
+  const supplierInput = document.getElementById('bulkEditSupplier');
+  const costInput = document.getElementById('bulkEditCost');
+  const locationInputs = document.querySelectorAll('.bulk-edit-location');
+  const syncToggle = document.getElementById('bulkEditSyncToEbay');
+
+  if (supplierToggle && supplierInput) {
+    supplierToggle.addEventListener('change', () => {
+      supplierInput.disabled = !supplierToggle.checked;
+    });
+  }
+
+  if (costToggle && costInput) {
+    costToggle.addEventListener('change', () => {
+      costInput.disabled = !costToggle.checked;
+    });
+  }
+
+  if (locationToggle) {
+    locationToggle.addEventListener('change', () => {
+      const enabled = locationToggle.checked;
+      locationInputs.forEach(input => {
+        input.disabled = !enabled;
+      });
+      if (syncToggle) {
+        syncToggle.disabled = !enabled;
+        if (!enabled) syncToggle.checked = false;
+      }
+      updateBulkEditLocationPreview();
+    });
+  }
+
+  locationInputs.forEach(input => {
+    input.addEventListener('change', updateBulkEditLocationPreview);
+  });
+}
+
+const bulkEditModal = document.getElementById('bulkEditModal');
+if (bulkEditModal) {
+  bulkEditModal.querySelectorAll('[data-modal-close="bulkEdit"]').forEach(btn => {
+    btn.addEventListener('click', closeBulkEditModal);
+  });
+
+  bulkEditModal.querySelectorAll('[data-bulk-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyBulkEditPreset(btn.getAttribute('data-bulk-preset'));
+    });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !bulkEditModal.hidden) {
+      closeBulkEditModal();
+    }
+  });
+}
+
+const bulkEditForm = document.getElementById('bulkEditForm');
+if (bulkEditForm) {
+  setupBulkEditToggles();
+
+  bulkEditForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await submitBulkEdit('custom');
+  });
+}
+
+async function submitBulkEdit(mode) {
+  const modal = document.getElementById('bulkEditModal');
+  const itemIds = JSON.parse(modal?.dataset.itemIds || '[]');
+
+  if (itemIds.length === 0) {
+    alert('No items selected');
+    return;
+  }
+
+  const applySupplierToggle = document.getElementById('bulkEditApplySupplier')?.checked;
+  const applyCostToggle = document.getElementById('bulkEditApplyCost')?.checked;
+  const applyLocationToggle = document.getElementById('bulkEditApplyLocation')?.checked;
+
+  let applySupplier = applySupplierToggle;
+  let applyCost = applyCostToggle;
+  let applyLocation = applyLocationToggle;
+
+  if (mode === 'supplier_cost') {
+    applySupplier = true;
+    applyCost = true;
+    applyLocation = false;
+  }
+
+  if (mode === 'location_sync') {
+    applySupplier = false;
+    applyCost = false;
+    applyLocation = true;
+  }
+
+  if (!applySupplier && !applyCost && !applyLocation) {
+    alert('Select at least one field to update.');
+    return;
+  }
+
+  const formData = new FormData(document.getElementById('bulkEditForm'));
+  const payload = {
+    item_ids: itemIds,
+    apply_supplier: !!applySupplier,
+    apply_cost: !!applyCost,
+    apply_location: !!applyLocation,
+    supplier: applySupplier ? (formData.get('supplier') || '').trim() : null,
+    item_cost: applyCost ? formData.get('item_cost') : null,
+    A: applyLocation ? (formData.get('A') || null) : null,
+    B: applyLocation ? (formData.get('B') || null) : null,
+    S: applyLocation ? (formData.get('S') || null) : null,
+    C: applyLocation ? (formData.get('C') || null) : null,
+    sync_to_ebay: applyLocation && (mode === 'location_sync' || formData.get('sync_to_ebay') === 'on')
+  };
+
+  const submitBtn = document.querySelector('button[form="bulkEditForm"]');
+  const originalText = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+  }
+
+  try {
+    const response = await fetch('/items/bulk_update_fields', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (data.ok) {
+      alert(data.message || 'Items updated successfully');
+      closeBulkEditModal();
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Failed to update items'));
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    }
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    alert('Failed to update items');
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalText;
+    }
+  }
 }
 
 // ==================== QR MODAL ====================
