@@ -2691,14 +2691,18 @@ def poll_user_listings(credential):
             Item.ebay_listing_id.isnot(None)
         ).all()
         for item in existing_items:
-            existing_listing_ids.add(item.ebay_listing_id)
+            if item.ebay_listing_id:
+                existing_listing_ids.add(str(item.ebay_listing_id))
 
         log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
 
         new_listings = 0
 
         for ebay_item in ebay_items:
-            item_id = ebay_item.get('ebay_listing_id')
+            item_id_raw = ebay_item.get('ebay_listing_id')
+            if not item_id_raw:
+                continue
+            item_id = str(item_id_raw)
 
             # Skip if already in database
             if item_id in existing_listing_ids:
@@ -2732,6 +2736,7 @@ def poll_user_listings(credential):
             price = parsed_with_images.get('item_price')
             listing_url = parsed_with_images.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
             item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
+            location_code = parsed_with_images.get('location_code') or ebay_custom_sku
 
             # IMPORTANT: sku field must be Qventory's unique SKU (20251029-A3B4)
             # ebay_sku field stores eBay's custom SKU (B1S1C1) for location sync
@@ -2741,6 +2746,11 @@ def poll_user_listings(credential):
                 sku=generate_sku(),  # Always generate unique Qventory SKU
                 ebay_listing_id=item_id,
                 ebay_sku=ebay_custom_sku[:100] if ebay_custom_sku else None,  # Store eBay's location code
+                location_code=location_code,
+                A=parsed_with_images.get('A'),
+                B=parsed_with_images.get('B'),
+                S=parsed_with_images.get('S'),
+                C=parsed_with_images.get('C'),
                 listing_link=listing_url,
                 item_price=price,
                 item_thumb=item_thumb,  # Cloudinary URL
@@ -2749,8 +2759,16 @@ def poll_user_listings(credential):
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
 
-            db.session.add(new_item)
-            db.session.commit()  # Commit immediately so items_remaining() reflects the new item
+            try:
+                db.session.add(new_item)
+                db.session.commit()  # Commit immediately so items_remaining() reflects the new item
+            except Exception as e:
+                db.session.rollback()
+                if "uq_items_user_ebay_listing" in str(e):
+                    log_task(f"    Skipping duplicate listing {item_id} (already exists)")
+                    existing_listing_ids.add(item_id)
+                    continue
+                raise
             new_listings += 1
 
             log_task(f"    ✓ New listing: {title[:50]}")
