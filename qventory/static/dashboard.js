@@ -237,6 +237,8 @@ function openBulkEditModal(itemIds) {
 
   setBulkEditEnabled(false);
   updateBulkEditLocationPreview();
+  setupBulkEditSupplierAutocomplete();
+  updateBulkEditSelectedList(itemIds);
 
   modal.hidden = false;
   document.body.classList.add('modal-open');
@@ -352,6 +354,36 @@ function setupBulkEditToggles() {
   });
 }
 
+function setupBulkEditSupplierAutocomplete() {
+  const supplierInput = document.getElementById('bulkEditSupplier');
+  const list = document.getElementById('bulkEditSupplierList');
+  const form = document.getElementById('bulkEditForm');
+  const container = document.querySelector('.bulk-edit-supplier');
+
+  if (supplierInput && list && form && container) {
+    setupSupplierInlineAutocomplete(supplierInput, list, form, container);
+  }
+}
+
+function updateBulkEditSelectedList(itemIds) {
+  const listWrap = document.getElementById('bulkEditSelectedList');
+  const listContainer = listWrap ? listWrap.querySelector('div') : null;
+  const toggleBtn = document.getElementById('bulkEditToggleItems');
+
+  if (!listWrap || !listContainer || !toggleBtn) return;
+
+  const titles = itemIds.map(id => {
+    const row = document.querySelector(`tr[data-item-row="${id}"]`);
+    const titleCell = row ? row.querySelector('td:nth-child(3)') : null;
+    return titleCell ? titleCell.textContent.trim() : `Item ${id}`;
+  });
+
+  listContainer.innerHTML = titles.map(title => `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">${title}</div>`).join('');
+
+  listWrap.style.display = 'none';
+  toggleBtn.textContent = 'Show items';
+}
+
 const bulkEditModal = document.getElementById('bulkEditModal');
 if (bulkEditModal) {
   bulkEditModal.querySelectorAll('[data-modal-close="bulkEdit"]').forEach(btn => {
@@ -368,6 +400,17 @@ if (bulkEditModal) {
     if (event.key === 'Escape' && !bulkEditModal.hidden) {
       closeBulkEditModal();
     }
+  });
+}
+
+const bulkEditToggleBtn = document.getElementById('bulkEditToggleItems');
+if (bulkEditToggleBtn) {
+  bulkEditToggleBtn.addEventListener('click', () => {
+    const listWrap = document.getElementById('bulkEditSelectedList');
+    if (!listWrap) return;
+    const isHidden = listWrap.style.display === 'none' || listWrap.style.display === '';
+    listWrap.style.display = isHidden ? 'block' : 'none';
+    bulkEditToggleBtn.textContent = isHidden ? 'Hide items' : 'Show items';
   });
 }
 
