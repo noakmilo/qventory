@@ -743,12 +743,17 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
                         log_inv(f"Warning: Could not parse quantity for item, defaulting to 1: {str(e)}")
                         quantity = 1
 
-                    # SKU (fallback to first variation SKU if needed)
+                    # SKU (Custom Label). For variations, use first variation SKU.
                     sku_elem = item_elem.find('ebay:SKU', ns)
                     sku = sku_elem.text if sku_elem is not None else ''
+                    variation_skus = []
                     if not sku:
-                        var_sku_elem = item_elem.find('.//ebay:Variations/ebay:Variation/ebay:SKU', ns)
-                        sku = var_sku_elem.text if var_sku_elem is not None else ''
+                        var_sku_elems = item_elem.findall('.//ebay:Variations/ebay:Variation/ebay:SKU', ns)
+                        for var_sku_elem in var_sku_elems:
+                            if var_sku_elem is not None and var_sku_elem.text:
+                                variation_skus.append(var_sku_elem.text.strip())
+                        if variation_skus:
+                            sku = variation_skus[0]
 
                     # Image
                     picture_details = item_elem.find('ebay:PictureDetails', ns)
@@ -786,7 +791,8 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
                         'ebay_url': f"https://www.ebay.com/itm/{item_id.text}" if item_id is not None else None,
                         'listing_start_time': start_time,
                         'listing_end_time': end_time,
-                        'source': 'trading_api'
+                        'source': 'trading_api',
+                        'variation_skus': variation_skus
                     }
                     all_items.append(normalized)
                     items_in_page += 1

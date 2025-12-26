@@ -636,10 +636,21 @@ def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
             selling_status = item_elem.find('ebay:SellingStatus', _XML_NS)
             current_price = selling_status.find('ebay:CurrentPrice', _XML_NS) if selling_status is not None else None
 
+            sku = sku_elem.text if sku_elem is not None else ''
+            variation_skus = []
+            if not sku:
+                var_sku_elems = item_elem.findall('.//ebay:Variations/ebay:Variation/ebay:SKU', _XML_NS)
+                for var_sku_elem in var_sku_elems:
+                    if var_sku_elem is not None and var_sku_elem.text:
+                        variation_skus.append(var_sku_elem.text.strip())
+                if variation_skus:
+                    sku = variation_skus[0]
+
             item_data = {
                 'item_id': item_id,
                 'quantity': int(quantity_elem.text) if quantity_elem is not None else 0,
-                'sku': sku_elem.text if sku_elem is not None else '',
+                'sku': sku,
+                'variation_skus': variation_skus,
                 'title': title_elem.text if title_elem is not None else '',
                 'price': float(current_price.text) if current_price is not None else 0
             }
