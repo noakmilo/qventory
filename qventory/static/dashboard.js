@@ -10,6 +10,7 @@ const bulkActionsContainer = document.getElementById('bulkActionsContainer');
 const bulkActionSelect = document.getElementById('bulkActionSelect');
 const bulkActionApply = document.getElementById('bulkActionApply');
 const bulkSelectedCount = document.getElementById('bulkSelectedCount');
+const bulkEditOpenBtn = document.getElementById('bulkEditOpenBtn');
 
 // Select all checkbox
 if (selectAllCheckbox) {
@@ -30,9 +31,11 @@ function updateBulkActions() {
   if (count > 0) {
     bulkActionsContainer.style.display = 'block';
     bulkSelectedCount.textContent = `${count} item(s) selected`;
+    if (bulkEditOpenBtn) bulkEditOpenBtn.style.display = 'inline-flex';
   } else {
     bulkActionsContainer.style.display = 'none';
     bulkSelectedCount.textContent = '';
+    if (bulkEditOpenBtn) bulkEditOpenBtn.style.display = 'none';
   }
 }
 
@@ -105,6 +108,18 @@ if (bulkActionApply) {
         alert('Failed to sync items');
       }
     }
+  });
+}
+
+if (bulkEditOpenBtn) {
+  bulkEditOpenBtn.addEventListener('click', () => {
+    const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
+    const itemIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.itemId));
+    if (itemIds.length === 0) {
+      alert('No items selected');
+      return;
+    }
+    openBulkEditModal(itemIds);
   });
 }
 
