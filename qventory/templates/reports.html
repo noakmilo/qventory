@@ -71,9 +71,8 @@
             </button>
           {% endif %}
 
-          <button class="btn" onclick="deleteReport({{ report.id }})"
-                  style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444;
-                         {% if report.status == 'completed' %}width:auto{% else %}flex:1{% endif %}">
+          <button class="btn btn-danger" onclick="deleteReport({{ report.id }})"
+                  style="{% if report.status == 'completed' %}width:auto{% else %}flex:1{% endif %}">
             <i class="fas fa-trash-alt"></i> Delete
           </button>
         </div>

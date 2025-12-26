@@ -160,9 +160,12 @@
         <div id="bulkActionsContainer" style="display:none;margin-right:10px">
           <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
             <option value="">Bulk Actions</option>
+            {# Sync to eBay (kept for later) #}
+            {#
             {% if view_type == 'active' %}
             <option value="sync_to_ebay">Sync to eBay</option>
             {% endif %}
+            #}
             <option value="delete">Delete Selected</option>
           </select>
           <button id="bulkActionApply" class="btn" style="padding:0.5rem 1rem">
@@ -181,13 +184,19 @@
         <a class="btn backup-btn" href="{{ url_for('main.import_ebay') }}" title="Import inventory from eBay">
           <i class="fab fa-ebay"></i> Import from eBay
         </a>
+        {# Sync eBay (kept for later) #}
+        {#
         <button id="syncEbayActiveBtn" class="btn backup-btn" title="Sync existing inventory with eBay">
           <i class="fas fa-sync-alt"></i> Sync eBay
         </button>
+        #}
         {% elif view_type == 'sold' %}
+        {# Sync eBay Sales (kept for later) #}
+        {#
         <button id="syncEbaySoldBtn" class="btn backup-btn" title="Sync sold items with eBay">
           <i class="fas fa-sync-alt"></i> Sync eBay Sales
         </button>
+        #}
         {% endif %}
       </div>
     </div>

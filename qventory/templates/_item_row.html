@@ -180,6 +180,8 @@
               <i class="fas fa-calculator" style="width:16px;color:#10b981;font-size:15px"></i>
               <span>Profit Calc</span>
             </button>
+            {# Sync eBay (kept for later) #}
+            {#
             {% if it.ebay_listing_id %}
             <button class="item-action-option sync-to-ebay-btn"
                     data-item-id="{{ it.id }}"
@@ -191,6 +193,7 @@
               <span>Sync eBay</span>
             </button>
             {% endif %}
+            #}
             <div style="height:1px;background:var(--border);margin:4px 0"></div>
             <a class="item-action-option"
                href="{{ url_for('main.edit_item', item_id=it.id) }}"
