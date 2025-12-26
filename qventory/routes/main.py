@@ -2918,17 +2918,28 @@ def qr_location_print_preview(code):
 def public_view_location(username, code):
     user = User.query.filter_by(username=username).first_or_404()
     s = get_or_create_settings(user)
-    parts = parse_location_code(code)
+    normalized_code = (code or "").strip()
+    parts = parse_location_code(normalized_code)
 
     q = Item.query.filter_by(user_id=user.id, is_active=True)
-    if s.enable_A and "A" in parts:
-        q = q.filter(Item.A == parts["A"])
-    if s.enable_B and "B" in parts:
-        q = q.filter(Item.B == parts["B"])
-    if s.enable_S and "S" in parts:
-        q = q.filter(Item.S == parts["S"])
-    if s.enable_C and "C" in parts:
-        q = q.filter(Item.C == parts["C"])
+
+    # Match explicit location_code to support eBay-imported SKUs without parsed A/B/S/C.
+    code_filters = [Item.location_code == normalized_code]
+
+    if parts:
+        component_filters = []
+        if s.enable_A and "A" in parts:
+            component_filters.append(Item.A == parts["A"])
+        if s.enable_B and "B" in parts:
+            component_filters.append(Item.B == parts["B"])
+        if s.enable_S and "S" in parts:
+            component_filters.append(Item.S == parts["S"])
+        if s.enable_C and "C" in parts:
+            component_filters.append(Item.C == parts["C"])
+        if component_filters:
+            code_filters.append(db.and_(*component_filters))
+
+    q = q.filter(db.or_(*code_filters))
 
     items = q.order_by(Item.created_at.desc()).all()
     return render_template("location.html", code=code, items=items, settings=s, parts=parts, username=username)
