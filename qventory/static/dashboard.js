@@ -1020,6 +1020,39 @@ const locationModalClose = document.getElementById('locationModalClose');
 const locationModalCancel = document.getElementById('locationModalCancel');
 let locationModalItemId = null;
 let locationModalContext = null; // Store modal context when opening QR scanner
+const LOCATION_SAVE_TEXT = 'Save & Sync';
+const LOCATION_UPDATE_TEXT = 'Update & Sync';
+
+function showFlashMessage(message, category = 'ok') {
+  const mainContent = document.querySelector('.main-content');
+  if (!mainContent) {
+    alert(message);
+    return;
+  }
+
+  let container = mainContent.querySelector('.flash-container');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'flash-container';
+    mainContent.insertBefore(container, mainContent.querySelector('.content-wrapper') || mainContent.firstChild);
+  }
+
+  const flash = document.createElement('div');
+  flash.className = `flash ${category === 'ok' ? 'ok' : category === 'error' ? 'error' : ''}`;
+  flash.textContent = message;
+
+  const close = document.createElement('button');
+  close.className = 'flash-close';
+  close.textContent = '×';
+  close.addEventListener('click', () => flash.remove());
+
+  flash.appendChild(close);
+  container.appendChild(flash);
+
+  setTimeout(() => {
+    flash.remove();
+  }, 6000);
+}
 
 function setupLocationButtons() {
   document.querySelectorAll('.location-inline-button').forEach(button => {
@@ -1077,6 +1110,12 @@ function openLocationModal(button) {
       firstInput = input;
     }
   });
+
+  const submitButton = locationModalForm.querySelector('button[type="submit"]');
+  const hasLocation = (locationDisplay.dataset.locationCode || '').trim().length > 0;
+  if (submitButton) {
+    submitButton.textContent = hasLocation ? LOCATION_UPDATE_TEXT : LOCATION_SAVE_TEXT;
+  }
 
   locationModal.classList.remove('hidden');
   locationModal.removeAttribute('hidden');
@@ -1146,8 +1185,21 @@ async function submitLocationModal(event) {
         updateLocationDisplay(locationContainer, data.location_code, data.A, data.B, data.S, data.C);
       }
     }
+
+    if (data.location_code) {
+      const syncResponse = await fetch('/item/sync_to_ebay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: locationModalItemId })
+      });
+      const syncData = await syncResponse.json();
+      if (!syncResponse.ok || !syncData.ok) {
+        throw new Error(syncData.error || 'eBay sync failed');
+      }
+      showFlashMessage(`eBay Custom SKU updated on item ${locationModalItemId}`, 'ok');
+    }
   } catch (error) {
-    alert(error.message || 'Error updating location');
+    showFlashMessage(error.message || 'Error updating location', 'error');
   } finally {
     if (submitButton) {
       submitButton.disabled = false;
