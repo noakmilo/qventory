@@ -115,13 +115,9 @@ normalized AS (
         i.updated_at,
         i.last_ebay_sync,
         lm.latest_listed_at,
-        lm.latest_synced_at,
         GREATEST(
             COALESCE(lm.latest_listed_at, '-infinity'::timestamp),
-            COALESCE(lm.latest_synced_at, '-infinity'::timestamp),
             COALESCE(i.listing_date::timestamp, '-infinity'::timestamp),
-            COALESCE(i.last_ebay_sync, '-infinity'::timestamp),
-            COALESCE(i.updated_at, '-infinity'::timestamp),
             COALESCE(i.created_at, '-infinity'::timestamp)
         ) AS sort_ts
     FROM items AS i
