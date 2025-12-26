@@ -126,7 +126,7 @@
   <td class="mobile-hide">
     <div class="platform-badges">
       {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
-      {% if it.ebay_url %}<a class="tag" href="{{ it.ebay_url }}" target="_blank">eBay</a>{% endif %}
+      {% if it.ebay_url or it.listing_link %}<a class="tag" href="{{ it.ebay_url or it.listing_link }}" target="_blank">eBay</a>{% endif %}
       {% if it.amazon_url %}<a class="tag" href="{{ it.amazon_url }}" target="_blank">Amazon</a>{% endif %}
       {% if it.mercari_url %}<a class="tag" href="{{ it.mercari_url }}" target="_blank">Mercari</a>{% endif %}
       {% if it.vinted_url %}<a class="tag" href="{{ it.vinted_url }}" target="_blank">Vinted</a>{% endif %}
@@ -147,8 +147,8 @@
                 title="View Profit Details">
           <i class="fas fa-calculator"></i>
         </button>
-        {% if it.ebay_url %}
-        <a class="btn settingsbtn" href="{{ it.ebay_url }}" target="_blank" title="View on eBay" style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
+        {% if it.ebay_url or it.listing_link %}
+        <a class="btn settingsbtn" href="{{ it.ebay_url or it.listing_link }}" target="_blank" title="View on eBay" style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
           <i class="fab fa-ebay"></i>
         </a>
         {% endif %}

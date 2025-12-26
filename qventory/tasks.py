@@ -2752,6 +2752,7 @@ def poll_user_listings(credential):
                 S=parsed_with_images.get('S'),
                 C=parsed_with_images.get('C'),
                 listing_link=listing_url,
+                ebay_url=listing_url,
                 item_price=price,
                 item_thumb=item_thumb,  # Cloudinary URL
                 synced_from_ebay=True,
