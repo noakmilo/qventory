@@ -55,7 +55,7 @@
     {# Cost is ALWAYS editable - even for sold items (for profit calculation) #}
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
       <div class="inline-edit__display" tabindex="0" role="button">
-        {% if it.item_cost %}
+        {% if it.item_cost is not none %}
         <span class="inline-edit__value tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
         {% else %}
         <span class="inline-edit__placeholder">{{ 'Add cost' if view_type == 'sold' else 'Add cost' }}</span>
