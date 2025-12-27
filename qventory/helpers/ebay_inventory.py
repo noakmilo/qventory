@@ -1763,6 +1763,20 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         dict: Sale model compatible dict
     """
     try:
+        def extract_money(*candidates):
+            for value in candidates:
+                if value is None:
+                    continue
+                if isinstance(value, dict):
+                    raw = value.get('value')
+                else:
+                    raw = value
+                try:
+                    return float(raw)
+                except (TypeError, ValueError):
+                    continue
+            return None
+
         # Extract order ID
         order_id = order_data.get('orderId', '')
 
@@ -1788,6 +1802,33 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         # Extract shipping info
         shipping_detail = line_item.get('deliveryCost', {})
         shipping_cost = float(shipping_detail.get('shippingCost', {}).get('value', 0)) if shipping_detail else 0
+
+        # Extract fee details if eBay provides them
+        pricing_summary = order_data.get('pricingSummary', {}) or {}
+        line_pricing_summary = line_item.get('pricingSummary', {}) or {}
+
+        marketplace_fee = extract_money(
+            pricing_summary.get('totalMarketplaceFee'),
+            pricing_summary.get('marketplaceFee'),
+            pricing_summary.get('finalValueFee'),
+            line_pricing_summary.get('totalMarketplaceFee'),
+            line_pricing_summary.get('marketplaceFee'),
+            line_pricing_summary.get('finalValueFee')
+        )
+
+        payment_processing_fee = extract_money(
+            pricing_summary.get('totalPaymentProcessingFee'),
+            pricing_summary.get('paymentProcessingFee'),
+            line_pricing_summary.get('totalPaymentProcessingFee'),
+            line_pricing_summary.get('paymentProcessingFee')
+        )
+
+        other_fees = extract_money(
+            pricing_summary.get('totalOtherFee'),
+            pricing_summary.get('otherFees'),
+            line_pricing_summary.get('totalOtherFee'),
+            line_pricing_summary.get('otherFees')
+        )
 
         # Extract fulfillment info
         fulfillment_start = order_data.get('fulfillmentStartInstructions', [{}])[0]
@@ -1940,6 +1981,9 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
             'item_sku': sku,
             'sold_price': sold_price,
             'shipping_cost': shipping_cost,
+            'marketplace_fee': marketplace_fee,
+            'payment_processing_fee': payment_processing_fee,
+            'other_fees': other_fees,
             'buyer_username': buyer_username,
             'ebay_buyer_username': buyer_username,
             'tracking_number': tracking_number,

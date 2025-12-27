@@ -625,14 +625,22 @@ def import_ebay_sales(self, user_id, days_back=None):
                     status = sale_data.get('status', 'pending')
                     ebay_transaction_id = sale_data.get('ebay_transaction_id')
 
-                    # Calculate eBay fees (approximate)
-                    marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
-                    payment_fee = sold_price * 0.029 + 0.30  # Payment processing
+                    # Calculate eBay fees (approximate) unless real fees are provided
+                    marketplace_fee = sale_data.get('marketplace_fee')
+                    payment_fee = sale_data.get('payment_processing_fee')
+                    other_fees = sale_data.get('other_fees')
+
+                    if marketplace_fee is None:
+                        marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
+                    if payment_fee is None:
+                        payment_fee = sold_price * 0.029 + 0.30  # Payment processing
 
                     # Calculate prorated store subscription fee
                     store_fee_per_sale = 0.0
                     if ebay_store_monthly_fee > 0 and len(orders) > 0:
                         store_fee_per_sale = ebay_store_monthly_fee / len(orders)
+                    if other_fees is not None:
+                        store_fee_per_sale = other_fees
 
                     # Try to find matching item in Qventory (multiple strategies)
                     item = None
@@ -3303,6 +3311,12 @@ def sync_ebay_sold_orders_deep(self):
                         # Update existing sale (in case data changed)
                         if order.get('sold_price'):
                             existing_sale.sold_price = order.get('sold_price')
+                        if order.get('marketplace_fee') is not None:
+                            existing_sale.marketplace_fee = order.get('marketplace_fee')
+                        if order.get('payment_processing_fee') is not None:
+                            existing_sale.payment_processing_fee = order.get('payment_processing_fee')
+                        if order.get('other_fees') is not None:
+                            existing_sale.other_fees = order.get('other_fees')
                         if order.get('shipped_at'):
                             existing_sale.shipped_at = order.get('shipped_at')
                         if order.get('delivered_at'):
@@ -3321,9 +3335,15 @@ def sync_ebay_sold_orders_deep(self):
                     else:
                         # Create new sale record
                         sold_price = order.get('sold_price', 0)
-                        marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
-                        payment_fee = sold_price * 0.029 + 0.30  # Payment processing
+                        marketplace_fee = order.get('marketplace_fee')
+                        payment_fee = order.get('payment_processing_fee')
                         shipping_cost = order.get('shipping_cost', 0)
+                        other_fees = order.get('other_fees')
+
+                        if marketplace_fee is None:
+                            marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
+                        if payment_fee is None:
+                            payment_fee = sold_price * 0.029 + 0.30  # Payment processing
 
                         new_sale = Sale(
                             user_id=user.id,
@@ -3337,6 +3357,7 @@ def sync_ebay_sold_orders_deep(self):
                             marketplace_fee=marketplace_fee,
                             payment_processing_fee=payment_fee,
                             shipping_cost=shipping_cost,
+                            other_fees=other_fees,
                             sold_at=order.get('sold_at', datetime.utcnow()),
                             shipped_at=order.get('shipped_at'),
                             delivered_at=order.get('delivered_at'),
