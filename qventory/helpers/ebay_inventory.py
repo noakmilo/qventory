@@ -30,6 +30,19 @@ TRADING_COMPAT_LEVEL = os.environ.get('EBAY_TRADING_COMPAT_LEVEL', '1145')
 _LISTING_TIME_CACHE = OrderedDict()
 _LISTING_TIME_CACHE_MAX = 512
 _XML_NS = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+EBAY_STORE_SUBSCRIPTION_FEES = {
+    "STARTER": 7.95,
+    "BASIC": 27.95,
+    "PREMIUM": 74.95,
+    "ANCHOR": 349.95
+}
+EBAY_STORE_SUBSCRIPTION_LIMITS = {
+    "STARTER": 250,
+    "BASIC": 1000,
+    "PREMIUM": 10000,
+    "ANCHOR": 25000,
+    "ENTERPRISE": 100000
+}
 
 
 def get_user_access_token(user_id):
@@ -87,6 +100,186 @@ def get_user_access_token(user_id):
             return None
 
     return credential.get_access_token()
+
+
+def normalize_store_subscription_level(level):
+    if not level:
+        return None
+    return str(level).strip().upper()
+
+
+def infer_store_subscription_level(monthly_fee):
+    if monthly_fee is None:
+        return None
+    try:
+        fee_value = float(monthly_fee)
+    except (TypeError, ValueError):
+        return None
+    for level, fee in EBAY_STORE_SUBSCRIPTION_FEES.items():
+        if abs(fee_value - fee) < 0.01:
+            return level
+    if fee_value >= 300:
+        return "ANCHOR"
+    if fee_value >= 70:
+        return "PREMIUM"
+    if fee_value >= 20:
+        return "BASIC"
+    if fee_value >= 1:
+        return "STARTER"
+    return None
+
+
+def get_store_listing_limit(level, monthly_fee=0.0):
+    normalized = normalize_store_subscription_level(level)
+    if normalized and normalized in EBAY_STORE_SUBSCRIPTION_LIMITS:
+        return EBAY_STORE_SUBSCRIPTION_LIMITS[normalized]
+    inferred = infer_store_subscription_level(monthly_fee)
+    if inferred and inferred in EBAY_STORE_SUBSCRIPTION_LIMITS:
+        return EBAY_STORE_SUBSCRIPTION_LIMITS[inferred]
+    return None
+
+
+def get_ebay_store_subscription(user_id):
+    """
+    Fetch eBay Store subscription level and monthly fee from Trading API.
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {
+            'success': False,
+            'error': 'missing_access_token',
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+    if not app_id:
+        return {
+            'success': False,
+            'error': 'missing_app_id',
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetStoreRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetStoreRequest>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'GetStore',
+        'X-EBAY-API-APP-NAME': app_id,
+        'X-EBAY-API-IAF-TOKEN': access_token,
+        'Content-Type': 'text/xml'
+    }
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        log_inv(f"Trading API GetStore network error: {exc}")
+        return {
+            'success': False,
+            'error': str(exc),
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    if response.status_code != 200:
+        log_inv(f"Trading API GetStore error: {response.status_code} {response.text[:500]}")
+        return {
+            'success': False,
+            'error': f'status_{response.status_code}',
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    try:
+        root = ET.fromstring(response.content)
+    except ET.ParseError as exc:
+        log_inv(f"Trading API GetStore parse error: {exc}")
+        return {
+            'success': False,
+            'error': 'parse_error',
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    ack = root.find('ebay:Ack', _XML_NS)
+    if ack is not None and ack.text in ['Failure', 'PartialFailure']:
+        error_msg = None
+        error_elem = root.find('.//ebay:Errors/ebay:LongMessage', _XML_NS)
+        if error_elem is not None:
+            error_msg = error_elem.text
+        log_inv(f"Trading API GetStore failure: {error_msg or 'unknown error'}")
+        return {
+            'success': False,
+            'error': error_msg or 'api_failure',
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    store_elem = root.find('.//ebay:Store', _XML_NS)
+    if store_elem is None:
+        return {
+            'success': True,
+            'error': None,
+            'has_store': False,
+            'subscription_level': None,
+            'monthly_fee': 0.0
+        }
+
+    level_elem = store_elem.find('ebay:SubscriptionLevel', _XML_NS)
+    level = level_elem.text.strip() if level_elem is not None and level_elem.text else None
+    level_key = level.upper() if level else None
+    monthly_fee = EBAY_STORE_SUBSCRIPTION_FEES.get(level_key, 0.0)
+
+    return {
+        'success': True,
+        'error': None,
+        'has_store': True,
+        'subscription_level': level,
+        'monthly_fee': monthly_fee
+    }
+
+
+def sync_ebay_store_subscription(user_id):
+    """
+    Persist store subscription fee on the marketplace credential.
+    """
+    from qventory.extensions import db
+
+    result = get_ebay_store_subscription(user_id)
+    if not result.get('success'):
+        return result
+
+    subscription_level = normalize_store_subscription_level(result.get('subscription_level'))
+    credential = MarketplaceCredential.query.filter_by(
+        user_id=user_id,
+        marketplace='ebay'
+    ).first()
+
+    if not credential:
+        result['success'] = False
+        result['error'] = 'missing_credential'
+        return result
+
+    credential.ebay_store_subscription = result.get('monthly_fee', 0.0)
+    credential.ebay_store_subscription_level = subscription_level
+    credential.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return result
 
 
 def _parse_ebay_datetime(value):

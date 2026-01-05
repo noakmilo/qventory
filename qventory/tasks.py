@@ -585,6 +585,17 @@ def import_ebay_sales(self, user_id, days_back=None):
             # TEMPORAL FIX: Use getattr to safely access ebay_store_subscription
             # In case migration hasn't been applied yet
             ebay_store_monthly_fee = getattr(ebay_cred, 'ebay_store_subscription', 0.0) if ebay_cred else 0.0
+            if ebay_cred and ebay_store_monthly_fee is None:
+                try:
+                    from qventory.helpers.ebay_inventory import sync_ebay_store_subscription
+                    store_result = sync_ebay_store_subscription(user_id)
+                    if store_result.get('success'):
+                        ebay_store_monthly_fee = store_result.get('monthly_fee', 0.0) or 0.0
+                except Exception as store_error:
+                    log_task(f"Store subscription lookup failed: {store_error}")
+                    ebay_store_monthly_fee = 0.0
+            if ebay_store_monthly_fee is None:
+                ebay_store_monthly_fee = 0.0
 
             # Fetch orders from eBay using the improved function that handles full history
             # This function automatically iterates in 90-day windows when days_back=None

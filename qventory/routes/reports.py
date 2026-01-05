@@ -347,10 +347,27 @@ def analytics():
     from datetime import datetime, timedelta
 
     # Check if eBay is connected
-    ebay_connected = MarketplaceCredential.query.filter_by(
+    ebay_cred = MarketplaceCredential.query.filter_by(
         user_id=current_user.id,
         marketplace='ebay'
-    ).first() is not None
+    ).first()
+    ebay_connected = ebay_cred is not None
+    ebay_store_monthly_fee = getattr(ebay_cred, 'ebay_store_subscription', 0.0) if ebay_cred else 0.0
+    if ebay_store_monthly_fee is None:
+        ebay_store_monthly_fee = 0.0
+    from qventory.helpers.ebay_inventory import normalize_store_subscription_level, get_ebay_store_subscription
+
+    store_subscription_level = getattr(ebay_cred, 'ebay_store_subscription_level', None) if ebay_cred else None
+    store_subscription_level = normalize_store_subscription_level(store_subscription_level)
+    if ebay_connected and store_subscription_level is None:
+        try:
+            store_result = get_ebay_store_subscription(current_user.id)
+            if store_result.get('success'):
+                store_subscription_level = normalize_store_subscription_level(store_result.get('subscription_level'))
+                if store_result.get('monthly_fee') is not None:
+                    ebay_store_monthly_fee = store_result.get('monthly_fee', 0.0) or 0.0
+        except Exception:
+            store_subscription_level = None
 
     # Get date range from query params (default: last 30 days)
     range_param = request.args.get('range', 'last_30_days')
@@ -449,18 +466,6 @@ def analytics():
     )
     business_expenses_total = sum(exp.amount for exp in business_expenses_query.all())
 
-    # Expenses summary (based on sales)
-    # Note: other_fees now contains store subscription prorate
-    expenses = {
-        "inventory": sum(s.item_cost or 0 for s in sales),
-        "supplies": 0,  # Reserved for future use (packaging, labels, etc.)
-        "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
-        "shipping": sum(s.shipping_cost or 0 for s in sales),
-        "store_subscription": sum(s.other_fees or 0 for s in sales),  # Store subscription prorated
-        "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
-        "liberis": total_liberis_fees,  # Liberis loan repayment fees
-    }
-
     # New listings created in range
     listing_daily = defaultdict(int)
     listing_start = start_date.date()
@@ -471,8 +476,38 @@ def analytics():
         Item.listing_date >= listing_start,
         Item.listing_date <= listing_end
     )
+    new_ebay_listings_count = 0
     for item in new_items_query:
         listing_daily[item.listing_date.strftime("%Y-%m-%d")] += 1
+        if item.ebay_listing_id:
+            new_ebay_listings_count += 1
+
+    active_ebay_count = sum(1 for item in active_items if item.ebay_listing_id)
+    insertion_fee_total = 0.0
+    insertion_fee = 0.30
+    if ebay_connected:
+        from qventory.helpers.ebay_inventory import get_store_listing_limit
+        listing_limit = get_store_listing_limit(store_subscription_level, ebay_store_monthly_fee)
+        if listing_limit is None:
+            listing_limit = 200
+        previous_active_estimate = max(0, active_ebay_count - new_ebay_listings_count)
+        free_slots = max(0, listing_limit - previous_active_estimate)
+        chargeable_listings = max(0, new_ebay_listings_count - free_slots)
+        insertion_fee_total = chargeable_listings * insertion_fee
+
+    store_subscription_total = sum(s.other_fees or 0 for s in sales) + insertion_fee_total
+
+    # Expenses summary (based on sales)
+    # Note: other_fees now contains store subscription prorate
+    expenses = {
+        "inventory": sum(s.item_cost or 0 for s in sales),
+        "supplies": 0,  # Reserved for future use (packaging, labels, etc.)
+        "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
+        "shipping": sum(s.shipping_cost or 0 for s in sales),
+        "store_subscription": store_subscription_total,
+        "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
+        "liberis": total_liberis_fees,  # Liberis loan repayment fees
+    }
 
     # Build daily trends
     daily_totals = defaultdict(lambda: {'gross': 0.0, 'net': 0.0})

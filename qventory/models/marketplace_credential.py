@@ -31,6 +31,7 @@ class MarketplaceCredential(db.Model):
 
     # eBay Store Subscription (monthly cost in USD)
     ebay_store_subscription = db.Column(db.Float, nullable=True, default=0.0)  # Monthly subscription fee (Basic: 27.95, Premium: 74.95, etc.)
+    ebay_store_subscription_level = db.Column(db.String(50), nullable=True)  # STARTER, BASIC, PREMIUM, ANCHOR, ENTERPRISE
 
     # Estado
     is_active = db.Column(db.Boolean, default=True, index=True)

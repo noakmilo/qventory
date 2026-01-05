@@ -175,6 +175,19 @@ def callback():
             ebay_user_id=ebay_user_id
         )
 
+        # Attempt to detect eBay Store subscription after connection
+        try:
+            from qventory.helpers.ebay_inventory import sync_ebay_store_subscription
+            store_result = sync_ebay_store_subscription(current_user.id)
+            if store_result.get('success'):
+                level = store_result.get('subscription_level') or 'none'
+                monthly_fee = store_result.get('monthly_fee', 0.0) or 0.0
+                log(f"eBay store subscription: {level} (${monthly_fee:.2f}/month)")
+            else:
+                log(f"Store subscription lookup failed: {store_result.get('error')}")
+        except Exception as store_error:
+            log(f"WARNING: Store subscription lookup failed: {store_error}")
+
         # NOTE: Commerce API webhook subscriptions are disabled for now
         # They require special access/approval from eBay that may not be available for all accounts
         # Platform Notifications (below) covers the main events: ItemListed, ItemSold, ItemRevised, ItemClosed
