@@ -1,6 +1,6 @@
 """add ebay store subscription level
 
-Revision ID: 028_add_ebay_store_subscription_level
+Revision ID: 028_store_sub_lvl
 Revises: 027_unique_ebay_listing
 Create Date: 2025-11-05
 """
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '028_add_ebay_store_subscription_level'
+revision = '028_store_sub_lvl'
 down_revision = '027_unique_ebay_listing'
 branch_labels = None
 depends_on = None
