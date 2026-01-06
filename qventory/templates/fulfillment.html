@@ -255,6 +255,20 @@ document.addEventListener('DOMContentLoaded', function() {
       syncBtn.disabled = true;
       syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
 
+      const showAlert = (message, isError) => {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = isError ? 'alert alert-error' : 'alert alert-success';
+        alertDiv.style.cssText = `position:fixed;top:20px;right:20px;z-index:9999;` +
+          `background:${isError ? '#fee2e2' : '#d1fae5'};` +
+          `color:${isError ? '#991b1b' : '#065f46'};` +
+          `padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);`;
+        alertDiv.innerHTML = `${isError ? '<i class="fas fa-exclamation-circle"></i>' : '<i class="fas fa-check-circle"></i>'} ${message}`;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => {
+          alertDiv.remove();
+        }, 5000);
+      };
+
       fetch('/fulfillment/sync-ebay-orders', {
         method: 'POST',
         headers: {
@@ -264,52 +278,21 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          syncBtn.innerHTML = '<i class="fas fa-check"></i> Synced!';
-
-          // Show success message
           const message = data.message || `Successfully synced ${data.orders_synced || 0} orders`;
-          const alertDiv = document.createElement('div');
-          alertDiv.className = 'alert alert-success';
-          alertDiv.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;background:#d1fae5;color:#065f46;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-          alertDiv.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
-          document.body.appendChild(alertDiv);
-
-          // Reload page after 2 seconds to show updated data
-          setTimeout(() => {
-            window.location.reload();
-          }, 2000);
-        } else {
-          syncBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+          showAlert(message, false);
           syncBtn.disabled = false;
-
-          // Show error message
-          const errorDiv = document.createElement('div');
-          errorDiv.className = 'alert alert-error';
-          errorDiv.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;background:#fee2e2;color:#991b1b;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-          errorDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${data.error || 'Failed to sync orders'}`;
-          document.body.appendChild(errorDiv);
-
-          setTimeout(() => {
-            syncBtn.innerHTML = originalText;
-            errorDiv.remove();
-          }, 5000);
+          syncBtn.innerHTML = originalText;
+        } else {
+          showAlert(data.error || 'Failed to sync orders', true);
+          syncBtn.disabled = false;
+          syncBtn.innerHTML = originalText;
         }
       })
       .catch(error => {
         console.error('Error:', error);
-        syncBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error';
+        showAlert('Network error. Please try again.', true);
         syncBtn.disabled = false;
-
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'alert alert-error';
-        errorDiv.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;background:#fee2e2;color:#991b1b;padding:16px 24px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-        errorDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Network error. Please try again.';
-        document.body.appendChild(errorDiv);
-
-        setTimeout(() => {
-          syncBtn.innerHTML = originalText;
-          errorDiv.remove();
-        }, 5000);
+        syncBtn.innerHTML = originalText;
       });
     });
   }
