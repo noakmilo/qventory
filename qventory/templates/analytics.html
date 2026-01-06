@@ -24,19 +24,6 @@
       </p>
     </div>
 
-    {% if ebay_connected %}
-    <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);border-radius:8px;padding:12px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <i class="fas fa-info-circle" style="color:#3b82f6"></i>
-        <div style="font-size:13px">
-          <div style="color:var(--text);font-weight:600;margin-bottom:2px">Sales import automatically with inventory</div>
-          <div style="color:var(--sub)">
-            Go to <a href="{{ url_for('main.dashboard') }}" style="color:#3b82f6">Dashboard</a> → <strong>Import from eBay</strong> to sync both inventory and sales.
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
   </div>
 
   <!-- Date Range Selector -->

@@ -178,7 +178,19 @@
             </td>
             <td>
               {% if sale.tracking_number %}
-              <a href="https://www.google.com/search?q={{ sale.tracking_number }}"
+              {% set carrier_label = (sale.carrier or '')|lower %}
+              {% set tracking_url = None %}
+              {% if 'usps' in carrier_label %}
+                {% set tracking_url = "https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=" ~ sale.tracking_number %}
+              {% elif 'fedex' in carrier_label or 'fed ex' in carrier_label %}
+                {% set tracking_url = "https://www.fedex.com/fedextrack/?trknbr=" ~ sale.tracking_number %}
+              {% elif 'ups' in carrier_label %}
+                {% set tracking_url = "https://www.ups.com/track?tracknum=" ~ sale.tracking_number ~ "&loc=en_US&requester=QUIC" %}
+              {% endif %}
+              {% if not tracking_url %}
+                {% set tracking_url = "https://www.google.com/search?q=" ~ sale.tracking_number %}
+              {% endif %}
+              <a href="{{ tracking_url }}"
                  target="_blank"
                  style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
                  title="Track package">
