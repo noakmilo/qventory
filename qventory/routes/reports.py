@@ -341,7 +341,7 @@ def analytics():
     from qventory.models.item import Item
     from qventory.models.listing import Listing
     from qventory.models.marketplace_credential import MarketplaceCredential
-    from qventory.helpers.ebay_finances import fetch_ebay_payouts, fetch_ebay_transactions
+    from qventory.models.ebay_finance import EbayPayout, EbayFinanceTransaction
     from qventory.models.expense import Expense
     from sqlalchemy import func
     from collections import defaultdict
@@ -541,7 +541,7 @@ def analytics():
     # Top products by sale price
     top_sales = sorted(sales, key=lambda s: s.sold_price or 0, reverse=True)[:10]
 
-    # eBay payout tracking (Finances API)
+    # eBay payout tracking (cached from Finances API sync task)
     payouts_table = []
     adjustments_table = []
     payout_totals = {
@@ -551,44 +551,47 @@ def analytics():
     }
     if ebay_connected:
         payout_end = end_date - timedelta(seconds=1)
-        payouts_result = fetch_ebay_payouts(current_user.id, start_date, payout_end, limit=200)
-        if payouts_result.get('success'):
-            for payout in payouts_result.get('payouts', []):
-                amount = payout.get('amount') or payout.get('payoutAmount') or {}
-                fee = payout.get('payoutFee') or payout.get('fee') or {}
-                currency = amount.get('currency') or fee.get('currency')
-                gross_value = float(amount.get('value', 0) or 0)
-                fee_value = float(fee.get('value', 0) or 0)
-                net_value = gross_value - fee_value
-                payouts_table.append({
-                    "payout_id": payout.get('payoutId') or payout.get('payout_id'),
-                    "payout_date": payout.get('payoutDate') or payout.get('payoutDateTime') or payout.get('payoutDateTimeGMT'),
-                    "status": payout.get('payoutStatus') or payout.get('status'),
-                    "gross_amount": gross_value,
-                    "fees": fee_value,
-                    "net_amount": net_value,
-                    "currency": currency
-                })
-                payout_totals["total_payouts"] += net_value
+        payouts = EbayPayout.query.filter(
+            EbayPayout.user_id == current_user.id,
+            EbayPayout.payout_date >= start_date,
+            EbayPayout.payout_date < payout_end
+        ).order_by(EbayPayout.payout_date.desc()).all()
 
-        transactions_result = fetch_ebay_transactions(current_user.id, start_date, payout_end, limit=200)
-        if transactions_result.get('success'):
-            for txn in transactions_result.get('transactions', []):
-                txn_type = (txn.get('transactionType') or txn.get('type') or '').upper()
-                if txn_type not in {'REFUND', 'CHARGEBACK', 'HOLD', 'FEE', 'ADJUSTMENT'}:
-                    continue
-                amount = txn.get('amount') or {}
-                currency = amount.get('currency')
-                value = float(amount.get('value', 0) or 0)
-                adjustments_table.append({
-                    "adjustment_id": txn.get('transactionId') or txn.get('adjustmentId'),
-                    "type": txn_type,
-                    "amount": value,
-                    "date": txn.get('transactionDate') or txn.get('creationDate'),
-                    "related_order": txn.get('orderId') or txn.get('referenceId'),
-                    "currency": currency
-                })
-                payout_totals["total_adjustments"] += value
+        for payout in payouts:
+            gross_value = float(payout.gross_amount or 0)
+            fee_value = float(payout.fee_amount or 0)
+            net_value = float(payout.net_amount or 0)
+            payouts_table.append({
+                "payout_id": payout.payout_id or '—',
+                "payout_date": payout.payout_date.isoformat() if payout.payout_date else None,
+                "status": payout.status,
+                "gross_amount": gross_value,
+                "fees": fee_value,
+                "net_amount": net_value,
+                "currency": payout.currency
+            })
+            payout_totals["total_payouts"] += net_value
+
+        transactions = EbayFinanceTransaction.query.filter(
+            EbayFinanceTransaction.user_id == current_user.id,
+            EbayFinanceTransaction.transaction_date >= start_date,
+            EbayFinanceTransaction.transaction_date < payout_end
+        ).order_by(EbayFinanceTransaction.transaction_date.desc()).all()
+
+        for txn in transactions:
+            txn_type = (txn.transaction_type or '').upper()
+            if txn_type not in {'REFUND', 'CHARGEBACK', 'HOLD', 'FEE', 'ADJUSTMENT'}:
+                continue
+            value = float(txn.amount or 0)
+            adjustments_table.append({
+                "adjustment_id": txn.transaction_id or txn.external_id,
+                "type": txn_type,
+                "amount": value,
+                "date": txn.transaction_date.isoformat() if txn.transaction_date else None,
+                "related_order": txn.order_id or txn.reference_id,
+                "currency": txn.currency
+            })
+            payout_totals["total_adjustments"] += value
 
         payout_totals["net_deposited"] = payout_totals["total_payouts"] + payout_totals["total_adjustments"]
 

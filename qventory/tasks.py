@@ -1,8 +1,9 @@
 """
 Celery Background Tasks for Qventory
 """
+import hashlib
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from qventory.celery_app import celery
 from qventory.extensions import db
@@ -11,6 +12,26 @@ from qventory import create_app
 def log_task(msg):
     """Helper function for task logging"""
     print(f"[CELERY_TASK] {msg}", file=sys.stderr, flush=True)
+
+
+def _parse_ebay_datetime(value):
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _build_external_id(prefix, parts):
+    payload = "|".join(str(part) for part in parts if part is not None)
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"{prefix}_{digest}"[:64]
 
 
 @celery.task(bind=True, name='qventory.tasks.import_ebay_inventory')
@@ -3484,6 +3505,159 @@ def sync_ebay_fulfillment_tracking_user(self, user_id):
                 'orders_created': 0,
                 'orders_updated': 0
             }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_finances_user')
+def sync_ebay_finances_user(self, user_id, days_back=120):
+    app = create_app()
+    with app.app_context():
+        from qventory.models.ebay_finance import EbayPayout, EbayFinanceTransaction
+        from qventory.helpers.ebay_finances import (
+            fetch_all_ebay_payouts,
+            fetch_all_ebay_transactions
+        )
+
+        log_task(f"=== Syncing eBay finances for user {user_id} ===")
+        start_date = datetime.utcnow() - timedelta(days=days_back)
+        end_date = datetime.utcnow()
+
+        payouts_result = fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200)
+        if not payouts_result.get('success'):
+            return {'success': False, 'error': payouts_result.get('error')}
+
+        transactions_result = fetch_all_ebay_transactions(user_id, start_date, end_date, limit=200)
+        if not transactions_result.get('success'):
+            return {'success': False, 'error': transactions_result.get('error')}
+
+        payouts_created = 0
+        payouts_updated = 0
+        for payout in payouts_result.get('payouts', []):
+            payout_id = payout.get('payoutId') or payout.get('payout_id')
+            payout_date = _parse_ebay_datetime(
+                payout.get('payoutDate') or payout.get('payoutDateTime') or payout.get('payoutDateTimeGMT')
+            )
+            status = payout.get('payoutStatus') or payout.get('status')
+            amount = payout.get('amount') or payout.get('payoutAmount') or {}
+            fee = payout.get('payoutFee') or payout.get('fee') or {}
+            currency = amount.get('currency') or fee.get('currency')
+            gross_value = float(amount.get('value', 0) or 0)
+            fee_value = float(fee.get('value', 0) or 0)
+            net_value = gross_value - fee_value
+
+            external_id = payout_id or _build_external_id(
+                "payout",
+                [payout_date, gross_value, fee_value, status]
+            )
+
+            existing = EbayPayout.query.filter_by(
+                user_id=user_id,
+                external_id=external_id
+            ).first()
+            if existing:
+                record = existing
+                payouts_updated += 1
+            else:
+                record = EbayPayout(user_id=user_id, external_id=external_id)
+                payouts_created += 1
+
+            record.payout_id = payout_id
+            record.payout_date = payout_date
+            record.status = status
+            record.gross_amount = gross_value
+            record.fee_amount = fee_value
+            record.net_amount = net_value
+            record.currency = currency
+            record.raw_json = payout
+            db.session.add(record)
+
+        tx_created = 0
+        tx_updated = 0
+        for txn in transactions_result.get('transactions', []):
+            txn_id = txn.get('transactionId') or txn.get('adjustmentId')
+            txn_date = _parse_ebay_datetime(
+                txn.get('transactionDate') or txn.get('creationDate')
+            )
+            txn_type = (txn.get('transactionType') or txn.get('type') or '').upper()
+            amount = txn.get('amount') or {}
+            currency = amount.get('currency')
+            value = float(amount.get('value', 0) or 0)
+            order_id = txn.get('orderId')
+            reference_id = txn.get('referenceId')
+
+            external_id = txn_id or _build_external_id(
+                "txn",
+                [txn_date, txn_type, value, order_id, reference_id]
+            )
+
+            existing = EbayFinanceTransaction.query.filter_by(
+                user_id=user_id,
+                external_id=external_id
+            ).first()
+            if existing:
+                record = existing
+                tx_updated += 1
+            else:
+                record = EbayFinanceTransaction(user_id=user_id, external_id=external_id)
+                tx_created += 1
+
+            record.transaction_id = txn_id
+            record.transaction_date = txn_date
+            record.transaction_type = txn_type
+            record.amount = value
+            record.currency = currency
+            record.order_id = order_id
+            record.reference_id = reference_id
+            record.raw_json = txn
+            db.session.add(record)
+
+        db.session.commit()
+        log_task(
+            f"eBay finances sync complete: payouts +{payouts_created}/~{payouts_updated}, "
+            f"transactions +{tx_created}/~{tx_updated}"
+        )
+        return {
+            'success': True,
+            'payouts_created': payouts_created,
+            'payouts_updated': payouts_updated,
+            'transactions_created': tx_created,
+            'transactions_updated': tx_updated
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_finances_global')
+def sync_ebay_finances_global(self):
+    app = create_app()
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+
+        log_task("=== Global eBay finances sync ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_connected=True
+        ).all()
+
+        if not credentials:
+            log_task("No active eBay accounts found")
+            return {'success': True, 'users_processed': 0, 'errors': 0}
+
+        users_processed = 0
+        errors = 0
+        for cred in credentials:
+            user = User.query.get(cred.user_id)
+            if not user:
+                continue
+            try:
+                users_processed += 1
+                sync_ebay_finances_user.run(cred.user_id)
+            except Exception as exc:
+                errors += 1
+                log_task(f"Finance sync failed for user {cred.user_id}: {exc}")
+
+        log_task(
+            f"=== Global finances sync complete: {users_processed} users, {errors} errors ==="
+        )
+        return {'success': True, 'users_processed': users_processed, 'errors': errors}
 
 
 @celery.task(bind=True, name='qventory.tasks.process_recurring_expenses')

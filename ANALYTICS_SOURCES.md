@@ -83,12 +83,16 @@ tracking and OCR workflows. The analytics page shows:
 
 ## eBay Payouts (Finances API)
 
-When eBay is connected, the analytics page can fetch:
+When eBay is connected, the analytics page shows cached finance data:
 - Payouts: payout ID, date, status, gross, fees, net, currency
 - Adjustments: refunds/chargebacks/holds/fees with amount and date
 - Net Deposited: total payouts + total adjustments for the date range
 
-These values come from the Receipt table and are filtered by upload date.
+These values are synced by a daily Celery task and stored in:
+- `ebay_payouts` (payout rows)
+- `ebay_finance_transactions` (adjustment rows)
+
+Analytics filters them by payout/transaction date.
 
 ## Liberis Loan Metrics (If Active)
 

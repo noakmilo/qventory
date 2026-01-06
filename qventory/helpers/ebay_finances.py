@@ -43,7 +43,7 @@ def _fetch_finances_endpoint(user_id, path, params):
     return {'success': True, 'data': payload}
 
 
-def fetch_ebay_payouts(user_id, start_date, end_date, limit=200):
+def fetch_ebay_payouts(user_id, start_date, end_date, limit=200, offset=0):
     start_iso = _format_iso(start_date)
     end_iso = _format_iso(end_date)
     filters = []
@@ -51,7 +51,8 @@ def fetch_ebay_payouts(user_id, start_date, end_date, limit=200):
         filters.append(f"payoutDate:[{start_iso}..{end_iso}]")
 
     params = {
-        "limit": limit
+        "limit": limit,
+        "offset": offset
     }
     if filters:
         params["filter"] = ",".join(filters)
@@ -62,10 +63,10 @@ def fetch_ebay_payouts(user_id, start_date, end_date, limit=200):
 
     payload = result.get('data', {}) or {}
     payouts = payload.get('payouts', []) or []
-    return {'success': True, 'payouts': payouts}
+    return {'success': True, 'payouts': payouts, 'total': payload.get('total')}
 
 
-def fetch_ebay_transactions(user_id, start_date, end_date, limit=200):
+def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0):
     start_iso = _format_iso(start_date)
     end_iso = _format_iso(end_date)
     filters = []
@@ -73,7 +74,8 @@ def fetch_ebay_transactions(user_id, start_date, end_date, limit=200):
         filters.append(f"transactionDate:[{start_iso}..{end_iso}]")
 
     params = {
-        "limit": limit
+        "limit": limit,
+        "offset": offset
     }
     if filters:
         params["filter"] = ",".join(filters)
@@ -84,5 +86,34 @@ def fetch_ebay_transactions(user_id, start_date, end_date, limit=200):
 
     payload = result.get('data', {}) or {}
     transactions = payload.get('transactions', []) or []
-    return {'success': True, 'transactions': transactions}
+    return {'success': True, 'transactions': transactions, 'total': payload.get('total')}
 
+
+def fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200, max_pages=10):
+    payouts = []
+    offset = 0
+    for _ in range(max_pages):
+        result = fetch_ebay_payouts(user_id, start_date, end_date, limit=limit, offset=offset)
+        if not result.get('success'):
+            return {'success': False, 'error': result.get('error'), 'payouts': payouts}
+        page = result.get('payouts', []) or []
+        payouts.extend(page)
+        if len(page) < limit:
+            break
+        offset += limit
+    return {'success': True, 'payouts': payouts}
+
+
+def fetch_all_ebay_transactions(user_id, start_date, end_date, limit=200, max_pages=10):
+    transactions = []
+    offset = 0
+    for _ in range(max_pages):
+        result = fetch_ebay_transactions(user_id, start_date, end_date, limit=limit, offset=offset)
+        if not result.get('success'):
+            return {'success': False, 'error': result.get('error'), 'transactions': transactions}
+        page = result.get('transactions', []) or []
+        transactions.extend(page)
+        if len(page) < limit:
+            break
+        offset += limit
+    return {'success': True, 'transactions': transactions}
