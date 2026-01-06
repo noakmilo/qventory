@@ -88,10 +88,12 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                         if item.item_cost:
                             sale_data['item_cost'] = item.item_cost
 
+                sale_payload = sale_data.copy()
+                sale_payload.pop('ebay_listing_id', None)
                 new_sale = Sale(
                     user_id=user_id,
                     item_id=item_id,
-                    **sale_data
+                    **sale_payload
                 )
                 new_sale.calculate_profit()
                 db.session.add(new_sale)
