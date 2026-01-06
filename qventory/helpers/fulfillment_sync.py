@@ -16,7 +16,7 @@ def log_fulfillment(msg):
     print(f"[FULFILLMENT_SYNC] {msg}", file=sys.stderr, flush=True)
 
 
-def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_PROGRESS'):
+def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_PROGRESS,NOT_STARTED'):
     """
     Sync fulfillment orders for a single user and update delivered status.
     """
