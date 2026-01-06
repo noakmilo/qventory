@@ -1107,139 +1107,27 @@ def debug_ebay_order():
 @login_required
 def sync_ebay_orders():
     """Sync orders from eBay Fulfillment API"""
-    from ..helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
-    from ..helpers.tracking import carrier_delivered_via_web, detect_carrier
-    from ..models.sale import Sale
+    from ..helpers.fulfillment_sync import sync_fulfillment_orders
 
     try:
-        # Fetch orders from eBay
-        # Get both FULFILLED (delivered) and IN_PROGRESS (in transit) orders
-        # Increased limit to 800 to capture all 778 orders
-        result = fetch_ebay_orders(current_user.id, filter_status='FULFILLED,IN_PROGRESS', limit=800)
+        result = sync_fulfillment_orders(current_user.id, limit=800)
 
-        if not result['success']:
+        if not result.get('success'):
             return jsonify({
                 'success': False,
-                'error': result['error']
+                'error': result.get('error', 'Sync failed')
             }), 400
 
-        orders = result['orders']
-
-        if not orders:
-            return jsonify({
-                'success': True,
-                'message': 'No new orders to sync',
-                'orders_synced': 0
-            })
-
-        # Log unique orderFulfillmentStatus values for debugging
-        statuses = set(order.get('orderFulfillmentStatus', 'UNKNOWN') for order in orders)
-        print(f"[FULFILLMENT_SYNC] Found {len(orders)} orders with statuses: {statuses}", file=sys.stderr)
-
-        # Process each order
-        orders_created = 0
-        orders_updated = 0
-
-        for order_data in orders:
-            try:
-                # Pass user_id to get detailed fulfillment info
-                sale_data = parse_ebay_order_to_sale(order_data, user_id=current_user.id)
-
-                if not sale_data:
-                    print(f"[FULFILLMENT_SYNC] Failed to parse order {order_data.get('orderId', 'UNKNOWN')}", file=sys.stderr)
-                    continue
-
-                # Check if order already exists
-                existing_sale = Sale.query.filter_by(
-                    user_id=current_user.id,
-                    marketplace_order_id=sale_data['marketplace_order_id']
-                ).first()
-
-                if existing_sale:
-                    # Update existing sale with latest fulfillment data
-                    # Always update these fields from eBay, even if None
-                    existing_sale.tracking_number = sale_data.get('tracking_number') or existing_sale.tracking_number
-                    existing_sale.carrier = sale_data.get('carrier') or existing_sale.carrier
-                    existing_sale.shipped_at = sale_data.get('shipped_at') or existing_sale.shipped_at
-                    existing_sale.status = sale_data.get('status') or existing_sale.status
-
-                    # Update delivered_at from eBay (clear it if not delivered)
-                    delivered_value = sale_data.get('delivered_at')
-                    if delivered_value:
-                        existing_sale.delivered_at = delivered_value
-                        existing_sale.status = 'delivered'
-                        print(f"[FULFILLMENT_SYNC] Updated delivered_at for {sale_data['marketplace_order_id']}: {delivered_value}", file=sys.stderr)
-                    elif not existing_sale.delivered_at:
-                        tracking_number = sale_data.get('tracking_number') or existing_sale.tracking_number
-                        carrier_hint = sale_data.get('carrier') or existing_sale.carrier
-                        if not carrier_hint and tracking_number:
-                            carrier_hint = detect_carrier(tracking_number)
-                        if tracking_number and carrier_hint and carrier_hint != 'Unknown':
-                            web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
-                            if web_delivered is True:
-                                existing_sale.delivered_at = datetime.utcnow()
-                                existing_sale.status = 'delivered'
-
-                    existing_sale.updated_at = datetime.utcnow()
-
-                    # CRITICAL: Commit immediately after each update to avoid worker conflicts
-                    db.session.commit()
-                    orders_updated += 1
-                else:
-                    # Try to match with existing item by SKU
-                    item_id = None
-                    if sale_data.get('item_sku'):
-                        from ..models.item import Item
-                        item = Item.query.filter_by(
-                            user_id=current_user.id,
-                            sku=sale_data['item_sku']
-                        ).first()
-                        if item:
-                            item_id = item.id
-                            # Update sale data with item cost if available
-                            if item.item_cost:
-                                sale_data['item_cost'] = item.item_cost
-
-                    # Create new sale
-                    tracking_number = sale_data.get('tracking_number')
-                    carrier_hint = sale_data.get('carrier')
-                    if not carrier_hint and tracking_number:
-                        carrier_hint = detect_carrier(tracking_number)
-                        sale_data['carrier'] = carrier_hint if carrier_hint != 'Unknown' else sale_data.get('carrier')
-                    if not sale_data.get('delivered_at') and tracking_number and carrier_hint and carrier_hint != 'Unknown':
-                        web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
-                        if web_delivered is True:
-                            sale_data['delivered_at'] = datetime.utcnow()
-                            sale_data['status'] = 'delivered'
-
-                    new_sale = Sale(
-                        user_id=current_user.id,
-                        item_id=item_id,
-                        **sale_data
-                    )
-
-                    # Calculate profit
-                    new_sale.calculate_profit()
-
-                    db.session.add(new_sale)
-                    orders_created += 1
-
-            except Exception as e:
-                print(f"[FULFILLMENT_SYNC] Error processing order: {str(e)}", file=sys.stderr)
-                import traceback
-                traceback.print_exc()
-                continue
-
-        # Note: Each order is committed immediately in the loop above
-        # This prevents worker conflicts with multiple gunicorn processes
-        print(f"[FULFILLMENT_SYNC] Completed: {orders_created} created, {orders_updated} updated (committed per-order)", file=sys.stderr)
+        message = result.get('message')
+        if not message:
+            message = f"Synced {result.get('orders_created', 0)} new and updated {result.get('orders_updated', 0)} existing orders"
 
         return jsonify({
             'success': True,
-            'message': f'Synced {orders_created} new and updated {orders_updated} existing orders',
-            'orders_synced': orders_created + orders_updated,
-            'orders_created': orders_created,
-            'orders_updated': orders_updated
+            'message': message,
+            'orders_synced': result.get('orders_synced', 0),
+            'orders_created': result.get('orders_created', 0),
+            'orders_updated': result.get('orders_updated', 0)
         })
 
     except Exception as e:

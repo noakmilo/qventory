@@ -83,6 +83,20 @@ celery.conf.beat_schedule = {
             'expires': 3600,  # Expire after 1 hour if not picked up
         }
     },
+    'sync-fulfillment-tracking-am': {
+        'task': 'qventory.tasks.sync_ebay_fulfillment_tracking_global',
+        'schedule': crontab(hour=8, minute=0),
+        'options': {
+            'expires': 60 * 60 * 3,
+        }
+    },
+    'sync-fulfillment-tracking-pm': {
+        'task': 'qventory.tasks.sync_ebay_fulfillment_tracking_global',
+        'schedule': crontab(hour=20, minute=0),
+        'options': {
+            'expires': 60 * 60 * 3,
+        }
+    },
 }
 
 

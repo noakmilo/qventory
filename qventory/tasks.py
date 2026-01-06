@@ -3406,6 +3406,63 @@ def sync_ebay_sold_orders_deep(self):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_fulfillment_tracking_global')
+def sync_ebay_fulfillment_tracking_global(self):
+    """
+    Refresh fulfillment tracking for all active eBay accounts.
+    Runs on a schedule to keep delivered statuses updated.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.helpers.fulfillment_sync import sync_fulfillment_orders
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+
+        log_task("=== Fulfillment tracking global sync ===")
+
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        if not credentials:
+            log_task("No active eBay accounts found")
+            return {
+                'success': True,
+                'users_processed': 0,
+                'orders_synced': 0
+            }
+
+        total_synced = 0
+        users_processed = 0
+
+        for cred in credentials:
+            user = User.query.get(cred.user_id)
+            if not user:
+                continue
+            try:
+                log_task(f"  Syncing fulfillment for user {user.id} ({user.username})")
+                result = sync_fulfillment_orders(user.id, limit=800)
+                if result.get('success'):
+                    total_synced += result.get('orders_synced', 0)
+                    users_processed += 1
+                else:
+                    log_task(f"    ✗ Failed: {result.get('error')}")
+            except Exception as exc:
+                log_task(f"    ✗ Error syncing user {user.id}: {exc}")
+                db.session.rollback()
+                continue
+
+        log_task(f"=== Fulfillment tracking sync complete: {users_processed} users, {total_synced} orders synced ===")
+
+        return {
+            'success': True,
+            'users_processed': users_processed,
+            'orders_synced': total_synced
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.process_recurring_expenses')
 def process_recurring_expenses(self):
     """

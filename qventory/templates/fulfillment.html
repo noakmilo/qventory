@@ -20,34 +20,12 @@
         Track all fulfillment orders in one place
       </p>
     </div>
-    {# Sync eBay Orders (kept for later) #}
-    {#
     <button id="syncOrdersBtn" class="btn btn-primary" style="white-space:nowrap;">
       <i class="fas fa-sync-alt"></i> Sync eBay Orders
     </button>
-    #}
   </div>
 
-  {% if shippo_enabled %}
-  <div class="card" style="margin-bottom:20px;padding:18px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center;">
-    <div style="flex:1;min-width:200px;">
-      <h3 style="margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px;color:var(--text);">
-        <i class="fas fa-satellite-dish" style="color:#60a5fa;"></i>
-        Live tracking powered by Shippo
-      </h3>
-      {% if shippo_last_update %}
-      <p style="margin:0;font-size:12px;color:var(--text-secondary);">
-        Last status refresh: {{ shippo_last_update.strftime('%b %d, %Y %I:%M %p') }} UTC
-      </p>
-      {% else %}
-      <p style="margin:0;font-size:12px;color:var(--text-secondary);">
-        Statuses update automatically as Shippo receives carrier scans.
-      </p>
-      {% endif %}
-    </div>
-    <span style="font-size:12px;color:var(--text-tertiary);white-space:nowrap;">Multi-carrier tracking via Shippo API</span>
-  </div>
-  {% if shippo_errors and shippo_errors|length %}
+  {% if shippo_enabled and shippo_errors and shippo_errors|length %}
   <div class="card" style="margin-bottom:20px;padding:16px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.35);">
     <strong style="display:block;margin-bottom:6px;color:#f87171;font-size:13px;">Shippo warnings</strong>
     <ul style="margin:0;padding-left:18px;color:var(--text-secondary);font-size:12px;line-height:1.4;">
@@ -58,16 +36,6 @@
       <li>+ {{ shippo_errors|length - 5 }} more</li>
       {% endif %}
     </ul>
-  </div>
-  {% endif %}
-  {% else %}
-  <div class="card" style="margin-bottom:20px;padding:18px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);">
-    <h3 style="margin:0 0 6px;color:#60a5fa;font-size:15px;display:flex;align-items:center;gap:8px;">
-      <i class="fas fa-info-circle"></i> Enable live tracking
-    </h3>
-    <p style="margin:0;font-size:12px;color:var(--text-secondary);line-height:1.5;">
-      Add your Shippo API key in Settings to automatically classify parcels as in transit or delivered across every carrier.
-    </p>
   </div>
   {% endif %}
 
