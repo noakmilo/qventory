@@ -6,7 +6,7 @@ from datetime import datetime
 
 from qventory.extensions import db
 from qventory.helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
-from qventory.helpers.tracking import carrier_delivered_via_web, detect_carrier
+from qventory.helpers.tracking import detect_carrier
 from qventory.models.sale import Sale
 from qventory.models.item import Item
 
@@ -72,11 +72,6 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                 if delivered_value:
                     existing_sale.delivered_at = delivered_value
                     existing_sale.status = 'delivered'
-                elif not existing_sale.delivered_at and tracking_number and carrier_hint and carrier_hint != 'Unknown':
-                    web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
-                    if web_delivered is True:
-                        existing_sale.delivered_at = datetime.utcnow()
-                        existing_sale.status = 'delivered'
 
                 existing_sale.updated_at = datetime.utcnow()
                 db.session.commit()
@@ -92,12 +87,6 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                         item_id = item.id
                         if item.item_cost:
                             sale_data['item_cost'] = item.item_cost
-
-                if not sale_data.get('delivered_at') and tracking_number and carrier_hint and carrier_hint != 'Unknown':
-                    web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
-                    if web_delivered is True:
-                        sale_data['delivered_at'] = datetime.utcnow()
-                        sale_data['status'] = 'delivered'
 
                 new_sale = Sale(
                     user_id=user_id,
