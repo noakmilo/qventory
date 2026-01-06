@@ -341,6 +341,7 @@ def analytics():
     from qventory.models.item import Item
     from qventory.models.listing import Listing
     from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.helpers.ebay_finances import fetch_ebay_payouts, fetch_ebay_transactions
     from qventory.models.expense import Expense
     from sqlalchemy import func
     from collections import defaultdict
@@ -540,6 +541,57 @@ def analytics():
     # Top products by sale price
     top_sales = sorted(sales, key=lambda s: s.sold_price or 0, reverse=True)[:10]
 
+    # eBay payout tracking (Finances API)
+    payouts_table = []
+    adjustments_table = []
+    payout_totals = {
+        "total_payouts": 0.0,
+        "total_adjustments": 0.0,
+        "net_deposited": 0.0
+    }
+    if ebay_connected:
+        payout_end = end_date - timedelta(seconds=1)
+        payouts_result = fetch_ebay_payouts(current_user.id, start_date, payout_end, limit=200)
+        if payouts_result.get('success'):
+            for payout in payouts_result.get('payouts', []):
+                amount = payout.get('amount') or payout.get('payoutAmount') or {}
+                fee = payout.get('payoutFee') or payout.get('fee') or {}
+                currency = amount.get('currency') or fee.get('currency')
+                gross_value = float(amount.get('value', 0) or 0)
+                fee_value = float(fee.get('value', 0) or 0)
+                net_value = gross_value - fee_value
+                payouts_table.append({
+                    "payout_id": payout.get('payoutId') or payout.get('payout_id'),
+                    "payout_date": payout.get('payoutDate') or payout.get('payoutDateTime') or payout.get('payoutDateTimeGMT'),
+                    "status": payout.get('payoutStatus') or payout.get('status'),
+                    "gross_amount": gross_value,
+                    "fees": fee_value,
+                    "net_amount": net_value,
+                    "currency": currency
+                })
+                payout_totals["total_payouts"] += net_value
+
+        transactions_result = fetch_ebay_transactions(current_user.id, start_date, payout_end, limit=200)
+        if transactions_result.get('success'):
+            for txn in transactions_result.get('transactions', []):
+                txn_type = (txn.get('transactionType') or txn.get('type') or '').upper()
+                if txn_type not in {'REFUND', 'CHARGEBACK', 'HOLD', 'FEE', 'ADJUSTMENT'}:
+                    continue
+                amount = txn.get('amount') or {}
+                currency = amount.get('currency')
+                value = float(amount.get('value', 0) or 0)
+                adjustments_table.append({
+                    "adjustment_id": txn.get('transactionId') or txn.get('adjustmentId'),
+                    "type": txn_type,
+                    "amount": value,
+                    "date": txn.get('transactionDate') or txn.get('creationDate'),
+                    "related_order": txn.get('orderId') or txn.get('referenceId'),
+                    "currency": currency
+                })
+                payout_totals["total_adjustments"] += value
+
+        payout_totals["net_deposited"] = payout_totals["total_payouts"] + payout_totals["total_adjustments"]
+
     # Query receipts in date range
     from qventory.models.receipt import Receipt
     receipts_query = Receipt.query.filter(
@@ -596,7 +648,10 @@ def analytics():
                          expenses=expenses,
                          top_sales=top_sales,
                          receipt_stats=receipt_stats,
-                         liberis_loan=liberis_loan)
+                         liberis_loan=liberis_loan,
+                         payouts_table=payouts_table,
+                         adjustments_table=adjustments_table,
+                         payout_totals=payout_totals)
 
 
 @reports_bp.route("/api/reports/user-reports")

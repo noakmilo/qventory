@@ -254,6 +254,99 @@
   </div>
   {% endif %}
 
+  <!-- eBay Payouts -->
+  {% if ebay_connected %}
+  <div style="margin-top:24px;">
+    <h3 style="margin:0 0 12px 0;font-size:18px;color:var(--text);display:flex;align-items:center;gap:8px">
+      <i class="fab fa-ebay" style="color:#10b981"></i> eBay Payouts
+    </h3>
+    <div class="table-wrap" style="margin-bottom:16px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Payout ID</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Gross</th>
+            <th>Fees</th>
+            <th>Net</th>
+            <th>Currency</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if payouts_table and payouts_table|length > 0 %}
+            {% for payout in payouts_table %}
+            <tr>
+              <td>{{ payout.payout_id or '—' }}</td>
+              <td>{{ payout.payout_date or '—' }}</td>
+              <td>{{ payout.status or '—' }}</td>
+              <td>${{ "%.2f"|format(payout.gross_amount or 0) }}</td>
+              <td>${{ "%.2f"|format(payout.fees or 0) }}</td>
+              <td>${{ "%.2f"|format(payout.net_amount or 0) }}</td>
+              <td>{{ payout.currency or '—' }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="7" style="color:var(--sub);text-align:center;">No payouts found for this range.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <h4 style="margin:0 0 10px 0;font-size:16px;color:var(--text);">Adjustments</h4>
+    <div class="table-wrap" style="margin-bottom:16px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Adjustment ID</th>
+            <th>Type</th>
+            <th>Amount</th>
+            <th>Date</th>
+            <th>Related Order</th>
+            <th>Currency</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if adjustments_table and adjustments_table|length > 0 %}
+            {% for adj in adjustments_table %}
+            <tr>
+              <td>{{ adj.adjustment_id or '—' }}</td>
+              <td>{{ adj.type or '—' }}</td>
+              <td>${{ "%.2f"|format(adj.amount or 0) }}</td>
+              <td>{{ adj.date or '—' }}</td>
+              <td>{{ adj.related_order or '—' }}</td>
+              <td>{{ adj.currency or '—' }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="6" style="color:var(--sub);text-align:center;">No adjustments found for this range.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <h4 style="margin:0 0 10px 0;font-size:16px;color:var(--text);">Net Deposited</h4>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Total Payouts</th>
+            <th>Total Adjustments</th>
+            <th>Net Deposited</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>${{ "%.2f"|format(payout_totals.total_payouts or 0) }}</td>
+            <td>${{ "%.2f"|format(payout_totals.total_adjustments or 0) }}</td>
+            <td>${{ "%.2f"|format(payout_totals.net_deposited or 0) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Top products -->
   <div class="analytics-top">
     <div class="analytics-top__header">

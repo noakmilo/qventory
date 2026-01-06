@@ -81,6 +81,13 @@ tracking and OCR workflows. The analytics page shows:
 - Processed vs pending receipts
 - Total amount across processed receipts
 
+## eBay Payouts (Finances API)
+
+When eBay is connected, the analytics page can fetch:
+- Payouts: payout ID, date, status, gross, fees, net, currency
+- Adjustments: refunds/chargebacks/holds/fees with amount and date
+- Net Deposited: total payouts + total adjustments for the date range
+
 These values come from the Receipt table and are filtered by upload date.
 
 ## Liberis Loan Metrics (If Active)
