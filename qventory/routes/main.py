@@ -1108,6 +1108,7 @@ def debug_ebay_order():
 def sync_ebay_orders():
     """Sync orders from eBay Fulfillment API"""
     from ..helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
+    from ..helpers.tracking import carrier_delivered_via_web, detect_carrier
     from ..models.sale import Sale
 
     try:
@@ -1166,9 +1167,18 @@ def sync_ebay_orders():
                     delivered_value = sale_data.get('delivered_at')
                     if delivered_value:
                         existing_sale.delivered_at = delivered_value
+                        existing_sale.status = 'delivered'
                         print(f"[FULFILLMENT_SYNC] Updated delivered_at for {sale_data['marketplace_order_id']}: {delivered_value}", file=sys.stderr)
-                    else:
-                        existing_sale.delivered_at = None
+                    elif not existing_sale.delivered_at:
+                        tracking_number = sale_data.get('tracking_number') or existing_sale.tracking_number
+                        carrier_hint = sale_data.get('carrier') or existing_sale.carrier
+                        if not carrier_hint and tracking_number:
+                            carrier_hint = detect_carrier(tracking_number)
+                        if tracking_number and carrier_hint and carrier_hint != 'Unknown':
+                            web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
+                            if web_delivered is True:
+                                existing_sale.delivered_at = datetime.utcnow()
+                                existing_sale.status = 'delivered'
 
                     existing_sale.updated_at = datetime.utcnow()
 
@@ -1191,6 +1201,17 @@ def sync_ebay_orders():
                                 sale_data['item_cost'] = item.item_cost
 
                     # Create new sale
+                    tracking_number = sale_data.get('tracking_number')
+                    carrier_hint = sale_data.get('carrier')
+                    if not carrier_hint and tracking_number:
+                        carrier_hint = detect_carrier(tracking_number)
+                        sale_data['carrier'] = carrier_hint if carrier_hint != 'Unknown' else sale_data.get('carrier')
+                    if not sale_data.get('delivered_at') and tracking_number and carrier_hint and carrier_hint != 'Unknown':
+                        web_delivered = carrier_delivered_via_web(tracking_number, carrier_hint)
+                        if web_delivered is True:
+                            sale_data['delivered_at'] = datetime.utcnow()
+                            sale_data['status'] = 'delivered'
+
                     new_sale = Sale(
                         user_id=current_user.id,
                         item_id=item_id,

@@ -5,6 +5,8 @@ Supports USPS, FedEx, UPS, DHL and 100+ carriers
 import os
 import sys
 import requests
+from typing import Optional
+from bs4 import BeautifulSoup
 from datetime import datetime
 
 def log_tracking(msg):
@@ -190,6 +192,67 @@ def detect_carrier(tracking_number):
         return 'DHL'
 
     return 'Unknown'
+
+
+def _fetch_tracking_page(url: str) -> Optional[str]:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=20)
+    except requests.RequestException as exc:
+        log_tracking(f"Tracking page request failed: {exc}")
+        return None
+    if response.status_code != 200:
+        log_tracking(f"Tracking page status {response.status_code} for {url}")
+        return None
+    return response.text
+
+
+def carrier_delivered_via_web(tracking_number: str, carrier_hint: Optional[str]) -> Optional[bool]:
+    """
+    Scrape carrier tracking pages to detect delivered status.
+    Returns True/False when detected, None when status cannot be determined.
+    """
+    if not tracking_number:
+        return None
+
+    carrier = (carrier_hint or "").strip().lower()
+
+    if "usps" in carrier:
+        url = f"https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1={tracking_number}"
+        html = _fetch_tracking_page(url)
+        if not html:
+            return None
+        soup = BeautifulSoup(html, "html.parser")
+        status_elem = soup.find("p", class_="tb-status")
+        if status_elem and status_elem.get_text(strip=True).lower() == "delivered":
+            return True
+        return False
+
+    if "fedex" in carrier or "fed ex" in carrier:
+        url = f"https://www.fedex.com/fedextrack/?trknbr={tracking_number}"
+        html = _fetch_tracking_page(url)
+        if not html:
+            return None
+        soup = BeautifulSoup(html, "html.parser")
+        status_elem = soup.find("span", id="status_delivered")
+        if status_elem and "delivered" in status_elem.get_text(strip=True).lower():
+            return True
+        return False
+
+    if "ups" in carrier:
+        url = f"https://www.ups.com/track?tracknum={tracking_number}&loc=en_US&requester=QUIC"
+        html = _fetch_tracking_page(url)
+        if not html:
+            return None
+        soup = BeautifulSoup(html, "html.parser")
+        status_elem = soup.find("span", id="st_App_DelvdLabel")
+        if status_elem and "delivered" in status_elem.get_text(strip=True).lower():
+            return True
+        return False
+
+    return None
 
 
 def batch_get_tracking_info(tracking_numbers):
