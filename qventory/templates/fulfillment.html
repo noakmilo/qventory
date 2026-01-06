@@ -269,6 +269,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 5000);
       };
 
+      const pollStatus = (taskId) => {
+        const startTime = Date.now();
+        const maxWaitMs = 10 * 60 * 1000;
+
+        const intervalId = setInterval(() => {
+          fetch(`/fulfillment/sync-ebay-orders/status/${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+              if (data.state === 'SUCCESS' && data.success) {
+                clearInterval(intervalId);
+                showAlert(data.message || 'Sync completed', false);
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+              } else if (data.state === 'FAILURE' || data.state === 'REVOKED') {
+                clearInterval(intervalId);
+                showAlert(data.error || 'Failed to sync orders', true);
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+              } else if (Date.now() - startTime > maxWaitMs) {
+                clearInterval(intervalId);
+                showAlert('Sync is taking longer than expected. Please check back later.', true);
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+              }
+            })
+            .catch(() => {
+              clearInterval(intervalId);
+              showAlert('Network error while checking sync status.', true);
+              syncBtn.disabled = false;
+              syncBtn.innerHTML = originalText;
+            });
+        }, 4000);
+      };
+
       fetch('/fulfillment/sync-ebay-orders', {
         method: 'POST',
         headers: {
@@ -278,10 +312,13 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          const message = data.message || `Successfully synced ${data.orders_synced || 0} orders`;
-          showAlert(message, false);
-          syncBtn.disabled = false;
-          syncBtn.innerHTML = originalText;
+          if (data.task_id) {
+            pollStatus(data.task_id);
+          } else {
+            showAlert('Sync queued but task id missing.', true);
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = originalText;
+          }
         } else {
           showAlert(data.error || 'Failed to sync orders', true);
           syncBtn.disabled = false;

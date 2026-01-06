@@ -1107,27 +1107,13 @@ def debug_ebay_order():
 @login_required
 def sync_ebay_orders():
     """Sync orders from eBay Fulfillment API"""
-    from ..helpers.fulfillment_sync import sync_fulfillment_orders
+    from qventory.tasks import sync_ebay_fulfillment_tracking_user
 
     try:
-        result = sync_fulfillment_orders(current_user.id, limit=800)
-
-        if not result.get('success'):
-            return jsonify({
-                'success': False,
-                'error': result.get('error', 'Sync failed')
-            }), 400
-
-        message = result.get('message')
-        if not message:
-            message = f"Synced {result.get('orders_created', 0)} new and updated {result.get('orders_updated', 0)} existing orders"
-
+        task = sync_ebay_fulfillment_tracking_user.delay(current_user.id)
         return jsonify({
             'success': True,
-            'message': message,
-            'orders_synced': result.get('orders_synced', 0),
-            'orders_created': result.get('orders_created', 0),
-            'orders_updated': result.get('orders_updated', 0)
+            'task_id': str(task.id)
         })
 
     except Exception as e:
@@ -1137,6 +1123,42 @@ def sync_ebay_orders():
             'success': False,
             'error': f'Sync failed: {str(e)}'
         }), 500
+
+
+@main_bp.route("/fulfillment/sync-ebay-orders/status/<task_id>", methods=["GET"])
+@login_required
+def sync_ebay_orders_status(task_id):
+    """Check status for fulfillment sync task."""
+    from qventory.celery_app import celery
+
+    result = celery.AsyncResult(task_id)
+    payload = {
+        'state': result.state
+    }
+
+    if result.state == 'SUCCESS':
+        data = result.result or {}
+        message = data.get('message')
+        if not message:
+            message = f"Synced {data.get('orders_created', 0)} new and updated {data.get('orders_updated', 0)} existing orders"
+        payload.update({
+            'success': True,
+            'message': message,
+            'orders_synced': data.get('orders_synced', 0),
+            'orders_created': data.get('orders_created', 0),
+            'orders_updated': data.get('orders_updated', 0)
+        })
+    elif result.state in ['FAILURE', 'REVOKED']:
+        payload.update({
+            'success': False,
+            'error': str(result.result) if result.result else 'Sync failed'
+        })
+    else:
+        payload.update({
+            'success': None
+        })
+
+    return jsonify(payload)
 
 
 # ---------------------- CSV Export/Import (protegido) ----------------------

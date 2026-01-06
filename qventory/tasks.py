@@ -3463,6 +3463,29 @@ def sync_ebay_fulfillment_tracking_global(self):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_fulfillment_tracking_user')
+def sync_ebay_fulfillment_tracking_user(self, user_id):
+    """
+    Refresh fulfillment tracking for a single user (manual sync).
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.helpers.fulfillment_sync import sync_fulfillment_orders
+
+        try:
+            return sync_fulfillment_orders(user_id, limit=800)
+        except Exception as exc:
+            log_task(f"Fulfillment sync failed for user {user_id}: {exc}")
+            return {
+                'success': False,
+                'error': str(exc),
+                'orders_synced': 0,
+                'orders_created': 0,
+                'orders_updated': 0
+            }
+
+
 @celery.task(bind=True, name='qventory.tasks.process_recurring_expenses')
 def process_recurring_expenses(self):
     """
