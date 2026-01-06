@@ -1,6 +1,7 @@
 from .user import User
 from .item import Item
 from .setting import Setting
+from .system_setting import SystemSetting
 from .sale import Sale
 from .listing import Listing
 from .marketplace_credential import MarketplaceCredential
@@ -29,6 +30,7 @@ __all__ = [
     'Report',
     'AITokenConfig',
     'AITokenUsage',
+    'SystemSetting',
     'ImportJob',
     'FailedImport',
     'Expense',

@@ -2,13 +2,14 @@
 Fulfillment sync helpers shared by routes and scheduled jobs.
 """
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from qventory.extensions import db
 from qventory.helpers.ebay_inventory import fetch_ebay_orders, parse_ebay_order_to_sale
 from qventory.helpers.tracking import detect_carrier
 from qventory.models.sale import Sale
 from qventory.models.item import Item
+from qventory.models.system_setting import SystemSetting
 
 
 def log_fulfillment(msg):
@@ -42,6 +43,7 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
 
     orders_created = 0
     orders_updated = 0
+    heuristic_days = SystemSetting.get_int('delivery_heuristic_days', 7)
 
     for order_data in orders:
         try:
@@ -77,6 +79,12 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                     if incoming_status == 'delivered':
                         incoming_status = 'shipped'
                     existing_sale.status = incoming_status
+                    shipped_at = sale_data.get('shipped_at') or existing_sale.shipped_at
+                    if shipped_at and heuristic_days:
+                        cutoff = shipped_at + timedelta(days=heuristic_days)
+                        if datetime.utcnow() >= cutoff:
+                            existing_sale.delivered_at = cutoff
+                            existing_sale.status = 'delivered'
 
                 existing_sale.updated_at = datetime.utcnow()
                 db.session.commit()
@@ -97,8 +105,15 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                 sale_payload.pop('ebay_listing_id', None)
                 if sale_data.get('delivered_at'):
                     sale_data['status'] = 'delivered'
-                elif sale_data.get('status') == 'delivered':
-                    sale_data['status'] = 'shipped'
+                else:
+                    shipped_at = sale_data.get('shipped_at')
+                    if shipped_at and heuristic_days:
+                        cutoff = shipped_at + timedelta(days=heuristic_days)
+                        if datetime.utcnow() >= cutoff:
+                            sale_data['delivered_at'] = cutoff
+                            sale_data['status'] = 'delivered'
+                    if sale_data.get('status') == 'delivered' and not sale_data.get('delivered_at'):
+                        sale_data['status'] = 'shipped'
 
                 new_sale = Sale(
                     user_id=user_id,

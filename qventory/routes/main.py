@@ -3389,6 +3389,7 @@ def admin_logout():
 @require_admin
 def admin_dashboard():
     """Admin dashboard - view all users and their inventory stats"""
+    from qventory.models.system_setting import SystemSetting
     # Get all users with item count
     users = User.query.all()
     user_stats = []
@@ -3404,7 +3405,8 @@ def admin_dashboard():
     # Sort by item count descending
     user_stats.sort(key=lambda x: x['item_count'], reverse=True)
 
-    return render_template("admin_dashboard.html", user_stats=user_stats)
+    heuristic_days = SystemSetting.get_int('delivery_heuristic_days', 7)
+    return render_template("admin_dashboard.html", user_stats=user_stats, heuristic_days=heuristic_days)
 
 
 @main_bp.route("/admin/user/<int:user_id>/diagnostics")
@@ -3726,6 +3728,34 @@ def admin_resync_all_inventory():
         f"Resync task launched (Task ID: {task.id}). All eBay inventories will be synced and listing dates backfilled.",
         "ok"
     )
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/delivery-heuristic", methods=["POST"])
+@require_admin
+def admin_update_delivery_heuristic():
+    from qventory.models.system_setting import SystemSetting
+
+    raw_value = request.form.get("delivery_heuristic_days", "").strip()
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        flash("Invalid heuristic value", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    if value < 1 or value > 60:
+        flash("Heuristic must be between 1 and 60 days", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    setting = SystemSetting.query.filter_by(key='delivery_heuristic_days').first()
+    if not setting:
+        setting = SystemSetting(key='delivery_heuristic_days', value_int=value)
+        db.session.add(setting)
+    else:
+        setting.value_int = value
+    db.session.commit()
+
+    flash("Delivery heuristic updated", "ok")
     return redirect(url_for('main.admin_dashboard'))
 
 
