@@ -66,12 +66,17 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
                 existing_sale.tracking_number = sale_data.get('tracking_number') or existing_sale.tracking_number
                 existing_sale.carrier = sale_data.get('carrier') or existing_sale.carrier
                 existing_sale.shipped_at = sale_data.get('shipped_at') or existing_sale.shipped_at
-                existing_sale.status = sale_data.get('status') or existing_sale.status
 
                 delivered_value = sale_data.get('delivered_at')
                 if delivered_value:
                     existing_sale.delivered_at = delivered_value
                     existing_sale.status = 'delivered'
+                else:
+                    existing_sale.delivered_at = None
+                    incoming_status = sale_data.get('status') or existing_sale.status
+                    if incoming_status == 'delivered':
+                        incoming_status = 'shipped'
+                    existing_sale.status = incoming_status
 
                 existing_sale.updated_at = datetime.utcnow()
                 db.session.commit()
@@ -90,6 +95,11 @@ def sync_fulfillment_orders(user_id, *, limit=800, filter_status='FULFILLED,IN_P
 
                 sale_payload = sale_data.copy()
                 sale_payload.pop('ebay_listing_id', None)
+                if sale_data.get('delivered_at'):
+                    sale_data['status'] = 'delivered'
+                elif sale_data.get('status') == 'delivered':
+                    sale_data['status'] = 'shipped'
+
                 new_sale = Sale(
                     user_id=user_id,
                     item_id=item_id,
