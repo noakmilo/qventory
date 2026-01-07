@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container page-shell" style="max-width:1100px;">
   <div style="margin:24px 0 16px;text-align:center;">
-    <h1 style="color:var(--text);font-size:28px;margin:10px 0 6px;">{{ article.title }}</h1>
+    <h1 style="color:var(--text);font-size:28px;margin:0 0 6px;">{{ article.title }}</h1>
     {% if article.summary %}
     <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;max-width:680px;margin:0 auto;">
       {{ article.summary }}
@@ -19,7 +19,7 @@
     </a>
   </div>
 
-  <div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:36px;align-items:start;">
+  <div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:36px;align-items:start;justify-content:center;">
     <aside style="position:sticky;top:96px;align-self:start;">
       <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);padding:12px;">
         <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;">
