@@ -197,6 +197,34 @@
     })();
   </script>
 
+  {% if recommended_article %}
+  <div class="card" style="margin-bottom:24px;border:1px solid rgba(34,197,94,0.35);background:linear-gradient(135deg,rgba(34,197,94,0.08),rgba(59,130,246,0.06));">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+      <div style="min-width:220px;flex:1;">
+        <div style="font-size:12px;color:#22c55e;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:6px;">
+          Recommended Help Article
+        </div>
+        <div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px;">
+          {{ recommended_article.title }}
+        </div>
+        {% if recommended_article.summary %}
+        <div style="color:var(--sub);font-size:14px;line-height:1.6;">
+          {{ recommended_article.summary }}
+        </div>
+        {% endif %}
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <a href="{{ url_for('main.help_center_article', slug=recommended_article.slug) }}" class="btn submitbtn">
+          <i class="fas fa-book-open"></i> Read Article
+        </a>
+        <a href="{{ url_for('main.help_center_index') }}" class="btn">
+          View Help Center
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Pending Tasks Section (Only show if there are tasks) -->
   {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
   <section class="dashboard-section pending-tasks-section">

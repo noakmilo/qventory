@@ -985,6 +985,10 @@ def dashboard():
     recently_sold = fetch_recently_sold_items(db.session, user_id=current_user.id, limit=5)
     recent_fulfillment = fetch_recent_fulfillment(db.session, user_id=current_user.id, limit=10)
     pending_tasks = fetch_pending_tasks(db.session, user_id=current_user.id)
+    seed_help_articles()
+    recommended_article = HelpArticle.query.filter_by(is_published=True)\
+        .order_by(func.random())\
+        .first()
 
     # Plan usage info
     plan_limits = current_user.get_plan_limits()
@@ -1062,7 +1066,8 @@ def dashboard():
         plan_max_items=plan_max_items,
         upgrade_task_dismiss_key=f"upgrade_task_dismissed_{current_user.id}",
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}",
-        today_listings_count=today_listings_count
+        today_listings_count=today_listings_count,
+        recommended_article=recommended_article
     )
 
 
