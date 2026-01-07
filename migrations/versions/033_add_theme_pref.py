@@ -1,6 +1,6 @@
 """add theme preference to settings
 
-Revision ID: 033_add_theme_preference_to_settings
+Revision ID: 033_add_theme_pref
 Revises: 032_add_plan_prices
 Create Date: 2026-01-07 00:15:00.000000
 """
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '033_add_theme_preference_to_settings'
+revision = '033_add_theme_pref'
 down_revision = '032_add_plan_prices'
 branch_labels = None
 depends_on = None
