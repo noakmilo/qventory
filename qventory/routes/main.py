@@ -4014,7 +4014,7 @@ def admin_dashboard():
     user_stats = []
 
     for user in users:
-        item_count = Item.query.filter_by(user_id=user.id).count()
+        item_count = Item.query.filter_by(user_id=user.id, is_active=True).count()
         user_stats.append({
             'user': user,
             'item_count': item_count,
@@ -4031,6 +4031,20 @@ def admin_dashboard():
         user_stats=user_stats,
         heuristic_days=heuristic_days,
         trial_days=trial_days
+    )
+
+
+@main_bp.route("/admin/user/<int:user_id>/inventory-text")
+@require_admin
+def admin_user_inventory_text(user_id):
+    user = User.query.get_or_404(user_id)
+    items = Item.query.filter_by(user_id=user_id, is_active=True).order_by(
+        Item.created_at.desc()
+    ).all()
+    return render_template(
+        "admin_user_inventory_text.html",
+        user=user,
+        items=items
     )
 
 

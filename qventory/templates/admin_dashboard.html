@@ -191,7 +191,7 @@
             </td>
             <td>
               <div style="display:flex;gap:8px;align-items:center;">
-                <a href="{{ url_for('main.dashboard') }}?user={{ stat.user.username }}" class="btn settingsbtn" title="View user items">
+                <a href="{{ url_for('main.admin_user_inventory_text', user_id=stat.user.id) }}" class="btn settingsbtn" title="View user inventory (text)">
                   <i class="fas fa-eye"></i>
                 </a>
                 <a href="{{ url_for('main.admin_user_diagnostics', user_id=stat.user.id) }}" class="btn settingsbtn" title="View import diagnostics">

@@ -1,0 +1,68 @@
+{% extends "base_admin.html" %}
+{% block title %}Inventory (Text) – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="admin-breadcrumb">
+  <a href="{{ url_for('main.admin_dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Inventory</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="width:98%;margin:0 auto;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-bottom:6px;">Inventory (Text View)</h1>
+      <p style="color:var(--sub);margin:0;">
+        {{ user.username }} · {{ user.email }}
+      </p>
+    </div>
+    <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+      <i class="fas fa-arrow-left"></i> Back to Admin
+    </a>
+  </div>
+
+  <div style="margin:16px 0;">
+    <span class="tag">{{ items|length }} active items</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>SKU</th>
+          <th>Location</th>
+          <th>Supplier</th>
+          <th>Cost</th>
+          <th>Price</th>
+          <th>Qty</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td style="max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</td>
+          <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">{{ item.sku }}</td>
+          <td>{{ item.location_code or '—' }}</td>
+          <td>{{ item.supplier or '—' }}</td>
+          <td>{{ ('$%.2f'|format(item.item_cost)) if item.item_cost is not none else '—' }}</td>
+          <td>{{ ('$%.2f'|format(item.item_price)) if item.item_price is not none else '—' }}</td>
+          <td>{{ item.quantity }}</td>
+          <td style="white-space:nowrap;">{{ item.created_at.strftime('%Y-%m-%d') if item.created_at else '—' }}</td>
+        </tr>
+        {% endfor %}
+        {% if not items %}
+        <tr>
+          <td colspan="8" style="text-align:center;color:var(--sub);padding:20px;">
+            No active items found.
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
