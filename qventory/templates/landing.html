@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Qventory — Smart Inventory Management for Resellers{% endblock %}
+{% block title %}Inventory Management Software for eBay Resellers | Qventory{% endblock %}
 {% block content %}
 
 {# ===== Canonical & SEO ===== #}
 {% set canonical = request.url_root.rstrip('/') %}
 <link rel="canonical" href="{{ canonical }}/">
 
-<meta name="description" content="Qventory: eBay seller tool with automatic sync, auto-relist, sales analytics, fulfillment tracking, AI pricing, profit calculator, and multi-marketplace inventory management. Mobile-first, real-time updates.">
-<meta name="keywords" content="ebay seller tool, ebay auto relist, ebay sync, sales analytics, fulfillment tracking, inventory management, reseller tools, profit calculator, ai pricing, marketplace tracking, ebay integration">
+<meta name="description" content="Inventory Management Software for eBay Resellers. Qventory syncs listings, tracks sales and fulfillment, manages costs, and streamlines pricing with AI.">
+<meta name="keywords" content="inventory management software for ebay resellers, ebay inventory management, ebay reseller software, ebay inventory tracking, ebay seller inventory tool">
 
 {# ===== Open Graph ===== #}
-<meta property="og:title" content="Qventory — eBay Seller Tool with Auto-Relist & Sales Analytics">
-<meta property="og:description" content="eBay Sync • Auto-Relist • Sales Analytics • Fulfillment Tracking • AI Pricing • Profit Calculator">
+<meta property="og:title" content="Inventory Management Software for eBay Resellers | Qventory">
+<meta property="og:description" content="Inventory Management Software for eBay Resellers. Sync listings, track sales, and manage fulfillment in one place.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== Twitter Card ===== #}
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Qventory — eBay Auto-Relist & Sales Analytics">
-<meta name="twitter:description" content="eBay Sync • Auto-Relist • Sales Analytics • Fulfillment • AI Pricing • Profit Calculator">
+<meta name="twitter:title" content="Inventory Management Software for eBay Resellers | Qventory">
+<meta name="twitter:description" content="Inventory Management Software for eBay Resellers. Sync listings, track sales, and manage fulfillment in one place.">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== JSON-LD: SoftwareApplication ===== #}
@@ -30,9 +30,9 @@
   "name": "Qventory",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "eBay seller tool with automatic inventory sync, auto-relist scheduling, sales analytics, fulfillment tracking, AI market research, profit calculator, and multi-marketplace inventory management for resellers.",
+  "description": "Inventory Management Software for eBay Resellers. Sync listings, manage inventory, track sales, and fulfillment in one place.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": "eBay OAuth Integration, Auto-Relist Scheduling, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Multi-Marketplace Support, Mobile PWA"
+  "featureList": "Inventory Management for eBay Resellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA"
 }
 </script>
 
@@ -48,7 +48,7 @@
       </button>
     </div>
   </div>
-  <h1 style="font-size:34px; margin:0 0 10px;">eBay Selling. <span style="color:var(--accent)">Automated.</span></h1>
+  <h1 style="font-size:34px; margin:0 0 10px;">Inventory Management Software for <span style="color:var(--accent)">eBay Resellers.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
     Sync your <strong>eBay inventory</strong>, auto-relist for visibility, track <strong>sales & fulfillment</strong> in real-time,
     and optimize pricing with <strong>AI research</strong>. Built for eBay sellers who want to scale smart.
