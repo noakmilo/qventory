@@ -111,5 +111,8 @@ class PlanLimit(db.Model):
     # Support
     support_level = db.Column(db.String(50), default='community')  # community, email, priority
 
+    # Pricing (monthly)
+    monthly_price = db.Column(db.Numeric(10, 2), nullable=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

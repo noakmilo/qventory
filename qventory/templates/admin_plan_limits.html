@@ -31,6 +31,20 @@
       <!-- Numeric Limits -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
         <div>
+          <label for="monthly_price_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
+            Monthly Price (USD)
+          </label>
+          <input
+            type="text"
+            id="monthly_price_{{ plan.plan }}"
+            name="monthly_price"
+            value="{{ '%.2f'|format(plan.monthly_price) if plan.monthly_price is not none else '' }}"
+            placeholder="0.00"
+            style="width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--muted); color: var(--text);"
+          >
+          <small style="color: var(--sub); font-size: var(--fs-xs);">Leave empty for custom pricing</small>
+        </div>
+        <div>
           <label for="max_items_{{ plan.plan }}" style="display: block; margin-bottom: 4px; color: var(--sub); font-size: var(--fs-sm);">
             Max Items
           </label>

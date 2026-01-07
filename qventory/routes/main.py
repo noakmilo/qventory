@@ -4016,6 +4016,15 @@ def admin_update_plan_limits(plan):
         plan_limit.max_images_per_item = int(request.form.get("max_images_per_item", 1))
         plan_limit.max_marketplace_integrations = int(request.form.get("max_marketplace_integrations", 0))
 
+        # Monthly price (optional)
+        price_str = request.form.get("monthly_price", "").strip()
+        if price_str == "":
+            plan_limit.monthly_price = None
+        else:
+            plan_limit.monthly_price = float(price_str)
+            if plan_limit.monthly_price < 0:
+                raise ValueError("Monthly price must be positive")
+
         # Receipt OCR limits
         receipt_monthly_str = request.form.get("max_receipt_ocr_per_month", "").strip()
         if receipt_monthly_str == "" or receipt_monthly_str.lower() == "unlimited":

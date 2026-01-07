@@ -28,6 +28,7 @@ def seed_plan_limits():
         {
             'plan': 'free',
             'max_items': 100,
+            'monthly_price': 0,
             'max_images_per_item': 1,
             'max_marketplace_integrations': 1,
             'can_use_ai_research': True,
@@ -41,6 +42,7 @@ def seed_plan_limits():
         {
             'plan': 'early_adopter',
             'max_items': 200,
+            'monthly_price': 0,
             'max_images_per_item': 3,
             'max_marketplace_integrations': 2,
             'can_use_ai_research': True,
@@ -54,6 +56,7 @@ def seed_plan_limits():
         {
             'plan': 'premium',
             'max_items': 500,
+            'monthly_price': 9.99,
             'max_images_per_item': 5,
             'max_marketplace_integrations': 3,
             'can_use_ai_research': True,
@@ -67,6 +70,7 @@ def seed_plan_limits():
         {
             'plan': 'plus',
             'max_items': 1000,
+            'monthly_price': 14.99,
             'max_images_per_item': 8,
             'max_marketplace_integrations': 5,
             'can_use_ai_research': True,
@@ -80,6 +84,7 @@ def seed_plan_limits():
         {
             'plan': 'pro',
             'max_items': None,  # Unlimited
+            'monthly_price': 19.99,
             'max_images_per_item': 10,
             'max_marketplace_integrations': 10,
             'can_use_ai_research': True,
@@ -93,6 +98,7 @@ def seed_plan_limits():
         {
             'plan': 'god',
             'max_items': None,  # Unlimited (bypassed in code anyway)
+            'monthly_price': None,
             'max_images_per_item': 999,
             'max_marketplace_integrations': 999,
             'can_use_ai_research': True,
@@ -106,6 +112,7 @@ def seed_plan_limits():
         {
             'plan': 'enterprise',
             'max_items': None,
+            'monthly_price': None,
             'max_images_per_item': 999,
             'max_marketplace_integrations': 999,
             'can_use_ai_research': True,

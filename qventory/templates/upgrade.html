@@ -53,19 +53,13 @@
         <!-- Pricing Placeholder -->
         <div style="margin-top: 12px;">
           <span style="font-size: 2.5rem; font-weight: 700; color: var(--text);">
-            {% if plan.plan == 'free' %}
-            $0
-            {% elif plan.plan == 'premium' %}
-            $9.99
-            {% elif plan.plan == 'pro' %}
-            $19.99
-            {% elif plan.plan == 'god' %}
-            Custom
+            {% if plan.monthly_price is not none %}
+              ${{ "%.2f"|format(plan.monthly_price) }}
             {% else %}
-            TBD
+              Custom
             {% endif %}
           </span>
-          {% if plan.plan != 'god' %}
+          {% if plan.monthly_price is not none %}
           <span style="color: var(--sub); font-size: var(--fs-sm);">/month</span>
           {% endif %}
         </div>
@@ -92,6 +86,7 @@
       <!-- Features List -->
       <div style="flex: 1; margin-bottom: 20px;">
         {% set token_config = token_configs.get(plan.plan) %}
+        {% set free_all_access = plan.plan == 'free' %}
         <ul style="list-style: none; padding: 0; margin: 0; color: var(--text);">
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
             <i class="fas fa-warehouse" style="width: 20px; color: var(--accent);"></i>
@@ -103,9 +98,10 @@
             <span>Receipts + expense tracking</span>
           </li>
 
+          {% set ai_enabled = free_all_access or plan.can_use_ai_research %}
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas {% if plan.can_use_ai_research %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_use_ai_research %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
-            <span style="{% if not plan.can_use_ai_research %}color: var(--sub); text-decoration: line-through;{% endif %}">AI Research</span>
+            <i class="fas {% if ai_enabled %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if ai_enabled %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not ai_enabled %}color: var(--sub); text-decoration: line-through;{% endif %}">AI Research</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
@@ -119,9 +115,10 @@
             </span>
           </li>
 
+          {% set bulk_enabled = free_all_access or plan.can_bulk_operations %}
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas {% if plan.can_bulk_operations %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_bulk_operations %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
-            <span style="{% if not plan.can_bulk_operations %}color: var(--sub); text-decoration: line-through;{% endif %}">Bulk Operations</span>
+            <i class="fas {% if bulk_enabled %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if bulk_enabled %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not bulk_enabled %}color: var(--sub); text-decoration: line-through;{% endif %}">Bulk Operations</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
@@ -134,9 +131,10 @@
             <span style="{% if not plan.can_import_csv %}color: var(--sub); text-decoration: line-through;{% endif %}">Import CSV</span>
           </li>
 
+          {% set analytics_enabled = free_all_access or plan.can_use_analytics %}
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas {% if plan.can_use_analytics %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_use_analytics %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
-            <span style="{% if not plan.can_use_analytics %}color: var(--sub); text-decoration: line-through;{% endif %}">Analytics</span>
+            <i class="fas {% if analytics_enabled %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if analytics_enabled %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not analytics_enabled %}color: var(--sub); text-decoration: line-through;{% endif %}">Analytics</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
