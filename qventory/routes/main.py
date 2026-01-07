@@ -158,6 +158,7 @@ def stripe_webhook():
             price_id = items[0].get("price", {}).get("id")
         plan_name = _plan_from_stripe_price(price_id)
         raw_status = data_object.get("status")
+        cancel_at_period_end = data_object.get("cancel_at_period_end")
         status = None
         if raw_status in {"active", "trialing"}:
             status = "active"
@@ -185,6 +186,21 @@ def stripe_webhook():
                 subscription.on_trial = raw_status == "trialing"
             subscription.updated_at = datetime.utcnow()
             db.session.commit()
+
+            if cancel_at_period_end and raw_status == "trialing" and trial_end:
+                now = datetime.utcnow()
+                if datetime.utcfromtimestamp(trial_end) > now:
+                    try:
+                        stripe.Subscription.delete(subscription_id)
+                    except Exception as exc:
+                        current_app.logger.exception("Stripe trial cancel failed: %s", exc)
+                    deleted_count = _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+                    db.session.commit()
+                    current_app.logger.warning(
+                        "Trial cancelled immediately for user %s; removed %s items to meet Free plan limit.",
+                        subscription.user_id,
+                        deleted_count,
+                    )
 
     elif event_type == "customer.subscription.deleted":
         subscription_id = data_object.get("id")
@@ -294,14 +310,31 @@ def stripe_cancel_subscription():
         return redirect(url_for("main.settings"))
 
     try:
-        stripe.Subscription.modify(
-            subscription.stripe_subscription_id,
-            cancel_at_period_end=True
-        )
-        subscription.cancelled_at = datetime.utcnow()
-        subscription.updated_at = datetime.utcnow()
-        db.session.commit()
-        flash("Cancellation scheduled. You will keep access until the current period ends.", "ok")
+        stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+        now = datetime.utcnow()
+        trial_end_ts = stripe_sub.get("trial_end")
+        is_trialing = stripe_sub.get("status") == "trialing"
+        trial_active = False
+        if is_trialing and trial_end_ts:
+            trial_active = datetime.utcfromtimestamp(trial_end_ts) > now
+
+        if trial_active:
+            stripe.Subscription.delete(subscription.stripe_subscription_id)
+            deleted_count = _downgrade_to_free_and_enforce(current_user, subscription, now)
+            db.session.commit()
+            message = "Trial cancelled. Your plan is now Free."
+            if deleted_count:
+                message += f" {deleted_count} item(s) were removed to fit the Free plan limit."
+            flash(message, "ok")
+        else:
+            stripe.Subscription.modify(
+                subscription.stripe_subscription_id,
+                cancel_at_period_end=True
+            )
+            subscription.cancelled_at = now
+            subscription.updated_at = now
+            db.session.commit()
+            flash("Cancellation scheduled. You will keep access until the current period ends.", "ok")
     except Exception as exc:
         current_app.logger.exception("Stripe cancel failed: %s", exc)
         flash("Unable to cancel subscription right now. Please try again.", "error")
@@ -370,6 +403,45 @@ def _stripe_price_for_plan(plan_name: str | None) -> str | None:
         "pro": STRIPE_PRICE_PRO,
     }
     return mapping.get(plan_name)
+
+
+def _enforce_free_plan_limit(user_id: int) -> int:
+    from qventory.models.subscription import PlanLimit
+
+    free_limits = PlanLimit.query.filter_by(plan='free').first()
+    if not free_limits or free_limits.max_items is None:
+        return 0
+
+    total_items = Item.query.filter_by(user_id=user_id).count()
+    over_limit = total_items - free_limits.max_items
+    if over_limit <= 0:
+        return 0
+
+    items_to_delete = (
+        Item.query.filter_by(user_id=user_id)
+        .order_by(Item.created_at.asc())
+        .limit(over_limit)
+        .all()
+    )
+    for item in items_to_delete:
+        db.session.delete(item)
+
+    return len(items_to_delete)
+
+
+def _downgrade_to_free_and_enforce(user: User, subscription: Subscription, now: datetime) -> int:
+    subscription.plan = "free"
+    subscription.status = "cancelled"
+    subscription.on_trial = False
+    subscription.trial_ends_at = None
+    subscription.cancelled_at = now
+    subscription.ended_at = now
+    subscription.current_period_end = now
+    subscription.updated_at = now
+
+    user.role = "free"
+    deleted_count = _enforce_free_plan_limit(user.id)
+    return deleted_count
 
 
 # ---------------------- Help Center (public) ----------------------
