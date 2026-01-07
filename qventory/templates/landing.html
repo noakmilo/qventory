@@ -37,7 +37,17 @@
 </script>
 
 {# ===== HERO ===== #}
-<section class="card" style="margin:20px; padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent);">
+<section class="card" style="margin:20px; padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent); position:relative;">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+    <div class="theme-toggle" aria-label="Toggle theme">
+      <button type="button" class="theme-toggle-btn" data-theme="dark" title="Dark theme">
+        <i class="fas fa-moon"></i>
+      </button>
+      <button type="button" class="theme-toggle-btn" data-theme="light" title="Light theme">
+        <i class="fas fa-sun"></i>
+      </button>
+    </div>
+  </div>
   <h1 style="font-size:34px; margin:0 0 10px;">eBay Selling. <span style="color:var(--accent)">Automated.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
     Sync your <strong>eBay inventory</strong>, auto-relist for visibility, track <strong>sales & fulfillment</strong> in real-time,
@@ -73,6 +83,69 @@
     <span class="tag">Help Center</span>
   </div>
 </section>
+
+<script>
+  (function() {
+    const storageKey = 'qventory_theme';
+    const buttons = document.querySelectorAll('.theme-toggle-btn');
+
+    function applyTheme(theme) {
+      document.body.setAttribute('data-theme', theme);
+      buttons.forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.theme === theme);
+      });
+    }
+
+    const saved = localStorage.getItem(storageKey);
+    if (saved === 'light' || saved === 'dark') {
+      applyTheme(saved);
+    }
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const theme = btn.dataset.theme;
+        localStorage.setItem(storageKey, theme);
+        applyTheme(theme);
+      });
+    });
+  })();
+</script>
+
+<style>
+  .theme-toggle {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:6px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--glass-bg-strong);
+    box-shadow:0 10px 24px rgba(0,0,0,0.25);
+  }
+  .theme-toggle-btn {
+    width:34px;
+    height:34px;
+    border-radius:999px;
+    border:1px solid transparent;
+    background:transparent;
+    color:var(--text);
+    display:grid;
+    place-items:center;
+    cursor:pointer;
+    transition:transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  }
+  .theme-toggle-btn:hover {
+    transform:translateY(-1px);
+    background:rgba(96,165,250,0.12);
+  }
+  .theme-toggle-btn.is-active {
+    border-color:var(--accent);
+    background:rgba(96,165,250,0.18);
+  }
+  .theme-toggle-btn i {
+    font-size:14px;
+  }
+</style>
 
 {# ===== VALUE ===== #}
 <section class="row" style="margin:20px;">
