@@ -3,7 +3,9 @@
 {% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set un = current_user.username %}
-<tr data-item-row="{{ it.id }}">
+<tr data-item-row="{{ it.id }}"
+    data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
+    data-item-cost="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}">
   <td style="text-align:center">
     {% if view_type == 'sold' %}
       {# No checkbox for sold items (no bulk actions) #}
@@ -68,7 +70,13 @@
     </div>
   </td>
   <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
-  <td class="mobile-hide">{% if has_price and has_cost %}<span class="tag">ROI {{ roi|round(0) }}%</span>{% else %}—{% endif %}</td>
+  <td class="mobile-hide roi-cell">
+    {% if has_price and has_cost %}
+      <span class="tag roi-value">ROI {{ roi|round(0) }}%</span>
+    {% else %}
+      <span class="roi-value">—</span>
+    {% endif %}
+  </td>
 
   <!-- Location con QR -->
   <td>

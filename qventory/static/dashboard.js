@@ -1162,6 +1162,7 @@ function updateCostDisplay(container, costValue) {
   const display = container.querySelector('.inline-edit__display');
   const valueSpan = display ? display.querySelector('.inline-edit__value') : null;
   const placeholder = display ? display.querySelector('.inline-edit__placeholder') : null;
+  const row = container.closest('tr[data-item-row]');
 
   if (costValue !== null && costValue !== undefined) {
     const formattedCost = `$${parseFloat(costValue).toFixed(2)}`;
@@ -1174,6 +1175,9 @@ function updateCostDisplay(container, costValue) {
       newValueSpan.innerHTML = `<i class="fas fa-receipt"></i> ${formattedCost}`;
       placeholder.replaceWith(newValueSpan);
     }
+    if (row) {
+      row.dataset.itemCost = parseFloat(costValue).toFixed(2);
+    }
   } else {
     if (valueSpan) {
       const newPlaceholder = document.createElement('span');
@@ -1181,6 +1185,13 @@ function updateCostDisplay(container, costValue) {
       newPlaceholder.textContent = 'Add cost';
       valueSpan.replaceWith(newPlaceholder);
     }
+    if (row) {
+      row.dataset.itemCost = '';
+    }
+  }
+
+  if (row) {
+    updateRoiDisplay(row);
   }
 }
 
@@ -1249,6 +1260,28 @@ function updateLocationDisplay(container, locationCode, A, B, S, C) {
       if (qrLink) qrLink.remove();
     }
   }
+}
+
+function updateRoiDisplay(row) {
+  const roiCell = row.querySelector('.roi-cell');
+  if (!roiCell) {
+    return;
+  }
+  const roiValue = roiCell.querySelector('.roi-value') || roiCell;
+  const priceRaw = row.dataset.itemPrice;
+  const costRaw = row.dataset.itemCost;
+  const price = priceRaw ? parseFloat(priceRaw) : NaN;
+  const cost = costRaw ? parseFloat(costRaw) : NaN;
+
+  if (!isFinite(price) || !isFinite(cost) || cost <= 0) {
+    roiValue.textContent = '—';
+    roiValue.className = 'roi-value';
+    return;
+  }
+
+  const roi = Math.round(((price - cost) / cost) * 100);
+  roiValue.textContent = `ROI ${roi}%`;
+  roiValue.className = 'tag roi-value';
 }
 
 function setupSupplierInlineAutocomplete(input, list, form, container) {
