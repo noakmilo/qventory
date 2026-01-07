@@ -94,6 +94,12 @@ def _normalize_arg(value: str | None) -> str | None:
 
 
 def _get_inventory_filter_params():
+    missing_data = _normalize_arg(request.args.get("missing_data"))
+    if missing_data is None:
+        if _normalize_arg(request.args.get("missing_cost")):
+            missing_data = "cost"
+        elif _normalize_arg(request.args.get("missing_supplier")):
+            missing_data = "supplier"
     return {
         "search": _normalize_arg(request.args.get("q")),
         "A": _normalize_arg(request.args.get("A")),
@@ -101,7 +107,7 @@ def _get_inventory_filter_params():
         "S": _normalize_arg(request.args.get("S")),
         "C": _normalize_arg(request.args.get("C")),
         "platform": _normalize_arg(request.args.get("platform")),
-        "missing_data": _normalize_arg(request.args.get("missing_data")),
+        "missing_data": missing_data,
     }
 
 
