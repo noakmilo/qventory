@@ -1,0 +1,162 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Edit Help Article – Admin{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('main.admin_help_center') }}">Help Center</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ 'New Article' if is_new else article.title }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell" style="max-width:1200px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div>
+      <h1 style="margin-bottom:4px;">{{ 'New Help Article' if is_new else 'Edit Help Article' }}</h1>
+      <p style="color:var(--text-secondary);font-size:13px;">Markdown editor with live preview.</p>
+    </div>
+    <a href="{{ url_for('main.admin_help_center') }}" class="btn">Back</a>
+  </div>
+
+  <form method="post" action="{{ form_action }}" class="card" style="padding:16px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+      <div>
+        <label>Title</label>
+        <input class="input" type="text" name="title" value="{{ article.title if article else '' }}" required>
+      </div>
+      <div>
+        <label>Slug</label>
+        <input class="input" type="text" name="slug" value="{{ article.slug if article else '' }}" placeholder="active-inventory">
+      </div>
+      <div>
+        <label>Order</label>
+        <input class="input" type="number" name="display_order" value="{{ article.display_order if article else 0 }}" min="0">
+      </div>
+      <div>
+        <label>Status</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <input type="checkbox" id="isPublished" name="is_published" {% if article and article.is_published %}checked{% endif %}>
+          <label for="isPublished" style="margin:0;">Published</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Summary</label>
+      <textarea class="input" name="summary" rows="2" placeholder="Short description for the index.">{{ article.summary if article else '' }}</textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:16px;">
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <label style="margin:0;">Markdown</label>
+          <div>
+            <label class="btn" style="display:inline-flex;align-items:center;gap:6px;">
+              <i class="fas fa-image"></i> Upload Image (2MB max)
+              <input type="file" id="helpImageUpload" accept="image/*" style="display:none;">
+            </label>
+          </div>
+        </div>
+        <textarea class="input" id="helpMarkdown" name="body_md" rows="24" required>{{ article.body_md if article else '' }}</textarea>
+        <div style="color:var(--text-secondary);font-size:12px;margin-top:6px;">
+          Use placeholders like <code>[IMAGE: label]</code> where you want an image.
+        </div>
+      </div>
+      <div>
+        <label style="margin-bottom:8px;display:block;">Preview</label>
+        <div id="helpPreview" style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-secondary);min-height:520px;"></div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-save"></i> Save Article
+      </button>
+      {% if not is_new %}
+      <a class="btn" href="{{ url_for('main.help_center_article', slug=article.slug) }}" target="_blank" rel="noopener">
+        <i class="fas fa-external-link-alt"></i> View
+      </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  const mdInput = document.getElementById('helpMarkdown');
+  const preview = document.getElementById('helpPreview');
+  const uploadInput = document.getElementById('helpImageUpload');
+
+  function updatePreview() {
+    if (!mdInput || !preview || !window.marked) return;
+    const raw = mdInput.value || '';
+    const withPlaceholders = raw.replace(/\[IMAGE:\s*([^\]]+)\]/g, (_, label) => {
+      return `<div class="help-image-placeholder">[IMAGE: ${label.trim()}]</div>`;
+    });
+    preview.innerHTML = window.marked.parse(withPlaceholders);
+  }
+
+  if (mdInput) {
+    mdInput.addEventListener('input', updatePreview);
+    updatePreview();
+  }
+
+  if (uploadInput) {
+    uploadInput.addEventListener('change', async () => {
+      const file = uploadInput.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const response = await fetch('{{ url_for("main.admin_help_center_upload_image") }}', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'Upload failed');
+        }
+        const markdownImage = `![Help image](${data.url})`;
+        insertAtCursor(mdInput, markdownImage);
+        updatePreview();
+      } catch (err) {
+        alert(err.message || 'Upload failed');
+      } finally {
+        uploadInput.value = '';
+      }
+    });
+  }
+
+  function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart || 0;
+    const end = textarea.selectionEnd || 0;
+    const value = textarea.value || '';
+    textarea.value = value.slice(0, start) + text + value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+  }
+</script>
+
+<style>
+  #helpPreview h1,
+  #helpPreview h2,
+  #helpPreview h3 {
+    color: var(--text);
+    margin: 16px 0 8px;
+  }
+  #helpPreview p {
+    margin: 8px 0;
+  }
+  #helpPreview ul {
+    padding-left: 18px;
+  }
+  .help-image-placeholder {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    color: var(--text-secondary);
+    margin: 10px 0;
+    font-size: 12px;
+  }
+</style>
+{% endblock %}

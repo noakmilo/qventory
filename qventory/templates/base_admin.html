@@ -65,6 +65,14 @@
         </a>
       </div>
 
+      <div class="admin-sidebar-section">
+        <div class="admin-sidebar-section-title">Content</div>
+        <a href="{{ url_for('main.admin_help_center') }}" class="admin-sidebar-item {% if 'admin_help_center' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-life-ring"></i>
+          <span>Help Center</span>
+        </a>
+      </div>
+
       <!-- Divider -->
       <div class="admin-sidebar-divider"></div>
 

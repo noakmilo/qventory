@@ -35,6 +35,8 @@ from ..extensions import db
 from ..models.item import Item
 from ..models.setting import Setting
 from ..models.user import User
+from ..models.help_article import HelpArticle
+from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
     get_or_create_settings, generate_sku, compose_location_code,
     parse_location_code, parse_values, human_from_code, qr_label_image
@@ -82,6 +84,25 @@ if cloudinary_enabled:
 @main_bp.route("/")
 def landing():
     return render_template("landing.html")
+
+
+# ---------------------- Help Center (public) ----------------------
+
+@main_bp.route("/help")
+def help_center_index():
+    seed_help_articles()
+    articles = HelpArticle.query.filter_by(is_published=True)\
+        .order_by(HelpArticle.display_order.asc(), HelpArticle.title.asc())\
+        .all()
+    return render_template("help_center.html", articles=articles)
+
+
+@main_bp.route("/help/<slug>")
+def help_center_article(slug):
+    seed_help_articles()
+    article = HelpArticle.query.filter_by(slug=slug, is_published=True).first_or_404()
+    rendered = render_help_markdown(article.body_md)
+    return render_template("help_article.html", article=article, rendered=rendered)
 
 
 # ---------------------- Dashboard (protegido) ----------------------
@@ -3389,6 +3410,144 @@ def admin_logout():
     resp.set_cookie('admin_auth', '', expires=0)
     flash("Logged out from admin", "ok")
     return resp
+
+
+# ---------------------- Admin: Help Center ----------------------
+
+def _slugify(value: str) -> str:
+    value = (value or "").strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "-", value)
+    return value.strip("-")
+
+
+@main_bp.route("/admin/help-center")
+@require_admin
+def admin_help_center():
+    seed_help_articles()
+    articles = HelpArticle.query.order_by(
+        HelpArticle.display_order.asc(),
+        HelpArticle.title.asc()
+    ).all()
+    return render_template("admin_help_center.html", articles=articles)
+
+
+@main_bp.route("/admin/help-center/new", methods=["GET", "POST"])
+@require_admin
+def admin_help_center_new():
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        slug = (request.form.get("slug") or "").strip()
+        summary = (request.form.get("summary") or "").strip() or None
+        body_md = (request.form.get("body_md") or "").strip()
+        display_order = int(request.form.get("display_order") or 0)
+        is_published = request.form.get("is_published") == "on"
+
+        if not title or not body_md:
+            flash("Title and body are required.", "error")
+            return redirect(url_for("main.admin_help_center_new"))
+
+        if not slug:
+            slug = _slugify(title)
+        if HelpArticle.query.filter_by(slug=slug).first():
+            flash("Slug already exists. Choose a different slug.", "error")
+            return redirect(url_for("main.admin_help_center_new"))
+
+        article = HelpArticle(
+            slug=slug,
+            title=title,
+            summary=summary,
+            body_md=body_md,
+            display_order=display_order,
+            is_published=is_published,
+        )
+        db.session.add(article)
+        db.session.commit()
+        flash("Help article created.", "ok")
+        return redirect(url_for("main.admin_help_center_edit", article_id=article.id))
+
+    return render_template(
+        "admin_help_center_edit.html",
+        article=None,
+        is_new=True,
+        form_action=url_for("main.admin_help_center_new"),
+    )
+
+
+@main_bp.route("/admin/help-center/<int:article_id>/edit", methods=["GET", "POST"])
+@require_admin
+def admin_help_center_edit(article_id):
+    article = HelpArticle.query.get_or_404(article_id)
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        slug = (request.form.get("slug") or "").strip()
+        summary = (request.form.get("summary") or "").strip() or None
+        body_md = (request.form.get("body_md") or "").strip()
+        display_order = int(request.form.get("display_order") or 0)
+        is_published = request.form.get("is_published") == "on"
+
+        if not title or not body_md:
+            flash("Title and body are required.", "error")
+            return redirect(url_for("main.admin_help_center_edit", article_id=article.id))
+
+        if not slug:
+            slug = _slugify(title)
+
+        existing = HelpArticle.query.filter_by(slug=slug).first()
+        if existing and existing.id != article.id:
+            flash("Slug already exists. Choose a different slug.", "error")
+            return redirect(url_for("main.admin_help_center_edit", article_id=article.id))
+
+        article.title = title
+        article.slug = slug
+        article.summary = summary
+        article.body_md = body_md
+        article.display_order = display_order
+        article.is_published = is_published
+        db.session.commit()
+
+        flash("Help article updated.", "ok")
+        return redirect(url_for("main.admin_help_center_edit", article_id=article.id))
+
+    return render_template(
+        "admin_help_center_edit.html",
+        article=article,
+        is_new=False,
+        form_action=url_for("main.admin_help_center_edit", article_id=article.id),
+    )
+
+
+@main_bp.route("/admin/help-center/upload-image", methods=["POST"])
+@require_admin
+def admin_help_center_upload_image():
+    if not cloudinary_enabled:
+        return jsonify({"ok": False, "error": "Cloudinary not configured"}), 503
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "Missing file"}), 400
+
+    ct = (f.mimetype or "").lower()
+    if not ct.startswith("image/"):
+        return jsonify({"ok": False, "error": "Only image files are allowed"}), 400
+
+    f.seek(0, io.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 2 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "Image too large (max 2MB)"}), 400
+
+    try:
+        up = cloudinary.uploader.upload(
+            f,
+            folder="qventory/help-center",
+            overwrite=True,
+            resource_type="image",
+            transformation=[{"quality": "auto", "fetch_format": "auto"}]
+        )
+        url = up.get("secure_url") or up.get("url")
+        return jsonify({"ok": True, "url": url})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
 
 
 @main_bp.route("/admin/dashboard")

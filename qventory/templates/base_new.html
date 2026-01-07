@@ -116,6 +116,11 @@
         <span>Settings</span>
       </a>
 
+      <a href="{{ url_for('main.help_center_index') }}" class="sidebar-item {% if 'help_center' in request.endpoint %}active{% endif %}" title="Help Center">
+        <i class="fas fa-life-ring"></i>
+        <span>Help Center</span>
+      </a>
+
       {% if current_user.is_authenticated and current_user.is_admin %}
       <!-- Admin Panel Access -->
       <div class="sidebar-section">

@@ -12,6 +12,14 @@ const bulkActionApply = document.getElementById('bulkActionApply');
 const bulkSelectedCount = document.getElementById('bulkSelectedCount');
 const bulkEditOpenBtn = document.getElementById('bulkEditOpenBtn');
 
+function getSelectedItemIds() {
+  const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
+  return Array.from(selectedCheckboxes)
+    .map(cb => cb.dataset.itemId || cb.value)
+    .map(id => parseInt(id, 10))
+    .filter(id => Number.isFinite(id));
+}
+
 // Select all checkbox
 if (selectAllCheckbox) {
   selectAllCheckbox.addEventListener('change', (e) => {
@@ -48,8 +56,7 @@ if (bulkActionApply) {
       return;
     }
 
-    const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
-    const itemIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.itemId));
+    const itemIds = getSelectedItemIds();
 
     if (itemIds.length === 0) {
       alert('No items selected');
@@ -113,8 +120,7 @@ if (bulkActionApply) {
 
 if (bulkEditOpenBtn) {
   bulkEditOpenBtn.addEventListener('click', () => {
-    const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
-    const itemIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.itemId));
+    const itemIds = getSelectedItemIds();
     if (itemIds.length === 0) {
       alert('No items selected');
       return;
@@ -165,7 +171,10 @@ if (bulkLocationForm) {
     e.preventDefault();
 
     const modal = document.getElementById('bulkLocationModal');
-    const itemIds = JSON.parse(modal.dataset.itemIds || '[]');
+    let itemIds = JSON.parse(modal.dataset.itemIds || '[]');
+    if (!itemIds.length) {
+      itemIds = getSelectedItemIds();
+    }
 
     if (itemIds.length === 0) {
       alert('No items selected');
@@ -426,7 +435,10 @@ if (bulkEditForm) {
 
 async function submitBulkEdit(mode) {
   const modal = document.getElementById('bulkEditModal');
-  const itemIds = JSON.parse(modal?.dataset.itemIds || '[]');
+  let itemIds = JSON.parse(modal?.dataset.itemIds || '[]');
+  if (!itemIds.length) {
+    itemIds = getSelectedItemIds();
+  }
 
   if (itemIds.length === 0) {
     alert('No items selected');

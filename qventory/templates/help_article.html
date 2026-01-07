@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}{{ article.title }} – Help Center{% endblock %}
+
+{% block content %}
+<div class="container page-shell" style="max-width:920px;">
+  <div style="margin:24px 0 12px;">
+    <a href="{{ url_for('main.help_center_index') }}" style="color:var(--sub);text-decoration:none;font-size:13px;">
+      <i class="fas fa-arrow-left"></i> Back to Help Center
+    </a>
+    <h1 style="color:var(--text);font-size:28px;margin:10px 0 6px;">{{ article.title }}</h1>
+    {% if article.summary %}
+    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;">{{ article.summary }}</p>
+    {% endif %}
+  </div>
+
+  <div class="help-article-body" style="line-height:1.7;color:var(--text);">
+    {{ rendered|safe }}
+  </div>
+</div>
+
+<style>
+  .help-article-body h1,
+  .help-article-body h2,
+  .help-article-body h3 {
+    color: var(--text);
+    margin: 20px 0 8px;
+  }
+  .help-article-body p {
+    margin: 10px 0;
+  }
+  .help-article-body ul {
+    padding-left: 18px;
+  }
+  .help-image-placeholder {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    background: var(--bg-secondary);
+    margin: 12px 0;
+  }
+</style>
+{% endblock %}
