@@ -220,6 +220,13 @@ body:not(.admin-layout) .remove-association-btn {
   color:#ef4444 !important;
 }
 
+body:not(.admin-layout) .hero-cta-btn {
+  background:#90baff !important;
+  color:#ffffff !important;
+  border:none !important;
+  box-shadow:0 12px 26px rgba(144,186,255,0.35) !important;
+}
+
 /* ===== Layout (98%) ===== */
 .wrap{
   width:98%;
