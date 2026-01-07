@@ -166,6 +166,11 @@ def verify_email():
             if user:
                 user.email_verified = True
                 db.session.commit()
+                try:
+                    from ..helpers.email_sender import send_welcome_verified_email
+                    send_welcome_verified_email(user.email, user.username)
+                except Exception:
+                    pass
 
                 # Auto-login the user
                 login_user(user)

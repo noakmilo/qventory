@@ -505,6 +505,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         link_text='Upgrade Plan',
                         source='ebay_import'
                     )
+                    try:
+                        from qventory.helpers.email_sender import send_plan_limit_reached_email
+                        user = User.query.get(user_id)
+                        if user:
+                            max_items = user.get_plan_limits().max_items or 0
+                            send_plan_limit_reached_email(user.email, user.username, max_items)
+                    except Exception:
+                        pass
                     log_task(f"✓ Sent plan limit notification")
                 else:
                     # Import completed successfully

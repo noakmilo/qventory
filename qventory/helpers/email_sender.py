@@ -232,3 +232,221 @@ Need help? Contact us at support@qventory.com
     """
 
     return send_email(to_email, subject, html_body, text_body)
+
+
+def send_plan_limit_reached_email(to_email, username, max_items):
+    subject = "You have reached your Qventory plan limit"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .highlight {{ background: #fff7ed; border: 1px solid #fed7aa; padding: 12px 14px; border-radius: 8px; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 18px 0; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Hi {username},</h2>
+                <p>You've reached the limit of your current plan. Right now your plan allows up to <strong>{max_items}</strong> active items.</p>
+                <div class="highlight">
+                    Upgrade to unlock higher item limits and keep your inventory fully synced.
+                </div>
+                <a class="button" href="https://qventory.com/upgrade">Upgrade your plan</a>
+                <p>If you believe this is a mistake, reply to this email and we'll help you.</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+Hi {username},
+
+You've reached the limit of your current plan. Your plan allows up to {max_items} active items.
+
+Upgrade to unlock higher item limits and keep your inventory fully synced:
+https://qventory.com/upgrade
+
+If you believe this is a mistake, reply to this email and we'll help you.
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, subject, html_body, text_body)
+
+
+def send_welcome_verified_email(to_email, username):
+    subject = "Welcome to Qventory"
+    discord_url = "https://discord.gg/KWGCZDGWMN"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 12px 0; }}
+            .button-secondary {{ display: inline-block; background: #111827; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 12px 0; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Welcome, {username}!</h2>
+                <p>Your account is verified and ready to go. Start organizing, pricing, and tracking your inventory with Qventory.</p>
+                <p>Join our community to get fast answers and tips:</p>
+                <a class="button-secondary" href="{discord_url}">Join the Discord</a>
+                <p>Want more power from day one?</p>
+                <ul>
+                    <li>Higher active item limits</li>
+                    <li>Advanced analytics</li>
+                    <li>AI research tokens</li>
+                    <li>Bulk actions to save time</li>
+                </ul>
+                <a class="button" href="https://qventory.com/upgrade">Upgrade your plan</a>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+Welcome, {username}!
+
+Your account is verified and ready to go.
+Join the Discord community: {discord_url}
+
+Upgrade to unlock higher limits, advanced analytics, AI research tokens, and bulk actions:
+https://qventory.com/upgrade
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, subject, html_body, text_body)
+
+
+def send_plan_upgrade_email(to_email, username, plan_name):
+    plan_title = plan_name.replace("_", " ").title()
+    subject = f"Welcome to {plan_title}"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .highlight {{ background: #eff6ff; border: 1px solid #bfdbfe; padding: 12px 14px; border-radius: 8px; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>You're on {plan_title} 🎉</h2>
+                <p>Thanks for upgrading, {username}. Your plan unlocks:</p>
+                <div class="highlight">
+                    <ul>
+                        <li>Higher active item limits</li>
+                        <li>Advanced analytics and reporting</li>
+                        <li>AI research tokens for better pricing</li>
+                        <li>Bulk workflows to save hours</li>
+                    </ul>
+                </div>
+                <p>If you need help getting the most out of your plan, just reply to this email.</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+You're on {plan_title}!
+
+Thanks for upgrading, {username}. Your plan unlocks higher item limits, advanced analytics, AI research tokens, and bulk workflows.
+
+If you need help getting the most out of your plan, just reply to this email.
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, subject, html_body, text_body)
+
+
+def send_plan_cancellation_email(to_email, username):
+    subject = "Your Qventory plan has been cancelled"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 12px 0; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Subscription cancelled</h2>
+                <p>Hi {username}, your subscription has been cancelled. You're always welcome back.</p>
+                <p>If you want to return, you can upgrade anytime:</p>
+                <a class="button" href="https://qventory.com/upgrade">View plans</a>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+Subscription cancelled
+
+Hi {username}, your subscription has been cancelled. You're always welcome back.
+Upgrade anytime: https://qventory.com/upgrade
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, subject, html_body, text_body)

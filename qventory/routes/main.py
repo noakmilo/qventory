@@ -142,6 +142,7 @@ def stripe_webhook():
                     subscription = Subscription.query.filter_by(user_id=user.id).first()
 
             if subscription:
+                old_plan = subscription.plan
                 subscription.stripe_customer_id = customer_id
                 subscription.stripe_subscription_id = subscription_id
                 if plan_name:
@@ -149,6 +150,12 @@ def stripe_webhook():
                 subscription.status = "active"
                 subscription.updated_at = datetime.utcnow()
                 db.session.commit()
+                if plan_name and old_plan != plan_name:
+                    try:
+                        from qventory.helpers.email_sender import send_plan_upgrade_email
+                        send_plan_upgrade_email(subscription.user.email, subscription.user.username, plan_name)
+                    except Exception:
+                        pass
 
     elif event_type == "customer.subscription.updated":
         subscription_id = data_object.get("id")
@@ -175,6 +182,7 @@ def stripe_webhook():
             stripe_subscription_id=subscription_id
         ).first()
         if subscription:
+            old_plan = subscription.plan
             if plan_name:
                 subscription.plan = plan_name
             if status:
@@ -186,6 +194,13 @@ def stripe_webhook():
                 subscription.on_trial = raw_status == "trialing"
             subscription.updated_at = datetime.utcnow()
             db.session.commit()
+
+            if plan_name and old_plan != plan_name:
+                try:
+                    from qventory.helpers.email_sender import send_plan_upgrade_email
+                    send_plan_upgrade_email(subscription.user.email, subscription.user.username, plan_name)
+                except Exception:
+                    pass
 
             if cancel_at_period_end and raw_status == "trialing" and trial_end:
                 now = datetime.utcnow()
@@ -208,10 +223,17 @@ def stripe_webhook():
             stripe_subscription_id=subscription_id
         ).first()
         if subscription:
+            was_cancelled = subscription.cancelled_at is not None
             subscription.status = "cancelled"
             subscription.ended_at = datetime.utcnow()
             subscription.updated_at = datetime.utcnow()
             db.session.commit()
+            if not was_cancelled:
+                try:
+                    from qventory.helpers.email_sender import send_plan_cancellation_email
+                    send_plan_cancellation_email(subscription.user.email, subscription.user.username)
+                except Exception:
+                    pass
 
     elif event_type == "invoice.paid":
         subscription_id = data_object.get("subscription")
@@ -325,6 +347,11 @@ def stripe_cancel_subscription():
             message = "Trial cancelled. Your plan is now Free."
             if deleted_count:
                 message += f" {deleted_count} item(s) were removed to fit the Free plan limit."
+            try:
+                from qventory.helpers.email_sender import send_plan_cancellation_email
+                send_plan_cancellation_email(current_user.email, current_user.username)
+            except Exception:
+                pass
             flash(message, "ok")
         else:
             stripe.Subscription.modify(
@@ -334,6 +361,11 @@ def stripe_cancel_subscription():
             subscription.cancelled_at = now
             subscription.updated_at = now
             db.session.commit()
+            try:
+                from qventory.helpers.email_sender import send_plan_cancellation_email
+                send_plan_cancellation_email(current_user.email, current_user.username)
+            except Exception:
+                pass
             flash("Cancellation scheduled. You will keep access until the current period ends.", "ok")
     except Exception as exc:
         current_app.logger.exception("Stripe cancel failed: %s", exc)
@@ -412,13 +444,13 @@ def _enforce_free_plan_limit(user_id: int) -> int:
     if not free_limits or free_limits.max_items is None:
         return 0
 
-    total_items = Item.query.filter_by(user_id=user_id).count()
-    over_limit = total_items - free_limits.max_items
+    active_items = Item.query.filter_by(user_id=user_id, is_active=True).count()
+    over_limit = active_items - free_limits.max_items
     if over_limit <= 0:
         return 0
 
     items_to_delete = (
-        Item.query.filter_by(user_id=user_id)
+        Item.query.filter_by(user_id=user_id, is_active=True)
         .order_by(Item.created_at.asc())
         .limit(over_limit)
         .all()
@@ -964,6 +996,39 @@ def dashboard():
         and items_remaining is not None
         and items_remaining <= upgrade_threshold
     )
+
+    if (
+        plan_max_items is not None
+        and items_remaining is not None
+        and items_remaining <= 0
+    ):
+        try:
+            from qventory.models.notification import Notification
+            from datetime import timedelta
+            recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+            recent_email = Notification.query.filter(
+                Notification.user_id == current_user.id,
+                Notification.source == "plan_limit_email",
+                Notification.created_at >= recent_cutoff
+            ).first()
+            if not recent_email:
+                from qventory.helpers.email_sender import send_plan_limit_reached_email
+                send_plan_limit_reached_email(
+                    current_user.email,
+                    current_user.username,
+                    plan_max_items
+                )
+                Notification.create_notification(
+                    user_id=current_user.id,
+                    type='warning',
+                    title='Plan Limit Reached',
+                    message='You have reached your plan limit. Upgrade to add more active items.',
+                    link_url='/upgrade',
+                    link_text='Upgrade Plan',
+                    source='plan_limit_email'
+                )
+        except Exception:
+            pass
 
     # Attach plan metadata to pending tasks namespace for template access
     setattr(pending_tasks, "upgrade_recommendation", upgrade_recommendation)
@@ -2117,7 +2182,7 @@ def sync_ebay_inventory():
             }), 403
 
         # Check how many items they're trying to sync vs their plan limit
-        current_item_count = Item.query.filter_by(user_id=current_user.id).count()
+        current_item_count = Item.query.filter_by(user_id=current_user.id, is_active=True).count()
 
         # Free plan should only sync up to their max_items limit
         if plan_limits.max_items is not None:
