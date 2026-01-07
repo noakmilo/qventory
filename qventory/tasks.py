@@ -34,6 +34,63 @@ def _build_external_id(prefix, parts):
     return f"{prefix}_{digest}"[:64]
 
 
+@celery.task(bind=True, name='qventory.tasks.relist_item_sell_similar')
+def relist_item_sell_similar(self, user_id, item_id, title=None, price=None):
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.item import Item
+        from qventory.helpers.ebay_relist import end_item_trading_api, sell_similar_trading_api
+
+        log_task("=== Sell Similar relist task ===")
+        log_task(f"  user_id={user_id} item_id={item_id}")
+
+        item = Item.query.filter_by(id=item_id, user_id=user_id).first()
+        if not item:
+            log_task("  ✗ Item not found")
+            return {'success': False, 'error': 'Item not found'}
+
+        if not item.ebay_listing_id:
+            log_task("  ✗ Missing eBay listing ID")
+            return {'success': False, 'error': 'Missing eBay listing ID'}
+
+        listing_id = item.ebay_listing_id
+        changes = {}
+        if title:
+            changes['title'] = title
+        if price is not None:
+            changes['price'] = price
+
+        log_task(f"  Step 1/2: EndItem {listing_id}")
+        end_result = end_item_trading_api(user_id, listing_id)
+        log_task(f"  EndItem result: {end_result}")
+        if not end_result.get('success'):
+            return {'success': False, 'error': end_result.get('error') or 'Failed to end listing'}
+
+        log_task(f"  Step 2/2: SellSimilar for {listing_id}")
+        sell_result = sell_similar_trading_api(user_id, listing_id, changes=changes)
+        log_task(f"  SellSimilar result: {sell_result}")
+        if not sell_result.get('success'):
+            return {'success': False, 'error': sell_result.get('error') or 'Sell similar failed'}
+
+        new_listing_id = sell_result.get('listing_id')
+        if not new_listing_id:
+            return {'success': False, 'error': 'Missing new listing ID'}
+
+        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        relist_note = f"\n[{timestamp}] Relist pending: {new_listing_id} (from {listing_id})"
+        item.notes = (item.notes or '') + relist_note
+        db.session.commit()
+
+        log_task(f"  ✓ Relist queued for polling transfer: new_listing_id={new_listing_id}")
+
+        return {
+            'success': True,
+            'new_listing_id': new_listing_id,
+            'old_listing_id': listing_id
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.import_ebay_inventory')
 def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status='ACTIVE'):
     """
@@ -2789,6 +2846,10 @@ def poll_user_listings(credential):
             item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
             location_code = parsed_with_images.get('location_code') or ebay_custom_sku
 
+            relist_source = Item.query.filter_by(user_id=user_id).filter(
+                Item.notes.like(f'%Relist pending: {item_id}%')
+            ).order_by(Item.updated_at.desc()).first()
+
             # IMPORTANT: sku field must be Qventory's unique SKU (20251029-A3B4)
             # ebay_sku field stores eBay's custom SKU (B1S1C1) for location sync
             new_item = Item(
@@ -2825,6 +2886,21 @@ def poll_user_listings(credential):
 
             log_task(f"    ✓ New listing: {title[:50]}")
 
+            if relist_source:
+                new_item.item_cost = relist_source.item_cost
+                new_item.supplier = relist_source.supplier
+                new_item.A = relist_source.A
+                new_item.B = relist_source.B
+                new_item.S = relist_source.S
+                new_item.C = relist_source.C
+                new_item.location_code = relist_source.location_code
+                relist_source.is_active = False
+                timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                relist_note = f"\n[{timestamp}] Relist transfer to {item_id} completed"
+                relist_source.notes = (relist_source.notes or '') + relist_note
+                db.session.commit()
+                log_task(f"    ✓ Transferred cost/supplier/location from {relist_source.id} to new listing {item_id}")
+
         if title_updates > 0:
             db.session.commit()
             log_task(f"    ✓ Updated {title_updates} item title(s) from eBay")
@@ -2840,6 +2916,9 @@ def poll_user_listings(credential):
 
         for db_item in active_db_items:
             if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
+                if db_item.notes and 'Relist pending:' in db_item.notes:
+                    log_task(f"    ↻ Skip inactive (pending relist): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
+                    continue
                 db_item.is_active = False
                 marked_inactive += 1
                 log_task(f"    ⊗ Marked inactive (ended on eBay): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")

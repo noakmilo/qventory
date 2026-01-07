@@ -3318,37 +3318,17 @@ def relist_item_from_inventory():
             except ValueError:
                 return jsonify({"ok": False, "error": "Invalid price"}), 400
 
-        from qventory.helpers.ebay_relist import end_item_trading_api, sell_similar_trading_api
+        from qventory.tasks import relist_item_sell_similar
 
-        end_result = end_item_trading_api(current_user.id, listing_id)
-        if not end_result.get("success"):
-            return jsonify({"ok": False, "error": end_result.get("error") or "Failed to end listing"}), 400
-
-        relist_result = sell_similar_trading_api(current_user.id, listing_id, changes=changes)
-        if not relist_result.get("success"):
-            return jsonify({"ok": False, "error": relist_result.get("error") or "Relist failed"}), 400
-
-        new_listing_id = relist_result.get("listing_id")
-        if not new_listing_id:
-            return jsonify({"ok": False, "error": "Missing new listing ID"}), 400
-
-        item.ebay_listing_id = new_listing_id
-        item.is_active = True
-
-        if title:
-            item.title = title
-        if "price" in changes:
-            item.item_price = changes["price"]
-
-        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-        relist_note = f"\n[{timestamp}] Relisted {listing_id} -> {new_listing_id}"
-        item.notes = (item.notes or '') + relist_note
-        db.session.commit()
+        task = relist_item_sell_similar.apply_async(
+            args=[current_user.id, item.id, title or None, changes.get("price")],
+            priority=1
+        )
 
         return jsonify({
             "ok": True,
-            "listing_id": new_listing_id,
-            "message": "Relist completed"
+            "task_id": task.id,
+            "message": "Relist queued"
         })
 
     except Exception as e:
