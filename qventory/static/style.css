@@ -85,6 +85,13 @@
   color:#1a213f;
 }
 
+[data-theme="light"] .tag,
+[data-theme="light"] .inline-edit__value{
+  background:#ffffff;
+  border-color:#1a213f;
+  color:#1a213f;
+}
+
 *{box-sizing:border-box}
 
 /* Force hidden attribute to work correctly */
