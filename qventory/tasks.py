@@ -2725,18 +2725,22 @@ def poll_user_listings(credential):
         if failed_items:
             log_task(f"    Warning: {len(failed_items)} items failed to parse")
 
-        # Get existing listing IDs from database
+        # Get existing listing IDs and items from database
         existing_listing_ids = set()
+        existing_items_by_id = {}
         existing_items = Item.query.filter_by(user_id=user_id).filter(
             Item.ebay_listing_id.isnot(None)
         ).all()
         for item in existing_items:
             if item.ebay_listing_id:
-                existing_listing_ids.add(str(item.ebay_listing_id))
+                listing_id = str(item.ebay_listing_id)
+                existing_listing_ids.add(listing_id)
+                existing_items_by_id[listing_id] = item
 
         log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
 
         new_listings = 0
+        title_updates = 0
 
         for ebay_item in ebay_items:
             item_id_raw = ebay_item.get('ebay_listing_id')
@@ -2746,6 +2750,20 @@ def poll_user_listings(credential):
 
             # Skip if already in database
             if item_id in existing_listing_ids:
+                existing_item = existing_items_by_id.get(item_id)
+                if existing_item:
+                    ebay_title = (
+                        (ebay_item.get('product') or {}).get('title')
+                        or ebay_item.get('title')
+                        or ebay_item.get('ebay_title')
+                    )
+                    if ebay_title:
+                        ebay_title = ebay_title.strip()
+                        current_title = (existing_item.title or '').strip()
+                        if ebay_title and ebay_title != current_title:
+                            existing_item.title = ebay_title[:500]
+                            existing_item.last_ebay_sync = datetime.utcnow()
+                            title_updates += 1
                 continue
 
             # Check plan limit BEFORE importing each item (recalculate fresh)
@@ -2814,6 +2832,10 @@ def poll_user_listings(credential):
 
             log_task(f"    ✓ New listing: {title[:50]}")
 
+        if title_updates > 0:
+            db.session.commit()
+            log_task(f"    ✓ Updated {title_updates} item title(s) from eBay")
+
         if new_listings > 0:
             
             # Send notification to user
@@ -2839,7 +2861,7 @@ def poll_user_listings(credential):
                     source='ebay_sync'
                 )
         
-        return {'new_listings': new_listings, 'errors': []}
+        return {'new_listings': new_listings, 'errors': [], 'title_updates': title_updates}
     
     except Exception as e:
         log_task(f"    ✗ Exception: {str(e)}")
