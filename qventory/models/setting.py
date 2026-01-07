@@ -14,6 +14,7 @@ class Setting(db.Model):
     label_B = db.Column(db.String, default="Bay")
     label_S = db.Column(db.String, default="Shelve")
     label_C = db.Column(db.String, default="Container")
+    theme_preference = db.Column(db.String(20), default="dark")
 
     def enabled_levels(self):
         levels = []

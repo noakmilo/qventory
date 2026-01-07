@@ -125,6 +125,20 @@ def create_app():
                     print(f"[ACTIVITY_TRACKING] Error updating last_activity: {e}")
 
     # Register template filters
+    @app.context_processor
+    def inject_theme_preference():
+        from flask_login import current_user
+        theme = "dark"
+        if current_user.is_authenticated:
+            try:
+                settings = current_user.settings
+                if settings and settings.theme_preference:
+                    theme = settings.theme_preference
+            except Exception:
+                theme = "dark"
+        return {"theme_preference": theme}
+
+    # Register template filters
     @app.template_filter('timeago')
     def timeago_filter(dt):
         """Convert datetime to relative time (e.g., '2h ago', '3d ago')"""
