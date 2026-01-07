@@ -196,6 +196,8 @@
             {% if is_ebay_item %}
             <button class="item-action-option relist-btn"
                     data-item-id="{{ it.id }}"
+                    data-item-title="{{ it.title }}"
+                    data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
                     type="button"
                     style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
               <i class="fas fa-sync" style="width:16px;color:#f97316;font-size:15px"></i>

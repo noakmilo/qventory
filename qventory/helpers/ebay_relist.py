@@ -577,6 +577,50 @@ def relist_item_trading_api(user_id: int, item_id: str, changes: dict = None) ->
         return {'success': False, 'error': str(e)}
 
 
+def update_relisted_item_record(
+    user_id: int,
+    old_listing_id: str,
+    new_listing_id: str,
+    title: str = None,
+    price: float = None,
+    commit: bool = False
+) -> dict:
+    from datetime import datetime
+    from qventory.extensions import db
+    from qventory.models.item import Item
+
+    if not old_listing_id or not new_listing_id:
+        return {'success': False, 'error': 'Missing listing ID'}
+
+    item = Item.query.filter_by(
+        user_id=user_id,
+        ebay_listing_id=old_listing_id
+    ).first()
+
+    if not item:
+        return {'success': False, 'error': f'Item not found for listing {old_listing_id}'}
+
+    item.ebay_listing_id = new_listing_id
+    item.is_active = True
+
+    if title:
+        item.title = title
+
+    if price is not None:
+        item.item_price = price
+
+    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    relist_note = f"\n[{timestamp}] Relisted {old_listing_id} -> {new_listing_id}"
+    item.notes = (item.notes or '') + relist_note
+
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
+
+    return {'success': True, 'item_id': item.id}
+
+
 def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
     """
     Get item details using Trading API (legacy)
@@ -957,7 +1001,7 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
         return result
 
     offer = validation['offer_details']
-    old_listing_id = offer.get('listingId')
+    old_listing_id = offer.get('listingId') or rule.listing_id
     result['old_listing_id'] = old_listing_id
 
     # Step 2: Withdraw
@@ -975,8 +1019,20 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
     log_relist(f"  ⏱ Waiting {delay} seconds...")
     time.sleep(delay)
 
+    # Ensure the old listing is ended to avoid duplicates
+    if old_listing_id:
+        end_result = end_item_trading_api(user_id, old_listing_id, reason='NotAvailable')
+        result['details']['end_item'] = end_result
+        if not end_result.get('success'):
+            error_msg = str(end_result.get('error', '')).lower()
+            if 'already' not in error_msg:
+                log_relist(f"  ✗ EndItem failed: {end_result.get('error')}")
+                result['error'] = f"EndItem failed: {end_result.get('error')}"
+                return result
+
     # Step 3: Update offer/inventory if changes requested
     log_relist(f"  DEBUG: apply_changes={apply_changes}, rule.pending_changes={rule.pending_changes}")
+    applied_changes = rule.pending_changes if apply_changes and rule.pending_changes else {}
     if apply_changes and rule.pending_changes:
         changes = rule.pending_changes
         log_relist(f"  → Step 2/3: Applying changes: {list(changes.keys())}")
@@ -1040,33 +1096,22 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
     result['success'] = True
     result['new_listing_id'] = new_listing_id
 
-    # Mark old item as inactive and let next sync create the new one
+    # Update existing item to point at the new listing ID
     try:
-        from qventory.models.item import Item
-        from datetime import datetime
-
-        # Find the item by old listing ID
-        old_item = Item.query.filter_by(
+        update_result = update_relisted_item_record(
             user_id=user_id,
-            ebay_listing_id=old_listing_id
-        ).first()
-
-        if old_item:
-            log_relist(f"  → Marking old item as inactive (will be replaced by sync)")
-            old_item.is_active = False
-
-            # Add note about relist
-            relist_note = f"\nRelisted as {new_listing_id} on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC (old item marked inactive)"
-            old_item.notes = (old_item.notes or '') + relist_note
-
-            db.session.commit()
-            log_relist(f"  ✓ Old item marked inactive. Next eBay sync will create new item with listing_id={new_listing_id}")
+            old_listing_id=old_listing_id,
+            new_listing_id=new_listing_id,
+            title=applied_changes.get('title'),
+            price=applied_changes.get('price'),
+            commit=True
+        )
+        if update_result.get('success'):
+            log_relist(f"  ✓ Updated item to new listing ID {new_listing_id}")
         else:
-            log_relist(f"  ⚠ Warning: Could not find item with listing_id={old_listing_id}")
-
+            log_relist(f"  ⚠ Warning: {update_result.get('error')}")
     except Exception as e:
-        log_relist(f"  ⚠ Warning: Failed to mark item as inactive: {str(e)}")
-        # Don't fail the relist if DB update fails - item was successfully relisted on eBay
+        log_relist(f"  ⚠ Warning: Failed to update item: {str(e)}")
         db.session.rollback()
 
     return result
@@ -1188,35 +1233,23 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
     result['success'] = True
     result['new_listing_id'] = new_listing_id
 
-    # Mark old item as inactive and let next sync create the new one
+    # Update existing item to point at the new listing ID
     try:
-        from qventory.models.item import Item
-        from datetime import datetime
-
         old_listing_id = item_id  # item_id is the old listing ID for Trading API
-
-        # Find the item by old listing ID
-        old_item = Item.query.filter_by(
+        update_result = update_relisted_item_record(
             user_id=user_id,
-            ebay_listing_id=old_listing_id
-        ).first()
-
-        if old_item:
-            log_relist(f"  → Marking old item as inactive (will be replaced by sync)")
-            old_item.is_active = False
-
-            # Add note about relist
-            relist_note = f"\nRelisted as {new_listing_id} on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC (old item marked inactive)"
-            old_item.notes = (old_item.notes or '') + relist_note
-
-            db.session.commit()
-            log_relist(f"  ✓ Old item marked inactive. Next eBay sync will create new item with listing_id={new_listing_id}")
+            old_listing_id=old_listing_id,
+            new_listing_id=new_listing_id,
+            title=(changes or {}).get('title'),
+            price=(changes or {}).get('price'),
+            commit=True
+        )
+        if update_result.get('success'):
+            log_relist(f"  ✓ Updated item to new listing ID {new_listing_id}")
         else:
-            log_relist(f"  ⚠ Warning: Could not find item with listing_id={old_listing_id}")
-
+            log_relist(f"  ⚠ Warning: {update_result.get('error')}")
     except Exception as e:
-        log_relist(f"  ⚠ Warning: Failed to mark item as inactive: {str(e)}")
-        # Don't fail the relist if DB update fails - item was successfully relisted on eBay
+        log_relist(f"  ⚠ Warning: Failed to update item: {str(e)}")
         db.session.rollback()
 
     return result

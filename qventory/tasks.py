@@ -1566,42 +1566,24 @@ def auto_relist_offers(self):
                     # Fetch and update the new listing ID from eBay
                     from qventory.helpers.ebay_relist import get_new_listing_id_from_offer
 
+                    previous_listing_id = new_listing_id
                     updated_listing_id = get_new_listing_id_from_offer(rule.user_id, rule.offer_id)
                     if updated_listing_id:
                         new_listing_id = updated_listing_id
                         log_task(f"  Updated listing ID: {new_listing_id}")
+                        if updated_listing_id != previous_listing_id:
+                            try:
+                                from qventory.helpers.ebay_relist import update_relisted_item_record
+                                update_relisted_item_record(
+                                    user_id=rule.user_id,
+                                    old_listing_id=previous_listing_id,
+                                    new_listing_id=updated_listing_id,
+                                    commit=False
+                                )
+                            except Exception as update_err:
+                                log_task(f"  ⚠ Failed to update listing ID in DB: {update_err}")
 
                     rule.mark_success(new_listing_id)
-
-                    # MARK OLD ITEM AS INACTIVE (preserve supplier and other Qventory data)
-                    # After successful relist, mark the old item as inactive
-                    # The import task will find this inactive item and update it with the new listing_id
-                    # This preserves supplier, purchase_date, and other Qventory-specific fields
-                    old_listing_id = result.get('old_listing_id')
-                    if old_listing_id:
-                        try:
-                            from qventory.models.item import Item
-                            old_item = Item.query.filter_by(
-                                user_id=rule.user_id,
-                                ebay_listing_id=old_listing_id
-                            ).first()
-
-                            if old_item:
-                                log_task(f"  Marking old item as inactive (listing_id: {old_listing_id}, sku: {old_item.sku})")
-                                old_item.is_active = False
-                                # Store the new listing ID in notes so import can match it
-                                timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-                                relist_note = f"\n[{timestamp}] Relisted with new listing ID: {new_listing_id}"
-                                old_item.notes = (old_item.notes or '') + relist_note
-                                db.session.flush()  # Flush to database but don't commit yet
-                                log_task(f"  ✓ Old item marked inactive - will be reactivated on next import (preserving supplier)")
-                            else:
-                                log_task(f"  No item found with listing_id {old_listing_id} to mark inactive")
-                        except Exception as mark_err:
-                            log_task(f"  ⚠ Error marking old item inactive (non-fatal): {mark_err}")
-                            # Don't fail the whole relist if marking inactive fails
-                            import traceback
-                            log_task(f"  Traceback: {traceback.format_exc()}")
 
                     history.status = 'success'
                     history.old_listing_id = result.get('old_listing_id')
@@ -2749,12 +2731,15 @@ def poll_user_listings(credential):
 
         new_listings = 0
         title_updates = 0
+        marked_inactive = 0
 
+        active_ebay_listing_ids = set()
         for ebay_item in ebay_items:
             item_id_raw = ebay_item.get('ebay_listing_id')
             if not item_id_raw:
                 continue
             item_id = str(item_id_raw)
+            active_ebay_listing_ids.add(item_id)
 
             # Skip if already in database
             if item_id in existing_listing_ids:
@@ -2844,6 +2829,25 @@ def poll_user_listings(credential):
             db.session.commit()
             log_task(f"    ✓ Updated {title_updates} item title(s) from eBay")
 
+        # Mark items inactive when they are no longer active on eBay
+        active_db_items = Item.query.filter_by(
+            user_id=user_id,
+            is_active=True
+        ).filter(
+            Item.ebay_listing_id.isnot(None),
+            Item.ebay_listing_id != ''
+        ).all()
+
+        for db_item in active_db_items:
+            if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
+                db_item.is_active = False
+                marked_inactive += 1
+                log_task(f"    ⊗ Marked inactive (ended on eBay): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
+
+        if marked_inactive > 0:
+            db.session.commit()
+            log_task(f"    ✓ Marked {marked_inactive} item(s) inactive (ended on eBay)")
+
         if new_listings > 0:
             
             # Send notification to user
@@ -2869,7 +2873,12 @@ def poll_user_listings(credential):
                     source='ebay_sync'
                 )
         
-        return {'new_listings': new_listings, 'errors': [], 'title_updates': title_updates}
+        return {
+            'new_listings': new_listings,
+            'errors': [],
+            'title_updates': title_updates,
+            'marked_inactive': marked_inactive
+        }
     
     except Exception as e:
         log_task(f"    ✗ Exception: {str(e)}")
