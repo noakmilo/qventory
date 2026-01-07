@@ -524,7 +524,7 @@ def relist_item_trading_api(user_id: int, item_id: str, changes: dict = None) ->
         'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
         'X-EBAY-API-CALL-NAME': 'RelistItem',
         'X-EBAY-API-APP-NAME': app_id,
-        'Content-Type': 'text/xml'
+        'Content-Type': 'text/xml; charset=utf-8'
     }
 
     log_relist(f"Relisting item {item_id} via Trading API...")
@@ -532,7 +532,7 @@ def relist_item_trading_api(user_id: int, item_id: str, changes: dict = None) ->
         log_relist(f"  With changes: {list(changes.keys())}")
 
     try:
-        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        response = requests.post(TRADING_API_URL, data=xml_request.encode('utf-8'), headers=headers, timeout=30)
 
         if response.status_code != 200:
             log_relist(f"✗ RelistItem failed: HTTP {response.status_code}")
@@ -632,7 +632,7 @@ def sell_similar_trading_api(user_id: int, item_id: str, changes: dict = None) -
         'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
         'X-EBAY-API-CALL-NAME': 'SellSimilarItem',
         'X-EBAY-API-APP-NAME': app_id,
-        'Content-Type': 'text/xml'
+        'Content-Type': 'text/xml; charset=utf-8'
     }
 
     log_relist(f"Selling similar item {item_id} via Trading API...")
@@ -640,7 +640,7 @@ def sell_similar_trading_api(user_id: int, item_id: str, changes: dict = None) -
         log_relist(f"  With changes: {list(changes.keys())}")
 
     try:
-        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        response = requests.post(TRADING_API_URL, data=xml_request.encode('utf-8'), headers=headers, timeout=30)
 
         if response.status_code != 200:
             log_relist(f"✗ SellSimilarItem failed: HTTP {response.status_code}")
