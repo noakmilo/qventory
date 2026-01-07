@@ -40,9 +40,9 @@ def relist_item_sell_similar(self, user_id, item_id, title=None, price=None):
 
     with app.app_context():
         from qventory.models.item import Item
-        from qventory.helpers.ebay_relist import end_item_trading_api, sell_similar_trading_api
+        from qventory.helpers.ebay_relist import end_item_trading_api, add_item_from_template_trading_api
 
-        log_task("=== Sell Similar relist task ===")
+        log_task("=== EndItem + AddItem relist task ===")
         log_task(f"  user_id={user_id} item_id={item_id}")
 
         item = Item.query.filter_by(id=item_id, user_id=user_id).first()
@@ -67,13 +67,13 @@ def relist_item_sell_similar(self, user_id, item_id, title=None, price=None):
         if not end_result.get('success'):
             return {'success': False, 'error': end_result.get('error') or 'Failed to end listing'}
 
-        log_task(f"  Step 2/2: SellSimilar for {listing_id}")
-        sell_result = sell_similar_trading_api(user_id, listing_id, changes=changes)
-        log_task(f"  SellSimilar result: {sell_result}")
-        if not sell_result.get('success'):
-            return {'success': False, 'error': sell_result.get('error') or 'Sell similar failed'}
+        log_task(f"  Step 2/2: AddItem from template for {listing_id}")
+        add_result = add_item_from_template_trading_api(user_id, listing_id, changes=changes)
+        log_task(f"  AddItem result: {add_result}")
+        if not add_result.get('success'):
+            return {'success': False, 'error': add_result.get('error') or 'Add item failed'}
 
-        new_listing_id = sell_result.get('listing_id')
+        new_listing_id = add_result.get('listing_id')
         if not new_listing_id:
             return {'success': False, 'error': 'Missing new listing ID'}
 

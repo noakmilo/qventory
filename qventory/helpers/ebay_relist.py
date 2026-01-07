@@ -13,6 +13,7 @@ import requests
 from datetime import datetime, timedelta
 from qventory.helpers.ebay_inventory import get_user_access_token
 import xml.etree.ElementTree as ET
+import copy
 
 def log_relist(msg):
     """Helper for logging"""
@@ -23,6 +24,7 @@ EBAY_API_BASE = "https://api.ebay.com"
 TRADING_API_URL = "https://api.ebay.com/ws/api.dll"
 TRADING_COMPAT_LEVEL = os.environ.get('EBAY_TRADING_COMPAT_LEVEL', '1145')
 _XML_NS = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+_XML_NS_URI = 'urn:ebay:apis:eBLBaseComponents'
 
 
 # ==================== INVENTORY API FUNCTIONS (Modern) ====================
@@ -823,6 +825,214 @@ def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
         return {'success': False, 'error': error_text}
 
     except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def get_item_element_trading_api(user_id: int, item_id: str) -> dict:
+    """
+    Get full Item element using Trading API (legacy)
+
+    Calls: GetItem (Trading API)
+
+    Returns:
+        dict: {'success': bool, 'item_elem': Element, 'error': str (optional)}
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {'success': False, 'error': 'No valid eBay access token'}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ItemID>{item_id}</ItemID>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetItemRequest>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'GetItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'Content-Type': 'text/xml; charset=utf-8'
+    }
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request.encode('utf-8'), headers=headers, timeout=30)
+
+        if response.status_code != 200:
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+
+        if ack is not None and ack.text in ['Success', 'Warning']:
+            item_elem = root.find('ebay:Item', _XML_NS)
+            if item_elem is None:
+                return {'success': False, 'error': 'No item element in response'}
+            return {'success': True, 'item_elem': item_elem}
+
+        errors = root.findall('.//ebay:Errors', _XML_NS)
+        error_msgs = []
+        for error in errors:
+            error_msg = error.find('ebay:LongMessage', _XML_NS)
+            if error_msg is not None:
+                error_msgs.append(error_msg.text)
+
+        error_text = '; '.join(error_msgs) if error_msgs else 'Unknown error'
+        return {'success': False, 'error': error_text}
+
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def add_item_from_template_trading_api(user_id: int, item_id: str, changes: dict = None) -> dict:
+    """
+    Create a new listing by cloning an existing one (Trading API).
+    Uses GetItem + AddItem/AddFixedPriceItem.
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {'success': False, 'error': 'No valid eBay access token'}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+
+    item_result = get_item_element_trading_api(user_id, item_id)
+    if not item_result.get('success'):
+        return {'success': False, 'error': item_result.get('error') or 'Failed to fetch item'}
+
+    item_elem = item_result['item_elem']
+    listing_type_elem = item_elem.find('ebay:ListingType', _XML_NS)
+    listing_type = listing_type_elem.text if listing_type_elem is not None else ''
+
+    call_name = 'AddFixedPriceItem' if listing_type in ['FixedPriceItem', 'FixedPrice'] else 'AddItem'
+
+    def _xml_escape(text: str) -> str:
+        return (
+            text.replace('&', '&amp;')
+                .replace('<', '&lt;')
+                .replace('>', '&gt;')
+        )
+
+    changes = changes or {}
+    override_title = changes.get('title')
+    override_price = changes.get('price')
+
+    allowed_complex = {
+        'PrimaryCategory', 'SecondaryCategory', 'ReturnPolicy', 'ShippingDetails',
+        'PictureDetails', 'ItemSpecifics', 'Variations', 'ProductListingDetails',
+        'BestOfferDetails', 'ListingCheckoutRedirectPreference', 'Storefront',
+        'BuyerRequirementDetails'
+    }
+
+    allowed_simple = [
+        'Title', 'Description', 'StartPrice', 'CategoryMappingAllowed', 'ConditionID',
+        'ConditionDescription', 'Country', 'Currency', 'DispatchTimeMax', 'ListingDuration',
+        'ListingType', 'PaymentMethods', 'PayPalEmailAddress', 'PostalCode', 'Quantity',
+        'Site', 'Location', 'SKU', 'PrivateListing', 'LotSize', 'AutoPay'
+    ]
+
+    item_xml_parts = []
+
+    for tag in allowed_simple:
+        if tag == 'Title':
+            if override_title:
+                item_xml_parts.append(f'<Title>{_xml_escape(str(override_title))[:80]}</Title>')
+            else:
+                child = item_elem.find(f'ebay:{tag}', _XML_NS)
+                if child is not None and child.text:
+                    item_xml_parts.append(f'<Title>{_xml_escape(child.text)[:80]}</Title>')
+            continue
+
+        if tag == 'StartPrice':
+            if override_price is not None:
+                item_xml_parts.append(f'<StartPrice>{override_price}</StartPrice>')
+                continue
+
+        if tag == 'Description':
+            child = item_elem.find(f'ebay:{tag}', _XML_NS)
+            if child is not None and child.text:
+                desc = str(child.text)
+                item_xml_parts.append(f'<Description><![CDATA[{desc}]]></Description>')
+            continue
+
+        if tag == 'PaymentMethods':
+            for pm in item_elem.findall('ebay:PaymentMethods', _XML_NS):
+                if pm is not None and pm.text:
+                    item_xml_parts.append(f'<PaymentMethods>{_xml_escape(pm.text)}</PaymentMethods>')
+            continue
+
+        child = item_elem.find(f'ebay:{tag}', _XML_NS)
+        if child is not None and child.text:
+            item_xml_parts.append(f'<{tag}>{_xml_escape(child.text)}</{tag}>')
+
+    for tag in allowed_complex:
+        child = item_elem.find(f'ebay:{tag}', _XML_NS)
+        if child is not None:
+            item_xml_parts.append(ET.tostring(copy.deepcopy(child), encoding='unicode'))
+
+    item_xml = '\n    '.join(item_xml_parts)
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<{call_name}Request xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ErrorLanguage>en_US</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <Item>
+    {item_xml}
+  </Item>
+</{call_name}Request>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': call_name,
+        'X-EBAY-API-APP-NAME': app_id,
+        'Content-Type': 'text/xml; charset=utf-8'
+    }
+
+    log_relist(f"Adding item via {call_name} for {item_id}...")
+    if changes:
+        log_relist(f"  With changes: {list(changes.keys())}")
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request.encode('utf-8'), headers=headers, timeout=30)
+
+        if response.status_code != 200:
+            log_relist(f"✗ {call_name} failed: HTTP {response.status_code}")
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+
+        if ack is not None and ack.text in ['Success', 'Warning']:
+            new_item_id = root.find('ebay:ItemID', _XML_NS)
+            listing_id = new_item_id.text if new_item_id is not None else None
+            log_relist(f"✓ New item created with ID: {listing_id}")
+            return {
+                'success': True,
+                'listing_id': listing_id,
+                'response': {'item_id': listing_id, 'old_item_id': item_id}
+            }
+
+        errors = root.findall('.//ebay:Errors', _XML_NS)
+        error_msgs = []
+        for error in errors:
+            error_msg = error.find('ebay:LongMessage', _XML_NS)
+            if error_msg is not None:
+                error_msgs.append(error_msg.text)
+
+        error_text = '; '.join(error_msgs) if error_msgs else 'Unknown error'
+        log_relist(f"✗ {call_name} failed: {error_text}")
+        return {'success': False, 'error': error_text}
+
+    except Exception as e:
+        log_relist(f"✗ Exception during {call_name}: {str(e)}")
         return {'success': False, 'error': str(e)}
 
 
