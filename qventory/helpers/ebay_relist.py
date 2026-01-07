@@ -972,7 +972,28 @@ def add_item_from_template_trading_api(user_id: int, item_id: str, changes: dict
     for tag in allowed_complex:
         child = item_elem.find(f'ebay:{tag}', _XML_NS)
         if child is not None:
-            item_xml_parts.append(ET.tostring(copy.deepcopy(child), encoding='unicode'))
+            has_brand_mpn = child.find('.//ebay:BrandMPN', _XML_NS) is not None
+            copied = copy.deepcopy(child)
+            if tag == 'ShippingDetails':
+                # Remove deprecated calculated shipping fields that break AddItem
+                for calc in copied.findall('.//ebay:CalculatedShippingRate', _XML_NS):
+                    for bad in [
+                        'PackageDepth', 'PackageLength', 'PackageWidth',
+                        'ShippingIrregular', 'ShippingPackage', 'WeightMajor', 'WeightMinor'
+                    ]:
+                        bad_elem = calc.find(f'ebay:{bad}', _XML_NS)
+                        if bad_elem is not None:
+                            calc.remove(bad_elem)
+            if tag in ['ItemSpecifics', 'ProductListingDetails']:
+                # Remove BrandMPN nodes that can cause validation errors
+                for parent in copied.iter():
+                    for child in list(parent):
+                        if child.tag == f'{{{_XML_NS_URI}}}BrandMPN':
+                            parent.remove(child)
+            if tag == 'ProductListingDetails' and has_brand_mpn:
+                # If BrandMPN was present, drop ProductListingDetails entirely to avoid validation errors
+                continue
+            item_xml_parts.append(ET.tostring(copied, encoding='unicode'))
 
     item_xml = '\n    '.join(item_xml_parts)
 
