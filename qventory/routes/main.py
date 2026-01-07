@@ -3277,10 +3277,11 @@ def settings():
         s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
         s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
         s.label_C = (request.form.get("label_C") or "").strip() or "Container"
-        theme_pref = (request.form.get("theme_preference") or "dark").strip().lower()
-        if theme_pref not in {"dark", "light"}:
-            theme_pref = "dark"
-        s.theme_preference = theme_pref
+        theme_pref = request.form.get("theme_preference")
+        if theme_pref:
+            theme_pref = theme_pref.strip().lower()
+            if theme_pref in {"dark", "light"}:
+                s.theme_preference = theme_pref
 
         db.session.commit()
         flash("Settings saved.", "ok")

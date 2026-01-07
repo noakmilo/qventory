@@ -220,22 +220,34 @@
 </script>
 {% endif %}
 
+<div class="card" style="margin-bottom:20px;">
+  <h2>Theme</h2>
+  <form method="post">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <label style="cursor:pointer;">
+        <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
+        <div style="width:80px;height:80px;border-radius:14px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:'Georgia','Times New Roman',serif;background:var(--glass-bg-strong);box-shadow:0 8px 20px rgba(0,0,0,0.2);">
+          <div style="font-size:22px;">🌙</div>
+          <div style="font-size:12px;color:var(--text);">Dark</div>
+        </div>
+      </label>
+      <label style="cursor:pointer;">
+        <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
+        <div style="width:80px;height:80px;border-radius:14px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:'Georgia','Times New Roman',serif;background:var(--glass-bg-strong);box-shadow:0 8px 20px rgba(0,0,0,0.2);">
+          <div style="font-size:22px;">☀️</div>
+          <div style="font-size:12px;color:var(--text);">Light</div>
+        </div>
+      </label>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn" type="submit">Save Theme</button>
+    </div>
+  </form>
+</div>
+
 <div class="card">
   <h2>Hierarchy & Labels</h2>
   <form method="post" class="grid cols-2">
-    <div style="grid-column:1/-1">
-      <label>Theme</label>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %}>
-          Dark (default)
-        </label>
-        <label style="display:flex;align-items:center;gap:8px;">
-          <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %}>
-          Light
-        </label>
-      </div>
-    </div>
     <div>
       <label><input type="checkbox" name="enable_A" {% if settings.enable_A %}checked{% endif %}> Enable {{ settings.label_A }} (A)</label>
       <input class="input" type="text" name="label_A" value="{{ settings.label_A }}">
