@@ -3268,15 +3268,16 @@ def bulk_sync_to_ebay():
 def settings():
     s = get_or_create_settings(current_user)
     if request.method == "POST":
-        s.enable_A = request.form.get("enable_A") == "on"
-        s.enable_B = request.form.get("enable_B") == "on"
-        s.enable_S = request.form.get("enable_S") == "on"
-        s.enable_C = request.form.get("enable_C") == "on"
+        if any(key in request.form for key in ("enable_A", "enable_B", "enable_S", "enable_C", "label_A", "label_B", "label_S", "label_C")):
+            s.enable_A = request.form.get("enable_A") == "on"
+            s.enable_B = request.form.get("enable_B") == "on"
+            s.enable_S = request.form.get("enable_S") == "on"
+            s.enable_C = request.form.get("enable_C") == "on"
 
-        s.label_A = (request.form.get("label_A") or "").strip() or "Aisle"
-        s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
-        s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
-        s.label_C = (request.form.get("label_C") or "").strip() or "Container"
+            s.label_A = (request.form.get("label_A") or "").strip() or "Aisle"
+            s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
+            s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
+            s.label_C = (request.form.get("label_C") or "").strip() or "Container"
         theme_pref = request.form.get("theme_preference")
         if theme_pref:
             theme_pref = theme_pref.strip().lower()

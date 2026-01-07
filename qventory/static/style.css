@@ -42,8 +42,8 @@
   --card:#ffffff;
   --muted:#eef2f7;
   --text:#111827;
-  --sub:#5b6b86;
-  --text-secondary:#5b6b86;
+  --sub:#3c4b66;
+  --text-secondary:#3c4b66;
   --accent:#2563eb;
   --ok:#16a34a;
   --err:#dc2626;
@@ -56,6 +56,33 @@
   --glass-highlight:rgba(255,255,255,0.7);
   --glass-shadow:rgba(15, 23, 42, 0.12);
   --blur:14px;
+}
+
+[data-theme="light"] .input,
+[data-theme="light"] select,
+[data-theme="light"] textarea{
+  background:#ffffff;
+  border-color:#d8e0ee;
+  color:#111827;
+}
+
+[data-theme="light"] .input::placeholder{
+  color:#7c8aa5;
+  opacity:0.8;
+}
+
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select{
+  caret-color:#1a213f;
+}
+
+[data-theme="light"] .btn i,
+[data-theme="light"] .sidebar-item i,
+[data-theme="light"] .page-title i,
+[data-theme="light"] .card i,
+[data-theme="light"] .footer i{
+  color:#1a213f;
 }
 
 *{box-sizing:border-box}

@@ -222,25 +222,22 @@
 
 <div class="card" style="margin-bottom:20px;">
   <h2>Theme</h2>
-  <form method="post">
+  <form method="post" id="themeForm">
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <label style="cursor:pointer;">
-        <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
-        <div style="width:80px;height:80px;border-radius:14px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:'Georgia','Times New Roman',serif;background:var(--glass-bg-strong);box-shadow:0 8px 20px rgba(0,0,0,0.2);">
-          <div style="font-size:22px;">🌙</div>
-          <div style="font-size:12px;color:var(--text);">Dark</div>
+      <label class="theme-card {% if settings.theme_preference != 'light' %}is-active{% endif %}">
+        <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %}>
+        <div class="theme-card-inner">
+          <i class="fas fa-moon"></i>
+          <div class="theme-card-label">Dark</div>
         </div>
       </label>
-      <label style="cursor:pointer;">
-        <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %} style="position:absolute;opacity:0;pointer-events:none;">
-        <div style="width:80px;height:80px;border-radius:14px;border:1px solid var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:'Georgia','Times New Roman',serif;background:var(--glass-bg-strong);box-shadow:0 8px 20px rgba(0,0,0,0.2);">
-          <div style="font-size:22px;">☀️</div>
-          <div style="font-size:12px;color:var(--text);">Light</div>
+      <label class="theme-card {% if settings.theme_preference == 'light' %}is-active{% endif %}">
+        <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %}>
+        <div class="theme-card-inner">
+          <i class="fas fa-sun"></i>
+          <div class="theme-card-label">Light</div>
         </div>
       </label>
-    </div>
-    <div style="margin-top:12px;">
-      <button class="btn" type="submit">Save Theme</button>
     </div>
   </form>
 </div>
@@ -271,4 +268,80 @@
   </form>
   <p class="tag">Order is fixed A → B → S → C. Disable levels you don't use.</p>
 </div>
+
+<style>
+  .theme-card {
+    cursor: pointer;
+    position: relative;
+  }
+  .theme-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .theme-card-inner {
+    width: 80px;
+    height: 80px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: 'Georgia','Times New Roman',serif;
+    background: var(--glass-bg-strong);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .theme-card:hover .theme-card-inner {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+  }
+  .theme-card.is-active .theme-card-inner {
+    border-color: var(--accent);
+    box-shadow: 0 14px 30px rgba(59,130,246,0.25);
+  }
+  .theme-card i {
+    font-size: 20px;
+    color: var(--text);
+  }
+  .theme-card-label {
+    font-size: 12px;
+    color: var(--text);
+  }
+</style>
+
+<script>
+  (function() {
+    const form = document.getElementById('themeForm');
+    if (!form) return;
+    const cards = form.querySelectorAll('.theme-card');
+    const radios = form.querySelectorAll('input[name="theme_preference"]');
+
+    function setActive(value) {
+      cards.forEach(card => {
+        const input = card.querySelector('input[name="theme_preference"]');
+        card.classList.toggle('is-active', input && input.value === value);
+      });
+    }
+
+    radios.forEach(radio => {
+      radio.addEventListener('change', async () => {
+        setActive(radio.value);
+        document.body.setAttribute('data-theme', radio.value);
+        const formData = new FormData();
+        formData.append('theme_preference', radio.value);
+        try {
+          await fetch('{{ url_for("main.settings") }}', {
+            method: 'POST',
+            body: formData
+          });
+        } catch (error) {
+          // no-op
+        }
+      });
+    });
+  })();
+</script>
 {% endblock %}
