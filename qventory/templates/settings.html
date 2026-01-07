@@ -84,6 +84,136 @@
   {% endif %}
 </div>
 
+<!-- Subscription Section -->
+<div class="card" style="margin-bottom:20px">
+  <h2><i class="fas fa-receipt" style="color:#22c55e"></i> My Subscription</h2>
+  {% if subscription %}
+    {% set plan_display = subscription.plan.replace('_', ' ').title() %}
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;margin-top:12px;">
+      <div style="min-width:220px;">
+        <div style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Current Plan</div>
+        <div style="font-size:20px;font-weight:600;color:var(--text);margin-top:4px;">{{ plan_display }}</div>
+        {% if plan_limits and plan_limits.monthly_price is not none %}
+          <div style="font-size:14px;color:var(--sub);margin-top:4px;">
+            ${{ '%.2f'|format(plan_limits.monthly_price) }} / month
+          </div>
+        {% endif %}
+      </div>
+      <div style="min-width:200px;">
+        <div style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Status</div>
+        <div style="font-size:16px;color:var(--text);margin-top:4px;">{{ subscription.status|capitalize }}</div>
+        {% if subscription.on_trial and subscription.trial_ends_at %}
+          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
+            Trial ends {{ subscription.trial_ends_at.strftime('%b %d, %Y') }}
+          </div>
+        {% elif subscription.current_period_end %}
+          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
+            Renews {{ subscription.current_period_end.strftime('%b %d, %Y') }}
+          </div>
+        {% endif %}
+      </div>
+      <div style="margin-left:auto;">
+        <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn">
+          <i class="fas fa-arrow-up"></i> Manage Plan
+        </a>
+      </div>
+    </div>
+
+    {% if subscription.stripe_subscription_id %}
+    <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+      <form method="POST" action="{{ url_for('main.stripe_customer_portal') }}" style="display:inline;">
+        <button type="submit" class="btn">
+          <i class="fas fa-credit-card"></i> Update Payment Method
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('main.stripe_cancel_subscription') }}" style="display:inline;" id="cancel-subscription-form">
+        <button type="button" class="btn" id="cancel-subscription-button" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#ef4444;">
+          <i class="fas fa-ban"></i> Cancel Subscription
+        </button>
+      </form>
+    </div>
+    <div style="margin-top:14px;padding:14px 16px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.06);border-radius:10px;">
+      <div style="font-weight:600;color:#ef4444;margin-bottom:6px;">Before you cancel</div>
+      <div style="color:var(--sub);font-size:14px;line-height:1.6;">
+        You'll lose higher item limits, advanced analytics, AI research capacity, and bulk workflows that save hours every week.
+        If you're downsizing, consider switching to a lower tier instead of cancelling.
+      </div>
+    </div>
+    {% endif %}
+  {% else %}
+    <p style="color:var(--sub);margin-top:8px;">No subscription details available yet.</p>
+    <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn" style="margin-top:10px;">
+      <i class="fas fa-arrow-up"></i> View Plans
+    </a>
+  {% endif %}
+</div>
+
+{% if subscription and subscription.stripe_subscription_id %}
+<div id="cancel-modal" style="position:fixed;inset:0;background:rgba(9,12,18,0.6);display:none;align-items:center;justify-content:center;z-index:9999;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:520px;width:92%;padding:22px 24px;box-shadow:0 18px 48px rgba(0,0,0,0.35);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(239,68,68,0.12);color:#ef4444;">
+          <i class="fas fa-triangle-exclamation"></i>
+        </div>
+        <div style="font-size:18px;font-weight:600;color:var(--text);">Before you cancel</div>
+      </div>
+      <button type="button" id="cancel-modal-close" class="btn" style="padding:6px 10px;">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <p style="color:var(--sub);line-height:1.7;margin:14px 0 16px 0;">
+      Canceling will remove higher item limits, advanced analytics, AI research capacity, and bulk workflows.
+      You will still have access until the current billing period ends.
+    </p>
+    <div style="padding:14px 16px;border:1px solid rgba(34,197,94,0.2);background:rgba(34,197,94,0.08);border-radius:10px;margin-bottom:16px;">
+      <div style="font-weight:600;color:#22c55e;margin-bottom:6px;">Consider downgrading instead</div>
+      <div style="color:var(--sub);font-size:14px;line-height:1.6;">
+        Keep essential tools active and lower your monthly cost. You can downgrade from the Upgrade page in seconds.
+      </div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;">
+      <a href="{{ url_for('main.upgrade') }}" class="btn">
+        View Plans
+      </a>
+      <button type="button" class="btn" id="cancel-modal-back">
+        Keep My Plan
+      </button>
+      <button type="button" class="btn" id="cancel-modal-confirm" style="background:#ef4444;border-color:#ef4444;color:#fff;">
+        Cancel Anyway
+      </button>
+    </div>
+  </div>
+</div>
+<script>
+  const cancelModal = document.getElementById("cancel-modal");
+  const cancelButton = document.getElementById("cancel-subscription-button");
+  const cancelClose = document.getElementById("cancel-modal-close");
+  const cancelBack = document.getElementById("cancel-modal-back");
+  const cancelConfirm = document.getElementById("cancel-modal-confirm");
+  const cancelForm = document.getElementById("cancel-subscription-form");
+
+  function openCancelModal() {
+    cancelModal.style.display = "flex";
+  }
+  function closeCancelModal() {
+    cancelModal.style.display = "none";
+  }
+
+  cancelButton.addEventListener("click", openCancelModal);
+  cancelClose.addEventListener("click", closeCancelModal);
+  cancelBack.addEventListener("click", closeCancelModal);
+  cancelModal.addEventListener("click", (event) => {
+    if (event.target === cancelModal) {
+      closeCancelModal();
+    }
+  });
+  cancelConfirm.addEventListener("click", () => {
+    cancelForm.submit();
+  });
+</script>
+{% endif %}
+
 <div class="card">
   <h2>Hierarchy & Labels</h2>
   <form method="post" class="grid cols-2">

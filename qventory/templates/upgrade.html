@@ -11,7 +11,7 @@
   <div style="text-align: center; margin-bottom: 40px;">
     <h1 style="margin-bottom: 8px; font-size: 2.5rem;">Choose Your Plan</h1>
     <p style="color: var(--sub); font-size: 1.1rem;">
-      Select the plan that best fits your inventory needs. Every plan includes a 10-day trial before billing starts, and you can cancel anytime with no fees.
+      Select the plan that best fits your inventory needs. Every plan includes a {{ trial_days }}-day trial before billing starts, and you can cancel anytime with no fees.
     </p>
 
     {% if items_remaining is not none %}
@@ -165,14 +165,17 @@
         <button class="btn" disabled style="width: 100%; opacity: 0.6; cursor: not-allowed;">
           Current Plan
         </button>
+        {% elif plan.plan == 'free' %}
+        <a href="mailto:support@qventory.com" class="btn" style="width: 100%; display: inline-block;">
+          Contact Support to Downgrade
+        </a>
         {% else %}
-        <button class="btn submitbtn" onclick="handleUpgrade('{{ plan.plan }}')" style="width: 100%;">
-          {% if plan.plan == 'free' %}
-          Downgrade
-          {% else %}
-          Upgrade Now
-          {% endif %}
-        </button>
+        <form method="POST" action="{{ url_for('main.stripe_checkout') }}">
+          <input type="hidden" name="plan" value="{{ plan.plan }}">
+          <button class="btn submitbtn" type="submit" style="width: 100%;">
+            Upgrade Now
+          </button>
+        </form>
         {% endif %}
       </div>
     </div>
@@ -181,23 +184,12 @@
 
   <!-- Notice -->
   <div style="text-align: center; padding: 24px; background: var(--muted); border-radius: var(--radius); max-width: 800px; margin: 0 auto;">
-    <i class="fas fa-info-circle" style="color: var(--accent); font-size: 1.5rem; margin-bottom: 12px;"></i>
-    <h3 style="margin: 0 0 8px 0; color: var(--text);">Upgrade Feature Coming Soon</h3>
+    <i class="fas fa-lock" style="color: var(--accent); font-size: 1.5rem; margin-bottom: 12px;"></i>
+    <h3 style="margin: 0 0 8px 0; color: var(--text);">Secure checkout with Stripe</h3>
     <p style="color: var(--sub); margin: 0; line-height: 1.6;">
-      Payment processing and automatic plan upgrades are currently under development.
-      For now, please contact support to upgrade your plan. We'll have self-service upgrades available soon!
+      Upgrades are processed with Stripe Checkout. Your plan updates automatically after payment confirmation.
     </p>
-    <a href="mailto:support@qventory.com" class="btn" style="margin-top: 16px; display: inline-block;">
-      <i class="fas fa-envelope"></i> Contact Support
-    </a>
   </div>
 </div>
-
-<script>
-function handleUpgrade(planName) {
-  // Placeholder for future upgrade functionality
-  alert('Upgrade to ' + planName.replace('_', ' ').toUpperCase() + ' plan coming soon!\n\nPlease contact support at support@qventory.com to upgrade your plan.');
-}
-</script>
 
 {% endblock %}

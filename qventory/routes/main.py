@@ -16,6 +16,7 @@ from urllib.parse import urlparse, parse_qs
 import csv
 from datetime import datetime, date
 import hashlib
+import stripe
 
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
@@ -35,6 +36,7 @@ from ..extensions import db
 from ..models.item import Item
 from ..models.setting import Setting
 from ..models.user import User
+from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
 from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
@@ -62,6 +64,15 @@ CLOUDINARY_UPLOAD_FOLDER = os.environ.get("CLOUDINARY_UPLOAD_FOLDER", "qventory/
 EBAY_VERIFICATION_TOKEN = os.environ.get("EBAY_VERIFICATION_TOKEN", "")
 EBAY_DELETIONS_ENDPOINT_URL = os.environ.get("EBAY_DELETIONS_ENDPOINT_URL", "")
 
+# Stripe
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_PREMIUM = os.environ.get("STRIPE_PRICE_PREMIUM")
+STRIPE_PRICE_PLUS = os.environ.get("STRIPE_PRICE_PLUS")
+STRIPE_PRICE_PRO = os.environ.get("STRIPE_PRICE_PRO")
+if STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
 
 cloudinary_enabled = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET)
 
@@ -84,6 +95,281 @@ if cloudinary_enabled:
 @main_bp.route("/")
 def landing():
     return render_template("landing.html")
+
+
+@main_bp.route("/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    if not STRIPE_WEBHOOK_SECRET:
+        return Response("Webhook secret not configured", status=500)
+
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError:
+        return Response("Invalid payload", status=400)
+    except stripe.error.SignatureVerificationError:
+        return Response("Invalid signature", status=400)
+
+    event_type = event.get("type")
+    data_object = event.get("data", {}).get("object", {})
+
+    if event_type == "checkout.session.completed":
+        subscription_id = data_object.get("subscription")
+        customer_id = data_object.get("customer")
+        metadata = data_object.get("metadata") or {}
+        plan_name = metadata.get("plan")
+        user_id = metadata.get("user_id")
+        customer_email = (data_object.get("customer_details") or {}).get("email")
+
+        if subscription_id:
+            subscription = Subscription.query.filter_by(
+                stripe_subscription_id=subscription_id
+            ).first()
+            if not subscription and user_id:
+                try:
+                    user = User.query.filter_by(id=int(user_id)).first()
+                except (TypeError, ValueError):
+                    user = None
+                if user:
+                    subscription = Subscription.query.filter_by(user_id=user.id).first()
+            if not subscription and customer_email:
+                user = User.query.filter_by(email=customer_email).first()
+                if user:
+                    subscription = Subscription.query.filter_by(user_id=user.id).first()
+
+            if subscription:
+                subscription.stripe_customer_id = customer_id
+                subscription.stripe_subscription_id = subscription_id
+                if plan_name:
+                    subscription.plan = plan_name
+                subscription.status = "active"
+                subscription.updated_at = datetime.utcnow()
+                db.session.commit()
+
+    elif event_type == "customer.subscription.updated":
+        subscription_id = data_object.get("id")
+        price_id = None
+        items = data_object.get("items", {}).get("data", [])
+        if items:
+            price_id = items[0].get("price", {}).get("id")
+        plan_name = _plan_from_stripe_price(price_id)
+        raw_status = data_object.get("status")
+        status = None
+        if raw_status in {"active", "trialing"}:
+            status = "active"
+        elif raw_status in {"past_due", "unpaid"}:
+            status = "suspended"
+        elif raw_status in {"canceled", "incomplete_expired"}:
+            status = "cancelled"
+        elif raw_status:
+            status = raw_status
+        period_end = data_object.get("current_period_end")
+        trial_end = data_object.get("trial_end")
+
+        subscription = Subscription.query.filter_by(
+            stripe_subscription_id=subscription_id
+        ).first()
+        if subscription:
+            if plan_name:
+                subscription.plan = plan_name
+            if status:
+                subscription.status = status
+            if period_end:
+                subscription.current_period_end = datetime.utcfromtimestamp(period_end)
+            if trial_end:
+                subscription.trial_ends_at = datetime.utcfromtimestamp(trial_end)
+                subscription.on_trial = raw_status == "trialing"
+            subscription.updated_at = datetime.utcnow()
+            db.session.commit()
+
+    elif event_type == "customer.subscription.deleted":
+        subscription_id = data_object.get("id")
+        subscription = Subscription.query.filter_by(
+            stripe_subscription_id=subscription_id
+        ).first()
+        if subscription:
+            subscription.status = "cancelled"
+            subscription.ended_at = datetime.utcnow()
+            subscription.updated_at = datetime.utcnow()
+            db.session.commit()
+
+    elif event_type == "invoice.paid":
+        subscription_id = data_object.get("subscription")
+        period_end = data_object.get("lines", {}).get("data", [])
+        subscription = Subscription.query.filter_by(
+            stripe_subscription_id=subscription_id
+        ).first()
+        if subscription:
+            if period_end:
+                end_ts = period_end[0].get("period", {}).get("end")
+                if end_ts:
+                    subscription.current_period_end = datetime.utcfromtimestamp(end_ts)
+            subscription.status = "active"
+            subscription.updated_at = datetime.utcnow()
+            db.session.commit()
+
+    elif event_type == "invoice.payment_failed":
+        subscription_id = data_object.get("subscription")
+        subscription = Subscription.query.filter_by(
+            stripe_subscription_id=subscription_id
+        ).first()
+        if subscription:
+            subscription.status = "suspended"
+            subscription.updated_at = datetime.utcnow()
+            db.session.commit()
+
+    return Response(status=200)
+
+
+@main_bp.route("/stripe/checkout", methods=["POST"])
+@login_required
+def stripe_checkout():
+    if not STRIPE_SECRET_KEY:
+        flash("Stripe is not configured yet.", "error")
+        return redirect(url_for("main.upgrade"))
+
+    plan_name = request.form.get("plan", "").strip().lower()
+    if plan_name not in {"premium", "plus", "pro"}:
+        flash("Selected plan is not available for checkout.", "error")
+        return redirect(url_for("main.upgrade"))
+
+    current_plan = current_user.get_subscription().plan
+    if plan_name == current_plan:
+        flash("You are already on that plan.", "info")
+        return redirect(url_for("main.upgrade"))
+
+    price_id = _stripe_price_for_plan(plan_name)
+    if not price_id:
+        flash("Stripe price is not configured for that plan.", "error")
+        return redirect(url_for("main.upgrade"))
+
+    from qventory.models.system_setting import SystemSetting
+
+    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
+    metadata = {
+        "plan": plan_name,
+        "user_id": str(current_user.id),
+    }
+
+    try:
+        session_params = {
+            "mode": "subscription",
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": url_for("main.upgrade", stripe="success", _external=True),
+            "cancel_url": url_for("main.upgrade", stripe="cancel", _external=True),
+            "customer_email": current_user.email,
+            "client_reference_id": str(current_user.id),
+            "metadata": metadata,
+            "allow_promotion_codes": True,
+        }
+        subscription_data = {"metadata": metadata}
+        if trial_days and trial_days > 0:
+            subscription_data["trial_period_days"] = int(trial_days)
+        if subscription_data:
+            session_params["subscription_data"] = subscription_data
+
+        checkout_session = stripe.checkout.Session.create(**session_params)
+    except Exception as exc:
+        current_app.logger.exception("Stripe checkout failed: %s", exc)
+        flash("Stripe checkout failed. Please try again.", "error")
+        return redirect(url_for("main.upgrade"))
+
+    return redirect(checkout_session.url, code=303)
+
+
+@main_bp.route("/stripe/cancel-subscription", methods=["POST"])
+@login_required
+def stripe_cancel_subscription():
+    if not STRIPE_SECRET_KEY:
+        flash("Stripe is not configured yet.", "error")
+        return redirect(url_for("main.settings"))
+
+    subscription = current_user.get_subscription()
+    if not subscription or not subscription.stripe_subscription_id:
+        flash("No active Stripe subscription found for this account.", "info")
+        return redirect(url_for("main.settings"))
+
+    try:
+        stripe.Subscription.modify(
+            subscription.stripe_subscription_id,
+            cancel_at_period_end=True
+        )
+        subscription.cancelled_at = datetime.utcnow()
+        subscription.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash("Cancellation scheduled. You will keep access until the current period ends.", "ok")
+    except Exception as exc:
+        current_app.logger.exception("Stripe cancel failed: %s", exc)
+        flash("Unable to cancel subscription right now. Please try again.", "error")
+
+    return redirect(url_for("main.settings"))
+
+
+@main_bp.route("/stripe/customer-portal", methods=["POST"])
+@login_required
+def stripe_customer_portal():
+    if not STRIPE_SECRET_KEY:
+        flash("Stripe is not configured yet.", "error")
+        return redirect(url_for("main.settings"))
+
+    subscription = current_user.get_subscription()
+    if not subscription:
+        flash("No subscription found for this account.", "info")
+        return redirect(url_for("main.settings"))
+
+    customer_id = subscription.stripe_customer_id
+    if not customer_id and subscription.stripe_subscription_id:
+        try:
+            stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+            customer_id = stripe_sub.get("customer")
+            if customer_id:
+                subscription.stripe_customer_id = customer_id
+                subscription.updated_at = datetime.utcnow()
+                db.session.commit()
+        except Exception as exc:
+            current_app.logger.exception("Stripe subscription lookup failed: %s", exc)
+
+    if not customer_id:
+        flash("No Stripe customer found for this account yet.", "info")
+        return redirect(url_for("main.settings"))
+
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=url_for("main.settings", _external=True)
+        )
+    except Exception as exc:
+        current_app.logger.exception("Stripe portal failed: %s", exc)
+        flash("Unable to open the billing portal right now.", "error")
+        return redirect(url_for("main.settings"))
+
+    return redirect(portal_session.url, code=303)
+
+
+def _plan_from_stripe_price(price_id: str | None) -> str | None:
+    if not price_id:
+        return None
+    mapping = {
+        STRIPE_PRICE_PREMIUM: "premium",
+        STRIPE_PRICE_PLUS: "plus",
+        STRIPE_PRICE_PRO: "pro",
+    }
+    return mapping.get(price_id)
+
+
+def _stripe_price_for_plan(plan_name: str | None) -> str | None:
+    if not plan_name:
+        return None
+    mapping = {
+        "premium": STRIPE_PRICE_PREMIUM,
+        "plus": STRIPE_PRICE_PLUS,
+        "pro": STRIPE_PRICE_PRO,
+    }
+    return mapping.get(plan_name)
 
 
 # ---------------------- Help Center (public) ----------------------
@@ -649,6 +935,7 @@ def upgrade():
     """Show upgrade page with plan comparison (non-functional placeholder)"""
     from qventory.models.subscription import PlanLimit
     from qventory.models.ai_token import AITokenConfig
+    from qventory.models.system_setting import SystemSetting
 
     # Get all plan limits
     plans = PlanLimit.query.filter(
@@ -671,6 +958,13 @@ def upgrade():
         cfg.role: cfg
         for cfg in AITokenConfig.query.all()
     }
+    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
+
+    stripe_status = request.args.get("stripe")
+    if stripe_status == "success":
+        flash("Stripe checkout completed. Your plan will update shortly.", "ok")
+    elif stripe_status == "cancel":
+        flash("Stripe checkout cancelled.", "info")
 
     return render_template(
         "upgrade.html",
@@ -678,7 +972,8 @@ def upgrade():
         current_plan=current_plan_limits,
         current_user_plan=subscription.plan if subscription else None,
         items_remaining=items_remaining,
-        token_configs=token_configs
+        token_configs=token_configs,
+        trial_days=trial_days
     )
 
 
@@ -2855,11 +3150,16 @@ def settings():
 
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+    from qventory.models.subscription import PlanLimit
+    subscription = current_user.get_subscription()
+    plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
 
     return render_template("settings.html",
                          settings=s,
                          ebay_connected=ebay_connected,
-                         ebay_username=ebay_username)
+                         ebay_username=ebay_username,
+                         subscription=subscription,
+                         plan_limits=plan_limits)
 
 
 # ---------------------- Batch QR (protegido) ----------------------
@@ -3588,7 +3888,13 @@ def admin_dashboard():
     user_stats.sort(key=lambda x: x['item_count'], reverse=True)
 
     heuristic_days = SystemSetting.get_int('delivery_heuristic_days', 7)
-    return render_template("admin_dashboard.html", user_stats=user_stats, heuristic_days=heuristic_days)
+    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
+    return render_template(
+        "admin_dashboard.html",
+        user_stats=user_stats,
+        heuristic_days=heuristic_days,
+        trial_days=trial_days
+    )
 
 
 @main_bp.route("/admin/user/<int:user_id>/diagnostics")
@@ -3938,6 +4244,34 @@ def admin_update_delivery_heuristic():
     db.session.commit()
 
     flash("Delivery heuristic updated", "ok")
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/stripe-trial-days", methods=["POST"])
+@require_admin
+def admin_update_stripe_trial_days():
+    from qventory.models.system_setting import SystemSetting
+
+    raw_value = request.form.get("stripe_trial_days", "").strip()
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        flash("Invalid trial days value", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    if value < 0 or value > 60:
+        flash("Trial days must be between 0 and 60", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    setting = SystemSetting.query.filter_by(key='stripe_trial_days').first()
+    if not setting:
+        setting = SystemSetting(key='stripe_trial_days', value_int=value)
+        db.session.add(setting)
+    else:
+        setting.value_int = value
+    db.session.commit()
+
+    flash("Stripe trial days updated", "ok")
     return redirect(url_for('main.admin_dashboard'))
 
 
