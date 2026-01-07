@@ -648,15 +648,17 @@ def dashboard():
 def upgrade():
     """Show upgrade page with plan comparison (non-functional placeholder)"""
     from qventory.models.subscription import PlanLimit
+    from qventory.models.ai_token import AITokenConfig
 
     # Get all plan limits
     plans = PlanLimit.query.filter(
-        ~PlanLimit.plan.in_(["early_adopter", "god"])
+        ~PlanLimit.plan.in_(["early_adopter", "god", "enterprise"])
     ).order_by(
         db.case(
             (PlanLimit.plan == 'free', 1),
             (PlanLimit.plan == 'premium', 2),
-            (PlanLimit.plan == 'pro', 3),
+            (PlanLimit.plan == 'plus', 3),
+            (PlanLimit.plan == 'pro', 4),
             else_=99
         )
     ).all()
@@ -665,13 +667,18 @@ def upgrade():
     subscription = current_user.get_subscription()
     current_plan_limits = current_user.get_plan_limits()
     items_remaining = current_user.items_remaining()
+    token_configs = {
+        cfg.role: cfg
+        for cfg in AITokenConfig.query.all()
+    }
 
     return render_template(
         "upgrade.html",
         plans=plans,
         current_plan=current_plan_limits,
         current_user_plan=subscription.plan if subscription else None,
-        items_remaining=items_remaining
+        items_remaining=items_remaining,
+        token_configs=token_configs
     )
 
 
@@ -3773,7 +3780,7 @@ def admin_change_user_role(user_id):
     user = User.query.get_or_404(user_id)
     new_role = request.form.get("role", "").strip().lower()
 
-    valid_roles = ['free', 'early_adopter', 'premium', 'pro', 'god']
+    valid_roles = ['free', 'early_adopter', 'premium', 'plus', 'pro', 'god', 'enterprise']
     if new_role not in valid_roles:
         flash(f"Invalid role. Must be one of: {', '.join(valid_roles)}", "error")
         return redirect(url_for('main.admin_users_roles'))

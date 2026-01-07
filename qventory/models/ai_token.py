@@ -39,8 +39,10 @@ class AITokenConfig(db.Model):
             'free': 3,
             'early_adopter': 10,
             'premium': 5,
+            'plus': 15,
             'pro': 10,
-            'god': 999999
+            'god': 999999,
+            'enterprise': 999999
         }
         return defaults.get(role, 0)
 
@@ -54,9 +56,13 @@ class AITokenConfig(db.Model):
              'description': '10 AI Research reports per day'},
             {'role': 'premium', 'daily_tokens': 5, 'display_name': 'Premium',
              'description': '5 AI Research reports per day'},
+            {'role': 'plus', 'daily_tokens': 15, 'display_name': 'Plus',
+             'description': '15 AI Research reports per day'},
             {'role': 'pro', 'daily_tokens': 10, 'display_name': 'Pro',
              'description': '10 AI Research reports per day'},
             {'role': 'god', 'daily_tokens': 999999, 'display_name': 'God Mode',
+             'description': 'Unlimited AI Research reports'},
+            {'role': 'enterprise', 'daily_tokens': 999999, 'display_name': 'Enterprise',
              'description': 'Unlimited AI Research reports'}
         ]
 

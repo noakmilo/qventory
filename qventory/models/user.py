@@ -9,7 +9,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     username = db.Column(db.String(50), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), default='free', nullable=False)  # free, early_adopter, premium, pro, god
+    role = db.Column(db.String(20), default='free', nullable=False)  # free, early_adopter, premium, plus, pro, god, enterprise
     email_verified = db.Column(db.Boolean, default=False, nullable=False)  # Email verification status
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime, nullable=True)  # Last explicit login (username/password)
@@ -197,8 +197,10 @@ class User(UserMixin, db.Model):
             'free': 'Free',
             'early_adopter': 'Early Adopter',
             'premium': 'Premium',
+            'plus': 'Plus',
             'pro': 'Pro',
-            'god': 'God Mode'
+            'god': 'God Mode',
+            'enterprise': 'Enterprise'
         }
         return names.get(self.role, 'Free')
 

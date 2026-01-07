@@ -30,12 +30,12 @@ def seed_plan_limits():
             'max_items': 100,
             'max_images_per_item': 1,
             'max_marketplace_integrations': 1,
-            'can_use_ai_research': False,
-            'can_bulk_operations': False,
+            'can_use_ai_research': True,
+            'can_bulk_operations': True,
             'can_export_csv': True,
             'can_import_csv': True,
-            'can_use_analytics': False,
-            'can_create_listings': False,
+            'can_use_analytics': True,
+            'can_create_listings': True,
             'support_level': 'community'
         },
         {
@@ -65,6 +65,19 @@ def seed_plan_limits():
             'support_level': 'email'
         },
         {
+            'plan': 'plus',
+            'max_items': 1000,
+            'max_images_per_item': 8,
+            'max_marketplace_integrations': 5,
+            'can_use_ai_research': True,
+            'can_bulk_operations': True,
+            'can_export_csv': True,
+            'can_import_csv': True,
+            'can_use_analytics': True,
+            'can_create_listings': True,
+            'support_level': 'priority'
+        },
+        {
             'plan': 'pro',
             'max_items': None,  # Unlimited
             'max_images_per_item': 10,
@@ -89,6 +102,19 @@ def seed_plan_limits():
             'can_use_analytics': True,
             'can_create_listings': True,
             'support_level': 'priority'
+        },
+        {
+            'plan': 'enterprise',
+            'max_items': None,
+            'max_images_per_item': 999,
+            'max_marketplace_integrations': 999,
+            'can_use_ai_research': True,
+            'can_bulk_operations': True,
+            'can_export_csv': True,
+            'can_import_csv': True,
+            'can_use_analytics': True,
+            'can_create_listings': True,
+            'support_level': 'priority'
         }
     ]
 
@@ -103,11 +129,17 @@ def seed_plan_limits():
         plans_config[2]['max_receipt_ocr_per_month'] = 50  # premium: 50/month
         plans_config[2]['max_receipt_ocr_per_day'] = None
 
-        plans_config[3]['max_receipt_ocr_per_month'] = 200  # pro: 200/month
+        plans_config[3]['max_receipt_ocr_per_month'] = 500  # plus: 500/month
         plans_config[3]['max_receipt_ocr_per_day'] = None
 
-        plans_config[4]['max_receipt_ocr_per_month'] = None  # god: unlimited
+        plans_config[4]['max_receipt_ocr_per_month'] = 200  # pro: 200/month
         plans_config[4]['max_receipt_ocr_per_day'] = None
+
+        plans_config[5]['max_receipt_ocr_per_month'] = None  # god: unlimited
+        plans_config[5]['max_receipt_ocr_per_day'] = None
+
+        plans_config[6]['max_receipt_ocr_per_month'] = None  # enterprise: unlimited
+        plans_config[6]['max_receipt_ocr_per_day'] = None
 
     for plan_data in plans_config:
         plan_name = plan_data['plan']

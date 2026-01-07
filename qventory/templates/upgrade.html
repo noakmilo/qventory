@@ -91,20 +91,32 @@
 
       <!-- Features List -->
       <div style="flex: 1; margin-bottom: 20px;">
+        {% set token_config = token_configs.get(plan.plan) %}
         <ul style="list-style: none; padding: 0; margin: 0; color: var(--text);">
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas fa-images" style="width: 20px; color: var(--accent);"></i>
-            <span>{{ plan.max_images_per_item }} images per item</span>
+            <i class="fas fa-warehouse" style="width: 20px; color: var(--accent);"></i>
+            <span>Active Inventory + A/B/S/C locations</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas fa-store" style="width: 20px; color: var(--accent);"></i>
-            <span>{{ plan.max_marketplace_integrations }} marketplace{{ 's' if plan.max_marketplace_integrations != 1 else '' }}</span>
+            <i class="fas fa-receipt" style="width: 20px; color: var(--accent);"></i>
+            <span>Receipts + expense tracking</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
             <i class="fas {% if plan.can_use_ai_research %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_use_ai_research %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
             <span style="{% if not plan.can_use_ai_research %}color: var(--sub); text-decoration: line-through;{% endif %}">AI Research</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-bolt" style="width: 20px; color: var(--accent);"></i>
+            <span>
+              {% if token_config %}
+                {{ token_config.daily_tokens }} AI tokens / day
+              {% else %}
+                AI tokens / day
+              {% endif %}
+            </span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
@@ -128,8 +140,18 @@
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
-            <i class="fas {% if plan.can_create_listings %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if plan.can_create_listings %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
-            <span style="{% if not plan.can_create_listings %}color: var(--sub); text-decoration: line-through;{% endif %}">Create Listings (API)</span>
+            <i class="fas fa-truck" style="width: 20px; color: var(--accent);"></i>
+            <span>Fulfillment tracking</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-file-invoice-dollar" style="width: 20px; color: var(--accent);"></i>
+            <span>Tax reports</span>
+          </li>
+
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-undo-alt" style="width: 20px; color: var(--accent);"></i>
+            <span>Auto-relist rules</span>
           </li>
 
           <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0;">
