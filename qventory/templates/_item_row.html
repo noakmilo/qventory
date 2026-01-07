@@ -4,6 +4,7 @@
 {% set roi_infinite = has_price and has_cost_value and it.item_cost == 0 %}
 {% set has_cost = has_cost_value and it.item_cost > 0 %}
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
+{% set is_ebay_item = it.synced_from_ebay or it.ebay_listing_id %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
@@ -192,6 +193,15 @@
               <i class="fas fa-calculator" style="width:16px;color:#10b981;font-size:15px"></i>
               <span>Profit Calc</span>
             </button>
+            {% if is_ebay_item %}
+            <button class="item-action-option relist-btn"
+                    data-item-id="{{ it.id }}"
+                    type="button"
+                    style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+              <i class="fas fa-sync" style="width:16px;color:#f97316;font-size:15px"></i>
+              <span>Update & Relist</span>
+            </button>
+            {% endif %}
             {# Sync eBay (kept for later) #}
             {#
             {% if it.ebay_listing_id %}
@@ -207,12 +217,14 @@
             {% endif %}
             #}
             <div style="height:1px;background:var(--border);margin:4px 0"></div>
+            {% if not is_ebay_item %}
             <a class="item-action-option"
                href="{{ url_for('main.edit_item', item_id=it.id) }}"
                style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;background:transparent;color:var(--text);font-size:14px;text-decoration:none;transition:background 0.15s">
               <i class="fas fa-edit" style="width:16px;color:#3b82f6;font-size:15px"></i>
               <span>Edit Item</span>
             </a>
+            {% endif %}
             <a class="item-action-option"
                href="{{ url_for('main.print_item_preview', item_id=it.id) }}"
                target="_blank"
@@ -221,6 +233,7 @@
               <i class="fas fa-print" style="width:16px;color:#6b7280;font-size:15px"></i>
               <span>Print Label</span>
             </a>
+            {% if not is_ebay_item %}
             <div style="height:1px;background:var(--border);margin:4px 0"></div>
             <form style="margin:0" method="post" action="{{ url_for('main.delete_item', item_id=it.id) }}" onsubmit="return confirm('Delete this item?')">
               <button class="item-action-option"
@@ -230,6 +243,7 @@
                 <span>Delete</span>
               </button>
             </form>
+            {% endif %}
           </div>
         </div>
       {% endif %}

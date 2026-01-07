@@ -280,43 +280,23 @@ def stripe_checkout():
         flash("You are already on that plan.", "info")
         return redirect(url_for("main.upgrade"))
 
-    price_id = _stripe_price_for_plan(plan_name)
-    if not price_id:
-        flash("Stripe price is not configured for that plan.", "error")
+    return _start_stripe_checkout(plan_name, success_redirect="main.upgrade", cancel_redirect="main.upgrade")
+
+
+@main_bp.route("/stripe/checkout/start/<plan_name>")
+@login_required
+def stripe_checkout_start(plan_name):
+    plan_name = (plan_name or "").strip().lower()
+    if plan_name not in {"premium", "plus", "pro"}:
+        flash("Selected plan is not available for checkout.", "error")
+        return redirect(url_for("main.pricing"))
+
+    current_plan = current_user.get_subscription().plan
+    if plan_name == current_plan:
+        flash("You are already on that plan.", "info")
         return redirect(url_for("main.upgrade"))
 
-    from qventory.models.system_setting import SystemSetting
-
-    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
-    metadata = {
-        "plan": plan_name,
-        "user_id": str(current_user.id),
-    }
-
-    try:
-        session_params = {
-            "mode": "subscription",
-            "line_items": [{"price": price_id, "quantity": 1}],
-            "success_url": url_for("main.upgrade", stripe="success", _external=True),
-            "cancel_url": url_for("main.upgrade", stripe="cancel", _external=True),
-            "customer_email": current_user.email,
-            "client_reference_id": str(current_user.id),
-            "metadata": metadata,
-            "allow_promotion_codes": True,
-        }
-        subscription_data = {"metadata": metadata}
-        if trial_days and trial_days > 0:
-            subscription_data["trial_period_days"] = int(trial_days)
-        if subscription_data:
-            session_params["subscription_data"] = subscription_data
-
-        checkout_session = stripe.checkout.Session.create(**session_params)
-    except Exception as exc:
-        current_app.logger.exception("Stripe checkout failed: %s", exc)
-        flash("Stripe checkout failed. Please try again.", "error")
-        return redirect(url_for("main.upgrade"))
-
-    return redirect(checkout_session.url, code=303)
+    return _start_stripe_checkout(plan_name, success_redirect="main.upgrade", cancel_redirect="main.pricing")
 
 
 @main_bp.route("/stripe/cancel-subscription", methods=["POST"])
@@ -435,6 +415,46 @@ def _stripe_price_for_plan(plan_name: str | None) -> str | None:
         "pro": STRIPE_PRICE_PRO,
     }
     return mapping.get(plan_name)
+
+
+def _start_stripe_checkout(plan_name, success_redirect, cancel_redirect):
+    price_id = _stripe_price_for_plan(plan_name)
+    if not price_id:
+        flash("Stripe price is not configured for that plan.", "error")
+        return redirect(url_for(success_redirect))
+
+    from qventory.models.system_setting import SystemSetting
+
+    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
+    metadata = {
+        "plan": plan_name,
+        "user_id": str(current_user.id),
+    }
+
+    try:
+        session_params = {
+            "mode": "subscription",
+            "line_items": [{"price": price_id, "quantity": 1}],
+            "success_url": url_for(success_redirect, stripe="success", _external=True),
+            "cancel_url": url_for(cancel_redirect, stripe="cancel", _external=True),
+            "customer_email": current_user.email,
+            "client_reference_id": str(current_user.id),
+            "metadata": metadata,
+            "allow_promotion_codes": True,
+        }
+        subscription_data = {"metadata": metadata}
+        if trial_days and trial_days > 0:
+            subscription_data["trial_period_days"] = int(trial_days)
+        if subscription_data:
+            session_params["subscription_data"] = subscription_data
+
+        checkout_session = stripe.checkout.Session.create(**session_params)
+    except Exception as exc:
+        current_app.logger.exception("Stripe checkout failed: %s", exc)
+        flash("Stripe checkout failed. Please try again.", "error")
+        return redirect(url_for(success_redirect))
+
+    return redirect(checkout_session.url, code=303)
 
 
 def _enforce_free_plan_limit(user_id: int) -> int:
@@ -1114,6 +1134,36 @@ def upgrade():
         current_plan=current_plan_limits,
         current_user_plan=subscription.plan if subscription else None,
         items_remaining=items_remaining,
+        token_configs=token_configs,
+        trial_days=trial_days
+    )
+
+
+@main_bp.route("/pricing")
+def pricing():
+    """Public pricing page (clone of upgrade without auth)"""
+    from qventory.models.subscription import PlanLimit
+    from qventory.models.ai_token import AITokenConfig
+    from qventory.models.system_setting import SystemSetting
+
+    plans = PlanLimit.query.filter(
+        ~PlanLimit.plan.in_(["early_adopter", "god", "enterprise"])
+    ).order_by(
+        db.case(
+            (PlanLimit.plan == 'free', 1),
+            (PlanLimit.plan == 'premium', 2),
+            (PlanLimit.plan == 'plus', 3),
+            (PlanLimit.plan == 'pro', 4),
+            else_=99
+        )
+    ).all()
+
+    token_configs = {cfg.role: cfg for cfg in AITokenConfig.query.all()}
+    trial_days = SystemSetting.get_int('stripe_trial_days', 10)
+
+    return render_template(
+        "pricing.html",
+        plans=plans,
         token_configs=token_configs,
         trial_days=trial_days
     )
@@ -2771,6 +2821,9 @@ def new_item():
 @login_required
 def edit_item(item_id):
     it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+    if it.synced_from_ebay or it.ebay_listing_id:
+        flash("eBay-synced items can’t be edited here. Use Update & Relist instead.", "error")
+        return redirect(url_for("main.inventory_active"))
     s = get_or_create_settings(current_user)
     if request.method == "POST":
         title = (request.form.get("title") or "").strip()
@@ -2842,6 +2895,9 @@ def edit_item(item_id):
 @login_required
 def delete_item(item_id):
     it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+    if it.synced_from_ebay or it.ebay_listing_id:
+        flash("eBay-synced items can’t be deleted from Qventory.", "error")
+        return redirect(request.referrer or url_for("main.inventory_active"))
 
     # Delete image from Cloudinary if it exists
     if it.item_thumb:
@@ -2948,6 +3004,12 @@ def bulk_delete_items():
             Item.id.in_(item_ids),
             Item.user_id == current_user.id
         ).all()
+        blocked_items = [item for item in items_to_delete if item.synced_from_ebay or item.ebay_listing_id]
+        if blocked_items:
+            return jsonify({
+                "ok": False,
+                "error": "eBay-synced items cannot be deleted from Qventory. Deselect those items and try again."
+            }), 400
 
         # Delete images from Cloudinary
         from qventory.helpers.image_processor import delete_cloudinary_image

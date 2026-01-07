@@ -4,6 +4,9 @@
 <div class="card" style="max-width:520px;margin:0 auto">
   <h2>Create your account</h2>
   <form method="post" class="grid cols-1">
+    {% if pending_plan %}
+      <input type="hidden" name="plan" value="{{ pending_plan }}">
+    {% endif %}
     <div>
       <label>Email</label>
       <input class="input" type="email" name="email" value="{{ email or '' }}" required>

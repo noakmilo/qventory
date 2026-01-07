@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Pricing – Qventory{% endblock %}
+
+{% block content %}
+<div style="padding: 20px; max-width: 1400px; margin: 0 auto;">
+  <div style="text-align: center; margin-bottom: 40px;">
+    <h1 style="margin-bottom: 8px; font-size: 2.5rem;">Choose Your Plan</h1>
+    <p style="color: var(--sub); font-size: 1.1rem;">
+      Inventory Management Software for eBay Resellers. Every plan includes a {{ trial_days }}-day trial before billing starts, and you can cancel anytime.
+    </p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 40px;">
+    {% for plan in plans %}
+    <div class="glass" style="padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); display: flex; flex-direction: column;">
+
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="margin: 0 0 8px 0; font-size: 1.8rem; text-transform: capitalize; color: var(--accent);">
+          {{ plan.plan.replace('_', ' ').title() }}
+        </h2>
+        <div style="margin-top: 12px;">
+          <span style="font-size: 2.5rem; font-weight: 700; color: var(--text);">
+            {% if plan.monthly_price is not none %}
+              ${{ "%.2f"|format(plan.monthly_price) }}
+            {% else %}
+              Custom
+            {% endif %}
+          </span>
+          {% if plan.monthly_price is not none %}
+          <span style="color: var(--sub); font-size: var(--fs-sm);">/month</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="padding: 16px; background: var(--muted); border-radius: 8px; margin-bottom: 16px; text-align: center;">
+        <div style="font-size: 2rem; font-weight: 700; color: var(--accent);">
+          {% if plan.max_items is none %}
+          ∞
+          {% else %}
+          {{ plan.max_items }}
+          {% endif %}
+        </div>
+        <div style="color: var(--sub); font-size: var(--fs-sm); margin-top: 4px;">
+          {% if plan.max_items is none %}
+          Unlimited Items
+          {% else %}
+          Max Items
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="flex: 1; margin-bottom: 20px;">
+        {% set token_config = token_configs.get(plan.plan) %}
+        {% set free_all_access = plan.plan == 'free' %}
+        <ul style="list-style: none; padding: 0; margin: 0; color: var(--text);">
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-warehouse" style="width: 20px; color: var(--accent);"></i>
+            <span>Active Inventory + A/B/S/C locations</span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-receipt" style="width: 20px; color: var(--accent);"></i>
+            <span>Receipts + expense tracking</span>
+          </li>
+          {% set ai_enabled = free_all_access or plan.can_use_ai_research %}
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if ai_enabled %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if ai_enabled %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not ai_enabled %}color: var(--sub); text-decoration: line-through;{% endif %}">AI Research</span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-bolt" style="width: 20px; color: var(--accent);"></i>
+            <span>
+              {% if token_config %}
+                {{ token_config.daily_tokens }} AI tokens / day
+              {% else %}
+                AI tokens / day
+              {% endif %}
+            </span>
+          </li>
+          {% set bulk_enabled = free_all_access or plan.can_bulk_operations %}
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas {% if bulk_enabled %}fa-check-circle{% else %}fa-times-circle{% endif %}" style="width: 20px; color: {% if bulk_enabled %}var(--success, #10b981){% else %}var(--sub){% endif %};"></i>
+            <span style="{% if not bulk_enabled %}color: var(--sub); text-decoration: line-through;{% endif %}">Bulk Operations</span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-truck" style="width: 20px; color: var(--accent);"></i>
+            <span>Fulfillment tracking</span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border);">
+            <i class="fas fa-file-invoice-dollar" style="width: 20px; color: var(--accent);"></i>
+            <span>Tax reports</span>
+          </li>
+          <li style="display: flex; align-items: center; gap: 12px; padding: 8px 0;">
+            <i class="fas fa-headset" style="width: 20px; color: var(--accent);"></i>
+            <span style="text-transform: capitalize;">{{ plan.support_level }} Support</span>
+          </li>
+        </ul>
+      </div>
+
+      <div style="text-align: center;">
+        <a class="btn submitbtn" href="{{ url_for('auth.register', plan=plan.plan) }}" style="width: 100%; display:inline-flex; justify-content:center;">
+          {% if plan.plan == 'free' %}
+          Start Free
+          {% else %}
+          Choose {{ plan.plan.replace('_', ' ').title() }}
+          {% endif %}
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

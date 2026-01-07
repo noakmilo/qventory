@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash
+from flask import render_template, request, redirect, url_for, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
 from email_validator import validate_email, EmailNotValidError
 from datetime import datetime
@@ -61,6 +61,12 @@ def register():
         return redirect(url_for("main.dashboard"))
 
     if request.method == "POST":
+        pending_plan = (request.form.get("plan") or "").strip().lower()
+        if pending_plan in {"premium", "plus", "pro"}:
+            session["pending_plan"] = pending_plan
+        elif pending_plan == "free":
+            session.pop("pending_plan", None)
+
         email = (request.form.get("email") or "").strip().lower()
         username = (request.form.get("username") or "").strip().lower()
         password = request.form.get("password") or ""
@@ -71,31 +77,31 @@ def register():
             validate_email(email, check_deliverability=False)
         except EmailNotValidError:
             flash("Please enter a valid email address.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
 
         # Check if email already exists
         if User.query.filter_by(email=email).first():
             flash("An account with this email already exists. Please sign in or use a different email.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
 
         # username validation
         if not re.fullmatch(r"[a-z0-9_-]{3,32}", username):
             flash("Username must be 3–32 chars, lowercase letters, numbers, _ or -.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
         if User.query.filter_by(username=username).first():
             flash("This username is taken.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
 
         # passwords
         if not password or not password2:
             flash("All fields are required.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
         if password != password2:
             flash("Passwords do not match.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
         if len(password) < 6:
             flash("Password must be at least 6 characters.", "error")
-            return render_template("register.html", email=email, username=username)
+            return render_template("register.html", email=email, username=username, pending_plan=pending_plan)
 
         # create user + settings inicial
         user = User(email=email, username=username)
@@ -128,7 +134,10 @@ def register():
             flash(f"Account created, but we couldn't send the verification email: {error}. You can request a new code.", "error")
             return redirect(url_for("auth.verify_email", email=email))
 
-    return render_template("register.html")
+    pending_plan = (request.args.get("plan") or "").strip().lower()
+    if pending_plan in {"premium", "plus", "pro", "free"}:
+        session["pending_plan"] = pending_plan
+    return render_template("register.html", pending_plan=pending_plan)
 
 
 @auth_bp.route("/verify-email", methods=["GET", "POST"])
@@ -149,7 +158,8 @@ def verify_email():
 
         if not code or len(code) != 6 or not code.isdigit():
             flash("Please enter a valid 6-digit code.", "error")
-            return render_template("verify_email.html", email=email)
+            show_checkout_redirect = session.get("pending_plan") in {"premium", "plus", "pro"}
+            return render_template("verify_email.html", email=email, show_checkout_redirect=show_checkout_redirect)
 
         # Verify the code
         from ..models.email_verification import EmailVerification
@@ -174,6 +184,11 @@ def verify_email():
 
                 # Auto-login the user
                 login_user(user)
+                pending_plan = session.pop("pending_plan", None)
+                if pending_plan in {"premium", "plus", "pro"}:
+                    flash("Email verified successfully! Redirecting you to checkout.", "ok")
+                    return redirect(url_for("main.stripe_checkout_start", plan_name=pending_plan))
+
                 flash("Email verified successfully! Welcome to Qventory.", "ok")
                 return redirect(url_for("main.dashboard"))
             else:
@@ -186,7 +201,8 @@ def verify_email():
 
             flash(message, "error")
 
-    return render_template("verify_email.html", email=email)
+    show_checkout_redirect = session.get("pending_plan") in {"premium", "plus", "pro"}
+    return render_template("verify_email.html", email=email, show_checkout_redirect=show_checkout_redirect)
 
 
 @auth_bp.route("/resend-verification", methods=["POST"])

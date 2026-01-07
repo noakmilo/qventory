@@ -79,7 +79,29 @@ def create_rule():
     if request.method == 'GET':
         # Simply render the form - items are loaded dynamically via AJAX autocomplete
         log_relist_route(f"Rendering create form for user {current_user.id}")
-        return render_template('auto_relist/create.html')
+        prefill_item = None
+        item_id = request.args.get('item_id')
+        if item_id:
+            try:
+                from ..models.item import Item
+                item = Item.query.filter_by(
+                    id=int(item_id),
+                    user_id=current_user.id,
+                    is_active=True
+                ).first()
+                if item and item.ebay_listing_id:
+                    prefill_item = {
+                        'offer_id': item.ebay_listing_id,
+                        'listing_id': item.ebay_listing_id,
+                        'title': item.title,
+                        'sku': item.sku or '',
+                        'price': float(item.item_price) if item.item_price is not None else None,
+                        'quantity': item.quantity or 0,
+                        'image_url': item.item_thumb
+                    }
+            except (ValueError, TypeError):
+                prefill_item = None
+        return render_template('auto_relist/create.html', prefill_item=prefill_item)
 
     # POST: Create rule
     try:

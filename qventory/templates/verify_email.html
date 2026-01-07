@@ -10,6 +10,11 @@
     <h2 style="margin:0 0 12px 0;font-size:24px;font-weight:700;">Verify your email</h2>
     <p style="color:var(--text-secondary);margin:0;font-size:15px;">We sent a 6-digit code to</p>
     <p style="font-weight:600;color:var(--primary);margin:8px 0 0 0;font-size:15px;">{{ email }}</p>
+    {% if show_checkout_redirect %}
+    <p style="color:var(--text-secondary);margin:12px 0 0 0;font-size:13px;">
+      You’ll be redirected to checkout after verification.
+    </p>
+    {% endif %}
   </div>
 
   <!-- Verification Code Inputs -->

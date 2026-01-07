@@ -726,6 +726,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  // Prefill item from query param (Update & Relist)
+  {% if prefill_item %}
+  const prefillItem = {{ prefill_item|tojson }};
+  if (prefillItem && prefillItem.offer_id) {
+    selectItem(prefillItem);
+  }
+  {% endif %}
+
   // Show error message
   function showError(message) {
     searchResults.innerHTML = `
