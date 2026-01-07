@@ -119,7 +119,7 @@
       </div>
     </div>
 
-    {% if subscription.stripe_subscription_id %}
+    {% if subscription.plan != 'free' and subscription.stripe_subscription_id %}
     <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
       <form method="POST" action="{{ url_for('main.stripe_customer_portal') }}" style="display:inline;">
         <button type="submit" class="btn">
@@ -138,6 +138,12 @@
         You'll lose higher item limits, advanced analytics, AI research capacity, and bulk workflows that save hours every week.
         If you're downsizing, consider switching to a lower tier instead of cancelling.
       </div>
+    </div>
+    {% elif subscription.plan == 'free' %}
+    <div style="margin-top:18px;">
+      <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn">
+        <i class="fas fa-arrow-up"></i> Upgrade Plan
+      </a>
     </div>
     {% endif %}
   {% else %}
