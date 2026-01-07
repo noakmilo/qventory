@@ -227,6 +227,14 @@ body:not(.admin-layout) .hero-cta-btn {
   box-shadow:0 12px 26px rgba(144,186,255,0.35) !important;
 }
 
+[data-theme="light"] body:not(.admin-layout) .hero-cta-btn,
+[data-theme="light"] .hero-cta-btn {
+  background:#111927 !important;
+  color:#ffffff !important;
+  border:none !important;
+  box-shadow:0 12px 26px rgba(17,25,39,0.25) !important;
+}
+
 /* ===== Layout (98%) ===== */
 .wrap{
   width:98%;
