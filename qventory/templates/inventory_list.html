@@ -329,7 +329,7 @@
 
 <!-- Update & Relist Modal -->
 <div id="relistModal" class="qr-modal hidden" role="dialog" aria-hidden="true" aria-label="Update & Relist">
-  <div class="qr-sheet" style="max-width:560px;width:92vw;">
+  <div class="qr-sheet relist-sheet" style="max-width:560px;width:92vw;">
     <div class="qr-header">
       <strong><i class="fas fa-sync" style="color:#f97316;"></i> Update & Relist</strong>
       <div class="qr-actions">
@@ -339,17 +339,17 @@
       </div>
     </div>
     <div class="qr-body" style="padding:16px;">
-      <form id="relistForm" style="display:grid;gap:12px;">
+      <form id="relistForm" class="relist-form" style="display:grid;gap:12px;">
         <input type="hidden" id="relistItemId">
         <div>
           <label style="display:block;margin-bottom:6px;color:var(--text);">Title</label>
-          <input class="input" type="text" id="relistTitle" placeholder="Listing title">
+          <input class="input relist-title-input" type="text" id="relistTitle" placeholder="Listing title">
         </div>
         <div>
           <label style="display:block;margin-bottom:6px;color:var(--text);">Price</label>
           <input class="input" type="number" id="relistPrice" step="0.01" min="0" placeholder="0.00">
         </div>
-        <button type="submit" class="btn submitbtn" id="relistSubmit">
+        <button type="submit" class="btn submitbtn relist-cta" id="relistSubmit">
           Relist Now
         </button>
       </form>

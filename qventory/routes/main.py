@@ -3318,13 +3318,13 @@ def relist_item_from_inventory():
             except ValueError:
                 return jsonify({"ok": False, "error": "Invalid price"}), 400
 
-        from qventory.helpers.ebay_relist import end_item_trading_api, relist_item_trading_api
+        from qventory.helpers.ebay_relist import end_item_trading_api, sell_similar_trading_api
 
         end_result = end_item_trading_api(current_user.id, listing_id)
         if not end_result.get("success"):
             return jsonify({"ok": False, "error": end_result.get("error") or "Failed to end listing"}), 400
 
-        relist_result = relist_item_trading_api(current_user.id, listing_id, changes=changes)
+        relist_result = sell_similar_trading_api(current_user.id, listing_id, changes=changes)
         if not relist_result.get("success"):
             return jsonify({"ok": False, "error": relist_result.get("error") or "Relist failed"}), 400
 

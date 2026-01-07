@@ -2141,6 +2141,37 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   align-items:center;
 }
 
+.relist-sheet{
+  text-align:left;
+}
+
+.relist-sheet .qr-body{
+  align-items:flex-start;
+  width:100%;
+}
+
+.relist-form{
+  text-align:left;
+  align-items:start;
+  justify-items:stretch;
+  width:100%;
+}
+
+.relist-title-input{
+  width:100%;
+}
+
+.relist-cta{
+  align-self:flex-start;
+  background:#90baff;
+  color:#ffffff;
+  border:none;
+}
+
+.relist-cta:hover{
+  filter:brightness(0.95);
+}
+
 .qr-viewport{
   width:100%; aspect-ratio:1/1;
   background:#fff; border-radius:10px;

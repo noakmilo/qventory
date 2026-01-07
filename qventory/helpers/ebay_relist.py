@@ -577,6 +577,113 @@ def relist_item_trading_api(user_id: int, item_id: str, changes: dict = None) ->
         return {'success': False, 'error': str(e)}
 
 
+def sell_similar_trading_api(user_id: int, item_id: str, changes: dict = None) -> dict:
+    """
+    List a new item using SellSimilar (Trading API).
+
+    Args:
+        user_id: Qventory user ID
+        item_id: eBay Item ID (listing ID) to use as template
+        changes: Optional dict with fields to update, e.g.:
+            {
+                'price': 29.99,
+                'quantity': 5,
+                'title': 'New Title'
+            }
+
+    Returns:
+        dict: {'success': bool, 'listing_id': str, 'error': str (optional), 'response': dict}
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {'success': False, 'error': 'No valid eBay access token'}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+
+    item_xml_parts = []
+
+    if changes:
+        if 'price' in changes:
+            item_xml_parts.append(f'<StartPrice>{changes["price"]}</StartPrice>')
+        if 'quantity' in changes:
+            item_xml_parts.append(f'<Quantity>{int(changes["quantity"])}</Quantity>')
+        if 'title' in changes:
+            title = str(changes['title']).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            item_xml_parts.append(f'<Title>{title[:80]}</Title>')
+        if 'description' in changes:
+            desc = str(changes['description']).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            item_xml_parts.append(f'<Description><![CDATA[{desc}]]></Description>')
+
+    item_xml = '\n    '.join(item_xml_parts)
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<SellSimilarItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ItemID>{item_id}</ItemID>
+  <Item>
+    {item_xml}
+  </Item>
+</SellSimilarItemRequest>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'SellSimilarItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'Content-Type': 'text/xml'
+    }
+
+    log_relist(f"Selling similar item {item_id} via Trading API...")
+    if changes:
+        log_relist(f"  With changes: {list(changes.keys())}")
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+
+        if response.status_code != 200:
+            log_relist(f"✗ SellSimilarItem failed: HTTP {response.status_code}")
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+
+        if ack is not None and ack.text in ['Success', 'Warning']:
+            new_item_id = root.find('ebay:ItemID', _XML_NS)
+            listing_id = new_item_id.text if new_item_id is not None else None
+
+            log_relist(f"✓ Item sold similar with new ID: {listing_id}")
+
+            return {
+                'success': True,
+                'listing_id': listing_id,
+                'response': {
+                    'item_id': listing_id,
+                    'old_item_id': item_id
+                }
+            }
+
+        errors = root.findall('.//ebay:Errors', _XML_NS)
+        error_msgs = []
+        for error in errors:
+            error_msg = error.find('ebay:LongMessage', _XML_NS)
+            if error_msg is not None:
+                error_msgs.append(error_msg.text)
+
+        error_text = '; '.join(error_msgs) if error_msgs else 'Unknown error'
+        log_relist(f"✗ SellSimilarItem failed: {error_text}")
+
+        return {
+            'success': False,
+            'error': error_text
+        }
+
+    except Exception as e:
+        log_relist(f"✗ Exception during SellSimilarItem: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
 def update_relisted_item_record(
     user_id: int,
     old_listing_id: str,
