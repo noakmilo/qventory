@@ -3,24 +3,42 @@
 {% block title %}Help Center – Qventory{% endblock %}
 
 {% block content %}
-<div class="container page-shell" style="max-width:980px;">
-  <div style="margin:24px 0 16px;">
+<div class="container page-shell" style="max-width:1100px;">
+  <div style="margin:24px 0 16px;text-align:center;">
     <h1 style="color:var(--text);font-size:30px;margin-bottom:8px;">Help Center</h1>
-    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;">
+    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;max-width:680px;margin:0 auto;">
       Browse quick guides for every part of Qventory. Each article includes step-by-step instructions and tips.
     </p>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
-    {% for article in articles %}
-      <a href="{{ url_for('main.help_center_article', slug=article.slug) }}"
-         style="display:block;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);text-decoration:none;">
-        <div style="font-weight:600;color:var(--text);margin-bottom:6px;">{{ article.title }}</div>
-        <div style="color:var(--text-secondary);font-size:13px;line-height:1.5;">
-          {{ article.summary or 'Guide and walkthrough.' }}
+  <div style="display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start;">
+    <aside style="position:sticky;top:96px;align-self:start;">
+      <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);padding:12px;">
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;">
+          Articles
         </div>
-      </a>
-    {% endfor %}
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          {% for article in articles %}
+            <a href="{{ url_for('main.help_center_article', slug=article.slug) }}"
+               style="color:var(--text);text-decoration:none;font-size:13px;padding:6px 8px;border-radius:6px;">
+              {{ article.title }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
+      {% for article in articles %}
+        <a href="{{ url_for('main.help_center_article', slug=article.slug) }}"
+           style="display:block;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);text-decoration:none;">
+          <div style="font-weight:600;color:var(--text);margin-bottom:6px;">{{ article.title }}</div>
+          <div style="color:var(--text-secondary);font-size:13px;line-height:1.5;">
+            {{ article.summary or 'Guide and walkthrough.' }}
+          </div>
+        </a>
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% endblock %}

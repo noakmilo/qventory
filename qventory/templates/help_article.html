@@ -3,19 +3,39 @@
 {% block title %}{{ article.title }} – Help Center{% endblock %}
 
 {% block content %}
-<div class="container page-shell" style="max-width:920px;">
-  <div style="margin:24px 0 12px;">
+<div class="container page-shell" style="max-width:1100px;">
+  <div style="margin:24px 0 16px;text-align:center;">
     <a href="{{ url_for('main.help_center_index') }}" style="color:var(--sub);text-decoration:none;font-size:13px;">
       <i class="fas fa-arrow-left"></i> Back to Help Center
     </a>
     <h1 style="color:var(--text);font-size:28px;margin:10px 0 6px;">{{ article.title }}</h1>
     {% if article.summary %}
-    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;">{{ article.summary }}</p>
+    <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;max-width:680px;margin:0 auto;">
+      {{ article.summary }}
+    </p>
     {% endif %}
   </div>
 
-  <div class="help-article-body" style="line-height:1.7;color:var(--text);">
-    {{ rendered|safe }}
+  <div style="display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;align-items:start;">
+    <aside style="position:sticky;top:96px;align-self:start;">
+      <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);padding:12px;">
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;">
+          Articles
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          {% for entry in articles %}
+            <a href="{{ url_for('main.help_center_article', slug=entry.slug) }}"
+               style="color:var(--text);text-decoration:none;font-size:13px;padding:6px 8px;border-radius:6px;{% if entry.id == article.id %}background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.35);{% endif %}">
+              {{ entry.title }}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+
+    <div class="help-article-body" style="line-height:1.7;color:var(--text);max-width:760px;margin:0 auto;">
+      {{ rendered|safe }}
+    </div>
   </div>
 </div>
 
@@ -40,6 +60,23 @@
     font-size: 13px;
     background: var(--bg-secondary);
     margin: 12px 0;
+  }
+  @media (max-width: 900px) {
+    .help-article-body {
+      max-width: 100%;
+    }
+    .help-article-body,
+    .help-article-body p {
+      text-align: left;
+    }
+    .help-article-body + aside,
+    aside {
+      position: static !important;
+    }
+    .help-article-body,
+    aside {
+      width: 100%;
+    }
   }
 </style>
 {% endblock %}

@@ -89,6 +89,7 @@ def landing():
 # ---------------------- Help Center (public) ----------------------
 
 @main_bp.route("/help")
+@login_required
 def help_center_index():
     seed_help_articles()
     articles = HelpArticle.query.filter_by(is_published=True)\
@@ -98,11 +99,20 @@ def help_center_index():
 
 
 @main_bp.route("/help/<slug>")
+@login_required
 def help_center_article(slug):
     seed_help_articles()
     article = HelpArticle.query.filter_by(slug=slug, is_published=True).first_or_404()
     rendered = render_help_markdown(article.body_md)
-    return render_template("help_article.html", article=article, rendered=rendered)
+    articles = HelpArticle.query.filter_by(is_published=True)\
+        .order_by(HelpArticle.display_order.asc(), HelpArticle.title.asc())\
+        .all()
+    return render_template(
+        "help_article.html",
+        article=article,
+        rendered=rendered,
+        articles=articles,
+    )
 
 
 # ---------------------- Dashboard (protegido) ----------------------
