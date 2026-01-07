@@ -1623,22 +1623,10 @@ def auto_relist_offers(self):
                     # Fetch and update the new listing ID from eBay
                     from qventory.helpers.ebay_relist import get_new_listing_id_from_offer
 
-                    previous_listing_id = new_listing_id
                     updated_listing_id = get_new_listing_id_from_offer(rule.user_id, rule.offer_id)
                     if updated_listing_id:
                         new_listing_id = updated_listing_id
                         log_task(f"  Updated listing ID: {new_listing_id}")
-                        if updated_listing_id != previous_listing_id:
-                            try:
-                                from qventory.helpers.ebay_relist import update_relisted_item_record
-                                update_relisted_item_record(
-                                    user_id=rule.user_id,
-                                    old_listing_id=previous_listing_id,
-                                    new_listing_id=updated_listing_id,
-                                    commit=False
-                                )
-                            except Exception as update_err:
-                                log_task(f"  ⚠ Failed to update listing ID in DB: {update_err}")
 
                     rule.mark_success(new_listing_id)
 
@@ -2899,7 +2887,12 @@ def poll_user_listings(credential):
                 relist_note = f"\n[{timestamp}] Relist transfer to {item_id} completed"
                 relist_source.notes = (relist_source.notes or '') + relist_note
                 db.session.commit()
-                log_task(f"    ✓ Transferred cost/supplier/location from {relist_source.id} to new listing {item_id}")
+                log_task(
+                    f"    ✓ Transferred cost/supplier/location from {relist_source.id} "
+                    f"to new listing {item_id} (supplier: {relist_source.supplier})"
+                )
+            else:
+                log_task(f"    ⚠ No relist source found for new listing {item_id}")
 
         if title_updates > 0:
             db.session.commit()

@@ -730,6 +730,34 @@ def update_relisted_item_record(
     return {'success': True, 'item_id': item.id}
 
 
+def mark_relist_pending(user_id: int, old_listing_id: str, new_listing_id: str, commit: bool = False) -> dict:
+    from datetime import datetime
+    from qventory.extensions import db
+    from qventory.models.item import Item
+
+    if not old_listing_id or not new_listing_id:
+        return {'success': False, 'error': 'Missing listing ID'}
+
+    item = Item.query.filter_by(
+        user_id=user_id,
+        ebay_listing_id=old_listing_id
+    ).first()
+
+    if not item:
+        return {'success': False, 'error': f'Item not found for listing {old_listing_id}'}
+
+    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    relist_note = f"\n[{timestamp}] Relist pending: {new_listing_id} (from {old_listing_id})"
+    item.notes = (item.notes or '') + relist_note
+
+    if commit:
+        db.session.commit()
+    else:
+        db.session.flush()
+
+    return {'success': True, 'item_id': item.id}
+
+
 def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
     """
     Get item details using Trading API (legacy)
@@ -1434,22 +1462,20 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
     result['success'] = True
     result['new_listing_id'] = new_listing_id
 
-    # Update existing item to point at the new listing ID
+    # Mark old item as pending relist so polling can transfer data
     try:
-        update_result = update_relisted_item_record(
+        update_result = mark_relist_pending(
             user_id=user_id,
             old_listing_id=old_listing_id,
             new_listing_id=new_listing_id,
-            title=applied_changes.get('title'),
-            price=applied_changes.get('price'),
             commit=True
         )
         if update_result.get('success'):
-            log_relist(f"  ✓ Updated item to new listing ID {new_listing_id}")
+            log_relist(f"  ✓ Marked relist pending for new listing ID {new_listing_id}")
         else:
             log_relist(f"  ⚠ Warning: {update_result.get('error')}")
     except Exception as e:
-        log_relist(f"  ⚠ Warning: Failed to update item: {str(e)}")
+        log_relist(f"  ⚠ Warning: Failed to mark relist pending: {str(e)}")
         db.session.rollback()
 
     return result
@@ -1571,23 +1597,21 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
     result['success'] = True
     result['new_listing_id'] = new_listing_id
 
-    # Update existing item to point at the new listing ID
+    # Mark old item as pending relist so polling can transfer data
     try:
         old_listing_id = item_id  # item_id is the old listing ID for Trading API
-        update_result = update_relisted_item_record(
+        update_result = mark_relist_pending(
             user_id=user_id,
             old_listing_id=old_listing_id,
             new_listing_id=new_listing_id,
-            title=(changes or {}).get('title'),
-            price=(changes or {}).get('price'),
             commit=True
         )
         if update_result.get('success'):
-            log_relist(f"  ✓ Updated item to new listing ID {new_listing_id}")
+            log_relist(f"  ✓ Marked relist pending for new listing ID {new_listing_id}")
         else:
             log_relist(f"  ⚠ Warning: {update_result.get('error')}")
     except Exception as e:
-        log_relist(f"  ⚠ Warning: Failed to update item: {str(e)}")
+        log_relist(f"  ⚠ Warning: Failed to mark relist pending: {str(e)}")
         db.session.rollback()
 
     return result
