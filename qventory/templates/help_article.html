@@ -28,14 +28,6 @@
     </aside>
 
     <div style="border:2px solid var(--border);border-radius:12px;padding:20px;background:var(--bg-secondary);max-width:760px;margin:0 auto;">
-      <div style="margin-bottom:12px;">
-        <h1 style="color:var(--text);font-size:28px;margin:0 0 6px;">{{ article.title }}</h1>
-        {% if article.summary %}
-        <p style="color:var(--text-secondary);font-size:14px;line-height:1.6;margin:0;">
-          {{ article.summary }}
-        </p>
-        {% endif %}
-      </div>
       <div class="help-article-body" style="line-height:1.7;color:var(--text);">
         {{ rendered|safe }}
       </div>
@@ -49,6 +41,10 @@
   .help-article-body h3 {
     color: var(--text);
     margin: 20px 0 8px;
+  }
+  .help-article-body {
+    max-width: 720px;
+    margin: 0 auto;
   }
   .help-article-body p {
     margin: 10px 0;
