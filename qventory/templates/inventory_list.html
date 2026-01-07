@@ -943,11 +943,19 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
 
-    // Preserve missing_data filter
+    // Preserve missing_data filter (or legacy missing_cost/missing_supplier)
     const missingDataParam = urlParams.get('missing_data');
-    if (missingDataParam) {
-      const missingDataSelect = filterForm.querySelector('[name="missing_data"]');
-      if (missingDataSelect) missingDataSelect.value = missingDataParam;
+    const missingCostParam = urlParams.get('missing_cost');
+    const missingSupplierParam = urlParams.get('missing_supplier');
+    const missingDataSelect = filterForm.querySelector('[name="missing_data"]');
+    if (missingDataSelect) {
+      if (missingDataParam) {
+        missingDataSelect.value = missingDataParam;
+      } else if (missingCostParam) {
+        missingDataSelect.value = 'cost';
+      } else if (missingSupplierParam) {
+        missingDataSelect.value = 'supplier';
+      }
     }
   }
 });
