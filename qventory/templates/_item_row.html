@@ -1,6 +1,8 @@
 {% set it = item if item is defined else it %}
 {% set has_price = it.item_price is not none %}
-{% set has_cost = it.item_cost is not none and it.item_cost > 0 %}
+{% set has_cost_value = it.item_cost is not none %}
+{% set roi_infinite = has_price and has_cost_value and it.item_cost == 0 %}
+{% set has_cost = has_cost_value and it.item_cost > 0 %}
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
@@ -71,7 +73,9 @@
   </td>
   <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
   <td class="mobile-hide roi-cell">
-    {% if has_price and has_cost %}
+    {% if roi_infinite %}
+      <span class="tag roi-value">ROI ∞</span>
+    {% elif has_price and has_cost %}
       <span class="tag roi-value">ROI {{ roi|round(0) }}%</span>
     {% else %}
       <span class="roi-value">—</span>
