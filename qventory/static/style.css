@@ -1937,6 +1937,21 @@ tbody tr:hover td{
 
 .location-modal {
   width: min(420px, 92vw);
+  background: var(--card);
+  color: var(--text);
+}
+
+.location-modal .qr-header{
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.location-modal .qr-icon{
+  color: var(--text);
+}
+
+.location-modal .inline-edit__grid label{
+  color: var(--sub);
 }
 
 .location-modal__body {
