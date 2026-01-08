@@ -718,7 +718,7 @@ def import_ebay_sales(self, user_id, days_back=None):
                     carrier = sale_data.get('carrier')
                     shipped_at = sale_data.get('shipped_at')
                     delivered_at = sale_data.get('delivered_at')
-                    sold_at = sale_data.get('sold_at', datetime.utcnow())
+                    sold_at = sale_data.get('sold_at') or shipped_at or delivered_at or datetime.utcnow()
                     status = sale_data.get('status', 'pending')
                     ebay_transaction_id = sale_data.get('ebay_transaction_id')
 

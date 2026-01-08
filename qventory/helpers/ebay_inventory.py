@@ -2198,9 +2198,15 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         else:
             status = 'pending'
 
-        # Get order creation date
+        # Get order creation date (fallback to lastModified/shipped/delivered)
         creation_date_str = order_data.get('creationDate', '')
-        sold_at = _parse_ebay_datetime(creation_date_str) if creation_date_str else datetime.utcnow()
+        sold_at = _parse_ebay_datetime(creation_date_str) if creation_date_str else None
+        if sold_at is None:
+            sold_at = _parse_ebay_datetime(order_data.get('lastModifiedDate', ''))
+        if sold_at is None:
+            sold_at = shipped_at or delivered_at
+        if sold_at is None:
+            sold_at = datetime.utcnow()
 
         return {
             'marketplace': 'ebay',

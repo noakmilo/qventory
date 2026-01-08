@@ -1507,6 +1507,7 @@ function openLocationModal(button) {
     input.name = component.key;
     input.value = component.value;
     input.autocomplete = 'off';
+    input.className = 'input';
     input.dataset.component = component.key;
     input.setAttribute('data-component', component.key);
     wrapper.appendChild(input);
@@ -1745,6 +1746,7 @@ function parseAndPopulateLocation(qrValue) {
     input.type = 'text';
     input.name = field.key;
     input.autocomplete = 'off';
+    input.className = 'input';
     input.dataset.component = field.key;
     input.setAttribute('data-component', field.key);
 
