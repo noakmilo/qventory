@@ -4520,6 +4520,86 @@ def reactivate_inactive_ebay_items(self):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.refresh_ebay_user_ids_global')
+def refresh_ebay_user_ids_global(self):
+    """
+    Admin task: Refresh eBay tokens and re-fetch ebay_user_id for all active accounts.
+
+    NOTE: Accounts with invalid refresh tokens still require manual reconnection.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.routes.ebay_auth import refresh_access_token, get_ebay_user_info
+        from datetime import datetime, timedelta
+
+        log_task("=== ADMIN: Refreshing eBay user IDs ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        processed = 0
+        refreshed = 0
+        user_ids_updated = 0
+        refresh_failed = 0
+        user_id_missing = 0
+
+        for cred in credentials:
+            try:
+                processed += 1
+                refresh_token = cred.get_refresh_token()
+                if not refresh_token:
+                    refresh_failed += 1
+                    cred.error_message = "missing_refresh_token"
+                    continue
+
+                token_data = refresh_access_token(refresh_token)
+                cred.set_access_token(token_data['access_token'])
+                if token_data.get('refresh_token'):
+                    cred.set_refresh_token(token_data['refresh_token'])
+                cred.token_expires_at = datetime.utcnow() + timedelta(
+                    seconds=token_data.get('expires_in', 7200)
+                )
+                refreshed += 1
+
+                ebay_user_id = get_ebay_user_info(token_data['access_token'])
+                if ebay_user_id:
+                    cred.ebay_user_id = ebay_user_id
+                    user_ids_updated += 1
+                else:
+                    user_id_missing += 1
+                    cred.error_message = "ebay_user_id_unresolved"
+
+                cred.last_synced_at = datetime.utcnow()
+                cred.sync_status = 'success'
+                db.session.commit()
+
+            except Exception as exc:
+                refresh_failed += 1
+                cred.sync_status = 'error'
+                cred.error_message = f"refresh_failed: {exc}"
+                db.session.rollback()
+                continue
+
+        log_task(
+            "=== Refresh complete: "
+            f"processed={processed} refreshed={refreshed} "
+            f"user_ids_updated={user_ids_updated} refresh_failed={refresh_failed} "
+            f"user_id_missing={user_id_missing} ==="
+        )
+
+        return {
+            'success': True,
+            'processed': processed,
+            'refreshed': refreshed,
+            'user_ids_updated': user_ids_updated,
+            'refresh_failed': refresh_failed,
+            'user_id_missing': user_id_missing
+        }
+
+
 def purge_duplicate_items_for_user(user_id):
     """
     Remove duplicate synced items for a specific user.

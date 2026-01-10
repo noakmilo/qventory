@@ -4482,6 +4482,21 @@ def admin_reactivate_ebay_items():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/refresh-ebay-user-ids", methods=["POST"])
+@require_admin
+def admin_refresh_ebay_user_ids():
+    """Refresh eBay tokens and update ebay_user_id for all active accounts."""
+    from qventory.tasks import refresh_ebay_user_ids_global
+
+    task = refresh_ebay_user_ids_global.delay()
+    flash(
+        f"eBay user ID refresh task launched (Task ID: {task.id}). "
+        "This will refresh tokens and update ebay_user_id when possible.",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/resync-all-inventory", methods=["POST"])
 @require_admin
 def admin_resync_all_inventory():
