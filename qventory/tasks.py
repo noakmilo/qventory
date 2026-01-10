@@ -126,7 +126,8 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
             reconcile_result = reconcile_sales_from_finances(
                 user_id=user_id,
                 days_back=days_back,
-                fetch_taxes=False
+                fetch_taxes=False,
+                force_recalculate=True
             )
         except Exception as e:
             log_task(f"  ✗ Finance reconcile failed: {e}")
@@ -781,9 +782,12 @@ def import_ebay_sales(self, user_id, days_back=None):
                     ebay_transaction_id = sale_data.get('ebay_transaction_id')
 
                     # Calculate eBay fees (approximate) unless real fees are provided
-                    marketplace_fee = sale_data.get('marketplace_fee')
-                    payment_fee = sale_data.get('payment_processing_fee')
+                    marketplace_fee_raw = sale_data.get('marketplace_fee')
+                    payment_fee_raw = sale_data.get('payment_processing_fee')
                     other_fees = sale_data.get('other_fees')
+
+                    marketplace_fee = marketplace_fee_raw
+                    payment_fee = payment_fee_raw
 
                     if marketplace_fee is None:
                         marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
@@ -831,10 +835,15 @@ def import_ebay_sales(self, user_id, days_back=None):
                         # Update existing sale
                         existing_sale.sold_price = sold_price
                         existing_sale.status = status
-                        existing_sale.marketplace_fee = marketplace_fee
-                        existing_sale.payment_processing_fee = payment_fee
-                        existing_sale.shipping_cost = shipping_cost
-                        existing_sale.other_fees = store_fee_per_sale
+                        if marketplace_fee_raw is not None:
+                            existing_sale.marketplace_fee = marketplace_fee_raw
+                        if payment_fee_raw is not None:
+                            existing_sale.payment_processing_fee = payment_fee_raw
+                        if shipping_cost is not None:
+                            if shipping_cost > 0 or not existing_sale.shipping_cost:
+                                existing_sale.shipping_cost = shipping_cost
+                        if store_fee_per_sale is not None:
+                            existing_sale.other_fees = store_fee_per_sale
                         if shipping_charged is not None:
                             existing_sale.shipping_charged = shipping_charged
                         if tax_collected is not None:
@@ -3398,6 +3407,18 @@ def sync_ebay_sold_orders_auto(self):
                 total_created += created_count
                 total_updated += updated_count
                 users_processed += 1
+
+                if created_count > 0 or updated_count > 0:
+                    try:
+                        reconcile_sales_from_finances(
+                            user_id=user.id,
+                            days_back=1,
+                            fetch_taxes=True,
+                            force_recalculate=True
+                        )
+                        log_task("    ↻ Reconciled sales (last 24h)")
+                    except Exception as reconcile_error:
+                        log_task(f"    ⚠ Reconcile failed: {reconcile_error}")
                 
             except Exception as e:
                 log_task(f"    ✗ Error syncing sales for user {user.id}: {str(e)}")
@@ -3597,6 +3618,16 @@ def sync_ebay_sold_orders_deep(self):
                 if created_count > 0 or updated_count > 0:
                     log_task(f"    ✓ {created_count} created, {updated_count} updated")
                     users_with_sales += 1
+                    try:
+                        reconcile_sales_from_finances(
+                            user_id=user.id,
+                            days_back=7,
+                            fetch_taxes=True,
+                            force_recalculate=True
+                        )
+                        log_task("    ↻ Reconciled sales (7 days)")
+                    except Exception as reconcile_error:
+                        log_task(f"    ⚠ Reconcile failed: {reconcile_error}")
 
                 total_created += created_count
                 total_updated += updated_count
@@ -3886,7 +3917,7 @@ def classify_finance_fee(txn_raw, amount):
     return None
 
 
-def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False):
+def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False):
     from qventory.models.sale import Sale
     from qventory.models.ebay_finance import EbayFinanceTransaction
     from qventory.helpers.ebay_inventory import (
@@ -4045,7 +4076,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
                 taxes_updated += 1
                 updated_this_sale = True
 
-        if updated_this_sale:
+        if updated_this_sale or force_recalculate:
             sale.calculate_profit()
 
     db.session.commit()
@@ -4123,7 +4154,8 @@ def recalculate_ebay_analytics_global(self):
                 reconcile_sales_from_finances(
                     user_id=cred.user_id,
                     days_back=None,
-                    fetch_taxes=True
+                    fetch_taxes=True,
+                    force_recalculate=True
                 )
             except Exception as exc:
                 errors += 1
