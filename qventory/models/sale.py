@@ -92,14 +92,21 @@ class Sale(db.Model):
         # Calculate Liberis fee if applicable
         liberis_fee = self.get_liberis_fee()
 
-        # Calculate total fees (including Liberis)
+        # Calculate total fees (including Liberis), rounding each component to cents
+        marketplace_fee = round(self.marketplace_fee or 0, 2)
+        processing_fee = round(self.payment_processing_fee or 0, 2)
+        shipping_cost = round(self.shipping_cost or 0, 2)
+        other_fees = round(self.other_fees or 0, 2)
+        shipping_charged = round(self.shipping_charged or 0, 2)
+        liberis_fee = round(liberis_fee or 0, 2)
+
         total_fees = (
-            (self.marketplace_fee or 0) +
-            (self.payment_processing_fee or 0) +
-            (self.shipping_cost or 0) +
-            (self.other_fees or 0) +
+            marketplace_fee +
+            processing_fee +
+            shipping_cost +
+            other_fees +
             liberis_fee -
-            (self.shipping_charged or 0)
+            shipping_charged
         )
 
         # Calculate net profit
