@@ -10,6 +10,7 @@ import base64
 import os
 import secrets
 import sys
+import xml.etree.ElementTree as ET
 
 from qventory.extensions import db
 from qventory.models.marketplace_credential import MarketplaceCredential
@@ -29,10 +30,15 @@ if EBAY_ENV == 'production':
     EBAY_OAUTH_URL = "https://auth.ebay.com/oauth2/authorize"
     EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
     EBAY_REDIRECT_URI = os.environ.get('EBAY_REDIRECT_URI', 'https://qventory.com/settings/ebay/callback')
+    TRADING_API_URL = "https://api.ebay.com/ws/api.dll"
 else:
     EBAY_OAUTH_URL = "https://auth.sandbox.ebay.com/oauth2/authorize"
     EBAY_TOKEN_URL = "https://api.sandbox.ebay.com/identity/v1/oauth2/token"
     EBAY_REDIRECT_URI = os.environ.get('EBAY_REDIRECT_URI', 'https://qventory.com/settings/ebay/callback')
+    TRADING_API_URL = "https://api.sandbox.ebay.com/ws/api.dll"
+
+TRADING_COMPAT_LEVEL = os.environ.get('EBAY_TRADING_COMPAT_LEVEL', '1145')
+_XML_NS = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
 
 # Log configuration on startup
 log(f"eBay OAuth Configuration:")
@@ -600,9 +606,46 @@ def get_ebay_user_info(access_token):
         import traceback
         log(f"Fulfillment API traceback: {traceback.format_exc()}")
 
-    # Fallback
-    log("All APIs failed, using generic 'eBay User'")
-    return 'eBay User'
+    # Try 4: Trading API GetUser (OAuth)
+    try:
+        log("Trying Trading API GetUser...")
+        xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetUserRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetUserRequest>'''
+
+        headers = {
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+            'X-EBAY-API-CALL-NAME': 'GetUser',
+            'X-EBAY-API-APP-NAME': EBAY_CLIENT_ID or '',
+            'X-EBAY-API-IAF-TOKEN': access_token,
+            'Content-Type': 'text/xml'
+        }
+
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=10)
+        log(f"Trading API GetUser status: {response.status_code}")
+        if response.status_code == 200:
+            root = ET.fromstring(response.content)
+            ack = root.find('ebay:Ack', _XML_NS)
+            if ack is not None and ack.text in ['Success', 'Warning']:
+                user_id_elem = root.find('ebay:User/ebay:UserID', _XML_NS)
+                if user_id_elem is not None and user_id_elem.text:
+                    log(f"Got username from Trading API: {user_id_elem.text}")
+                    return user_id_elem.text
+            log(f"Trading API GetUser error response: {response.text[:300]}")
+        else:
+            log(f"Trading API GetUser HTTP error: {response.text[:300]}")
+    except Exception as e:
+        log(f"Trading API GetUser exception: {str(e)}")
+        import traceback
+        log(f"Trading API GetUser traceback: {traceback.format_exc()}")
+
+    log("All APIs failed, could not resolve eBay user ID")
+    return None
 
 
 def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay_user_id):
@@ -630,7 +673,10 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         credential.set_access_token(access_token)
         credential.set_refresh_token(refresh_token)
         credential.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
-        credential.ebay_user_id = ebay_user_id
+        if ebay_user_id:
+            credential.ebay_user_id = ebay_user_id
+        else:
+            log("Skipping ebay_user_id update (not available)")
         credential.is_active = True
         credential.updated_at = datetime.utcnow()
     else:
@@ -639,7 +685,7 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         credential = MarketplaceCredential(
             user_id=user_id,
             marketplace='ebay',
-            ebay_user_id=ebay_user_id,
+            ebay_user_id=ebay_user_id if ebay_user_id else None,
             is_active=True
         )
         credential.set_access_token(access_token)
