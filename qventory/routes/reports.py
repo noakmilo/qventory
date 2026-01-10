@@ -343,7 +343,7 @@ def analytics():
     from qventory.models.marketplace_credential import MarketplaceCredential
     from qventory.models.ebay_finance import EbayPayout, EbayFinanceTransaction
     from qventory.models.expense import Expense
-    from sqlalchemy import func
+    from sqlalchemy import func, and_, or_
     from collections import defaultdict
     from datetime import datetime, timedelta
 
@@ -472,14 +472,25 @@ def analytics():
     listing_start = start_date.date()
     listing_end = (end_date - timedelta(days=1)).date()
     new_items_query = Item.query.filter(
-        Item.user_id == current_user.id,
-        Item.listing_date.isnot(None),
-        Item.listing_date >= listing_start,
-        Item.listing_date <= listing_end
+        Item.user_id == current_user.id
+    ).filter(
+        or_(
+            and_(
+                Item.listing_date.isnot(None),
+                Item.listing_date >= listing_start,
+                Item.listing_date <= listing_end
+            ),
+            and_(
+                Item.listing_date.is_(None),
+                Item.created_at >= start_date,
+                Item.created_at < end_date
+            )
+        )
     )
     new_ebay_listings_count = 0
     for item in new_items_query:
-        listing_daily[item.listing_date.strftime("%Y-%m-%d")] += 1
+        listing_date_value = item.listing_date or item.created_at.date()
+        listing_daily[listing_date_value.strftime("%Y-%m-%d")] += 1
         if item.ebay_listing_id:
             new_ebay_listings_count += 1
 

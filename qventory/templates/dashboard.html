@@ -287,7 +287,32 @@
       </div>
     </div>
     <form id="locationModalForm" class="location-modal__body">
-      <div id="locationModalFields" class="inline-edit__grid"></div>
+      <div id="locationModalFields" class="inline-edit__grid">
+        {% if settings.enable_A %}
+        <label class="location-modal__label">
+          {{ settings.label_A }}
+          <input class="input" type="text" name="A" data-component="A" autocomplete="off">
+        </label>
+        {% endif %}
+        {% if settings.enable_B %}
+        <label class="location-modal__label">
+          {{ settings.label_B }}
+          <input class="input" type="text" name="B" data-component="B" autocomplete="off">
+        </label>
+        {% endif %}
+        {% if settings.enable_S %}
+        <label class="location-modal__label">
+          {{ settings.label_S }}
+          <input class="input" type="text" name="S" data-component="S" autocomplete="off">
+        </label>
+        {% endif %}
+        {% if settings.enable_C %}
+        <label class="location-modal__label">
+          {{ settings.label_C }}
+          <input class="input" type="text" name="C" data-component="C" autocomplete="off">
+        </label>
+        {% endif %}
+      </div>
       <div class="inline-edit__actions">
         <button type="submit" class="inline-edit__action">Save &amp; Sync</button>
         <button type="button" class="inline-edit__action inline-edit__cancel" id="locationModalCancel">Cancel</button>

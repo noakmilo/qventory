@@ -1484,38 +1484,59 @@ function openLocationModal(button) {
   }
 
   locationModalItemId = locationContainer.dataset.itemId;
-  locationModalFields.innerHTML = '';
-
-  const components = [
-    { key: 'A', enabled: locationDisplay.dataset.enableA === '1', label: locationDisplay.dataset.labelA || 'A', value: locationDisplay.dataset.locationA || '' },
-    { key: 'B', enabled: locationDisplay.dataset.enableB === '1', label: locationDisplay.dataset.labelB || 'B', value: locationDisplay.dataset.locationB || '' },
-    { key: 'S', enabled: locationDisplay.dataset.enableS === '1', label: locationDisplay.dataset.labelS || 'S', value: locationDisplay.dataset.locationS || '' },
-    { key: 'C', enabled: locationDisplay.dataset.enableC === '1', label: locationDisplay.dataset.labelC || 'C', value: locationDisplay.dataset.locationC || '' },
-  ];
+  const componentState = {
+    A: { enabled: locationDisplay.dataset.enableA === '1', label: locationDisplay.dataset.labelA || 'A', value: locationDisplay.dataset.locationA || '' },
+    B: { enabled: locationDisplay.dataset.enableB === '1', label: locationDisplay.dataset.labelB || 'B', value: locationDisplay.dataset.locationB || '' },
+    S: { enabled: locationDisplay.dataset.enableS === '1', label: locationDisplay.dataset.labelS || 'S', value: locationDisplay.dataset.locationS || '' },
+    C: { enabled: locationDisplay.dataset.enableC === '1', label: locationDisplay.dataset.labelC || 'C', value: locationDisplay.dataset.locationC || '' },
+  };
 
   let firstInput = null;
-  components.forEach(component => {
-    if (!component.enabled) {
-      return;
-    }
-    const wrapper = document.createElement('label');
-    wrapper.textContent = component.label;
-    wrapper.className = 'location-modal__label';
+  const existingInputs = locationModalFields.querySelectorAll('[data-component]');
+  if (existingInputs.length > 0) {
+    existingInputs.forEach(input => {
+      const key = input.dataset.component;
+      const state = componentState[key];
+      if (!state) {
+        return;
+      }
+      const wrapper = input.closest('label');
+      if (wrapper) {
+        wrapper.style.display = state.enabled ? '' : 'none';
+      }
+      if (state.enabled) {
+        input.value = state.value;
+        if (!firstInput) {
+          firstInput = input;
+        }
+      }
+    });
+  } else {
+    locationModalFields.innerHTML = '';
+    Object.keys(componentState).forEach(key => {
+      const component = componentState[key];
+      if (!component.enabled) {
+        return;
+      }
+      const wrapper = document.createElement('label');
+      wrapper.textContent = component.label;
+      wrapper.className = 'location-modal__label';
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.name = component.key;
-    input.value = component.value;
-    input.autocomplete = 'off';
-    input.className = 'input';
-    input.dataset.component = component.key;
-    input.setAttribute('data-component', component.key);
-    wrapper.appendChild(input);
-    locationModalFields.appendChild(wrapper);
-    if (!firstInput) {
-      firstInput = input;
-    }
-  });
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = key;
+      input.value = component.value;
+      input.autocomplete = 'off';
+      input.className = 'input';
+      input.dataset.component = key;
+      input.setAttribute('data-component', key);
+      wrapper.appendChild(input);
+      locationModalFields.appendChild(wrapper);
+      if (!firstInput) {
+        firstInput = input;
+      }
+    });
+  }
 
   const submitButton = locationModalForm.querySelector('button[type="submit"]');
   const hasLocation = (locationDisplay.dataset.locationCode || '').trim().length > 0;
@@ -1541,9 +1562,6 @@ function closeLocationModal() {
   locationModal.setAttribute('hidden', '');
   locationModal.setAttribute('aria-hidden', 'true');
   locationModalItemId = null;
-  if (locationModalFields) {
-    locationModalFields.innerHTML = '';
-  }
 }
 
 async function submitLocationModal(event) {
@@ -1733,34 +1751,49 @@ function parseAndPopulateLocation(qrValue) {
   // Restore item ID
   locationModalItemId = locationModalContext.itemId;
 
-  // Recreate fields with scanned values
-  locationModalFields.innerHTML = '';
   let firstInput = null;
+  const existingInputs = locationModalFields.querySelectorAll('[data-component]');
+  if (existingInputs.length > 0) {
+    existingInputs.forEach(input => {
+      const key = input.dataset.component;
+      if (!key) {
+        return;
+      }
+      const nextValue = components[key] || input.value;
+      input.value = nextValue;
+      if (!firstInput) {
+        firstInput = input;
+      }
+      console.log(`[QR Location] Field ${key} = ${nextValue} (scanned: ${components[key] || 'N/A'})`);
+    });
+  } else {
+    // Recreate fields with scanned values
+    locationModalFields.innerHTML = '';
+    locationModalContext.fields.forEach(field => {
+      const wrapper = document.createElement('label');
+      wrapper.textContent = field.label;
+      wrapper.className = 'location-modal__label';
 
-  locationModalContext.fields.forEach(field => {
-    const wrapper = document.createElement('label');
-    wrapper.textContent = field.label;
-    wrapper.className = 'location-modal__label';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.name = field.key;
+      input.autocomplete = 'off';
+      input.className = 'input';
+      input.dataset.component = field.key;
+      input.setAttribute('data-component', field.key);
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.name = field.key;
-    input.autocomplete = 'off';
-    input.className = 'input';
-    input.dataset.component = field.key;
-    input.setAttribute('data-component', field.key);
+      // Use scanned value if available, otherwise use previous value
+      input.value = components[field.key] || field.value;
+      console.log(`[QR Location] Field ${field.key} = ${input.value} (scanned: ${components[field.key] || 'N/A'})`);
 
-    // Use scanned value if available, otherwise use previous value
-    input.value = components[field.key] || field.value;
-    console.log(`[QR Location] Field ${field.key} = ${input.value} (scanned: ${components[field.key] || 'N/A'})`);
+      wrapper.appendChild(input);
+      locationModalFields.appendChild(wrapper);
 
-    wrapper.appendChild(input);
-    locationModalFields.appendChild(wrapper);
-
-    if (!firstInput) {
-      firstInput = input;
-    }
-  });
+      if (!firstInput) {
+        firstInput = input;
+      }
+    });
+  }
 
   // Reopen location modal
   locationModal.classList.remove('hidden');
