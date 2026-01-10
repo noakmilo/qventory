@@ -657,6 +657,15 @@ def analytics():
                          payout_totals=payout_totals)
 
 
+@reports_bp.route("/analytics/sync", methods=["POST"])
+@login_required
+def sync_analytics():
+    from qventory.tasks import refresh_user_analytics
+
+    task = refresh_user_analytics.apply_async(args=[current_user.id], kwargs={'force': True}, priority=3)
+    return jsonify({"ok": True, "task_id": task.id})
+
+
 @reports_bp.route("/api/reports/user-reports")
 @login_required
 def get_user_reports():

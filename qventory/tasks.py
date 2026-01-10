@@ -91,6 +91,51 @@ def relist_item_sell_similar(self, user_id, item_id, title=None, price=None):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.refresh_user_analytics')
+def refresh_user_analytics(self, user_id, days_back=90, force=False):
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.system_setting import SystemSetting
+
+        log_task("=== Analytics refresh task ===")
+        log_task(f"  user_id={user_id} days_back={days_back} force={force}")
+
+        now_ts = int(datetime.utcnow().timestamp())
+        throttle_key = f"analytics_refresh_last_{user_id}"
+
+        if not force:
+            last_ts = SystemSetting.get_int(throttle_key)
+            if last_ts and now_ts - last_ts < 600:
+                log_task(f"  Skipping analytics refresh (last run {now_ts - last_ts}s ago)")
+                return {'success': True, 'skipped': True}
+
+        try:
+            sales_result = import_ebay_sales.run(user_id, days_back=days_back)
+        except Exception as e:
+            log_task(f"  ✗ Sales refresh failed: {e}")
+            sales_result = {'success': False, 'error': str(e)}
+
+        try:
+            finance_result = sync_ebay_finances_user.run(user_id)
+        except Exception as e:
+            log_task(f"  ✗ Finance refresh failed: {e}")
+            finance_result = {'success': False, 'error': str(e)}
+
+        setting = SystemSetting.query.filter_by(key=throttle_key).first()
+        if not setting:
+            setting = SystemSetting(key=throttle_key)
+            db.session.add(setting)
+        setting.value_int = now_ts
+        db.session.commit()
+
+        return {
+            'success': True,
+            'sales': sales_result,
+            'finances': finance_result
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.import_ebay_inventory')
 def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status='ACTIVE'):
     """
@@ -2944,6 +2989,12 @@ def poll_user_listings(credential):
                     link_text='View Inventory',
                     source='ebay_sync'
                 )
+
+        try:
+            refresh_user_analytics.apply_async(args=[user_id], priority=9)
+            log_task("    ↻ Analytics refresh queued")
+        except Exception as analytics_err:
+            log_task(f"    ⚠ Analytics refresh queue failed: {analytics_err}")
         
         return {
             'new_listings': new_listings,

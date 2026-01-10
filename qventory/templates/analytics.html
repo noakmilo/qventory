@@ -23,6 +23,12 @@
         Track your sales performance and inventory insights
       </p>
     </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+      <button type="button" class="btn" id="analyticsSyncBtn">
+        <i class="fas fa-sync"></i> Sync analytics
+      </button>
+      <div id="analyticsSyncStatus" style="font-size:12px;color:var(--sub);"></div>
+    </div>
 
   </div>
 
@@ -490,6 +496,39 @@ document.addEventListener('keydown', (event) => {
     closeCustomRange();
   }
 });
+
+const analyticsSyncBtn = document.getElementById('analyticsSyncBtn');
+const analyticsSyncStatus = document.getElementById('analyticsSyncStatus');
+
+if (analyticsSyncBtn) {
+  analyticsSyncBtn.addEventListener('click', async () => {
+    analyticsSyncBtn.disabled = true;
+    analyticsSyncBtn.textContent = 'Syncing...';
+    if (analyticsSyncStatus) {
+      analyticsSyncStatus.textContent = 'Starting analytics sync…';
+    }
+    try {
+      const response = await fetch('{{ url_for("reports.sync_analytics") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Sync failed');
+      }
+      if (analyticsSyncStatus) {
+        analyticsSyncStatus.textContent = 'Sync queued. Refresh in a minute.';
+      }
+    } catch (err) {
+      if (analyticsSyncStatus) {
+        analyticsSyncStatus.textContent = err.message || 'Sync failed.';
+      }
+    } finally {
+      analyticsSyncBtn.disabled = false;
+      analyticsSyncBtn.innerHTML = '<i class="fas fa-sync"></i> Sync analytics';
+    }
+  });
+}
 
 
 // Charts
