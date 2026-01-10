@@ -3918,6 +3918,8 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
     totals_by_order = {}
     totals_by_line_item = {}
     trading_fee_cache = {}
+    order_detail_cache = {}
+    parsed_order_cache = {}
 
     for txn in transactions:
         raw = txn.raw_json or {}
@@ -3973,7 +3975,27 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
             updated += 1
             updated_this_sale = True
         elif not has_finances:
-            if (sale.marketplace_fee or 0) == 0 and sale.marketplace_order_id:
+            parsed = None
+            if sale.marketplace_order_id:
+                parsed = parsed_order_cache.get(sale.marketplace_order_id)
+                if parsed is None:
+                    order_detail = order_detail_cache.get(sale.marketplace_order_id)
+                    if order_detail is None:
+                        order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
+                        order_detail_cache[sale.marketplace_order_id] = order_detail
+                    if order_detail:
+                        parsed = parse_ebay_order_to_sale(order_detail, user_id=user_id)
+                        parsed_order_cache[sale.marketplace_order_id] = parsed
+
+            marketplace_fee_value = None
+            if parsed and parsed.get('marketplace_fee') is not None:
+                marketplace_fee_value = parsed.get('marketplace_fee')
+
+            if marketplace_fee_value is not None:
+                if sale.marketplace_fee != marketplace_fee_value:
+                    sale.marketplace_fee = marketplace_fee_value
+                    updated_this_sale = True
+            elif sale.marketplace_order_id:
                 fee_data = trading_fee_cache.get(sale.marketplace_order_id)
                 if fee_data is None:
                     fee_data = fetch_trading_order_fees(user_id, sale.marketplace_order_id)
@@ -3997,7 +4019,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
                         elif fee_data.get('total_final_value_fee'):
                             fee_value = fee_data.get('total_final_value_fee')
 
-                    if fee_value is not None:
+                    if fee_value is not None and sale.marketplace_fee != fee_value:
                         sale.marketplace_fee = fee_value
                         updated_this_sale = True
 
@@ -4008,13 +4030,20 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
                 updated_this_sale = True
 
         if fetch_taxes and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
-            order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
-            if order_detail:
-                parsed = parse_ebay_order_to_sale(order_detail, user_id=user_id)
-                if parsed and parsed.get('tax_collected') is not None:
-                    sale.tax_collected = parsed.get('tax_collected')
-                    taxes_updated += 1
-                    updated_this_sale = True
+            parsed = parsed_order_cache.get(sale.marketplace_order_id)
+            if parsed is None:
+                order_detail = order_detail_cache.get(sale.marketplace_order_id)
+                if order_detail is None:
+                    order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
+                    order_detail_cache[sale.marketplace_order_id] = order_detail
+                if order_detail:
+                    parsed = parse_ebay_order_to_sale(order_detail, user_id=user_id)
+                    parsed_order_cache[sale.marketplace_order_id] = parsed
+
+            if parsed and parsed.get('tax_collected') is not None:
+                sale.tax_collected = parsed.get('tax_collected')
+                taxes_updated += 1
+                updated_this_sale = True
 
         if updated_this_sale:
             sale.calculate_profit()
