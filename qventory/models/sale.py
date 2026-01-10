@@ -79,9 +79,13 @@ class Sale(db.Model):
         - gross_profit = None
         - net_profit = sold_price - fees (muestra pérdida/ganancia sin conocer costo)
         """
+        # Exclude collected taxes from revenue for profit calculations
+        tax_collected = self.tax_collected or 0
+        revenue = (self.sold_price or 0) - tax_collected
+
         # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
-            self.gross_profit = self.sold_price - self.item_cost
+            self.gross_profit = revenue - self.item_cost
         else:
             self.gross_profit = None
 
@@ -106,7 +110,7 @@ class Sale(db.Model):
         else:
             # Even without item_cost, show what's left after fees
             # This gives the seller visibility of actual payout
-            self.net_profit = self.sold_price - total_fees
+            self.net_profit = revenue - total_fees
 
     def get_liberis_fee(self):
         """
