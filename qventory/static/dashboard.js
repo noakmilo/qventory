@@ -1500,15 +1500,9 @@ function openLocationModal(button) {
       if (!state) {
         return;
       }
-      const wrapper = input.closest('label');
-      if (wrapper) {
-        wrapper.style.display = state.enabled ? '' : 'none';
-      }
-      if (state.enabled) {
-        input.value = state.value;
-        if (!firstInput) {
-          firstInput = input;
-        }
+      input.value = state.value;
+      if (!firstInput) {
+        firstInput = input;
       }
     });
   } else {

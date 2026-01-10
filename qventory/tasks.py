@@ -117,10 +117,20 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
             sales_result = {'success': False, 'error': str(e)}
 
         try:
-            finance_result = sync_ebay_finances_user.run(user_id)
+            finance_result = sync_ebay_finances_user.run(user_id, days_back=days_back or 120)
         except Exception as e:
             log_task(f"  ✗ Finance refresh failed: {e}")
             finance_result = {'success': False, 'error': str(e)}
+
+        try:
+            reconcile_result = reconcile_sales_from_finances(
+                user_id=user_id,
+                days_back=days_back,
+                fetch_taxes=False
+            )
+        except Exception as e:
+            log_task(f"  ✗ Finance reconcile failed: {e}")
+            reconcile_result = {'success': False, 'error': str(e)}
 
         setting = SystemSetting.query.filter_by(key=throttle_key).first()
         if not setting:
@@ -132,7 +142,8 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
         return {
             'success': True,
             'sales': sales_result,
-            'finances': finance_result
+            'finances': finance_result,
+            'reconcile': reconcile_result
         }
 
 
@@ -758,6 +769,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                     sku = sale_data.get('item_sku', '')
                     sold_price = sale_data.get('sold_price', 0)
                     shipping_cost = sale_data.get('shipping_cost', 0)
+                    shipping_charged = sale_data.get('shipping_charged')
+                    tax_collected = sale_data.get('tax_collected')
                     buyer_username = sale_data.get('buyer_username', '')
                     tracking_number = sale_data.get('tracking_number')
                     carrier = sale_data.get('carrier')
@@ -822,6 +835,10 @@ def import_ebay_sales(self, user_id, days_back=None):
                         existing_sale.payment_processing_fee = payment_fee
                         existing_sale.shipping_cost = shipping_cost
                         existing_sale.other_fees = store_fee_per_sale
+                        if shipping_charged is not None:
+                            existing_sale.shipping_charged = shipping_charged
+                        if tax_collected is not None:
+                            existing_sale.tax_collected = tax_collected
                         existing_sale.updated_at = datetime.utcnow()
 
                         # Update item_id if we found a match and it wasn't set before
@@ -863,10 +880,12 @@ def import_ebay_sales(self, user_id, days_back=None):
                             item_title=title,
                             item_sku=sku,
                             sold_price=sold_price,
+                            tax_collected=tax_collected,
                             item_cost=item.item_cost if item else None,
                             marketplace_fee=marketplace_fee,
                             payment_processing_fee=payment_fee,
                             shipping_cost=shipping_cost,
+                            shipping_charged=shipping_charged,
                             other_fees=store_fee_per_sale,
                             sold_at=sold_at,
                             shipped_at=shipped_at,
@@ -3343,6 +3362,10 @@ def sync_ebay_sold_orders_auto(self):
                             existing_sale.marketplace_fee = order['marketplace_fee']
                         if order.get('payment_processing_fee'):
                             existing_sale.payment_processing_fee = order['payment_processing_fee']
+                        if order.get('tax_collected') is not None:
+                            existing_sale.tax_collected = order['tax_collected']
+                        if order.get('shipping_charged') is not None:
+                            existing_sale.shipping_charged = order['shipping_charged']
 
                         # Update item_cost if we found it
                         if item_cost is not None and existing_sale.item_cost is None:
@@ -3511,6 +3534,10 @@ def sync_ebay_sold_orders_deep(self):
                             existing_sale.payment_processing_fee = order.get('payment_processing_fee')
                         if order.get('other_fees') is not None:
                             existing_sale.other_fees = order.get('other_fees')
+                        if order.get('tax_collected') is not None:
+                            existing_sale.tax_collected = order.get('tax_collected')
+                        if order.get('shipping_charged') is not None:
+                            existing_sale.shipping_charged = order.get('shipping_charged')
                         if order.get('shipped_at'):
                             existing_sale.shipped_at = order.get('shipped_at')
                         if order.get('delivered_at'):
@@ -3546,11 +3573,13 @@ def sync_ebay_sold_orders_deep(self):
                             item_sku=order.get('item_sku'),
                             item_cost=item_cost,
                             sold_price=sold_price,
+                            tax_collected=order.get('tax_collected'),
                             marketplace=order.get('marketplace', 'ebay'),
                             marketplace_order_id=order.get('marketplace_order_id'),
                             marketplace_fee=marketplace_fee,
                             payment_processing_fee=payment_fee,
                             shipping_cost=shipping_cost,
+                            shipping_charged=order.get('shipping_charged'),
                             other_fees=other_fees,
                             sold_at=order.get('sold_at', datetime.utcnow()),
                             shipped_at=order.get('shipped_at'),
@@ -3680,7 +3709,10 @@ def sync_ebay_finances_user(self, user_id, days_back=120):
         )
 
         log_task(f"=== Syncing eBay finances for user {user_id} ===")
-        start_date = datetime.utcnow() - timedelta(days=days_back)
+        if days_back is None:
+            start_date = datetime.utcnow() - timedelta(days=7300)
+        else:
+            start_date = datetime.utcnow() - timedelta(days=days_back)
         end_date = datetime.utcnow()
 
         payouts_result = fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200)
@@ -3745,6 +3777,11 @@ def sync_ebay_finances_user(self, user_id, days_back=120):
             value = float(amount.get('value', 0) or 0)
             order_id = txn.get('orderId')
             reference_id = txn.get('referenceId')
+            ref_order_ids, ref_line_ids, ref_all_ids = extract_finance_reference_ids(txn)
+            if not order_id and ref_order_ids:
+                order_id = next(iter(ref_order_ids))
+            if not reference_id and ref_all_ids:
+                reference_id = next(iter(ref_all_ids))
 
             external_id = txn_id or _build_external_id(
                 "txn",
@@ -3786,6 +3823,171 @@ def sync_ebay_finances_user(self, user_id, days_back=120):
         }
 
 
+def extract_finance_reference_ids(txn_raw):
+    order_ids = set()
+    line_item_ids = set()
+    reference_ids = set()
+
+    if txn_raw.get('orderId'):
+        order_ids.add(txn_raw.get('orderId'))
+        reference_ids.add(txn_raw.get('orderId'))
+    if txn_raw.get('referenceId'):
+        reference_ids.add(txn_raw.get('referenceId'))
+
+    references = txn_raw.get('references') or []
+    for ref in references:
+        ref_id = ref.get('referenceId') or ref.get('refId') or ref.get('id')
+        ref_type = (ref.get('referenceType') or ref.get('type') or '').upper()
+        if not ref_id:
+            continue
+        reference_ids.add(ref_id)
+        if 'ORDER' in ref_type:
+            order_ids.add(ref_id)
+        if 'LINE' in ref_type or 'ITEM' in ref_type or 'TRANSACTION' in ref_type:
+            line_item_ids.add(ref_id)
+
+    return order_ids, line_item_ids, reference_ids
+
+
+def classify_finance_fee(txn_raw, amount):
+    fee_type = (
+        txn_raw.get('feeType')
+        or txn_raw.get('feeTypeCode')
+        or txn_raw.get('feeTypeEnum')
+        or ''
+    )
+    fee_type = str(fee_type).upper()
+    transaction_type = str(txn_raw.get('transactionType') or txn_raw.get('type') or '').upper()
+    reference_types = {
+        (ref.get('referenceType') or ref.get('type') or '').upper()
+        for ref in (txn_raw.get('references') or [])
+    }
+
+    if not amount:
+        return None
+
+    if 'PAYMENT_PROCESSING' in fee_type:
+        return 'payment_processing'
+    if 'FINAL_VALUE' in fee_type or 'MARKETPLACE' in fee_type:
+        return 'marketplace'
+    if 'SHIPPING' in fee_type and 'LABEL' in fee_type:
+        return 'shipping_label'
+    if any('SHIPPING_LABEL' in ref_type for ref_type in reference_types):
+        return 'shipping_label'
+    if 'ADVERTISING' in fee_type or 'PROMOTED' in fee_type or 'PROMOTION' in fee_type:
+        return 'other'
+    if 'INTERNATIONAL' in fee_type or 'REGULATORY' in fee_type:
+        return 'other'
+    if transaction_type in {'NON_SALE_CHARGE', 'FEE', 'ADJUSTMENT', 'REFUND', 'DISPUTE'}:
+        return 'other'
+    if amount < 0:
+        return 'other'
+
+    return None
+
+
+def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False):
+    from qventory.models.sale import Sale
+    from qventory.models.ebay_finance import EbayFinanceTransaction
+    from qventory.helpers.ebay_inventory import fetch_ebay_order_details, parse_ebay_order_to_sale
+
+    start_date = None
+    if days_back is not None:
+        try:
+            days_back = int(days_back)
+        except (TypeError, ValueError):
+            days_back = None
+    if days_back:
+        start_date = datetime.utcnow() - timedelta(days=days_back)
+
+    sales_query = Sale.query.filter_by(user_id=user_id)
+    if start_date is not None:
+        sales_query = sales_query.filter(Sale.sold_at >= start_date)
+    sales = sales_query.all()
+
+    tx_query = EbayFinanceTransaction.query.filter_by(user_id=user_id)
+    if start_date is not None:
+        tx_query = tx_query.filter(EbayFinanceTransaction.transaction_date >= start_date)
+    transactions = tx_query.all()
+
+    totals_by_order = {}
+    totals_by_line_item = {}
+
+    for txn in transactions:
+        raw = txn.raw_json or {}
+        amount = float(txn.amount or 0)
+        fee_bucket = classify_finance_fee(raw, amount)
+        if not fee_bucket:
+            continue
+        value = abs(amount)
+
+        order_ids, line_item_ids, reference_ids = extract_finance_reference_ids(raw)
+        if txn.order_id:
+            order_ids.add(txn.order_id)
+            reference_ids.add(txn.order_id)
+        if txn.reference_id:
+            reference_ids.add(txn.reference_id)
+
+        target_order_ids = order_ids or set()
+        target_line_ids = line_item_ids or set()
+
+        for order_id in target_order_ids:
+            totals = totals_by_order.setdefault(order_id, {
+                'marketplace': 0.0,
+                'payment_processing': 0.0,
+                'other': 0.0,
+                'shipping_label': 0.0
+            })
+            totals[fee_bucket] += value
+
+        for line_id in target_line_ids:
+            totals = totals_by_line_item.setdefault(line_id, {
+                'marketplace': 0.0,
+                'payment_processing': 0.0,
+                'other': 0.0,
+                'shipping_label': 0.0
+            })
+            totals[fee_bucket] += value
+
+    updated = 0
+    taxes_updated = 0
+    for sale in sales:
+        updated_this_sale = False
+        fees = None
+        if sale.marketplace_order_id and sale.marketplace_order_id in totals_by_order:
+            fees = totals_by_order[sale.marketplace_order_id]
+        elif sale.ebay_transaction_id and sale.ebay_transaction_id in totals_by_line_item:
+            fees = totals_by_line_item[sale.ebay_transaction_id]
+
+        if fees:
+            sale.marketplace_fee = fees['marketplace']
+            sale.payment_processing_fee = fees['payment_processing']
+            sale.other_fees = fees['other']
+            sale.shipping_cost = fees['shipping_label']
+            updated += 1
+            updated_this_sale = True
+
+        if fetch_taxes and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
+            order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
+            if order_detail:
+                parsed = parse_ebay_order_to_sale(order_detail, user_id=user_id)
+                if parsed and parsed.get('tax_collected') is not None:
+                    sale.tax_collected = parsed.get('tax_collected')
+                    taxes_updated += 1
+                    updated_this_sale = True
+
+        if updated_this_sale:
+            sale.calculate_profit()
+
+    db.session.commit()
+
+    return {
+        'success': True,
+        'updated_sales': updated,
+        'taxes_updated': taxes_updated
+    }
+
+
 @celery.task(bind=True, name='qventory.tasks.sync_ebay_finances_global')
 def sync_ebay_finances_global(self):
     app = create_app()
@@ -3818,6 +4020,48 @@ def sync_ebay_finances_global(self):
 
         log_task(
             f"=== Global finances sync complete: {users_processed} users, {errors} errors ==="
+        )
+        return {'success': True, 'users_processed': users_processed, 'errors': errors}
+
+
+@celery.task(bind=True, name='qventory.tasks.recalculate_ebay_analytics_global')
+def recalculate_ebay_analytics_global(self):
+    app = create_app()
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+
+        log_task("=== Global analytics recalculation ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_connected=True
+        ).all()
+
+        if not credentials:
+            log_task("No active eBay accounts found")
+            return {'success': True, 'users_processed': 0, 'errors': 0}
+
+        users_processed = 0
+        errors = 0
+        for cred in credentials:
+            user = User.query.get(cred.user_id)
+            if not user:
+                continue
+            try:
+                users_processed += 1
+                import_ebay_sales.run(cred.user_id, days_back=None)
+                sync_ebay_finances_user.run(cred.user_id, days_back=None)
+                reconcile_sales_from_finances(
+                    user_id=cred.user_id,
+                    days_back=None,
+                    fetch_taxes=True
+                )
+            except Exception as exc:
+                errors += 1
+                log_task(f"Analytics recalculation failed for user {cred.user_id}: {exc}")
+
+        log_task(
+            f"=== Global analytics recalculation complete: {users_processed} users, {errors} errors ==="
         )
         return {'success': True, 'users_processed': users_processed, 'errors': errors}
 

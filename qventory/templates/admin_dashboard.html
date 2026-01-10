@@ -70,6 +70,24 @@
       </div>
     </div>
 
+    <div style="background:rgba(244,114,182,0.12);border:1px solid rgba(244,114,182,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
+        <div style="flex:1;">
+          <h3 style="color:#f472b6;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-chart-line"></i> Recalculate Analytics (All Users)
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Full history refresh using Orders + Finances APIs. Updates fees, taxes, and profit accuracy.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_recalculate_analytics') }}" onsubmit="return confirm('This will re-import sales, sync finances, and reconcile fees for all users. Continue?');">
+          <button type="submit" class="btn" style="background:#f472b6;color:#fff;white-space:nowrap;">
+            <i class="fas fa-sync-alt"></i> Recalculate Analytics
+          </button>
+        </form>
+      </div>
+    </div>
+
     <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
         <div style="flex:1;min-width:220px;">

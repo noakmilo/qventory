@@ -439,6 +439,7 @@ def analytics():
     gross_sales = sum(s.sold_price for s in sales)
     total_costs = sum(s.item_cost or 0 for s in sales)
     total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales)
+    total_taxes_collected = sum(s.tax_collected or 0 for s in sales)
 
     # Calculate Liberis fees for sales in range
     total_liberis_fees = sum(s.get_liberis_fee() for s in sales)
@@ -660,6 +661,7 @@ def analytics():
                          new_listings_labels=new_listings_labels,
                          new_listings_counts=new_listings_counts,
                          expenses=expenses,
+                         taxes_collected=total_taxes_collected,
                          top_sales=top_sales,
                          receipt_stats=receipt_stats,
                          liberis_loan=liberis_loan,

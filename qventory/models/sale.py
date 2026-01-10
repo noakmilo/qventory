@@ -22,6 +22,7 @@ class Sale(db.Model):
 
     # Precios y costos
     sold_price = db.Column(db.Float, nullable=False)  # Precio de venta
+    tax_collected = db.Column(db.Float, nullable=True, default=0)  # Impuestos cobrados al comprador
     item_cost = db.Column(db.Float, nullable=True)  # Costo del item (snapshot)
 
     # Fees y gastos

@@ -205,6 +205,10 @@
       <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['marketplace']) }}</strong>
     </div>
     <div class="analytics-expense-card">
+      <span class="analytics-expense-label"><i class="fas fa-percent"></i> Sales Tax Collected</span>
+      <strong class="analytics-expense-value" style="color:#60a5fa">${{ "%.2f"|format(taxes_collected or 0) }}</strong>
+    </div>
+    <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-shipping-fast"></i> Shipping</span>
       <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['shipping']) }}</strong>
     </div>

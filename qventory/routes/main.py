@@ -4498,6 +4498,20 @@ def admin_resync_all_inventory():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/recalculate-analytics", methods=["POST"])
+@require_admin
+def admin_recalculate_analytics():
+    """Global action: recalculate analytics using Orders + Finances APIs."""
+    from qventory.tasks import recalculate_ebay_analytics_global
+
+    task = recalculate_ebay_analytics_global.delay()
+    flash(
+        f"Analytics recalculation task launched (Task ID: {task.id}).",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/delivery-heuristic", methods=["POST"])
 @require_admin
 def admin_update_delivery_heuristic():

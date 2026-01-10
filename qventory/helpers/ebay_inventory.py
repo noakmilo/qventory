@@ -1944,6 +1944,36 @@ def fetch_ebay_orders(user_id, filter_status=None, limit=100):
         }
 
 
+def fetch_ebay_order_details(user_id, order_id):
+    """
+    Fetch a single order detail from eBay Fulfillment API.
+    """
+    if not order_id:
+        return None
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("ERROR: No valid eBay access token available")
+        return None
+
+    url = f"{EBAY_API_BASE}/sell/fulfillment/v1/order/{order_id}"
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            log_inv(f"Order detail error {response.status_code}: {response.text[:200]}")
+            return None
+        return response.json()
+    except Exception as exc:
+        log_inv(f"Order detail fetch failed for {order_id}: {exc}")
+        return None
+
+
 def parse_ebay_order_to_sale(order_data, user_id=None):
     """
     Parse eBay Fulfillment API order data into Sale model format
@@ -1992,9 +2022,31 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         total = line_item.get('total', {})
         sold_price = float(total.get('value', 0)) if total else 0
 
-        # Extract shipping info
+        # Extract shipping info (buyer-paid shipping, not label cost)
         shipping_detail = line_item.get('deliveryCost', {})
-        shipping_cost = float(shipping_detail.get('shippingCost', {}).get('value', 0)) if shipping_detail else 0
+        shipping_charged = float(shipping_detail.get('shippingCost', {}).get('value', 0)) if shipping_detail else 0
+        shipping_cost = 0.0
+
+        # Extract taxes collected from buyer (if available)
+        def extract_tax_amount(node):
+            if not node:
+                return 0.0
+            if isinstance(node, list):
+                return sum(extract_tax_amount(entry) for entry in node)
+            if isinstance(node, dict):
+                amount = node.get('amount') or node.get('taxAmount') or node.get('TaxAmount')
+                if isinstance(amount, dict):
+                    amount = amount.get('value') or amount.get('Value')
+                try:
+                    return float(amount or 0)
+                except (TypeError, ValueError):
+                    return 0.0
+            return 0.0
+
+        tax_collected = 0.0
+        tax_collected += extract_tax_amount(line_item.get('taxes'))
+        tax_collected += extract_tax_amount(line_item.get('ebayCollectAndRemitTaxes'))
+        tax_collected += extract_tax_amount(line_item.get('taxDetails'))
 
         # Extract fee details if eBay provides them
         pricing_summary = order_data.get('pricingSummary', {}) or {}
@@ -2214,7 +2266,9 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
             'item_title': title,
             'item_sku': sku,
             'sold_price': sold_price,
+            'tax_collected': tax_collected,
             'shipping_cost': shipping_cost,
+            'shipping_charged': shipping_charged,
             'marketplace_fee': marketplace_fee,
             'payment_processing_fee': payment_processing_fee,
             'other_fees': other_fees,
