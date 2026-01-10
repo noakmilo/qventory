@@ -210,6 +210,35 @@
       {% set un = current_user.username %}
       <table>
         <thead>
+          {% if view_type == 'sold' %}
+          <tr>
+            <th style="width:40px;text-align:center">
+              <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+            </th>
+            <th style="width:44px"></th>
+            <th>Title</th>
+            <th>SKU</th>
+            <th class="mobile-hide">Supplier</th>
+            <th>Cost</th>
+            <th>Sold Price</th>
+            <th class="mobile-hide">Tax</th>
+            <th class="mobile-hide">Marketplace Fee</th>
+            <th class="mobile-hide">Processing Fee</th>
+            <th class="mobile-hide">Shipping Cost</th>
+            <th class="mobile-hide">Shipping Charged</th>
+            <th class="mobile-hide">Other Fees</th>
+            <th>
+              Net Profit
+              <span title="Net Profit = (Sold Price - Tax - Cost) - (Marketplace Fee + Processing Fee + Shipping Cost + Other Fees - Shipping Charged)" style="margin-left:6px;color:var(--sub);cursor:help;">
+                <i class="fas fa-info-circle"></i>
+              </span>
+            </th>
+            <th>Sold At</th>
+            <th>Location</th>
+            <th class="mobile-hide">Listings</th>
+            <th></th>
+          </tr>
+          {% else %}
           <tr>
             <th style="width:40px;text-align:center">
               <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
@@ -225,6 +254,7 @@
             <th class="mobile-hide">Listings</th>
             <th></th>
           </tr>
+          {% endif %}
         </thead>
         <tbody id="itemsTableBody">
           {% for it in items %}
