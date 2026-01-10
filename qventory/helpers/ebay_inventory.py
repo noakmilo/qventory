@@ -2412,6 +2412,9 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
         return {'success': True, 'orders': [], 'error': None, 'fetched': 0, 'filtered': 0}
 
     max_history = days_back if days_back is not None else max_history_days
+    if max_history > 730:
+        log_inv(f"Limiting historical scan to 730 days (eBay Fulfillment API limit). Requested: {max_history}")
+        max_history = 730
     earliest_allowed = window_end - timedelta(days=max_history)
 
     aggregated_orders = []
