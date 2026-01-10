@@ -4264,7 +4264,7 @@ def sync_and_purge_inactive_items(self):
     with app.app_context():
         from qventory.models.user import User
         from qventory.models.item import Item
-        from qventory.helpers.ebay_inventory import get_all_inventory
+        from qventory.helpers.ebay_inventory import fetch_active_listings_snapshot
         from sqlalchemy import and_
 
         log_task("=== ADMIN: Starting eBay sync and purge task ===")
@@ -4288,14 +4288,19 @@ def sync_and_purge_inactive_items(self):
 
                 # Get current active listings from eBay
                 log_task(f"  Fetching active listings from eBay...")
-                ebay_result = get_all_inventory(user.id, listing_status='ACTIVE')
+                snapshot = fetch_active_listings_snapshot(user.id)
 
-                if not ebay_result['success']:
-                    log_task(f"  ✗ Failed to fetch eBay inventory: {ebay_result.get('error')}")
+                if not snapshot.get('success'):
+                    log_task(f"  ✗ Failed to fetch eBay inventory: {snapshot.get('error')}")
                     continue
 
-                ebay_items = ebay_result['items']
-                log_task(f"  Found {len(ebay_items)} active listings on eBay")
+                ebay_items = snapshot.get('offers', [])
+                can_mark_inactive = snapshot.get('can_mark_inactive', False)
+                sources = ', '.join(snapshot.get('sources', [])) or 'unknown'
+                log_task(
+                    f"  Found {len(ebay_items)} active listings on eBay "
+                    f"(sources: {sources}, can_mark_inactive={can_mark_inactive})"
+                )
 
                 # Get all active items in our database for this user
                 db_items = Item.query.filter_by(
@@ -4311,12 +4316,33 @@ def sync_and_purge_inactive_items(self):
                 # Create a set of active eBay listing IDs for fast lookup
                 active_ebay_listing_ids = set()
                 for ebay_item in ebay_items:
-                    listing_id = ebay_item.get('listing_id') or ebay_item.get('ebay_listing_id')
+                    listing_id = (
+                        ebay_item.get('ebay_listing_id')
+                        or ebay_item.get('listingId')
+                        or ebay_item.get('listing_id')
+                    )
                     if listing_id:
                         active_ebay_listing_ids.add(str(listing_id))
 
                 if not ebay_items and db_items:
                     log_task("  ⚠ No active listings returned from eBay; skipping inactive marking")
+                    db.session.commit()
+                    users_processed += 1
+                    continue
+
+                if not can_mark_inactive:
+                    log_task("  ⚠ Incomplete listing snapshot; skipping inactive marking")
+                    db.session.commit()
+                    users_processed += 1
+                    continue
+
+                db_listing_ids = {str(item.ebay_listing_id) for item in db_items if item.ebay_listing_id}
+                overlap_count = len(active_ebay_listing_ids.intersection(db_listing_ids))
+                if db_listing_ids and active_ebay_listing_ids and overlap_count == 0:
+                    log_task(
+                        "  ⚠ No overlap between eBay listings and DB listings; "
+                        "skipping inactive marking to avoid mass deactivation"
+                    )
                     db.session.commit()
                     users_processed += 1
                     continue
