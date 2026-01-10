@@ -2980,6 +2980,18 @@ def poll_user_listings(credential):
             Item.ebay_listing_id != ''
         ).all()
 
+        if not active_ebay_listing_ids and existing_listing_ids:
+            log_task("    ⚠ No active listings returned from eBay; skipping inactive marking")
+            active_db_items = []
+        else:
+            overlap_count = len(active_ebay_listing_ids.intersection(existing_listing_ids))
+            if existing_listing_ids and active_ebay_listing_ids and overlap_count == 0:
+                log_task(
+                    "    ⚠ No overlap between eBay listings and DB listings; "
+                    "skipping inactive marking to avoid mass deactivation"
+                )
+                active_db_items = []
+
         for db_item in active_db_items:
             if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
                 if db_item.notes and 'Relist pending:' in db_item.notes:
@@ -4302,6 +4314,12 @@ def sync_and_purge_inactive_items(self):
                     listing_id = ebay_item.get('listing_id') or ebay_item.get('ebay_listing_id')
                     if listing_id:
                         active_ebay_listing_ids.add(str(listing_id))
+
+                if not ebay_items and db_items:
+                    log_task("  ⚠ No active listings returned from eBay; skipping inactive marking")
+                    db.session.commit()
+                    users_processed += 1
+                    continue
 
                 # Check each database item against eBay
                 marked_inactive = 0
