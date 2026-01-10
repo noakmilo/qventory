@@ -1842,6 +1842,18 @@ tbody tr:hover td{
   font-size: 13px;
 }
 
+.inline-edit__form input[type="number"] {
+  width: 8ch;
+  min-width: 8ch;
+  -moz-appearance: textfield;
+}
+
+.inline-edit__form input[type="number"]::-webkit-outer-spin-button,
+.inline-edit__form input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .inline-edit__actions {
   display: flex;
   gap: 8px;
@@ -3043,6 +3055,54 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   align-items: center;
   color: var(--sub);
   font-size: 14px;
+}
+
+.tooltip-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  color: var(--sub);
+  cursor: help;
+}
+
+.tooltip-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f1115;
+  color: #e5e7eb;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  transition: opacity 0.15s ease;
+  z-index: 20;
+}
+
+.tooltip-icon::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #0f1115 transparent transparent transparent;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 20;
+}
+
+.tooltip-icon:hover::after,
+.tooltip-icon:hover::before {
+  opacity: 1;
 }
 
 .analytics-modal {
