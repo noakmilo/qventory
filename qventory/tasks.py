@@ -4385,7 +4385,7 @@ def sync_and_purge_inactive_items(self):
         return {
             'success': True,
             'users_processed': users_processed,
-            'total_users': len(users_with_ebay),
+            'total_users': len(credentials),
             'items_synced': total_synced,
             'items_marked_inactive': total_marked_inactive,
             'items_purged': total_purged
