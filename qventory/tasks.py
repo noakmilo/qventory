@@ -2791,7 +2791,7 @@ def poll_user_listings(credential):
     from datetime import datetime, timedelta
     from qventory.models.item import Item
     from qventory.helpers import generate_sku
-    from qventory.helpers.ebay_inventory import get_active_listings_trading_api
+    from qventory.helpers.ebay_inventory import get_active_listings, get_active_listings_trading_api
 
     user_id = credential.user_id
 
@@ -2825,9 +2825,67 @@ def poll_user_listings(credential):
             log_task(f"    ✗ User has reached plan limit (0 items remaining)")
             return {'new_listings': 0, 'errors': ['Plan limit reached']}
 
-        # Use the same proven function as manual import
+        # Fetch active listings from eBay (Offers API first, Trading API fallback)
         log_task(f"    Fetching active listings from eBay...")
-        ebay_items, failed_items = get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True)
+        ebay_items = []
+        failed_items = []
+        try:
+            offers = []
+            offset = 0
+            limit = 200
+            max_items = 1000
+            while len(offers) < max_items:
+                result = get_active_listings(user_id, limit=limit, offset=offset)
+                page_offers = result.get('offers', []) or []
+                if not page_offers:
+                    break
+                offers.extend(page_offers)
+                if len(page_offers) < limit:
+                    break
+                offset += limit
+
+            if offers:
+                log_task(f"    Offers API returned {len(offers)} offers")
+                for offer in offers[:max_items]:
+                    sku = offer.get('sku', '')
+                    listing_id = offer.get('listingId')
+                    pricing = offer.get('pricingSummary', {}) or {}
+                    price_value = pricing.get('price', {}).get('value', 0)
+                    available_quantity = offer.get('availableQuantity', 0)
+                    listing = offer.get('listing', {}) or {}
+                    ebay_items.append({
+                        'sku': sku,
+                        'product': {
+                            'title': listing.get('title', offer.get('merchantLocationKey', f'Listing {listing_id}')),
+                            'description': listing.get('description', ''),
+                            'imageUrls': listing.get('pictureUrls', [])
+                        },
+                        'availability': {
+                            'shipToLocationAvailability': {
+                                'quantity': available_quantity
+                            }
+                        },
+                        'condition': offer.get('listingPolicies', {}).get('condition', 'USED_EXCELLENT'),
+                        'ebay_listing_id': listing_id,
+                        'ebay_offer_id': offer.get('offerId'),
+                        'item_price': float(price_value) if price_value else 0,
+                        'ebay_url': f"https://www.ebay.com/itm/{listing_id}" if listing_id else None,
+                        'listing_status': offer.get('status', 'UNKNOWN'),
+                        'source': 'offers_api'
+                    })
+            else:
+                log_task("    Offers API returned 0 offers")
+        except Exception as offers_error:
+            log_task(f"    Offers API error: {offers_error}")
+
+        if not ebay_items:
+            log_task("    Falling back to Trading API for active listings...")
+            ebay_items, failed_items = get_active_listings_trading_api(
+                user_id,
+                max_items=1000,
+                collect_failures=True
+            )
+
         log_task(f"    Found {len(ebay_items)} active listings on eBay")
 
         if failed_items:
@@ -3232,18 +3290,16 @@ def sync_ebay_active_inventory_auto(self):
                         offer_data = offers_by_listing[item.ebay_listing_id]
 
                     if offer_data:
+                        if not item.is_active:
+                            item.is_active = True
+                            updated_count += 1
+
                         # Item still exists - update price
                         if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
                             item.item_price = offer_data['item_price']
                             updated_count += 1
 
-                        # Update status
-                        listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
-                        ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED', 'CANCELED'}
-
-                        if listing_status in ended_statuses and item.is_active:
-                            item.is_active = False
-                            updated_count += 1
+                        # Listing still present in active snapshot; keep active.
                     else:
                         # Only mark items inactive if we are confident we fetched the full offer set
                         if can_mark_inactive:

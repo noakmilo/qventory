@@ -2338,16 +2338,10 @@ def sync_ebay_inventory():
                 if not item.ebay_sku and offer_data.get('ebay_sku'):
                     item.ebay_sku = offer_data['ebay_sku']
 
-                # Update listing status
+                # Update listing status (reactivate if present and active)
                 listing_status = str(offer_data.get('listing_status', 'ACTIVE')).upper()
-                ended_statuses = {'ENDED', 'UNPUBLISHED', 'INACTIVE', 'CLOSED', 'ARCHIVED', 'CANCELED'}
                 active_statuses = {'PUBLISHED', 'ACTIVE', 'IN_PROGRESS', 'SCHEDULED', 'ON_HOLD', 'LIVE'}
-
-                if listing_status in ended_statuses:
-                    if item.is_active:
-                        item.is_active = False
-                        updated_count += 1
-                elif listing_status in active_statuses or not listing_status:
+                if listing_status in active_statuses or not listing_status:
                     if not item.is_active:
                         item.is_active = True
             else:
