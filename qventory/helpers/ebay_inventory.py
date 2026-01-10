@@ -2140,6 +2140,8 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         line_pricing_summary = line_item.get('pricingSummary', {}) or {}
 
         marketplace_fee = extract_money(
+            order_data.get('totalMarketplaceFee'),
+            order_data.get('marketplaceFee'),
             pricing_summary.get('totalMarketplaceFee'),
             pricing_summary.get('marketplaceFee'),
             pricing_summary.get('finalValueFee'),
@@ -2149,6 +2151,8 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         )
 
         payment_processing_fee = extract_money(
+            order_data.get('totalPaymentProcessingFee'),
+            order_data.get('paymentProcessingFee'),
             pricing_summary.get('totalPaymentProcessingFee'),
             pricing_summary.get('paymentProcessingFee'),
             line_pricing_summary.get('totalPaymentProcessingFee'),
