@@ -4034,7 +4034,7 @@ def recalculate_ebay_analytics_global(self):
         log_task("=== Global analytics recalculation ===")
         credentials = MarketplaceCredential.query.filter_by(
             marketplace='ebay',
-            is_connected=True
+            is_active=True
         ).all()
 
         if not credentials:
