@@ -4264,26 +4264,32 @@ def sync_and_purge_inactive_items(self):
     with app.app_context():
         from qventory.models.user import User
         from qventory.models.item import Item
+        from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.helpers.ebay_inventory import fetch_active_listings_snapshot
         from sqlalchemy import and_
 
         log_task("=== ADMIN: Starting eBay sync and purge task ===")
 
-        # Find all users with eBay connected
-        users_with_ebay = User.query.filter(
-            User.ebay_access_token.isnot(None),
-            User.ebay_access_token != ''
+        # Find all users with active eBay credentials
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
         ).all()
 
-        log_task(f"Found {len(users_with_ebay)} users with eBay connected")
+        log_task(f"Found {len(credentials)} active eBay credentials")
 
         total_synced = 0
         total_marked_inactive = 0
         total_purged = 0
         users_processed = 0
 
-        for user in users_with_ebay:
+        for cred in credentials:
             try:
+                user = cred.owner or User.query.get(cred.user_id)
+                if not user:
+                    log_task(f"\n--- Skipping credential {cred.id}: user not found ---")
+                    continue
+
                 log_task(f"\n--- Processing user {user.id}: {user.username} ---")
 
                 # Get current active listings from eBay
@@ -4372,7 +4378,7 @@ def sync_and_purge_inactive_items(self):
                 continue
 
         log_task(f"\n=== Sync and purge complete ===")
-        log_task(f"Users processed: {users_processed}/{len(users_with_ebay)}")
+        log_task(f"Users processed: {users_processed}/{len(credentials)}")
         log_task(f"Total eBay items synced: {total_synced}")
         log_task(f"Total items marked inactive: {total_marked_inactive}")
 
