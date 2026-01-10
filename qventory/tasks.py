@@ -3998,7 +3998,7 @@ def sync_ebay_finances_global(self):
         log_task("=== Global eBay finances sync ===")
         credentials = MarketplaceCredential.query.filter_by(
             marketplace='ebay',
-            is_connected=True
+            is_active=True
         ).all()
 
         if not credentials:
