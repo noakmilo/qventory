@@ -3909,6 +3909,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
     if start_date is not None:
         tx_query = tx_query.filter(EbayFinanceTransaction.transaction_date >= start_date)
     transactions = tx_query.all()
+    has_finances = len(transactions) > 0
 
     totals_by_order = {}
     totals_by_line_item = {}
@@ -3966,6 +3967,12 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
             sale.shipping_cost = fees['shipping_label']
             updated += 1
             updated_this_sale = True
+        elif not has_finances:
+            shipping_charged = sale.shipping_charged or 0
+            if (sale.shipping_cost or 0) == 0 and shipping_charged > 0:
+                # Fallback: use buyer-paid shipping as estimated label cost
+                sale.shipping_cost = shipping_charged
+                updated_this_sale = True
 
         if fetch_taxes and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
             order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
