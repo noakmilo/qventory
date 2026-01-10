@@ -32,8 +32,25 @@ def _fetch_finances_endpoint(user_id, path, params):
         return {'success': False, 'error': str(exc), 'data': []}
 
     if response.status_code != 200:
-        log_inv(f"Finances API error {response.status_code}: {response.text[:300]}")
-        return {'success': False, 'error': response.text, 'data': []}
+        body_preview = response.text[:500] if response.text else ""
+        correlation_id = response.headers.get("x-ebay-correlation-id")
+        log_inv(
+            f"Finances API error {response.status_code} "
+            f"(correlation_id={correlation_id}): {body_preview}"
+        )
+        if response.status_code == 404:
+            return {
+                'success': False,
+                'error': 'finances_api_unavailable',
+                'data': []
+            }
+        if response.status_code == 403:
+            return {
+                'success': False,
+                'error': 'finances_api_forbidden',
+                'data': []
+            }
+        return {'success': False, 'error': response.text or 'unknown_error', 'data': []}
 
     try:
         payload = response.json()
