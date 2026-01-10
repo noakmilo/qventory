@@ -23,7 +23,8 @@ def _fetch_finances_endpoint(user_id, path, params):
     url = f"{EBAY_API_BASE}{path}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
 
     try:
@@ -83,7 +84,7 @@ def fetch_ebay_payouts(user_id, start_date, end_date, limit=200, offset=0):
     return {'success': True, 'payouts': payouts, 'total': payload.get('total')}
 
 
-def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0):
+def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0, order_id=None):
     start_iso = _format_iso(start_date)
     end_iso = _format_iso(end_date)
     filters = []
@@ -96,6 +97,8 @@ def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0):
     }
     if filters:
         params["filter"] = ",".join(filters)
+    if order_id:
+        params["orderId"] = order_id
 
     result = _fetch_finances_endpoint(user_id, "/sell/finances/v1/transaction", params)
     if not result.get('success'):
@@ -121,11 +124,18 @@ def fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200, max_pages=1
     return {'success': True, 'payouts': payouts}
 
 
-def fetch_all_ebay_transactions(user_id, start_date, end_date, limit=200, max_pages=10):
+def fetch_all_ebay_transactions(user_id, start_date, end_date, limit=200, max_pages=10, order_id=None):
     transactions = []
     offset = 0
     for _ in range(max_pages):
-        result = fetch_ebay_transactions(user_id, start_date, end_date, limit=limit, offset=offset)
+        result = fetch_ebay_transactions(
+            user_id,
+            start_date,
+            end_date,
+            limit=limit,
+            offset=offset,
+            order_id=order_id
+        )
         if not result.get('success'):
             return {'success': False, 'error': result.get('error'), 'transactions': transactions}
         page = result.get('transactions', []) or []
