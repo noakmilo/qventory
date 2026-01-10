@@ -57,12 +57,15 @@ backup_postgresql
 # === 2) Actualizar código ===
 cd "${APP_DIR}"
 
-# Fuerza remoto a HTTPS público
 CURRENT_URL="$(git remote get-url origin || true)"
-if echo "${CURRENT_URL}" | grep -qE '^git@github\.com:'; then
-  log "Cambiando remoto SSH → HTTPS"
-  git remote set-url origin "https://github.com/noakmilo/qventory.git"
+if [ -n "${DEPLOY_REMOTE_URL:-}" ]; then
+  log "Usando remoto configurado por DEPLOY_REMOTE_URL"
+  git remote set-url origin "${DEPLOY_REMOTE_URL}"
+  CURRENT_URL="$(git remote get-url origin || true)"
 fi
+
+log "Remoto actual: ${CURRENT_URL}"
+log "Commit actual: $(git rev-parse --short HEAD)"
 
 log "git fetch --all"
 git fetch --all --prune
@@ -79,6 +82,7 @@ fi
 
 log "git reset --hard ${UPSTREAM}"
 git reset --hard "${UPSTREAM}"
+log "Commit despues del reset: $(git rev-parse --short HEAD)"
 
 # === 3) Actualizar dependencias ===
 log "Actualizando pip y requirements"
