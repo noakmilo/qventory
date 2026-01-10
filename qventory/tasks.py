@@ -3889,7 +3889,11 @@ def classify_finance_fee(txn_raw, amount):
 def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False):
     from qventory.models.sale import Sale
     from qventory.models.ebay_finance import EbayFinanceTransaction
-    from qventory.helpers.ebay_inventory import fetch_ebay_order_details, parse_ebay_order_to_sale
+    from qventory.helpers.ebay_inventory import (
+        fetch_ebay_order_details,
+        parse_ebay_order_to_sale,
+        fetch_trading_order_fees
+    )
 
     start_date = None
     if days_back is not None:
@@ -3913,6 +3917,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
 
     totals_by_order = {}
     totals_by_line_item = {}
+    trading_fee_cache = {}
 
     for txn in transactions:
         raw = txn.raw_json or {}
@@ -3968,6 +3973,34 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False)
             updated += 1
             updated_this_sale = True
         elif not has_finances:
+            if (sale.marketplace_fee or 0) == 0 and sale.marketplace_order_id:
+                fee_data = trading_fee_cache.get(sale.marketplace_order_id)
+                if fee_data is None:
+                    fee_data = fetch_trading_order_fees(user_id, sale.marketplace_order_id)
+                    trading_fee_cache[sale.marketplace_order_id] = fee_data
+
+                if fee_data:
+                    fee_value = None
+                    if sale.ebay_transaction_id:
+                        fee_value = (
+                            fee_data.get('by_order_line_item', {}).get(sale.ebay_transaction_id)
+                            or fee_data.get('by_transaction', {}).get(sale.ebay_transaction_id)
+                        )
+
+                    if fee_value is None:
+                        order_line_fees = list(fee_data.get('by_order_line_item', {}).values())
+                        transaction_fees = list(fee_data.get('by_transaction', {}).values())
+                        if len(order_line_fees) == 1:
+                            fee_value = order_line_fees[0]
+                        elif len(transaction_fees) == 1:
+                            fee_value = transaction_fees[0]
+                        elif fee_data.get('total_final_value_fee'):
+                            fee_value = fee_data.get('total_final_value_fee')
+
+                    if fee_value is not None:
+                        sale.marketplace_fee = fee_value
+                        updated_this_sale = True
+
             shipping_charged = sale.shipping_charged or 0
             if (sale.shipping_cost or 0) == 0 and shipping_charged > 0:
                 # Fallback: use buyer-paid shipping as estimated label cost

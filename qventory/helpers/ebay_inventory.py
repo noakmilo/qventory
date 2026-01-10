@@ -378,6 +378,93 @@ def get_listing_time_details(user_id, listing_id):
         return {}
 
 
+def fetch_trading_order_fees(user_id, order_id):
+    """
+    Fetch FinalValueFee per order using Trading API GetOrders.
+    Returns dict with total and per-line-item fees if available.
+    """
+    if not order_id:
+        return {}
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("Cannot fetch order fees: no access token")
+        return {}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+    if not app_id:
+        log_inv("Cannot fetch order fees: missing EBAY_CLIENT_ID")
+        return {}
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'GetOrders',
+        'X-EBAY-API-APP-NAME': app_id,
+        'X-EBAY-API-IAF-TOKEN': access_token,
+        'Content-Type': 'text/xml'
+    }
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <OrderIDArray>
+    <OrderID>{order_id}</OrderID>
+  </OrderIDArray>
+  <IncludeFinalValueFee>true</IncludeFinalValueFee>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetOrdersRequest>'''
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"GetOrders status for {order_id}: {response.status_code}")
+        if response.status_code != 200:
+            log_inv(f"GetOrders error body: {response.text[:500]}")
+            return {}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+        if ack is not None and ack.text in ['Failure', 'PartialFailure']:
+            error = root.find('.//ebay:Errors/ebay:LongMessage', _XML_NS)
+            if error is not None:
+                log_inv(f"GetOrders error: {error.text}")
+            return {}
+
+        order_elem = root.find('.//ebay:OrderArray/ebay:Order', _XML_NS)
+        if order_elem is None:
+            log_inv("GetOrders response missing Order element")
+            return {}
+
+        total_fee = 0.0
+        by_order_line_item = {}
+        by_transaction = {}
+
+        transactions = order_elem.findall('.//ebay:TransactionArray/ebay:Transaction', _XML_NS)
+        for txn in transactions:
+            fee_elem = txn.find('ebay:FinalValueFee', _XML_NS)
+            fee_value = 0.0
+            if fee_elem is not None:
+                fee_value = float(fee_elem.text or 0)
+            total_fee += fee_value
+
+            order_line_item_id = txn.find('ebay:OrderLineItemID', _XML_NS)
+            if order_line_item_id is not None and order_line_item_id.text:
+                by_order_line_item[order_line_item_id.text] = fee_value
+
+            transaction_id = txn.find('ebay:TransactionID', _XML_NS)
+            if transaction_id is not None and transaction_id.text:
+                by_transaction[transaction_id.text] = fee_value
+
+        return {
+            'order_id': order_id,
+            'total_final_value_fee': total_fee,
+            'by_order_line_item': by_order_line_item,
+            'by_transaction': by_transaction
+        }
+    except Exception as exc:
+        log_inv(f"Exception calling GetOrders for {order_id}: {exc}")
+        return {}
+
+
 def get_inventory_items(user_id, limit=200, offset=0):
     """
     Get inventory items from eBay Inventory API
