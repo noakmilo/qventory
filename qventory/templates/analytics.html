@@ -130,70 +130,6 @@
 
   </div>
 
-  <!-- Liberis Loan Progress (if active) -->
-  {% if liberis_loan %}
-  <div style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(5,150,105,0.1));border:1px solid rgba(16,185,129,0.3);border-radius:12px;padding:24px;margin-bottom:24px;box-shadow:0 4px 6px rgba(0,0,0,0.1)">
-    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-      <div>
-        <h3 style="margin:0 0 6px 0;font-size:20px;color:#10b981;display:flex;align-items:center;gap:8px">
-          <i class="fas fa-hand-holding-usd"></i> Liberis Loan Repayment
-        </h3>
-        <p style="margin:0;color:var(--sub);font-size:13px">
-          {{ liberis_loan.percentage }}% fee on sales since {{ liberis_loan.start_date.strftime('%b %d, %Y') }}
-        </p>
-      </div>
-      <a href="{{ url_for('main.liberis_loan_settings') }}" style="padding:8px 16px;background:rgba(16,185,129,0.2);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;transition:all 0.2s">
-        <i class="fas fa-cog"></i> Manage
-      </a>
-    </div>
-
-    <!-- Progress Bar -->
-    <div style="margin-bottom:16px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
-        <span style="color:var(--sub)">Repayment Progress</span>
-        <span style="font-weight:600;color:#10b981">{{ "%.1f"|format(liberis_loan.progress_percentage) }}%</span>
-      </div>
-      <div style="background:rgba(255,255,255,0.1);border-radius:999px;height:16px;overflow:hidden;border:1px solid rgba(16,185,129,0.2)">
-        <div style="background:linear-gradient(90deg, #10b981, #059669);height:100%;width:{{ liberis_loan.progress_percentage }}%;transition:width 0.5s ease;{% if liberis_loan.is_paid_off %}box-shadow:0 0 20px rgba(16,185,129,0.5){% endif %}"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:14px">
-        <span style="color:#10b981;font-weight:600">
-          <i class="fas fa-check-circle"></i> ${{ "%.2f"|format(liberis_loan.paid_amount) }}
-        </span>
-        <span style="color:var(--sub)">
-          ${{ "%.2f"|format(liberis_loan.total_amount) }} total
-        </span>
-      </div>
-    </div>
-
-    <!-- Stats Grid -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
-      <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:var(--sub);margin-bottom:4px">Remaining</div>
-        <div style="font-size:20px;font-weight:700;color:#10b981">${{ "%.2f"|format(liberis_loan.remaining_amount) }}</div>
-      </div>
-      <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-size:11px;color:var(--sub);margin-bottom:4px">This Period</div>
-        <div style="font-size:20px;font-weight:700;color:#ef4444">${{ "%.2f"|format(expenses['liberis']) }}</div>
-      </div>
-      {% if liberis_loan.is_paid_off %}
-      <div style="background:rgba(34,197,94,0.2);border-radius:8px;padding:12px;text-align:center;grid-column:1/-1">
-        <div style="font-size:18px;font-weight:700;color:#22c55e">
-          <i class="fas fa-trophy"></i> Loan Paid Off!
-        </div>
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Recalculate Button -->
-    <div style="margin-top:12px;text-align:right">
-      <button onclick="recalculateLiberis()" class="btn" style="font-size:12px;padding:8px 12px">
-        <i class="fas fa-sync-alt"></i> Recalculate Progress
-      </button>
-    </div>
-  </div>
-  {% endif %}
-
   <!-- Expenses -->
   <div class="analytics-expenses">
     <div class="analytics-expense-card">
@@ -216,12 +152,6 @@
       <span class="analytics-expense-label"><i class="fab fa-ebay"></i> Store & Listing Fees</span>
       <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['store_subscription']) }}</strong>
     </div>
-    {% if liberis_loan %}
-    <div class="analytics-expense-card">
-      <span class="analytics-expense-label"><i class="fas fa-hand-holding-usd"></i> Liberis Fee</span>
-      <strong class="analytics-expense-value" style="color:#10b981">${{ "%.2f"|format(expenses['liberis']) }}</strong>
-    </div>
-    {% endif %}
     <div class="analytics-expense-card">
       <span class="analytics-expense-label"><i class="fas fa-building"></i> Business Expenses</span>
       <strong class="analytics-expense-value" style="color:#ef4444">${{ "%.2f"|format(expenses['business_expenses']) }}</strong>
@@ -665,39 +595,6 @@ new Chart(listingsCtx, {
   }
 });
 
-// Recalculate Liberis loan progress
-async function recalculateLiberis() {
-  const btn = event.target.closest('button');
-  const originalContent = btn.innerHTML;
-
-  try {
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Recalculating...';
-
-    const response = await fetch('/expenses/api/liberis/recalculate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const data = await response.json();
-
-    if (data.ok) {
-      // Reload page to show updated progress
-      window.location.reload();
-    } else {
-      alert('Error: ' + (data.error || 'Failed to recalculate'));
-      btn.innerHTML = originalContent;
-      btn.disabled = false;
-    }
-  } catch (error) {
-    console.error('Error recalculating Liberis:', error);
-    alert('Error: ' + error.message);
-    btn.innerHTML = originalContent;
-    btn.disabled = false;
-  }
-}
 </script>
 
 {% endblock %}

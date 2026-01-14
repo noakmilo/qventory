@@ -931,14 +931,6 @@ def import_ebay_sales(self, user_id, days_back=None):
 
             log_task(f"✅ Sales import complete: {imported_count} new, {updated_count} updated, {skipped_count} skipped")
 
-            # Recalculate Liberis loan if there's an active one
-            from qventory.models.liberis_loan import LiberisLoan
-            liberis_loan = LiberisLoan.get_active_loan(user_id)
-            if liberis_loan and (imported_count > 0 or updated_count > 0):
-                log_task(f"Recalculating Liberis loan repayment...")
-                liberis_loan.recalculate_paid_amount()
-                log_task(f"  Liberis: ${liberis_loan.paid_amount:.2f} / ${liberis_loan.total_amount:.2f} ({liberis_loan.progress_percentage:.1f}%)")
-
             return {
                 'success': True,
                 'imported': imported_count,

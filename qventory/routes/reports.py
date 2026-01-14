@@ -441,9 +441,6 @@ def analytics():
     total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales)
     total_taxes_collected = sum(s.tax_collected or 0 for s in sales)
 
-    # Calculate Liberis fees for sales in range
-    total_liberis_fees = sum(s.get_liberis_fee() for s in sales)
-
     net_sales = sum((s.net_profit or 0) - (s.tax_collected or 0) for s in sales)
 
     avg_gross_per_sale = gross_sales / total_sales if total_sales > 0 else 0
@@ -519,7 +516,6 @@ def analytics():
         "shipping": sum(s.shipping_cost or 0 for s in sales),
         "store_subscription": store_subscription_total,
         "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
-        "liberis": total_liberis_fees,  # Liberis loan repayment fees
     }
 
     # Build daily trends
@@ -641,10 +637,6 @@ def analytics():
         'total_amount': float(total_receipts_amount)
     }
 
-    # Get active Liberis loan for display
-    from qventory.models.liberis_loan import LiberisLoan
-    liberis_loan = LiberisLoan.get_active_loan(current_user.id)
-
     return render_template("analytics.html",
                          range_param=range_param,
                          total_sales=total_sales,
@@ -667,7 +659,6 @@ def analytics():
                          taxes_collected=total_taxes_collected,
                          top_sales=top_sales,
                          receipt_stats=receipt_stats,
-                         liberis_loan=liberis_loan,
                          payouts_table=payouts_table,
                          adjustments_table=adjustments_table,
                          payout_totals=payout_totals)

@@ -73,7 +73,7 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = Sold Price - Item Cost - Fees - Shipping + Shipping Charged - Liberis Fee
+        Net Profit = Sold Price - Item Cost - Fees - Shipping + Shipping Charged
 
         Si no hay item_cost:
         - gross_profit = None
@@ -89,23 +89,18 @@ class Sale(db.Model):
         else:
             self.gross_profit = None
 
-        # Calculate Liberis fee if applicable
-        liberis_fee = self.get_liberis_fee()
-
-        # Calculate total fees (including Liberis), rounding each component to cents
+        # Calculate total fees, rounding each component to cents
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         shipping_cost = round(self.shipping_cost or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
         shipping_charged = round(self.shipping_charged or 0, 2)
-        liberis_fee = round(liberis_fee or 0, 2)
 
         total_fees = (
             marketplace_fee +
             processing_fee +
             shipping_cost +
-            other_fees +
-            liberis_fee -
+            other_fees -
             shipping_charged
         )
 
@@ -118,30 +113,3 @@ class Sale(db.Model):
             # Even without item_cost, show what's left after fees
             # This gives the seller visibility of actual payout
             self.net_profit = revenue - total_fees
-
-    def get_liberis_fee(self):
-        """
-        Calculate Liberis fee for this sale if applicable
-
-        Returns:
-            float: Liberis fee amount (0 if no active loan or sale is before loan start date)
-        """
-        from qventory.models.liberis_loan import LiberisLoan
-        from datetime import datetime
-
-        # Get active loan for user
-        loan = LiberisLoan.get_active_loan(self.user_id)
-
-        if not loan:
-            return 0
-
-        # Only apply fee if sale is after loan start date
-        if not self.sold_at:
-            return 0
-
-        sale_date = self.sold_at.date()
-        if sale_date < loan.start_date:
-            return 0
-
-        # Calculate fee
-        return loan.calculate_fee_for_sale(self.sold_price)
