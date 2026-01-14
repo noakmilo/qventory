@@ -73,7 +73,7 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = Sold Price - Item Cost - Taxes - Total Selling Cost
+        Net Profit = Sold Price - Item Cost - Taxes - Total Selling Cost - Shipping Charged
 
         Si no hay item_cost:
         - gross_profit = None
@@ -89,7 +89,7 @@ class Sale(db.Model):
         else:
             self.gross_profit = None
 
-        # Total selling cost: marketplace + processing + other fees + shipping charged
+        # Total selling cost: marketplace + processing + other fees (shipping charged tracked separately)
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
@@ -98,16 +98,15 @@ class Sale(db.Model):
         total_fees = (
             marketplace_fee +
             processing_fee +
-            other_fees +
-            shipping_charged
+            other_fees
         )
 
         # Calculate net profit
         # If we have item_cost, use gross_profit - fees
         # If we don't have item_cost, show sold_price - fees (partial profit)
         if self.gross_profit is not None:
-            self.net_profit = self.gross_profit - total_fees
+            self.net_profit = self.gross_profit - total_fees - shipping_charged
         else:
             # Even without item_cost, show what's left after fees
             # This gives the seller visibility of actual payout
-            self.net_profit = revenue - total_fees
+            self.net_profit = revenue - total_fees - shipping_charged
