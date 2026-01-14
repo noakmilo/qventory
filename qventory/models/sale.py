@@ -89,7 +89,7 @@ class Sale(db.Model):
         else:
             self.gross_profit = None
 
-        # Total selling cost: marketplace + processing + other fees (shipping charged tracked separately)
+        # Total selling cost: marketplace + processing + other fees (shipping cost tracked separately)
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)

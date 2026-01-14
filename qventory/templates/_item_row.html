@@ -75,10 +75,8 @@
   <td>{% if it.item_price %}<span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(it.item_price) }}</span>{% else %}—{% endif %}</td>
   {% if view_type == 'sold' %}
   <td class="mobile-hide">${{ '%.2f'|format(it.tax_collected or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format(it.marketplace_fee or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format(it.payment_processing_fee or 0) }}</td>
   <td class="mobile-hide">${{ '%.2f'|format(it.shipping_charged or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format(it.other_fees or 0) }}</td>
+  <td class="mobile-hide">${{ '%.2f'|format((it.marketplace_fee or 0) + (it.payment_processing_fee or 0) + (it.other_fees or 0)) }}</td>
   <td class="{{ 'positive' if (it.net_profit or 0) >= 0 else 'negative' }}">
     ${{ '%.2f'|format(it.net_profit or 0) }}
   </td>
