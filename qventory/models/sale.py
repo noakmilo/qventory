@@ -73,19 +73,18 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = Sold Price - Item Cost - Taxes - Total Selling Cost - Shipping Charged
+        Net Profit = Total Sales - Item Cost - Taxes - Total Selling Cost - Shipping Cost
 
         Si no hay item_cost:
         - gross_profit = None
         - net_profit = sold_price - fees (muestra pérdida/ganancia sin conocer costo)
         """
-        # Exclude collected taxes from revenue for profit calculations
         tax_collected = self.tax_collected or 0
-        revenue = (self.sold_price or 0) - tax_collected
+        total_sales = (self.sold_price or 0) + tax_collected
 
         # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
-            self.gross_profit = revenue - self.item_cost
+            self.gross_profit = total_sales - tax_collected - self.item_cost
         else:
             self.gross_profit = None
 
@@ -93,7 +92,7 @@ class Sale(db.Model):
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
-        shipping_charged = round(self.shipping_charged or 0, 2)
+        shipping_cost = round(self.shipping_charged or 0, 2)
 
         total_fees = (
             marketplace_fee +
@@ -105,8 +104,8 @@ class Sale(db.Model):
         # If we have item_cost, use gross_profit - fees
         # If we don't have item_cost, show sold_price - fees (partial profit)
         if self.gross_profit is not None:
-            self.net_profit = self.gross_profit - total_fees - shipping_charged
+            self.net_profit = self.gross_profit - total_fees - shipping_cost
         else:
             # Even without item_cost, show what's left after fees
             # This gives the seller visibility of actual payout
-            self.net_profit = revenue - total_fees - shipping_charged
+            self.net_profit = (total_sales - tax_collected) - total_fees - shipping_cost

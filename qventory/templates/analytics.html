@@ -311,7 +311,7 @@
             {% if sale.item_sku %}<div class="analytics-top__sku">SKU: {{ sale.item_sku }}</div>{% endif %}
           </td>
           <td>{{ sale.marketplace|capitalize }}</td>
-          <td>${{ "%.2f"|format(sale.sold_price or 0) }}</td>
+          <td>${{ "%.2f"|format((sale.sold_price or 0) + (sale.tax_collected or 0)) }}</td>
           <td class="{{ 'positive' if (sale.net_profit or 0) >= 0 else 'negative' }}">
             ${{ "%.2f"|format(sale.net_profit or 0) }}
           </td>
