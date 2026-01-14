@@ -168,8 +168,11 @@ def callback():
 
         # Get eBay user info
         log("Getting eBay user info...")
-        ebay_user_id = get_ebay_user_info(tokens['access_token'])
+        profile = get_ebay_user_profile(tokens['access_token'])
+        ebay_user_id = profile.get('username')
+        ebay_top_rated = profile.get('top_rated')
         log(f"eBay user ID: {ebay_user_id}")
+        log(f"eBay top rated: {ebay_top_rated}")
 
         # Save or update credentials in database
         log("Saving credentials to database...")
@@ -178,7 +181,8 @@ def callback():
             access_token=tokens['access_token'],
             refresh_token=tokens['refresh_token'],
             expires_in=tokens['expires_in'],
-            ebay_user_id=ebay_user_id
+            ebay_user_id=ebay_user_id,
+            ebay_top_rated=ebay_top_rated
         )
 
         # Attempt to detect eBay Store subscription after connection
@@ -648,7 +652,61 @@ def get_ebay_user_info(access_token):
     return None
 
 
-def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay_user_id):
+def get_ebay_top_rated_status(access_token):
+    """
+    Fetch Top Rated Seller status from Trading API GetUser.
+    """
+    try:
+        xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetUserRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetUserRequest>'''
+
+        headers = {
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+            'X-EBAY-API-CALL-NAME': 'GetUser',
+            'X-EBAY-API-APP-NAME': EBAY_CLIENT_ID or '',
+            'X-EBAY-API-IAF-TOKEN': access_token,
+            'Content-Type': 'text/xml'
+        }
+
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return None
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+        if ack is None or ack.text not in ['Success', 'Warning']:
+            return None
+
+        top_rated_elem = root.find('ebay:User/ebay:SellerInfo/ebay:TopRatedSeller', _XML_NS)
+        if top_rated_elem is not None and top_rated_elem.text is not None:
+            return top_rated_elem.text.strip().lower() == 'true'
+
+        seller_level = root.find('ebay:User/ebay:SellerInfo/ebay:SellerLevel', _XML_NS)
+        if seller_level is not None and seller_level.text:
+            return 'toprated' in seller_level.text.strip().lower()
+
+        return None
+    except Exception:
+        return None
+
+
+def get_ebay_user_profile(access_token):
+    """
+    Get username and top rated status for the connected eBay account.
+    """
+    return {
+        'username': get_ebay_user_info(access_token),
+        'top_rated': get_ebay_top_rated_status(access_token)
+    }
+
+
+def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay_user_id, ebay_top_rated=None):
     """
     Save or update eBay credentials in database
 
@@ -677,6 +735,8 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
             credential.ebay_user_id = ebay_user_id
         else:
             log("Skipping ebay_user_id update (not available)")
+        if ebay_top_rated is not None:
+            credential.ebay_top_rated = ebay_top_rated
         credential.is_active = True
         credential.updated_at = datetime.utcnow()
     else:
@@ -686,6 +746,7 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
             user_id=user_id,
             marketplace='ebay',
             ebay_user_id=ebay_user_id if ebay_user_id else None,
+            ebay_top_rated=ebay_top_rated if ebay_top_rated is not None else False,
             is_active=True
         )
         credential.set_access_token(access_token)

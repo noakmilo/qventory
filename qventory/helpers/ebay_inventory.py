@@ -2061,7 +2061,7 @@ def fetch_ebay_order_details(user_id, order_id):
         return None
 
 
-def parse_ebay_order_to_sale(order_data, user_id=None):
+def parse_ebay_order_to_sale(order_data, user_id=None, top_rated=None):
     """
     Parse eBay Fulfillment API order data into Sale model format
 
@@ -2139,6 +2139,12 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
         pricing_summary = order_data.get('pricingSummary', {}) or {}
         line_pricing_summary = line_item.get('pricingSummary', {}) or {}
 
+        final_value_fee = extract_money(
+            order_data.get('finalValueFee'),
+            pricing_summary.get('finalValueFee'),
+            line_pricing_summary.get('finalValueFee')
+        ) or 0.0
+
         marketplace_fee = extract_money(
             order_data.get('totalMarketplaceFee'),
             order_data.get('marketplaceFee'),
@@ -2149,6 +2155,17 @@ def parse_ebay_order_to_sale(order_data, user_id=None):
             line_pricing_summary.get('marketplaceFee'),
             line_pricing_summary.get('finalValueFee')
         )
+
+        if top_rated is None and user_id:
+            credential = MarketplaceCredential.query.filter_by(
+                user_id=user_id,
+                marketplace='ebay'
+            ).first()
+            if credential is not None:
+                top_rated = bool(credential.ebay_top_rated)
+
+        if top_rated and marketplace_fee is not None and final_value_fee:
+            marketplace_fee = max(0.0, marketplace_fee - (final_value_fee * 0.10))
 
         payment_processing_fee = extract_money(
             order_data.get('totalPaymentProcessingFee'),
@@ -2484,13 +2501,22 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
     if fulfillment_statuses:
         allowed_statuses = {status.upper() for status in fulfillment_statuses}
 
+    top_rated = None
+    if user_id:
+        credential = MarketplaceCredential.query.filter_by(
+            user_id=user_id,
+            marketplace='ebay'
+        ).first()
+        if credential is not None:
+            top_rated = bool(credential.ebay_top_rated)
+
     parsed_orders = []
     for order in aggregated_orders:
         order_status = (order.get('orderFulfillmentStatus') or '').upper()
         if allowed_statuses and order_status not in allowed_statuses:
             continue
 
-        sale_payload = parse_ebay_order_to_sale(order, user_id=user_id)
+        sale_payload = parse_ebay_order_to_sale(order, user_id=user_id, top_rated=top_rated)
         if sale_payload:
             parsed_orders.append(sale_payload)
 

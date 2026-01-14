@@ -4579,7 +4579,7 @@ def refresh_ebay_user_ids_global(self):
 
     with app.app_context():
         from qventory.models.marketplace_credential import MarketplaceCredential
-        from qventory.routes.ebay_auth import refresh_access_token, get_ebay_user_info
+        from qventory.routes.ebay_auth import refresh_access_token, get_ebay_user_profile
         from datetime import datetime, timedelta
 
         log_task("=== ADMIN: Refreshing eBay user IDs ===")
@@ -4612,13 +4612,17 @@ def refresh_ebay_user_ids_global(self):
                 )
                 refreshed += 1
 
-                ebay_user_id = get_ebay_user_info(token_data['access_token'])
+                profile = get_ebay_user_profile(token_data['access_token'])
+                ebay_user_id = profile.get('username')
+                ebay_top_rated = profile.get('top_rated')
                 if ebay_user_id:
                     cred.ebay_user_id = ebay_user_id
                     user_ids_updated += 1
                 else:
                     user_id_missing += 1
                     cred.error_message = "ebay_user_id_unresolved"
+                if ebay_top_rated is not None:
+                    cred.ebay_top_rated = ebay_top_rated
 
                 cred.last_synced_at = datetime.utcnow()
                 cred.sync_status = 'success'

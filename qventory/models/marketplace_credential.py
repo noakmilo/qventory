@@ -28,6 +28,7 @@ class MarketplaceCredential(db.Model):
 
     # eBay user information
     ebay_user_id = db.Column(db.String(100), nullable=True)  # eBay username/user ID
+    ebay_top_rated = db.Column(db.Boolean, nullable=True, default=False)
 
     # eBay Store Subscription (monthly cost in USD)
     ebay_store_subscription = db.Column(db.Float, nullable=True, default=0.0)  # Monthly subscription fee (Basic: 27.95, Premium: 74.95, etc.)
