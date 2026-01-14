@@ -24,6 +24,35 @@ def get_or_create_settings(user):
         s = Setting(user_id=uid)
         db.session.add(s)
         db.session.commit()
+        return s
+
+    dirty = False
+    if s.enable_A is None:
+        s.enable_A = True
+        dirty = True
+    if s.enable_B is None:
+        s.enable_B = True
+        dirty = True
+    if s.enable_S is None:
+        s.enable_S = True
+        dirty = True
+    if s.enable_C is None:
+        s.enable_C = True
+        dirty = True
+    if not (s.label_A or "").strip():
+        s.label_A = "Aisle"
+        dirty = True
+    if not (s.label_B or "").strip():
+        s.label_B = "Bay"
+        dirty = True
+    if not (s.label_S or "").strip():
+        s.label_S = "Shelve"
+        dirty = True
+    if not (s.label_C or "").strip():
+        s.label_C = "Container"
+        dirty = True
+    if dirty:
+        db.session.commit()
     return s
 
 def generate_sku():
