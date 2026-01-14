@@ -441,7 +441,7 @@ def analytics():
     total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales)
     total_taxes_collected = sum(s.tax_collected or 0 for s in sales)
 
-    net_sales = sum((s.net_profit or 0) - (s.tax_collected or 0) for s in sales)
+    net_sales = sum((s.net_profit or 0) for s in sales)
 
     avg_gross_per_sale = gross_sales / total_sales if total_sales > 0 else 0
     avg_net_per_sale = net_sales / total_sales if total_sales > 0 else 0
@@ -529,7 +529,7 @@ def analytics():
         date_key = sale.sold_at.strftime("%Y-%m-%d")
         tax_value = sale.tax_collected or 0
         gross_value = max((sale.sold_price or 0) - tax_value, 0)
-        net_value = (sale.net_profit or 0) - tax_value
+        net_value = (sale.net_profit or 0)
         daily_totals[date_key]['gross'] += gross_value
         daily_totals[date_key]['net'] += net_value
         marketplace_daily[date_key][sale.marketplace] += gross_value

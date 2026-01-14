@@ -73,7 +73,7 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = Sold Price - Item Cost - Fees - Shipping Charged
+        Net Profit = Sold Price - Item Cost - Taxes - Total Selling Cost
 
         Si no hay item_cost:
         - gross_profit = None
@@ -89,7 +89,7 @@ class Sale(db.Model):
         else:
             self.gross_profit = None
 
-        # Calculate total fees, rounding each component to cents
+        # Total selling cost: marketplace + processing + other fees + shipping charged
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
