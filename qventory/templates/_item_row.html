@@ -77,7 +77,6 @@
   <td class="mobile-hide">${{ '%.2f'|format(it.tax_collected or 0) }}</td>
   <td class="mobile-hide">${{ '%.2f'|format(it.marketplace_fee or 0) }}</td>
   <td class="mobile-hide">${{ '%.2f'|format(it.payment_processing_fee or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format(it.shipping_cost or 0) }}</td>
   <td class="mobile-hide">${{ '%.2f'|format(it.shipping_charged or 0) }}</td>
   <td class="mobile-hide">${{ '%.2f'|format(it.other_fees or 0) }}</td>
   <td class="{{ 'positive' if (it.net_profit or 0) >= 0 else 'negative' }}">
