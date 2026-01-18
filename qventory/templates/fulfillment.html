@@ -144,7 +144,7 @@
             <td style="color:var(--text-secondary);">
               {{ sale.carrier or 'N/A' }}
             </td>
-            <td>
+            <td style="padding-right:24px;">
               {% if sale.tracking_number %}
               {% set carrier_label = (sale.carrier or '')|lower %}
               {% set tracking_url = None %}
