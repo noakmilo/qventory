@@ -98,7 +98,6 @@
             <th>Delivered Date</th>
             <th>Carrier</th>
             <th>Tracking</th>
-            <th>Value</th>
             <th>Status</th>
           </tr>
         </thead>
@@ -176,9 +175,6 @@
               {% else %}
               <span style="color:var(--text-tertiary);">N/A</span>
               {% endif %}
-            </td>
-            <td style="font-weight:600;color:#34d399;">
-              ${{ "%.2f"|format(sale.sold_price) }}
             </td>
             <td>
               {% if sale.delivered_at %}
