@@ -92,16 +92,27 @@ def create_expense():
         expense_date_str = data.get('expense_date')
         expense_date = datetime.strptime(expense_date_str, '%Y-%m-%d').date()
 
+        is_recurring = data.get('is_recurring', False)
+        recurring_frequency = data.get('recurring_frequency')
+        recurring_day = data.get('recurring_day')
+        recurring_until = datetime.strptime(data.get('recurring_until'), '%Y-%m-%d').date() if data.get('recurring_until') else None
+
+        if is_recurring and recurring_day is None:
+            if recurring_frequency == 'monthly':
+                recurring_day = expense_date.day
+            elif recurring_frequency == 'weekly':
+                recurring_day = expense_date.weekday()
+
         expense = Expense(
             user_id=current_user.id,
             description=data.get('description'),
             amount=float(data.get('amount')),
             category=data.get('category'),
             expense_date=expense_date,
-            is_recurring=data.get('is_recurring', False),
-            recurring_frequency=data.get('recurring_frequency'),
-            recurring_day=data.get('recurring_day'),
-            recurring_until=datetime.strptime(data.get('recurring_until'), '%Y-%m-%d').date() if data.get('recurring_until') else None,
+            is_recurring=is_recurring,
+            recurring_frequency=recurring_frequency,
+            recurring_day=recurring_day,
+            recurring_until=recurring_until,
             notes=data.get('notes')
         )
 
@@ -153,6 +164,12 @@ def update_expense(expense_id):
             expense.recurring_day = data['recurring_day']
         if 'recurring_until' in data:
             expense.recurring_until = datetime.strptime(data['recurring_until'], '%Y-%m-%d').date() if data['recurring_until'] else None
+
+        if expense.is_recurring and expense.recurring_day is None:
+            if expense.recurring_frequency == 'monthly':
+                expense.recurring_day = expense.expense_date.day
+            elif expense.recurring_frequency == 'weekly':
+                expense.recurring_day = expense.expense_date.weekday()
         if 'notes' in data:
             expense.notes = data['notes']
 
@@ -209,4 +226,3 @@ def update_budget():
     except Exception as e:
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 400
-

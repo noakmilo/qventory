@@ -158,13 +158,21 @@
               {% if not tracking_url %}
                 {% set tracking_url = "https://www.google.com/search?q=" ~ sale.tracking_number %}
               {% endif %}
-              <a href="{{ tracking_url }}"
-                 target="_blank"
-                 style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
-                 title="Track package">
-                {{ sale.tracking_number[:15] }}{% if sale.tracking_number|length > 15 %}...{% endif %}
-                <i class="fas fa-external-link-alt" style="font-size:10px;margin-left:4px;"></i>
-              </a>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <a href="{{ tracking_url }}"
+                   target="_blank"
+                   style="color:#60a5fa;text-decoration:none;font-family:monospace;font-size:12px;"
+                   title="Track package">
+                  {{ sale.tracking_number[:10] }}{% if sale.tracking_number|length > 10 %}...{% endif %}
+                  <i class="fas fa-external-link-alt" style="font-size:10px;margin-left:4px;"></i>
+                </a>
+                <button type="button"
+                        class="btn btn-secondary btn-xs copy-tracking-btn"
+                        data-tracking-number="{{ sale.tracking_number }}"
+                        title="Copy tracking number">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
               {% else %}
               <span style="color:var(--text-tertiary);">N/A</span>
               {% endif %}
@@ -248,6 +256,40 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const syncBtn = document.getElementById('syncOrdersBtn');
+  const copyButtons = document.querySelectorAll('.copy-tracking-btn');
+
+  copyButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const trackingNumber = button.getAttribute('data-tracking-number');
+
+      if (!trackingNumber) {
+        return;
+      }
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(trackingNumber);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = trackingNumber;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          textarea.remove();
+        }
+
+        const originalHtml = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => {
+          button.innerHTML = originalHtml;
+        }, 1200);
+      } catch (err) {
+        console.error('Failed to copy tracking number:', err);
+      }
+    });
+  });
 
   if (syncBtn) {
     syncBtn.addEventListener('click', function() {

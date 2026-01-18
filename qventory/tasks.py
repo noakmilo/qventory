@@ -4238,12 +4238,16 @@ def process_recurring_expenses(self):
             should_create = False
 
             if expense.recurring_frequency == 'monthly':
+                recurring_day = expense.recurring_day or expense.expense_date.day
                 # Check if today matches the recurring day
-                if expense.recurring_day and expense.recurring_day == current_day:
+                if recurring_day == current_day:
                     should_create = True
             elif expense.recurring_frequency == 'weekly':
+                recurring_day = expense.recurring_day
+                if recurring_day is None:
+                    recurring_day = expense.expense_date.weekday()
                 # Check if today's weekday matches
-                if expense.recurring_day and today.weekday() == expense.recurring_day:
+                if today.weekday() == recurring_day:
                     should_create = True
             elif expense.recurring_frequency == 'yearly':
                 # Check if today matches month/day of original expense
