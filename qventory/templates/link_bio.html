@@ -58,16 +58,24 @@
         overflow-x: auto;
         padding-bottom: 8px;
         margin-bottom: 20px;
+        scrollbar-width: none;
+      }
+      .carousel::-webkit-scrollbar {
+        width: 0;
+        height: 0;
       }
       .card {
-        min-width: 160px;
+        min-width: 200px;
         background: var(--card);
         border: 1px solid var(--border);
         border-radius: 12px;
-        padding: 10px;
+        padding: 10px 12px;
         text-align: left;
         text-decoration: none;
         color: var(--text);
+        display: flex;
+        gap: 10px;
+        align-items: center;
       }
       .card img {
         width: 80px;
@@ -75,7 +83,6 @@
         object-fit: cover;
         border-radius: 8px;
         display: block;
-        margin-bottom: 8px;
       }
       .card-title {
         font-size: 12px;
@@ -137,14 +144,16 @@
           {% if item.image %}
           <img src="{{ item.image }}" alt="{{ item.title }}">
           {% else %}
-          <div style="width:80px;height:60px;border-radius:8px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;margin-bottom:8px;">
+          <div style="width:80px;height:60px;border-radius:8px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;">
             <i class="fas fa-box" style="color:var(--muted);font-size:16px"></i>
           </div>
           {% endif %}
-          <div class="card-title">{{ item.title }}</div>
-          {% if item.price is not none %}
-          <div class="card-price">${{ "%.2f"|format(item.price) }}</div>
-          {% endif %}
+          <div>
+            <div class="card-title">{{ item.title }}</div>
+            {% if item.price is not none %}
+            <div class="card-price">${{ "%.2f"|format(item.price) }}</div>
+            {% endif %}
+          </div>
         </a>
         {% endfor %}
       </div>

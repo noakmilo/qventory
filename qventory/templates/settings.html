@@ -220,21 +220,27 @@
 </script>
 {% endif %}
 
-<div class="card" style="margin-bottom:20px;">
-  <h2>Link In Bio</h2>
+<div class="card link-bio-card" style="margin-bottom:20px;">
+  <div class="link-bio-head">
+    <div>
+      <h2>Link In Bio</h2>
+      <p class="link-bio-sub">Build a storefront link that feels like a real shop, not a list.</p>
+    </div>
+    <div class="link-bio-pill">
+      <i class="fas fa-link"></i> {{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}
+    </div>
+  </div>
   <form method="post" id="linkBioForm">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+    <div class="link-bio-grid">
       <div>
         <label>Custom Link (optional)</label>
         <input class="input" type="text" name="link_bio_slug" value="{{ settings.link_bio_slug or '' }}" placeholder="your-store">
-        <div class="muted" style="font-size:12px;margin-top:6px">
-          Link: {{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}
-        </div>
+        <div class="muted" style="font-size:12px;margin-top:6px">Lowercase, numbers, dashes. 3–60 chars.</div>
       </div>
-      <div>
+      <div class="link-bio-uploader">
         <label>Store Picture</label>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--muted);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);">
+        <div class="link-bio-uploader-inner">
+          <div class="link-bio-avatar">
             {% if settings.link_bio_image_url %}
             <img src="{{ settings.link_bio_image_url }}" alt="Store image" style="width:100%;height:100%;object-fit:cover" id="linkBioPreview">
             {% else %}
@@ -242,7 +248,7 @@
             <img src="" alt="Store image" style="display:none;width:100%;height:100%;object-fit:cover" id="linkBioPreview">
             {% endif %}
           </div>
-          <div>
+          <div class="link-bio-uploader-actions">
             <input type="file" id="linkBioImageFile" accept="image/*">
             <button class="btn" type="button" id="linkBioUploadBtn" {% if not cloudinary_enabled %}disabled{% endif %}>Upload</button>
             <input type="hidden" name="link_bio_image_url" id="linkBioImageUrl" value="{{ settings.link_bio_image_url or '' }}">
@@ -262,19 +268,20 @@
 
     <div style="margin-top:16px;">
       <label>Store Links</label>
-      <div class="grid cols-2" style="margin-top:8px;">
-        <div>
+      <div class="link-bio-links">
+        <div class="link-bio-link-card">
           <label>eBay (auto)</label>
           <input class="input" type="text" value="{{ ebay_store_url or '' }}" readonly>
+          <div class="muted" style="font-size:12px;margin-top:6px">Connect eBay to populate this link automatically.</div>
         </div>
-        <div>
-          <label>Poshmark (label + link)</label>
+        <div class="link-bio-link-card">
+          <label>Poshmark</label>
           {% set primary1 = link_bio_links[0] if link_bio_links|length > 0 else {} %}
           <input class="input" type="text" name="link_bio_label_1" value="{{ primary1.label or 'Poshmark' }}" placeholder="Label">
           <input class="input" type="url" name="link_bio_url_1" value="{{ primary1.url or '' }}" placeholder="https://poshmark.com/closet/username" style="margin-top:6px">
         </div>
-        <div>
-          <label>Etsy (label + link)</label>
+        <div class="link-bio-link-card">
+          <label>Etsy</label>
           {% set primary2 = link_bio_links[1] if link_bio_links|length > 1 else {} %}
           <input class="input" type="text" name="link_bio_label_2" value="{{ primary2.label or 'Etsy' }}" placeholder="Label">
           <input class="input" type="url" name="link_bio_url_2" value="{{ primary2.url or '' }}" placeholder="https://www.etsy.com/shop/yourshop" style="margin-top:6px">
@@ -290,7 +297,7 @@
         </div>
         {% endfor %}
       </div>
-      <button type="button" class="btn" id="linkBioAddLink">Add new</button>
+      <button type="button" class="btn" id="linkBioAddLink"><i class="fas fa-plus"></i> Add new</button>
     </div>
 
     <div style="margin-top:16px;">
@@ -310,8 +317,11 @@
       </div>
     </div>
 
-    <div style="margin-top:16px;">
-      <button class="btn" type="submit">Save Link In Bio</button>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Link In Bio</button>
+      <a class="btn" href="{{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}" target="_blank" rel="noopener">
+        <i class="fas fa-external-link-alt"></i> Preview
+      </a>
     </div>
   </form>
 </div>
@@ -448,6 +458,77 @@
     gap: 8px;
     align-items: center;
     margin-bottom: 8px;
+  }
+  .link-bio-card {
+    border: 1px solid rgba(52,211,153,0.15);
+    background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(15,23,42,0.55));
+    box-shadow: 0 16px 40px rgba(15,23,42,0.35);
+  }
+  .link-bio-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .link-bio-sub {
+    margin: 6px 0 0;
+    color: var(--sub);
+    font-size: 13px;
+  }
+  .link-bio-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(52,211,153,0.12);
+    border: 1px solid rgba(52,211,153,0.35);
+    color: #6ee7b7;
+  }
+  .link-bio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .link-bio-uploader-inner {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .link-bio-avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .link-bio-uploader-actions input[type="file"] {
+    display: block;
+    margin-bottom: 6px;
+  }
+  .link-bio-links {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .link-bio-link-card {
+    padding: 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(15,23,42,0.6);
+  }
+  .link-bio-link-card label {
+    font-size: 12px;
+    color: var(--sub);
   }
   @media (max-width: 768px) {
     .link-bio-row {
