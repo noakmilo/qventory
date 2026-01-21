@@ -14,11 +14,15 @@
         --accent: #34d399;
         --border: rgba(255,255,255,0.08);
       }
+      * {
+        box-sizing: border-box;
+      }
       body {
         margin: 0;
         font-family: "Georgia", "Times New Roman", serif;
         background: radial-gradient(circle at top, #162030, #0b0f14 60%);
         color: var(--text);
+        overflow-x: hidden;
       }
       .shell {
         min-height: 100vh;
@@ -27,6 +31,7 @@
       }
       .page {
         max-width: 520px;
+        width: 100%;
         margin: 0 auto;
         padding: clamp(24px, 6vw, 36px) clamp(18px, 6vw, 28px) 40px;
         text-align: center;
@@ -64,6 +69,8 @@
         padding-bottom: 8px;
         margin-bottom: 20px;
         scrollbar-width: none;
+        padding-left: 2px;
+        padding-right: 2px;
       }
       .carousel::-webkit-scrollbar {
         width: 0;
@@ -103,6 +110,7 @@
         display: grid;
         gap: 10px;
         margin-bottom: 28px;
+        width: 100%;
       }
       .link-btn {
         padding: 12px 14px;
