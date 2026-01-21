@@ -15,6 +15,11 @@ class Setting(db.Model):
     label_S = db.Column(db.String, default="Shelve")
     label_C = db.Column(db.String, default="Container")
     theme_preference = db.Column(db.String(20), default="dark")
+    link_bio_slug = db.Column(db.String(60), nullable=True, unique=True, index=True)
+    link_bio_image_url = db.Column(db.String, nullable=True)
+    link_bio_bio = db.Column(db.Text, nullable=True)
+    link_bio_links_json = db.Column(db.Text, nullable=True)
+    link_bio_featured_json = db.Column(db.Text, nullable=True)
 
     def enabled_levels(self):
         levels = []

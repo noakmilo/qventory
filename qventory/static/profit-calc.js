@@ -57,6 +57,7 @@ const ProfitCalc = (function() {
       resalePrice: document.getElementById('resalePrice'),
       fees: document.getElementById('fees'),
       feesLabel: document.getElementById('feesLabel'),
+      fixedAdsFee: document.getElementById('fixedAdsFee'),
       shipping: document.getElementById('shipping'),
 
       // eBay specific
@@ -161,6 +162,8 @@ const ProfitCalc = (function() {
     const buyPrice = parseFloat(elements.buyPrice.value) || 0;
     const resalePrice = parseFloat(elements.resalePrice.value) || 0;
     const shippingCost = parseFloat(elements.shipping.value) || 0;
+    const adsFeeRate = parseFloat(elements.fixedAdsFee.value) || 0;
+    const adsFee = resalePrice * (adsFeeRate / 100);
 
     if (!buyPrice || !resalePrice) {
       elements.result.innerHTML = '<p style="color:var(--err)">Please fill in Item Cost and Listing Price.</p>';
@@ -168,26 +171,30 @@ const ProfitCalc = (function() {
       return;
     }
 
-    let totalFees, feeDetails, net, profit, totalCost, breakeven;
+    let totalFees, marketplaceFees, feeDetails, net, profit, totalCost, breakeven;
 
     if (marketplace === 'ebay') {
       const feePercent = parseFloat(elements.fees.value) || 0;
       const includeFixedFee = elements.fixedFee.checked;
       const variableFees = resalePrice * (feePercent / 100);
       const fixedFee = includeFixedFee ? 0.30 : 0;
-      totalFees = variableFees + fixedFee;
+      marketplaceFees = variableFees + fixedFee;
+      totalFees = marketplaceFees + adsFee;
       feeDetails = `eBay + PayPal Fees (${feePercent}% + $${fixedFee.toFixed(2)})`;
       net = resalePrice - totalFees - shippingCost;
       totalCost = buyPrice + shippingCost + totalFees;
-      breakeven = ((buyPrice + shippingCost + fixedFee) / (1 - (feePercent / 100))).toFixed(2);
+      const ebayPercentTotal = feePercent + adsFeeRate;
+      breakeven = ((buyPrice + shippingCost + fixedFee) / (1 - (ebayPercentTotal / 100))).toFixed(2);
     } else {
       const depopFees = calculateDepopFees(resalePrice, shippingCost);
-      totalFees = depopFees.totalFees;
+      marketplaceFees = depopFees.totalFees;
+      totalFees = marketplaceFees + adsFee;
       feeDetails = depopFees.details;
       const includeShippingInPrice = elements.depopShipping.checked;
       net = resalePrice - totalFees - (includeShippingInPrice ? 0 : shippingCost);
       totalCost = buyPrice + (includeShippingInPrice ? 0 : shippingCost) + totalFees;
-      breakeven = ((buyPrice + (includeShippingInPrice ? 0 : shippingCost) + depopPaymentFixedFee) / (1 - (depopPaymentFeeRate / 100))).toFixed(2);
+      const depopPercentTotal = depopPaymentFeeRate + (elements.depopBoost.checked ? depopBoostFeeRate : 0) + adsFeeRate;
+      breakeven = ((buyPrice + (includeShippingInPrice ? 0 : shippingCost) + depopPaymentFixedFee) / (1 - (depopPercentTotal / 100))).toFixed(2);
     }
 
     profit = net - buyPrice;
@@ -205,7 +212,8 @@ const ProfitCalc = (function() {
 📊 Markup: ${markup}%
 📦 Net Sale: $${net.toFixed(2)}
 💼 Total Cost: $${totalCost.toFixed(2)}
-💸 ${feeDetails}: $${totalFees.toFixed(2)}
+💸 ${feeDetails}: $${marketplaceFees.toFixed(2)}
+📣 Ads Fee (${adsFeeRate.toFixed(2)}%): $${adsFee.toFixed(2)}
 🚚 Shipping: $${marketplace === 'depop' && elements.depopShipping.checked ? 'Included in price' : shippingCost.toFixed(2)}
 🧾 Buyer Pays (w/ tax): $${buyerPays.toFixed(2)}
 🧮 Break-even Price: $${breakeven}
@@ -302,6 +310,7 @@ const ProfitCalc = (function() {
       itemName: elements.itemName.value,
       buyPrice: elements.buyPrice.value,
       resalePrice: elements.resalePrice.value,
+      fixedAdsFee: elements.fixedAdsFee.value,
       shipping: elements.shipping.value,
       hasStore: elements.hasStore.checked,
       topRated: elements.topRated.checked,
@@ -322,6 +331,7 @@ const ProfitCalc = (function() {
     elements.itemName.value = data.itemName || '';
     elements.buyPrice.value = data.buyPrice || '';
     elements.resalePrice.value = data.resalePrice || '';
+    elements.fixedAdsFee.value = data.fixedAdsFee || '';
     elements.shipping.value = data.shipping || '';
     elements.hasStore.checked = data.hasStore || false;
     elements.topRated.checked = data.topRated || false;
@@ -485,7 +495,7 @@ const ProfitCalc = (function() {
     elements.depopCategory.addEventListener('change', saveFormData);
 
     // Save on input changes
-    ['itemName', 'buyPrice', 'resalePrice', 'shipping'].forEach(field => {
+    ['itemName', 'buyPrice', 'resalePrice', 'fixedAdsFee', 'shipping'].forEach(field => {
       elements[field].addEventListener('input', saveFormData);
     });
   }

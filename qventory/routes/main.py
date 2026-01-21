@@ -1,6 +1,6 @@
 from flask import (
     render_template, request, redirect, url_for, send_file, flash, Response,
-    jsonify, send_from_directory, make_response, current_app
+    jsonify, send_from_directory, make_response, current_app, abort
 )
 from flask_login import login_required, current_user
 from sqlalchemy import func, or_
@@ -61,6 +61,7 @@ CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
 CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 CLOUDINARY_UPLOAD_FOLDER = os.environ.get("CLOUDINARY_UPLOAD_FOLDER", "qventory/items")
+CLOUDINARY_STORE_FOLDER = os.environ.get("CLOUDINARY_STORE_FOLDER", "qventory/stores")
 EBAY_VERIFICATION_TOKEN = os.environ.get("EBAY_VERIFICATION_TOKEN", "")
 EBAY_DELETIONS_ENDPOINT_URL = os.environ.get("EBAY_DELETIONS_ENDPOINT_URL", "")
 
@@ -2730,6 +2731,43 @@ def api_upload_image():
         return jsonify({"ok": False, "error": str(e)}), 502
 
 
+@main_bp.route("/api/upload-store-image", methods=["POST"])
+@login_required
+def api_upload_store_image():
+    if not cloudinary_enabled:
+        return jsonify({"ok": False, "error": "Cloudinary not configured"}), 503
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "Missing file"}), 400
+
+    ct = (f.mimetype or "").lower()
+    if not ct.startswith("image/"):
+        return jsonify({"ok": False, "error": "Only image files are allowed"}), 400
+
+    f.seek(0, io.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 1 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "Image too large (max 1MB)"}), 400
+
+    try:
+        up = cloudinary.uploader.upload(
+            f,
+            folder=CLOUDINARY_STORE_FOLDER,
+            overwrite=True,
+            resource_type="image",
+            transformation=[{"quality": "auto", "fetch_format": "auto"}]
+        )
+        url = up.get("secure_url") or up.get("url")
+        public_id = up.get("public_id")
+        width = up.get("width")
+        height = up.get("height")
+        return jsonify({"ok": True, "url": url, "public_id": public_id, "width": width, "height": height})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
 # ---------------------- CRUD Items (protegido) ----------------------
 
 def _parse_float(s: str | None):
@@ -3379,6 +3417,68 @@ def bulk_sync_to_ebay():
 def settings():
     s = get_or_create_settings(current_user)
     if request.method == "POST":
+        if any(key in request.form for key in ("link_bio_slug", "link_bio_bio", "link_bio_image_url")):
+            import json
+            slug_raw = (request.form.get("link_bio_slug") or "").strip().lower()
+            if slug_raw:
+                if not re.match(r"^[a-z0-9][a-z0-9-]{2,59}$", slug_raw):
+                    flash("Custom link must be 3-60 chars, lowercase letters, numbers, or dashes.", "error")
+                    return redirect(url_for("main.settings"))
+
+                slug_exists = Setting.query.filter(
+                    Setting.link_bio_slug == slug_raw,
+                    Setting.user_id != current_user.id
+                ).first()
+                user_conflict = User.query.filter(
+                    db.func.lower(User.username) == slug_raw,
+                    User.id != current_user.id
+                ).first()
+                if slug_exists or user_conflict:
+                    flash("That custom link is already taken.", "error")
+                    return redirect(url_for("main.settings"))
+
+                s.link_bio_slug = slug_raw
+            else:
+                s.link_bio_slug = None
+
+            s.link_bio_bio = (request.form.get("link_bio_bio") or "").strip()
+            s.link_bio_image_url = (request.form.get("link_bio_image_url") or "").strip() or None
+
+            links = []
+            label_1 = (request.form.get("link_bio_label_1") or "").strip() or "Poshmark"
+            url_1 = (request.form.get("link_bio_url_1") or "").strip()
+            if url_1:
+                links.append({"label": label_1, "url": url_1})
+
+            label_2 = (request.form.get("link_bio_label_2") or "").strip() or "Etsy"
+            url_2 = (request.form.get("link_bio_url_2") or "").strip()
+            if url_2:
+                links.append({"label": label_2, "url": url_2})
+
+            extra_labels = request.form.getlist("link_bio_extra_label")
+            extra_urls = request.form.getlist("link_bio_extra_url")
+            for label, url in zip(extra_labels, extra_urls):
+                label = (label or "").strip()
+                url = (url or "").strip()
+                if not url:
+                    continue
+                links.append({"label": label or "Shop", "url": url})
+
+            s.link_bio_links_json = json.dumps(links)
+
+            featured_ids = []
+            for key in ("link_bio_featured_1", "link_bio_featured_2", "link_bio_featured_3"):
+                raw = (request.form.get(key) or "").strip()
+                if not raw:
+                    continue
+                try:
+                    featured_ids.append(int(raw))
+                except ValueError:
+                    continue
+            if featured_ids:
+                featured_ids = list(dict.fromkeys(featured_ids))[:3]
+            s.link_bio_featured_json = json.dumps(featured_ids)
+
         if any(key in request.form for key in ("enable_A", "enable_B", "enable_S", "enable_C", "label_A", "label_B", "label_S", "label_C")):
             s.enable_A = request.form.get("enable_A") == "on"
             s.enable_B = request.form.get("enable_B") == "on"
@@ -3409,14 +3509,41 @@ def settings():
 
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+    ebay_store_url = f"https://www.ebay.com/str/{ebay_username}" if ebay_username else None
     from qventory.models.subscription import PlanLimit
     subscription = current_user.get_subscription()
     plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
+
+    import json
+    link_bio_links = []
+    if s.link_bio_links_json:
+        try:
+            link_bio_links = json.loads(s.link_bio_links_json)
+        except Exception:
+            link_bio_links = []
+
+    featured_ids = []
+    if s.link_bio_featured_json:
+        try:
+            featured_ids = json.loads(s.link_bio_featured_json) or []
+        except Exception:
+            featured_ids = []
+
+    items_active = (
+        Item.query.filter_by(user_id=current_user.id, is_active=True)
+        .order_by(Item.title.asc())
+        .all()
+    )
 
     return render_template("settings.html",
                          settings=s,
                          ebay_connected=ebay_connected,
                          ebay_username=ebay_username,
+                         ebay_store_url=ebay_store_url,
+                         link_bio_links=link_bio_links,
+                         link_bio_featured_ids=featured_ids,
+                         items_active=items_active,
+                         cloudinary_enabled=cloudinary_enabled,
                          subscription=subscription,
                          plan_limits=plan_limits)
 
@@ -5046,3 +5173,129 @@ def mark_all_notifications_read():
 
     return jsonify({"ok": True})
 
+
+@main_bp.route("/<slug>")
+def public_link_bio(slug):
+    if "." in slug:
+        abort(404)
+    slug_norm = (slug or "").strip().lower()
+    if not slug_norm:
+        abort(404)
+
+    settings = Setting.query.filter(
+        Setting.link_bio_slug == slug_norm
+    ).first()
+
+    user = None
+    if settings:
+        user = User.query.filter_by(id=settings.user_id).first()
+    else:
+        user = User.query.filter(func.lower(User.username) == slug_norm).first()
+        if user:
+            settings = Setting.query.filter_by(user_id=user.id).first()
+
+    if not user or not settings:
+        abort(404)
+
+    from qventory.models.marketplace_credential import MarketplaceCredential
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+    ebay_link = None
+    if ebay_cred and ebay_cred.ebay_user_id:
+        ebay_link = f"https://www.ebay.com/str/{ebay_cred.ebay_user_id}"
+
+    import json
+    links = []
+    if ebay_link:
+        links.append({"label": "eBay", "url": ebay_link})
+
+    stored_links = []
+    if settings.link_bio_links_json:
+        try:
+            stored_links = json.loads(settings.link_bio_links_json) or []
+        except Exception:
+            stored_links = []
+
+    def infer_label(url):
+        host = urlparse(url).netloc.lower()
+        if "poshmark" in host:
+            return "Poshmark"
+        if "etsy" in host:
+            return "Etsy"
+        if "mercari" in host:
+            return "Mercari"
+        if "depop" in host:
+            return "Depop"
+        if "whatnot" in host:
+            return "Whatnot"
+        if "vinted" in host:
+            return "Vinted"
+        if "amazon" in host:
+            return "Amazon"
+        return "Shop"
+
+    for link in stored_links:
+        url = (link.get("url") or "").strip()
+        if not url:
+            continue
+        label = (link.get("label") or "").strip()
+        if not label or label.lower() in {"shop", "store", "link"}:
+            label = infer_label(url)
+        links.append({"label": label, "url": url})
+
+    featured_ids = []
+    if settings.link_bio_featured_json:
+        try:
+            featured_ids = json.loads(settings.link_bio_featured_json) or []
+        except Exception:
+            featured_ids = []
+
+    featured_items = []
+    if featured_ids:
+        items = (
+            Item.query.filter(
+                Item.user_id == user.id,
+                Item.is_active.is_(True),
+                Item.id.in_(featured_ids)
+            ).all()
+        )
+        items_by_id = {item.id: item for item in items}
+        for item_id in featured_ids:
+            item = items_by_id.get(item_id)
+            if item:
+                featured_items.append(item)
+
+    def listing_url(item):
+        return (
+            item.listing_link
+            or item.ebay_url
+            or item.web_url
+            or item.poshmark_url
+            or item.mercari_url
+            or item.depop_url
+            or item.whatnot_url
+            or item.vinted_url
+            or item.amazon_url
+        )
+
+    featured_cards = []
+    for item in featured_items:
+        featured_cards.append({
+            "title": item.title,
+            "price": item.item_price,
+            "image": item.item_thumb,
+            "url": listing_url(item)
+        })
+
+    display_name = user.username
+    return render_template(
+        "link_bio.html",
+        user=user,
+        settings=settings,
+        links=links,
+        featured_cards=featured_cards,
+        display_name=display_name
+    )

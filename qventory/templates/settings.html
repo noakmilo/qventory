@@ -221,6 +221,102 @@
 {% endif %}
 
 <div class="card" style="margin-bottom:20px;">
+  <h2>Link In Bio</h2>
+  <form method="post" id="linkBioForm">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
+      <div>
+        <label>Custom Link (optional)</label>
+        <input class="input" type="text" name="link_bio_slug" value="{{ settings.link_bio_slug or '' }}" placeholder="your-store">
+        <div class="muted" style="font-size:12px;margin-top:6px">
+          Link: {{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}
+        </div>
+      </div>
+      <div>
+        <label>Store Picture</label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;background:var(--muted);display:flex;align-items:center;justify-content:center;border:1px solid var(--border);">
+            {% if settings.link_bio_image_url %}
+            <img src="{{ settings.link_bio_image_url }}" alt="Store image" style="width:100%;height:100%;object-fit:cover" id="linkBioPreview">
+            {% else %}
+            <i class="fas fa-store" style="color:var(--sub);font-size:22px" id="linkBioPreviewIcon"></i>
+            <img src="" alt="Store image" style="display:none;width:100%;height:100%;object-fit:cover" id="linkBioPreview">
+            {% endif %}
+          </div>
+          <div>
+            <input type="file" id="linkBioImageFile" accept="image/*">
+            <button class="btn" type="button" id="linkBioUploadBtn" {% if not cloudinary_enabled %}disabled{% endif %}>Upload</button>
+            <input type="hidden" name="link_bio_image_url" id="linkBioImageUrl" value="{{ settings.link_bio_image_url or '' }}">
+            {% if not cloudinary_enabled %}
+            <div class="muted" style="color:var(--err);font-size:12px;margin-top:4px">Cloudinary is not configured.</div>
+            {% else %}
+            <div class="muted" style="font-size:12px;margin-top:4px">Max 1MB.</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div style="grid-column:1/-1;">
+        <label>About / Bio</label>
+        <textarea class="input" name="link_bio_bio" rows="3" placeholder="Short bio about your store">{{ settings.link_bio_bio or '' }}</textarea>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label>Store Links</label>
+      <div class="grid cols-2" style="margin-top:8px;">
+        <div>
+          <label>eBay (auto)</label>
+          <input class="input" type="text" value="{{ ebay_store_url or '' }}" readonly>
+        </div>
+        <div>
+          <label>Poshmark (label + link)</label>
+          {% set primary1 = link_bio_links[0] if link_bio_links|length > 0 else {} %}
+          <input class="input" type="text" name="link_bio_label_1" value="{{ primary1.label or 'Poshmark' }}" placeholder="Label">
+          <input class="input" type="url" name="link_bio_url_1" value="{{ primary1.url or '' }}" placeholder="https://poshmark.com/closet/username" style="margin-top:6px">
+        </div>
+        <div>
+          <label>Etsy (label + link)</label>
+          {% set primary2 = link_bio_links[1] if link_bio_links|length > 1 else {} %}
+          <input class="input" type="text" name="link_bio_label_2" value="{{ primary2.label or 'Etsy' }}" placeholder="Label">
+          <input class="input" type="url" name="link_bio_url_2" value="{{ primary2.url or '' }}" placeholder="https://www.etsy.com/shop/yourshop" style="margin-top:6px">
+        </div>
+      </div>
+
+      <div id="linkBioExtraLinks" style="margin-top:10px;">
+        {% for link in link_bio_links[2:] %}
+        <div class="link-bio-row">
+          <input class="input" type="text" name="link_bio_extra_label" value="{{ link.label or '' }}" placeholder="Label">
+          <input class="input" type="url" name="link_bio_extra_url" value="{{ link.url or '' }}" placeholder="https://">
+          <button type="button" class="btn link-bio-remove">Remove</button>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="btn" id="linkBioAddLink">Add new</button>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label>Featured Products (up to 3)</label>
+      <div class="grid cols-3" style="margin-top:8px;">
+        {% for idx in [0,1,2] %}
+        {% set selected_id = link_bio_featured_ids[idx] if link_bio_featured_ids|length > idx else None %}
+        <select class="input" name="link_bio_featured_{{ idx + 1 }}">
+          <option value="">Select item</option>
+          {% for item in items_active %}
+          <option value="{{ item.id }}" {% if selected_id == item.id %}selected{% endif %}>
+            {{ item.title }}{% if item.item_price %} - ${{ '%.2f'|format(item.item_price) }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <button class="btn" type="submit">Save Link In Bio</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
   <h2>Theme</h2>
   <form method="post" id="themeForm">
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -341,6 +437,94 @@
           // no-op
         }
       });
+    });
+  })();
+</script>
+
+<style>
+  .link-bio-row {
+    display: grid;
+    grid-template-columns: 1fr 2fr auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  @media (max-width: 768px) {
+    .link-bio-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  (function() {
+    const addBtn = document.getElementById('linkBioAddLink');
+    const container = document.getElementById('linkBioExtraLinks');
+    const uploadBtn = document.getElementById('linkBioUploadBtn');
+    const fileInput = document.getElementById('linkBioImageFile');
+    const urlInput = document.getElementById('linkBioImageUrl');
+    const preview = document.getElementById('linkBioPreview');
+    const previewIcon = document.getElementById('linkBioPreviewIcon');
+
+    function bindRemove(btn) {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.link-bio-row');
+        if (row) row.remove();
+      });
+    }
+
+    container?.querySelectorAll('.link-bio-remove').forEach(bindRemove);
+
+    addBtn?.addEventListener('click', () => {
+      const row = document.createElement('div');
+      row.className = 'link-bio-row';
+      row.innerHTML = `
+        <input class="input" type="text" name="link_bio_extra_label" placeholder="Label">
+        <input class="input" type="url" name="link_bio_extra_url" placeholder="https://">
+        <button type="button" class="btn link-bio-remove">Remove</button>
+      `;
+      container.appendChild(row);
+      const removeBtn = row.querySelector('.link-bio-remove');
+      if (removeBtn) bindRemove(removeBtn);
+    });
+
+    uploadBtn?.addEventListener('click', async () => {
+      if (!fileInput?.files?.length) {
+        alert('Select an image first.');
+        return;
+      }
+      const file = fileInput.files[0];
+      if (file.size > 1024 * 1024) {
+        alert('Image too large (max 1MB).');
+        return;
+      }
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Uploading...';
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const resp = await fetch('{{ url_for("main.api_upload_store_image") }}', {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin'
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.error || 'Upload failed');
+        }
+        if (urlInput) urlInput.value = data.url;
+        if (preview) {
+          preview.src = data.url;
+          preview.style.display = 'block';
+        }
+        if (previewIcon) previewIcon.style.display = 'none';
+      } catch (err) {
+        alert(`Upload failed: ${err.message}`);
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload';
+      }
     });
   })();
 </script>
