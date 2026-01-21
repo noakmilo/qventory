@@ -1,7 +1,7 @@
 """Add link in bio fields to settings.
 
 Revision ID: 036_add_link_bio_fields
-Revises: 035_add_ebay_top_rated_to_credentials
+Revises: 035_add_ebay_top_rated
 Create Date: 2025-01-11 00:00:00.000000
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '036_add_link_bio_fields'
-down_revision = '035_add_ebay_top_rated_to_credentials'
+down_revision = '035_add_ebay_top_rated'
 branch_labels = None
 depends_on = None
 
