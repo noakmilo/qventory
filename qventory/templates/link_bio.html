@@ -4,6 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ display_name }} • Qventory</title>
+    {% if settings.link_bio_image_url %}
+    <link rel="icon" href="{{ settings.link_bio_image_url }}">
+    {% else %}
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111827'/%3E%3Cpath d='M10 26h44v26a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4V26zm6-16h32l6 10H10l6-10z' fill='%2334d399'/%3E%3Cpath d='M22 30h20v18H22z' fill='%230b0f14'/%3E%3C/svg%3E">
+    {% endif %}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
       :root {

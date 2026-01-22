@@ -237,10 +237,10 @@
         <input class="input" type="text" name="link_bio_slug" value="{{ settings.link_bio_slug or '' }}" placeholder="your-store">
         <div class="muted" style="font-size:12px;margin-top:6px">Lowercase, numbers, dashes. 3–60 chars.</div>
       </div>
-      <div class="link-bio-uploader">
+      <div class="link-bio-uploader" style="grid-column:1/-1;">
         <label>Store Picture</label>
         <div class="link-bio-uploader-inner">
-          <div class="link-bio-avatar">
+          <div class="link-bio-avatar" id="linkBioAvatar">
             {% if settings.link_bio_image_url %}
             <img src="{{ settings.link_bio_image_url }}" alt="Store image" style="width:100%;height:100%;object-fit:cover" id="linkBioPreview">
             {% else %}
@@ -249,7 +249,7 @@
             {% endif %}
           </div>
           <div class="link-bio-uploader-actions">
-            <input type="file" id="linkBioImageFile" accept="image/*">
+            <input type="file" id="linkBioImageFile" accept="image/*" class="link-bio-file-input">
             <button class="btn" type="button" id="linkBioUploadBtn" {% if not cloudinary_enabled %}disabled{% endif %}>Upload</button>
             <input type="hidden" name="link_bio_image_url" id="linkBioImageUrl" value="{{ settings.link_bio_image_url or '' }}">
             {% if not cloudinary_enabled %}
@@ -509,10 +509,10 @@
     align-items: center;
     justify-content: center;
     border: 1px solid rgba(255,255,255,0.12);
+    cursor: pointer;
   }
-  .link-bio-uploader-actions input[type="file"] {
-    display: block;
-    margin-bottom: 6px;
+  .link-bio-file-input {
+    display: none;
   }
   .link-bio-links {
     display: grid;
@@ -543,6 +543,7 @@
     const container = document.getElementById('linkBioExtraLinks');
     const uploadBtn = document.getElementById('linkBioUploadBtn');
     const fileInput = document.getElementById('linkBioImageFile');
+    const avatar = document.getElementById('linkBioAvatar');
     const urlInput = document.getElementById('linkBioImageUrl');
     const preview = document.getElementById('linkBioPreview');
     const previewIcon = document.getElementById('linkBioPreviewIcon');
@@ -606,6 +607,10 @@
         uploadBtn.disabled = false;
         uploadBtn.textContent = 'Upload';
       }
+    });
+
+    avatar?.addEventListener('click', () => {
+      fileInput?.click();
     });
   })();
 </script>
