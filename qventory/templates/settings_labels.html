@@ -1,0 +1,40 @@
+{% extends "base_new.html" %}
+{% block title %}Location Labels – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Location Labels</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>Hierarchy & Labels</h2>
+  <p style="color:var(--sub);font-size:14px;margin-top:-6px;">Control the A/B/S/C structure that appears everywhere in Qventory.</p>
+  <form method="post" class="grid cols-2" style="margin-top:16px;">
+    <div>
+      <label><input type="checkbox" name="enable_A" {% if settings.enable_A %}checked{% endif %}> Enable {{ settings.label_A }} (A)</label>
+      <input class="input" type="text" name="label_A" value="{{ settings.label_A }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_B" {% if settings.enable_B %}checked{% endif %}> Enable {{ settings.label_B }} (B)</label>
+      <input class="input" type="text" name="label_B" value="{{ settings.label_B }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_S" {% if settings.enable_S %}checked{% endif %}> Enable {{ settings.label_S }} (S)</label>
+      <input class="input" type="text" name="label_S" value="{{ settings.label_S }}">
+    </div>
+    <div>
+      <label><input type="checkbox" name="enable_C" {% if settings.enable_C %}checked{% endif %}> Enable {{ settings.label_C }} (C)</label>
+      <input class="input" type="text" name="label_C" value="{{ settings.label_C }}">
+    </div>
+    <div style="grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Labels</button>
+      <a class="btn" href="{{ url_for('main.settings') }}"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+  </form>
+  <p class="tag">Order is fixed A → B → S → C. Disable levels you don't use.</p>
+</div>
+{% endblock %}

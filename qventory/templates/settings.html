@@ -11,18 +11,6 @@
 
 {% block content %}
 
-<div class="card" style="margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px;">
-  <div>
-    <h2 style="margin-bottom:6px;"><i class="fab fa-discord" style="color:#5865F2;"></i> Join our Discord</h2>
-    <p style="color:var(--sub); font-size:14px; max-width:460px; margin:0;">
-      Get support from the team, share feedback, and see what other sellers are building.
-    </p>
-  </div>
-  <a href="https://discord.gg/KWGCZDGWMN" target="_blank" rel="noopener" class="btn submitbtn" style="white-space:nowrap;">
-    <i class="fab fa-discord"></i> Join the community
-  </a>
-</div>
-
 <!-- eBay Integration Section -->
 <div class="card" style="margin-bottom:20px">
   <h2><i class="fab fa-ebay" style="color:#E53238"></i> eBay Integration</h2>
@@ -82,536 +70,86 @@
       <i class="fab fa-ebay"></i> Connect eBay Account
     </a>
   {% endif %}
-</div>
-
-<!-- Subscription Section -->
-<div class="card" style="margin-bottom:20px">
-  <h2><i class="fas fa-receipt" style="color:#22c55e"></i> My Subscription</h2>
-  {% if subscription %}
-    {% set plan_display = subscription.plan.replace('_', ' ').title() %}
-    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;margin-top:12px;">
-      <div style="min-width:220px;">
-        <div style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Current Plan</div>
-        <div style="font-size:20px;font-weight:600;color:var(--text);margin-top:4px;">{{ plan_display }}</div>
-        {% if plan_limits and plan_limits.monthly_price is not none %}
-          <div style="font-size:14px;color:var(--sub);margin-top:4px;">
-            ${{ '%.2f'|format(plan_limits.monthly_price) }} / month
-          </div>
-        {% endif %}
-      </div>
-      <div style="min-width:200px;">
-        <div style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Status</div>
-        <div style="font-size:16px;color:var(--text);margin-top:4px;">{{ subscription.status|capitalize }}</div>
-        {% if subscription.on_trial and subscription.trial_ends_at %}
-          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
-            Trial ends {{ subscription.trial_ends_at.strftime('%b %d, %Y') }}
-          </div>
-        {% elif subscription.current_period_end %}
-          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
-            Renews {{ subscription.current_period_end.strftime('%b %d, %Y') }}
-          </div>
-        {% endif %}
-      </div>
-      <div style="margin-left:auto;">
-        <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn">
-          <i class="fas fa-arrow-up"></i> Manage Plan
-        </a>
-      </div>
     </div>
 
-    {% if subscription.plan != 'free' and subscription.stripe_subscription_id %}
-    <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
-      <form method="POST" action="{{ url_for('main.stripe_customer_portal') }}" style="display:inline;">
-        <button type="submit" class="btn">
-          <i class="fas fa-credit-card"></i> Update Payment Method
-        </button>
-      </form>
-      <form method="POST" action="{{ url_for('main.stripe_cancel_subscription') }}" style="display:inline;" id="cancel-subscription-form">
-        <button type="button" class="btn" id="cancel-subscription-button" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#ef4444;">
-          <i class="fas fa-ban"></i> Cancel Subscription
-        </button>
-      </form>
-    </div>
-    <div style="margin-top:14px;padding:14px 16px;border:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.06);border-radius:10px;">
-      <div style="font-weight:600;color:#ef4444;margin-bottom:6px;">Before you cancel</div>
-      <div style="color:var(--sub);font-size:14px;line-height:1.6;">
-        You'll lose higher item limits, advanced analytics, AI research capacity, and bulk workflows that save hours every week.
-        If you're downsizing, consider switching to a lower tier instead of cancelling.
-      </div>
-    </div>
-    {% elif subscription.plan == 'free' %}
-    <div style="margin-top:18px;">
-      <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn">
-        <i class="fas fa-arrow-up"></i> Upgrade Plan
-      </a>
-    </div>
-    {% endif %}
-  {% else %}
-    <p style="color:var(--sub);margin-top:8px;">No subscription details available yet.</p>
-    <a href="{{ url_for('main.upgrade') }}" class="btn submitbtn" style="margin-top:10px;">
-      <i class="fas fa-arrow-up"></i> View Plans
-    </a>
-  {% endif %}
-</div>
-
-{% if subscription and subscription.stripe_subscription_id %}
-<div id="cancel-modal" style="position:fixed;inset:0;background:rgba(9,12,18,0.6);display:none;align-items:center;justify-content:center;z-index:9999;">
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:520px;width:92%;padding:22px 24px;box-shadow:0 18px 48px rgba(0,0,0,0.35);">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(239,68,68,0.12);color:#ef4444;">
-          <i class="fas fa-triangle-exclamation"></i>
-        </div>
-        <div style="font-size:18px;font-weight:600;color:var(--text);">Before you cancel</div>
-      </div>
-      <button type="button" id="cancel-modal-close" class="btn" style="padding:6px 10px;">
-        <i class="fas fa-times"></i>
-      </button>
-    </div>
-    <p style="color:var(--sub);line-height:1.7;margin:14px 0 16px 0;">
-      Canceling will remove higher item limits, advanced analytics, AI research capacity, and bulk workflows.
-      If you're still in trial, the cancellation is immediate and items above the Free plan limit are removed.
-    </p>
-    <div style="padding:14px 16px;border:1px solid rgba(34,197,94,0.2);background:rgba(34,197,94,0.08);border-radius:10px;margin-bottom:16px;">
-      <div style="font-weight:600;color:#22c55e;margin-bottom:6px;">Consider downgrading instead</div>
-      <div style="color:var(--sub);font-size:14px;line-height:1.6;">
-        Keep essential tools active and lower your monthly cost. You can downgrade from the Upgrade page in seconds.
-      </div>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;">
-      <a href="{{ url_for('main.upgrade') }}" class="btn">
-        View Plans
-      </a>
-      <button type="button" class="btn" id="cancel-modal-back">
-        Keep My Plan
-      </button>
-      <button type="button" class="btn" id="cancel-modal-confirm" style="background:#ef4444;border-color:#ef4444;color:#fff;">
-        Cancel Anyway
-      </button>
-    </div>
-  </div>
-</div>
-<script>
-  const cancelModal = document.getElementById("cancel-modal");
-  const cancelButton = document.getElementById("cancel-subscription-button");
-  const cancelClose = document.getElementById("cancel-modal-close");
-  const cancelBack = document.getElementById("cancel-modal-back");
-  const cancelConfirm = document.getElementById("cancel-modal-confirm");
-  const cancelForm = document.getElementById("cancel-subscription-form");
-
-  function openCancelModal() {
-    cancelModal.style.display = "flex";
-  }
-  function closeCancelModal() {
-    cancelModal.style.display = "none";
-  }
-
-  cancelButton.addEventListener("click", openCancelModal);
-  cancelClose.addEventListener("click", closeCancelModal);
-  cancelBack.addEventListener("click", closeCancelModal);
-  cancelModal.addEventListener("click", (event) => {
-    if (event.target === cancelModal) {
-      closeCancelModal();
-    }
-  });
-  cancelConfirm.addEventListener("click", () => {
-    cancelForm.submit();
-  });
-</script>
-{% endif %}
-
-<div class="card link-bio-card" style="margin-bottom:20px;">
-  <div class="link-bio-head">
+<div class="settings-grid">
+  <a class="settings-card" href="{{ url_for('main.settings_labels') }}">
+    <div class="settings-card__icon"><i class="fas fa-layer-group"></i></div>
     <div>
-      <h2>Link In Bio</h2>
-      <p class="link-bio-sub">Build a storefront link that feels like a real shop, not a list.</p>
+      <h3>Location Labels</h3>
+      <p>Configure A/B/S/C hierarchy and labels.</p>
     </div>
-    <div class="link-bio-pill">
-      <i class="fas fa-link"></i> {{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}
-    </div>
-  </div>
-  <form method="post" id="linkBioForm">
-    <div class="link-bio-grid">
-      <div>
-        <label>Custom Link (optional)</label>
-        <input class="input" type="text" name="link_bio_slug" value="{{ settings.link_bio_slug or '' }}" placeholder="your-store">
-        <div class="muted" style="font-size:12px;margin-top:6px">Lowercase, numbers, dashes. 3–60 chars.</div>
-      </div>
-      <div class="link-bio-uploader" style="grid-column:1/-1;">
-        <label>Store Picture</label>
-        <div class="link-bio-uploader-inner">
-          <div class="link-bio-avatar" id="linkBioAvatar">
-            {% if settings.link_bio_image_url %}
-            <img src="{{ settings.link_bio_image_url }}" alt="Store image" style="width:100%;height:100%;object-fit:cover" id="linkBioPreview">
-            {% else %}
-            <i class="fas fa-store" style="color:var(--sub);font-size:22px" id="linkBioPreviewIcon"></i>
-            <img src="" alt="Store image" style="display:none;width:100%;height:100%;object-fit:cover" id="linkBioPreview">
-            {% endif %}
-          </div>
-          <div class="link-bio-uploader-actions">
-            <input type="file" id="linkBioImageFile" accept="image/*" class="link-bio-file-input">
-            <button class="btn" type="button" id="linkBioUploadBtn" {% if not cloudinary_enabled %}disabled{% endif %}>Upload</button>
-            <input type="hidden" name="link_bio_image_url" id="linkBioImageUrl" value="{{ settings.link_bio_image_url or '' }}">
-            {% if not cloudinary_enabled %}
-            <div class="muted" style="color:var(--err);font-size:12px;margin-top:4px">Cloudinary is not configured.</div>
-            {% else %}
-            <div class="muted" style="font-size:12px;margin-top:4px">Max 1MB.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      <div style="grid-column:1/-1;">
-        <label>About / Bio</label>
-        <textarea class="input" name="link_bio_bio" rows="3" placeholder="Short bio about your store">{{ settings.link_bio_bio or '' }}</textarea>
-      </div>
-    </div>
-
-    <div style="margin-top:16px;">
-      <label>Store Links</label>
-      <div class="link-bio-links">
-        <div class="link-bio-link-card">
-          <label>eBay (auto)</label>
-          <input class="input" type="text" value="{{ ebay_store_url or '' }}" readonly>
-          <div class="muted" style="font-size:12px;margin-top:6px">Connect eBay to populate this link automatically.</div>
-        </div>
-        <div class="link-bio-link-card">
-          <label>Poshmark</label>
-          {% set primary1 = link_bio_links[0] if link_bio_links|length > 0 else {} %}
-          <input class="input" type="text" name="link_bio_label_1" value="{{ primary1.label or 'Poshmark' }}" placeholder="Label">
-          <input class="input" type="url" name="link_bio_url_1" value="{{ primary1.url or '' }}" placeholder="https://poshmark.com/closet/username" style="margin-top:6px">
-        </div>
-        <div class="link-bio-link-card">
-          <label>Etsy</label>
-          {% set primary2 = link_bio_links[1] if link_bio_links|length > 1 else {} %}
-          <input class="input" type="text" name="link_bio_label_2" value="{{ primary2.label or 'Etsy' }}" placeholder="Label">
-          <input class="input" type="url" name="link_bio_url_2" value="{{ primary2.url or '' }}" placeholder="https://www.etsy.com/shop/yourshop" style="margin-top:6px">
-        </div>
-      </div>
-
-      <div id="linkBioExtraLinks" style="margin-top:10px;">
-        {% for link in link_bio_links[2:] %}
-        <div class="link-bio-row">
-          <input class="input" type="text" name="link_bio_extra_label" value="{{ link.label or '' }}" placeholder="Label">
-          <input class="input" type="url" name="link_bio_extra_url" value="{{ link.url or '' }}" placeholder="https://">
-          <button type="button" class="btn link-bio-remove">Remove</button>
-        </div>
-        {% endfor %}
-      </div>
-      <button type="button" class="btn" id="linkBioAddLink"><i class="fas fa-plus"></i> Add new</button>
-    </div>
-
-    <div style="margin-top:16px;">
-      <label>Featured Products (up to 3)</label>
-      <div class="grid cols-3" style="margin-top:8px;">
-        {% for idx in [0,1,2] %}
-        {% set selected_id = link_bio_featured_ids[idx] if link_bio_featured_ids|length > idx else None %}
-        <select class="input" name="link_bio_featured_{{ idx + 1 }}">
-          <option value="">Select item</option>
-          {% for item in items_active %}
-          <option value="{{ item.id }}" {% if selected_id == item.id %}selected{% endif %}>
-            {{ item.title }}{% if item.item_price %} - ${{ '%.2f'|format(item.item_price) }}{% endif %}
-          </option>
-          {% endfor %}
-        </select>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Link In Bio</button>
-      <a class="btn" href="{{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}" target="_blank" rel="noopener">
-        <i class="fas fa-external-link-alt"></i> Preview
-      </a>
-    </div>
-  </form>
-</div>
-
-<div class="card" style="margin-bottom:20px;">
-  <h2>Theme</h2>
-  <form method="post" id="themeForm">
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <label class="theme-card {% if settings.theme_preference != 'light' %}is-active{% endif %}">
-        <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %}>
-        <div class="theme-card-inner">
-          <i class="fas fa-moon"></i>
-          <div class="theme-card-label">Dark</div>
-        </div>
-      </label>
-      <label class="theme-card {% if settings.theme_preference == 'light' %}is-active{% endif %}">
-        <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %}>
-        <div class="theme-card-inner">
-          <i class="fas fa-sun"></i>
-          <div class="theme-card-label">Light</div>
-        </div>
-      </label>
-    </div>
-  </form>
-</div>
-
-<div class="card">
-  <h2>Hierarchy & Labels</h2>
-  <form method="post" class="grid cols-2">
+  </a>
+  <a class="settings-card" href="{{ url_for('main.settings_link_bio') }}">
+    <div class="settings-card__icon"><i class="fas fa-link"></i></div>
     <div>
-      <label><input type="checkbox" name="enable_A" {% if settings.enable_A %}checked{% endif %}> Enable {{ settings.label_A }} (A)</label>
-      <input class="input" type="text" name="label_A" value="{{ settings.label_A }}">
+      <h3>Link In Bio</h3>
+      <p>Customize your public storefront link.</p>
     </div>
+  </a>
+  <a class="settings-card" href="{{ url_for('main.settings_theme') }}">
+    <div class="settings-card__icon"><i class="fas fa-palette"></i></div>
     <div>
-      <label><input type="checkbox" name="enable_B" {% if settings.enable_B %}checked{% endif %}> Enable {{ settings.label_B }} (B)</label>
-      <input class="input" type="text" name="label_B" value="{{ settings.label_B }}">
+      <h3>Theme</h3>
+      <p>Switch between dark and light modes.</p>
     </div>
+  </a>
+  <a class="settings-card" href="{{ url_for('main.settings_subscription') }}">
+    <div class="settings-card__icon"><i class="fas fa-receipt"></i></div>
     <div>
-      <label><input type="checkbox" name="enable_S" {% if settings.enable_S %}checked{% endif %}> Enable {{ settings.label_S }} (S)</label>
-      <input class="input" type="text" name="label_S" value="{{ settings.label_S }}">
+      <h3>Subscription</h3>
+      <p>Manage plan, billing, and renewals.</p>
     </div>
+  </a>
+  <a class="settings-card" href="{{ url_for('main.settings_support') }}">
+    <div class="settings-card__icon"><i class="fas fa-life-ring"></i></div>
     <div>
-      <label><input type="checkbox" name="enable_C" {% if settings.enable_C %}checked{% endif %}> Enable {{ settings.label_C }} (C)</label>
-      <input class="input" type="text" name="label_C" value="{{ settings.label_C }}">
+      <h3>Support</h3>
+      <p>Get help and join the community.</p>
     </div>
-    <div style="grid-column:1/-1">
-      <button class="btn" type="submit">Save Settings</button>
-      <a class="btn" href="{{ url_for('main.dashboard') }}">Back</a>
-    </div>
-  </form>
-  <p class="tag">Order is fixed A → B → S → C. Disable levels you don't use.</p>
+  </a>
 </div>
 
 <style>
-  .theme-card {
-    cursor: pointer;
-    position: relative;
-  }
-  .theme-card input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-  }
-  .theme-card-inner {
-    width: 80px;
-    height: 80px;
-    border-radius: 14px;
-    border: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    font-family: 'Georgia','Times New Roman',serif;
-    background: var(--glass-bg-strong);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-  }
-  .theme-card:hover .theme-card-inner {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 28px rgba(0,0,0,0.25);
-  }
-  .theme-card.is-active .theme-card-inner {
-    border-color: var(--accent);
-    box-shadow: 0 14px 30px rgba(59,130,246,0.25);
-  }
-  .theme-card i {
-    font-size: 20px;
-    color: var(--text);
-  }
-  .theme-card-label {
-    font-size: 12px;
-    color: var(--text);
-  }
-</style>
-
-<script>
-  (function() {
-    const form = document.getElementById('themeForm');
-    if (!form) return;
-    const cards = form.querySelectorAll('.theme-card');
-    const radios = form.querySelectorAll('input[name="theme_preference"]');
-
-    function setActive(value) {
-      cards.forEach(card => {
-        const input = card.querySelector('input[name="theme_preference"]');
-        card.classList.toggle('is-active', input && input.value === value);
-      });
-    }
-
-    radios.forEach(radio => {
-      radio.addEventListener('change', async () => {
-        setActive(radio.value);
-        document.body.setAttribute('data-theme', radio.value);
-        const formData = new FormData();
-        formData.append('theme_preference', radio.value);
-        try {
-          await fetch('{{ url_for("main.settings") }}', {
-            method: 'POST',
-            body: formData
-          });
-        } catch (error) {
-          // no-op
-        }
-      });
-    });
-  })();
-</script>
-
-<style>
-  .link-bio-row {
+  .settings-grid {
     display: grid;
-    grid-template-columns: 1fr 2fr auto;
-    gap: 8px;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .link-bio-card {
-    border: 1px solid rgba(52,211,153,0.15);
-    background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(15,23,42,0.55));
-    box-shadow: 0 16px 40px rgba(15,23,42,0.35);
-  }
-  .link-bio-head {
-    display: flex;
-    justify-content: space-between;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 16px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
   }
-  .link-bio-sub {
-    margin: 6px 0 0;
+  .settings-card {
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(15,23,42,0.6);
+    text-decoration: none;
+    color: var(--text);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  .settings-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(96,165,250,0.45);
+  }
+  .settings-card__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(96,165,250,0.12);
+    color: #60a5fa;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    flex: 0 0 auto;
+  }
+  .settings-card h3 {
+    margin: 0 0 4px 0;
+    font-size: 16px;
+  }
+  .settings-card p {
+    margin: 0;
     color: var(--sub);
     font-size: 13px;
   }
-  .link-bio-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    background: rgba(52,211,153,0.12);
-    border: 1px solid rgba(52,211,153,0.35);
-    color: #6ee7b7;
-  }
-  .link-bio-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-  }
-  .link-bio-uploader-inner {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
-  .link-bio-avatar {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    overflow: hidden;
-    background: rgba(255,255,255,0.06);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255,255,255,0.12);
-    cursor: pointer;
-  }
-  .link-bio-file-input {
-    display: none;
-  }
-  .link-bio-links {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 12px;
-    margin-top: 8px;
-  }
-  .link-bio-link-card {
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(15,23,42,0.6);
-  }
-  .link-bio-link-card label {
-    font-size: 12px;
-    color: var(--sub);
-  }
-  @media (max-width: 768px) {
-    .link-bio-row {
-      grid-template-columns: 1fr;
-    }
-  }
 </style>
-
-<script>
-  (function() {
-    const addBtn = document.getElementById('linkBioAddLink');
-    const container = document.getElementById('linkBioExtraLinks');
-    const uploadBtn = document.getElementById('linkBioUploadBtn');
-    const fileInput = document.getElementById('linkBioImageFile');
-    const avatar = document.getElementById('linkBioAvatar');
-    const urlInput = document.getElementById('linkBioImageUrl');
-    const preview = document.getElementById('linkBioPreview');
-    const previewIcon = document.getElementById('linkBioPreviewIcon');
-
-    function bindRemove(btn) {
-      btn.addEventListener('click', () => {
-        const row = btn.closest('.link-bio-row');
-        if (row) row.remove();
-      });
-    }
-
-    container?.querySelectorAll('.link-bio-remove').forEach(bindRemove);
-
-    addBtn?.addEventListener('click', () => {
-      const row = document.createElement('div');
-      row.className = 'link-bio-row';
-      row.innerHTML = `
-        <input class="input" type="text" name="link_bio_extra_label" placeholder="Label">
-        <input class="input" type="url" name="link_bio_extra_url" placeholder="https://">
-        <button type="button" class="btn link-bio-remove">Remove</button>
-      `;
-      container.appendChild(row);
-      const removeBtn = row.querySelector('.link-bio-remove');
-      if (removeBtn) bindRemove(removeBtn);
-    });
-
-    uploadBtn?.addEventListener('click', async () => {
-      if (!fileInput?.files?.length) {
-        alert('Select an image first.');
-        return;
-      }
-      const file = fileInput.files[0];
-      if (file.size > 1024 * 1024) {
-        alert('Image too large (max 1MB).');
-        return;
-      }
-      uploadBtn.disabled = true;
-      uploadBtn.textContent = 'Uploading...';
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        const resp = await fetch('{{ url_for("main.api_upload_store_image") }}', {
-          method: 'POST',
-          body: formData,
-          credentials: 'same-origin'
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          throw new Error(data.error || 'Upload failed');
-        }
-        if (urlInput) urlInput.value = data.url;
-        if (preview) {
-          preview.src = data.url;
-          preview.style.display = 'block';
-        }
-        if (previewIcon) previewIcon.style.display = 'none';
-      } catch (err) {
-        alert(`Upload failed: ${err.message}`);
-      } finally {
-        uploadBtn.disabled = false;
-        uploadBtn.textContent = 'Upload';
-      }
-    });
-
-    avatar?.addEventListener('click', () => {
-      fileInput?.click();
-    });
-  })();
-</script>
 {% endblock %}

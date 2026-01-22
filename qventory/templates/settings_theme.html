@@ -1,0 +1,82 @@
+{% extends "base_new.html" %}
+{% block title %}Theme – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Theme</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+  <h2>Theme</h2>
+  <p style="color:var(--sub);font-size:14px;margin-top:-6px;">Pick the look that feels right for your workflow.</p>
+  <form method="post" id="themeForm" style="margin-top:16px;">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <label class="theme-card {% if settings.theme_preference != 'light' %}is-active{% endif %}">
+        <input type="radio" name="theme_preference" value="dark" {% if settings.theme_preference != 'light' %}checked{% endif %}>
+        <div class="theme-card-inner">
+          <i class="fas fa-moon"></i>
+          <div class="theme-card-label">Dark</div>
+        </div>
+      </label>
+      <label class="theme-card {% if settings.theme_preference == 'light' %}is-active{% endif %}">
+        <input type="radio" name="theme_preference" value="light" {% if settings.theme_preference == 'light' %}checked{% endif %}>
+        <div class="theme-card-inner">
+          <i class="fas fa-sun"></i>
+          <div class="theme-card-label">Light</div>
+        </div>
+      </label>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Theme</button>
+      <a class="btn" href="{{ url_for('main.settings') }}"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+  </form>
+</div>
+
+<style>
+  .theme-card {
+    cursor: pointer;
+    position: relative;
+  }
+  .theme-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .theme-card-inner {
+    width: 80px;
+    height: 80px;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-family: 'Georgia','Times New Roman',serif;
+    background: var(--glass-bg-strong);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+  .theme-card:hover .theme-card-inner {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0,0,0,0.25);
+  }
+  .theme-card.is-active .theme-card-inner {
+    border-color: var(--accent);
+    box-shadow: 0 14px 30px rgba(59,130,246,0.25);
+  }
+  .theme-card i {
+    font-size: 20px;
+    color: var(--text);
+  }
+  .theme-card-label {
+    font-size: 12px;
+    color: var(--text);
+  }
+</style>
+{% endblock %}

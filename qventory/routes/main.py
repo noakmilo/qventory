@@ -3417,86 +3417,6 @@ def bulk_sync_to_ebay():
 def settings():
     s = get_or_create_settings(current_user)
     if request.method == "POST":
-        if any(key in request.form for key in ("link_bio_slug", "link_bio_bio", "link_bio_image_url")):
-            import json
-            slug_raw = (request.form.get("link_bio_slug") or "").strip().lower()
-            if slug_raw:
-                if not re.match(r"^[a-z0-9][a-z0-9-]{2,59}$", slug_raw):
-                    flash("Custom link must be 3-60 chars, lowercase letters, numbers, or dashes.", "error")
-                    return redirect(url_for("main.settings"))
-
-                slug_exists = Setting.query.filter(
-                    Setting.link_bio_slug == slug_raw,
-                    Setting.user_id != current_user.id
-                ).first()
-                user_conflict = User.query.filter(
-                    db.func.lower(User.username) == slug_raw,
-                    User.id != current_user.id
-                ).first()
-                if slug_exists or user_conflict:
-                    flash("That custom link is already taken.", "error")
-                    return redirect(url_for("main.settings"))
-
-                s.link_bio_slug = slug_raw
-            else:
-                s.link_bio_slug = None
-
-            s.link_bio_bio = (request.form.get("link_bio_bio") or "").strip()
-            s.link_bio_image_url = (request.form.get("link_bio_image_url") or "").strip() or None
-
-            links = []
-            label_1 = (request.form.get("link_bio_label_1") or "").strip() or "Poshmark"
-            url_1 = (request.form.get("link_bio_url_1") or "").strip()
-            if url_1:
-                links.append({"label": label_1, "url": url_1})
-
-            label_2 = (request.form.get("link_bio_label_2") or "").strip() or "Etsy"
-            url_2 = (request.form.get("link_bio_url_2") or "").strip()
-            if url_2:
-                links.append({"label": label_2, "url": url_2})
-
-            extra_labels = request.form.getlist("link_bio_extra_label")
-            extra_urls = request.form.getlist("link_bio_extra_url")
-            for label, url in zip(extra_labels, extra_urls):
-                label = (label or "").strip()
-                url = (url or "").strip()
-                if not url:
-                    continue
-                links.append({"label": label or "Shop", "url": url})
-
-            s.link_bio_links_json = json.dumps(links)
-
-            featured_ids = []
-            for key in ("link_bio_featured_1", "link_bio_featured_2", "link_bio_featured_3"):
-                raw = (request.form.get(key) or "").strip()
-                if not raw:
-                    continue
-                try:
-                    featured_ids.append(int(raw))
-                except ValueError:
-                    continue
-            if featured_ids:
-                featured_ids = list(dict.fromkeys(featured_ids))[:3]
-            s.link_bio_featured_json = json.dumps(featured_ids)
-
-        if any(key in request.form for key in ("enable_A", "enable_B", "enable_S", "enable_C", "label_A", "label_B", "label_S", "label_C")):
-            s.enable_A = request.form.get("enable_A") == "on"
-            s.enable_B = request.form.get("enable_B") == "on"
-            s.enable_S = request.form.get("enable_S") == "on"
-            s.enable_C = request.form.get("enable_C") == "on"
-
-            s.label_A = (request.form.get("label_A") or "").strip() or "Aisle"
-            s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
-            s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
-            s.label_C = (request.form.get("label_C") or "").strip() or "Container"
-        theme_pref = request.form.get("theme_preference")
-        if theme_pref:
-            theme_pref = theme_pref.strip().lower()
-            if theme_pref in {"dark", "light"}:
-                s.theme_preference = theme_pref
-
-        db.session.commit()
-        flash("Settings saved.", "ok")
         return redirect(url_for("main.settings"))
 
     # Check eBay connection status
@@ -3509,43 +3429,192 @@ def settings():
 
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
-    ebay_store_url = f"https://www.ebay.com/str/{ebay_username}" if ebay_username else None
-    from qventory.models.subscription import PlanLimit
-    subscription = current_user.get_subscription()
-    plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
-
-    import json
-    link_bio_links = []
-    if s.link_bio_links_json:
-        try:
-            link_bio_links = json.loads(s.link_bio_links_json)
-        except Exception:
-            link_bio_links = []
-
-    featured_ids = []
-    if s.link_bio_featured_json:
-        try:
-            featured_ids = json.loads(s.link_bio_featured_json) or []
-        except Exception:
-            featured_ids = []
-
-    items_active = (
-        Item.query.filter_by(user_id=current_user.id, is_active=True)
-        .order_by(Item.title.asc())
-        .all()
-    )
 
     return render_template("settings.html",
                          settings=s,
                          ebay_connected=ebay_connected,
-                         ebay_username=ebay_username,
-                         ebay_store_url=ebay_store_url,
-                         link_bio_links=link_bio_links,
-                         link_bio_featured_ids=featured_ids,
-                         items_active=items_active,
-                         cloudinary_enabled=cloudinary_enabled,
-                         subscription=subscription,
-                         plan_limits=plan_limits)
+                         ebay_username=ebay_username)
+
+
+def _build_link_bio_context(user, settings):
+    import json
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+    ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+    ebay_store_url = f"https://www.ebay.com/str/{ebay_username}" if ebay_username else None
+
+    link_bio_links = []
+    if settings.link_bio_links_json:
+        try:
+            link_bio_links = json.loads(settings.link_bio_links_json)
+        except Exception:
+            link_bio_links = []
+
+    featured_ids = []
+    if settings.link_bio_featured_json:
+        try:
+            featured_ids = json.loads(settings.link_bio_featured_json) or []
+        except Exception:
+            featured_ids = []
+
+    items_active = (
+        Item.query.filter_by(user_id=user.id, is_active=True)
+        .order_by(Item.title.asc())
+        .all()
+    )
+
+    return {
+        "ebay_store_url": ebay_store_url,
+        "link_bio_links": link_bio_links,
+        "link_bio_featured_ids": featured_ids,
+        "items_active": items_active
+    }
+
+
+def _save_link_bio_settings(settings, form, user_id):
+    import json
+    slug_raw = (form.get("link_bio_slug") or "").strip().lower()
+    if slug_raw:
+        if not re.match(r"^[a-z0-9][a-z0-9-]{2,59}$", slug_raw):
+            return "Custom link must be 3-60 chars, lowercase letters, numbers, or dashes."
+
+        slug_exists = Setting.query.filter(
+            Setting.link_bio_slug == slug_raw,
+            Setting.user_id != user_id
+        ).first()
+        user_conflict = User.query.filter(
+            db.func.lower(User.username) == slug_raw,
+            User.id != user_id
+        ).first()
+        if slug_exists or user_conflict:
+            return "That custom link is already taken."
+
+        settings.link_bio_slug = slug_raw
+    else:
+        settings.link_bio_slug = None
+
+    settings.link_bio_bio = (form.get("link_bio_bio") or "").strip()
+    settings.link_bio_image_url = (form.get("link_bio_image_url") or "").strip() or None
+
+    links = []
+    label_1 = (form.get("link_bio_label_1") or "").strip() or "Poshmark"
+    url_1 = (form.get("link_bio_url_1") or "").strip()
+    if url_1:
+        links.append({"label": label_1, "url": url_1})
+
+    label_2 = (form.get("link_bio_label_2") or "").strip() or "Etsy"
+    url_2 = (form.get("link_bio_url_2") or "").strip()
+    if url_2:
+        links.append({"label": label_2, "url": url_2})
+
+    extra_labels = form.getlist("link_bio_extra_label")
+    extra_urls = form.getlist("link_bio_extra_url")
+    for label, url in zip(extra_labels, extra_urls):
+        label = (label or "").strip()
+        url = (url or "").strip()
+        if not url:
+            continue
+        links.append({"label": label or "Shop", "url": url})
+
+    settings.link_bio_links_json = json.dumps(links)
+
+    featured_ids = []
+    for key in ("link_bio_featured_1", "link_bio_featured_2", "link_bio_featured_3"):
+        raw = (form.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            featured_ids.append(int(raw))
+        except ValueError:
+            continue
+    if featured_ids:
+        featured_ids = list(dict.fromkeys(featured_ids))[:3]
+    settings.link_bio_featured_json = json.dumps(featured_ids)
+
+    return None
+
+
+@main_bp.route("/settings/link-bio", methods=["GET", "POST"])
+@login_required
+def settings_link_bio():
+    s = get_or_create_settings(current_user)
+    if request.method == "POST":
+        error = _save_link_bio_settings(s, request.form, current_user.id)
+        if error:
+            flash(error, "error")
+            return redirect(url_for("main.settings_link_bio"))
+        db.session.commit()
+        flash("Link in bio saved.", "ok")
+        return redirect(url_for("main.settings_link_bio"))
+
+    ctx = _build_link_bio_context(current_user, s)
+    return render_template(
+        "settings_link_bio.html",
+        settings=s,
+        cloudinary_enabled=cloudinary_enabled,
+        **ctx
+    )
+
+
+@main_bp.route("/settings/labels", methods=["GET", "POST"])
+@login_required
+def settings_labels():
+    s = get_or_create_settings(current_user)
+    if request.method == "POST":
+        s.enable_A = request.form.get("enable_A") == "on"
+        s.enable_B = request.form.get("enable_B") == "on"
+        s.enable_S = request.form.get("enable_S") == "on"
+        s.enable_C = request.form.get("enable_C") == "on"
+
+        s.label_A = (request.form.get("label_A") or "").strip() or "Aisle"
+        s.label_B = (request.form.get("label_B") or "").strip() or "Bay"
+        s.label_S = (request.form.get("label_S") or "").strip() or "Shelve"
+        s.label_C = (request.form.get("label_C") or "").strip() or "Container"
+        db.session.commit()
+        flash("Location settings saved.", "ok")
+        return redirect(url_for("main.settings_labels"))
+
+    return render_template("settings_labels.html", settings=s)
+
+
+@main_bp.route("/settings/theme", methods=["GET", "POST"])
+@login_required
+def settings_theme():
+    s = get_or_create_settings(current_user)
+    if request.method == "POST":
+        theme_pref = request.form.get("theme_preference")
+        if theme_pref:
+            theme_pref = theme_pref.strip().lower()
+            if theme_pref in {"dark", "light"}:
+                s.theme_preference = theme_pref
+                db.session.commit()
+        return redirect(url_for("main.settings_theme"))
+
+    return render_template("settings_theme.html", settings=s)
+
+
+@main_bp.route("/settings/subscription", methods=["GET"])
+@login_required
+def settings_subscription():
+    from qventory.models.subscription import PlanLimit
+    subscription = current_user.get_subscription()
+    plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
+    return render_template(
+        "settings_subscription.html",
+        subscription=subscription,
+        plan_limits=plan_limits
+    )
+
+
+@main_bp.route("/settings/support", methods=["GET"])
+@login_required
+def settings_support():
+    return render_template("settings_support.html")
 
 
 # ---------------------- Batch QR (protegido) ----------------------
