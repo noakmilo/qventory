@@ -3417,6 +3417,13 @@ def bulk_sync_to_ebay():
 def settings():
     s = get_or_create_settings(current_user)
     if request.method == "POST":
+        theme_pref = request.form.get("theme_preference")
+        if theme_pref:
+            theme_pref = theme_pref.strip().lower()
+            if theme_pref in {"dark", "light"}:
+                s.theme_preference = theme_pref
+                db.session.commit()
+                return redirect(url_for("main.settings"))
         return redirect(url_for("main.settings"))
 
     # Check eBay connection status
@@ -3429,11 +3436,16 @@ def settings():
 
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
+    from qventory.models.subscription import PlanLimit
+    subscription = current_user.get_subscription()
+    plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
 
     return render_template("settings.html",
                          settings=s,
                          ebay_connected=ebay_connected,
-                         ebay_username=ebay_username)
+                         ebay_username=ebay_username,
+                         subscription=subscription,
+                         plan_limits=plan_limits)
 
 
 def _build_link_bio_context(user, settings):
