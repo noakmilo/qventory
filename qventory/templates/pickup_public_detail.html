@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0f14">
     <title>Pickup Details - Qventory</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -17,11 +18,14 @@
         --border: rgba(255,255,255,0.08);
       }
       * { box-sizing: border-box; }
+      html, body {
+        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
+      }
       body {
         margin: 0;
         font-family: "Georgia", "Times New Roman", serif;
-        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
         color: var(--text);
+        padding-top: env(safe-area-inset-top);
       }
       .shell {
         min-height: 100vh;
@@ -242,19 +246,28 @@
         });
 
         {% if appointment.pickup_address and appointment.status not in ['completed','archived','cancelled'] %}
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent({{ appointment.pickup_address|tojson }})}`)
-          .then(response => response.json())
-          .then(results => {
-            if (!results.length) return;
-            const { lat, lon } = results[0];
-            const map = L.map('pickupMap').setView([lat, lon], 14);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              maxZoom: 19,
-              attribution: '&copy; OpenStreetMap'
-            }).addTo(map);
-            L.marker([lat, lon]).addTo(map);
-          })
-          .catch(() => {});
+        const mapCoords = {{ map_coords | tojson }};
+        const mapAddress = {{ appointment.pickup_address | tojson }};
+        function initMap(lat, lon) {
+          const map = L.map('pickupMap').setView([lat, lon], 14);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+          }).addTo(map);
+          L.marker([lat, lon]).addTo(map);
+        }
+
+        if (mapCoords && mapCoords.lat && mapCoords.lon) {
+          initMap(mapCoords.lat, mapCoords.lon);
+        } else if (mapAddress) {
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(mapAddress)}`)
+            .then(response => response.json())
+            .then(results => {
+              if (!results.length) return;
+              initMap(results[0].lat, results[0].lon);
+            })
+            .catch(() => {});
+        }
         {% endif %}
       })();
     </script>

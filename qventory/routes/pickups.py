@@ -13,6 +13,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from sqlalchemy import func
+import requests
 
 from ..extensions import db
 from ..helpers import get_or_create_settings
@@ -132,6 +133,29 @@ def _resolve_public_user(slug):
 
 def _format_pickup_datetime(dt_value):
     return dt_value.strftime("%b %d, %Y"), dt_value.strftime("%I:%M %p").lstrip("0")
+
+
+def _geocode_address(address):
+    if not address:
+        return None
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "jsonv2", "limit": 1, "q": address},
+            headers={"User-Agent": "Qventory Pickup Scheduler"},
+            timeout=3
+        )
+        if response.status_code != 200:
+            return None
+        payload = response.json()
+        if not payload:
+            return None
+        return {
+            "lat": float(payload[0].get("lat")),
+            "lon": float(payload[0].get("lon"))
+        }
+    except Exception:
+        return None
 
 
 def _build_ics(appointment):
@@ -437,13 +461,15 @@ def pickup_public(slug):
 
         return redirect(url_for("main.pickup_public_detail", token=appointment.public_token))
 
+    map_coords = _geocode_address(settings.pickup_address)
     return render_template(
         "pickup_public.html",
         seller=user,
         settings=settings,
         availability_enabled=availability_enabled,
         availability_map=availability_map,
-        instructions=settings.pickup_instructions
+        instructions=settings.pickup_instructions,
+        map_coords=map_coords
     )
 
 
@@ -452,12 +478,14 @@ def pickup_public_detail(token):
     appointment = PickupAppointment.query.filter_by(public_token=token).first_or_404()
     messages = appointment.messages.order_by(PickupMessage.created_at.asc()).all()
     pickup_date, pickup_time = _format_pickup_datetime(appointment.scheduled_start)
+    map_coords = _geocode_address(appointment.pickup_address)
     return render_template(
         "pickup_public_detail.html",
         appointment=appointment,
         messages=messages,
         pickup_date=pickup_date,
-        pickup_time=pickup_time
+        pickup_time=pickup_time,
+        map_coords=map_coords
     )
 
 
