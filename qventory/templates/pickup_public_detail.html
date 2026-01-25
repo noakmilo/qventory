@@ -16,11 +16,23 @@
         --muted: #9ca3af;
         --accent: #38bdf8;
         --border: rgba(255,255,255,0.08);
+        --page-bg: radial-gradient(circle at top, #162030, #0b0f14 60%);
+        --page-solid: #0b0f14;
+      }
+      [data-theme="light"] {
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #111827;
+        --muted: #5b6b85;
+        --accent: #2563eb;
+        --border: #d8e0ee;
+        --page-bg: radial-gradient(circle at top, #eef2ff, #f5f7fb 60%);
+        --page-solid: #f5f7fb;
       }
       * { box-sizing: border-box; }
       html, body {
-        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
-        background-color: #0b0f14;
+        background: var(--page-bg);
+        background-color: var(--page-solid);
       }
       body {
         margin: 0;
@@ -33,7 +45,7 @@
         min-height: 100vh;
         display: flex;
         flex-direction: column;
-        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
+        background: var(--page-bg);
       }
       .page {
         max-width: 720px;
@@ -81,6 +93,26 @@
         align-items: center;
         gap: 6px;
       }
+      [data-theme="light"] .btn {
+        background: rgba(37,99,235,0.12);
+        border-color: rgba(37,99,235,0.45);
+        color: #1d4ed8;
+      }
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: rgba(15,23,42,0.6);
+        color: var(--text);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      [data-theme="light"] .theme-toggle {
+        background: #ffffff;
+      }
       .link-row {
         display: flex;
         gap: 8px;
@@ -95,6 +127,9 @@
         background: rgba(15,23,42,0.6);
         color: var(--text);
       }
+      [data-theme="light"] .input {
+        background: #ffffff;
+      }
       .pickup-thread {
         display: grid;
         gap: 12px;
@@ -105,6 +140,10 @@
         padding: 12px;
         background: rgba(15,23,42,0.6);
         border: 1px solid rgba(255,255,255,0.08);
+      }
+      [data-theme="light"] .pickup-message {
+        background: #ffffff;
+        border-color: var(--border);
       }
       .pickup-message--buyer {
         border-color: rgba(56,189,248,0.5);
@@ -146,17 +185,26 @@
         {% endwith %}
         {% if appointment.status in ['completed', 'archived'] %}
         <div class="card">
-          <h1>Pickup completed</h1>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h1>Pickup completed</h1>
+            <button class="theme-toggle" type="button" id="themeToggle"><i class="fas fa-sun"></i><span>Light</span></button>
+          </div>
           <p class="muted">Your pickup has been marked completed by the seller.</p>
         </div>
         {% elif appointment.status == 'cancelled' %}
         <div class="card">
-          <h1>Pickup cancelled</h1>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h1>Pickup cancelled</h1>
+            <button class="theme-toggle" type="button" id="themeToggle"><i class="fas fa-sun"></i><span>Light</span></button>
+          </div>
           <p class="muted">This pickup was cancelled by the seller.</p>
         </div>
         {% else %}
         <div class="card">
-          <h1>Pickup details</h1>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h1>Pickup details</h1>
+            <button class="theme-toggle" type="button" id="themeToggle"><i class="fas fa-sun"></i><span>Light</span></button>
+          </div>
           <p class="muted">Scheduled with {{ appointment.seller.username }}.</p>
           <div class="detail-grid" style="margin-top:12px;">
             <div class="detail-row">
@@ -237,6 +285,32 @@
             integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
       (function() {
+        const themeToggle = document.getElementById('themeToggle');
+        const storedTheme = localStorage.getItem('qventory_pickup_theme');
+        const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        const initialTheme = storedTheme || (prefersLight ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', initialTheme);
+
+        function updateToggle() {
+          const theme = document.documentElement.getAttribute('data-theme') || 'dark';
+          if (!themeToggle) return;
+          if (theme === 'light') {
+            themeToggle.innerHTML = '<i class="fas fa-moon"></i><span>Dark</span>';
+          } else {
+            themeToggle.innerHTML = '<i class="fas fa-sun"></i><span>Light</span>';
+          }
+        }
+
+        themeToggle?.addEventListener('click', () => {
+          const current = document.documentElement.getAttribute('data-theme') || 'dark';
+          const next = current === 'light' ? 'dark' : 'light';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('qventory_pickup_theme', next);
+          updateToggle();
+        });
+
+        updateToggle();
+
         document.querySelectorAll('[data-copy]').forEach(button => {
           button.addEventListener('click', () => {
             const value = button.getAttribute('data-copy');
