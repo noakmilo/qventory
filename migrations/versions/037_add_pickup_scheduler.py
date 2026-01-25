@@ -17,56 +17,85 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('settings', sa.Column('pickup_scheduler_enabled', sa.Boolean(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_availability_mode', sa.String(length=20), nullable=True))
-    op.add_column('settings', sa.Column('pickup_specific_dates_json', sa.Text(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_weekly_days_json', sa.Text(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_start_time', sa.String(length=5), nullable=True))
-    op.add_column('settings', sa.Column('pickup_end_time', sa.String(length=5), nullable=True))
-    op.add_column('settings', sa.Column('pickup_breaks_json', sa.Text(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_slot_minutes', sa.Integer(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_address', sa.Text(), nullable=True))
-    op.add_column('settings', sa.Column('pickup_contact_email', sa.String(length=255), nullable=True))
-    op.add_column('settings', sa.Column('pickup_contact_phone', sa.String(length=50), nullable=True))
-    op.add_column('settings', sa.Column('pickup_instructions', sa.Text(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    op.create_table(
-        'pickup_appointments',
-        sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('seller_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('buyer_name', sa.String(length=120), nullable=False),
-        sa.Column('buyer_email', sa.String(length=255), nullable=False),
-        sa.Column('buyer_phone', sa.String(length=50), nullable=True),
-        sa.Column('buyer_note', sa.Text(), nullable=True),
-        sa.Column('scheduled_start', sa.DateTime(), nullable=False),
-        sa.Column('scheduled_end', sa.DateTime(), nullable=False),
-        sa.Column('duration_minutes', sa.Integer(), nullable=False),
-        sa.Column('status', sa.String(length=20), nullable=True),
-        sa.Column('pickup_address', sa.Text(), nullable=True),
-        sa.Column('seller_contact_email', sa.String(length=255), nullable=True),
-        sa.Column('seller_contact_phone', sa.String(length=50), nullable=True),
-        sa.Column('seller_instructions', sa.Text(), nullable=True),
-        sa.Column('public_token', sa.String(length=64), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-    )
-    op.create_index('ix_pickup_appointments_seller_id', 'pickup_appointments', ['seller_id'])
-    op.create_index('ix_pickup_appointments_scheduled_start', 'pickup_appointments', ['scheduled_start'])
-    op.create_index('ix_pickup_appointments_status', 'pickup_appointments', ['status'])
-    op.create_index('ix_pickup_appointments_public_token', 'pickup_appointments', ['public_token'], unique=True)
-    op.create_index('ix_pickup_appointments_created_at', 'pickup_appointments', ['created_at'])
+    settings_columns = {col['name'] for col in inspector.get_columns('settings')}
+    if 'pickup_scheduler_enabled' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_scheduler_enabled', sa.Boolean(), nullable=True))
+    if 'pickup_availability_mode' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_availability_mode', sa.String(length=20), nullable=True))
+    if 'pickup_specific_dates_json' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_specific_dates_json', sa.Text(), nullable=True))
+    if 'pickup_weekly_days_json' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_weekly_days_json', sa.Text(), nullable=True))
+    if 'pickup_start_time' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_start_time', sa.String(length=5), nullable=True))
+    if 'pickup_end_time' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_end_time', sa.String(length=5), nullable=True))
+    if 'pickup_breaks_json' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_breaks_json', sa.Text(), nullable=True))
+    if 'pickup_slot_minutes' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_slot_minutes', sa.Integer(), nullable=True))
+    if 'pickup_address' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_address', sa.Text(), nullable=True))
+    if 'pickup_contact_email' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_contact_email', sa.String(length=255), nullable=True))
+    if 'pickup_contact_phone' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_contact_phone', sa.String(length=50), nullable=True))
+    if 'pickup_instructions' not in settings_columns:
+        op.add_column('settings', sa.Column('pickup_instructions', sa.Text(), nullable=True))
 
-    op.create_table(
-        'pickup_messages',
-        sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('pickup_id', sa.Integer(), sa.ForeignKey('pickup_appointments.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('sender_role', sa.String(length=20), nullable=False),
-        sa.Column('sender_user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
-        sa.Column('message', sa.Text(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-    )
-    op.create_index('ix_pickup_messages_pickup_id', 'pickup_messages', ['pickup_id'])
-    op.create_index('ix_pickup_messages_created_at', 'pickup_messages', ['created_at'])
+    if not inspector.has_table('pickup_appointments'):
+        op.create_table(
+            'pickup_appointments',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('seller_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('buyer_name', sa.String(length=120), nullable=False),
+            sa.Column('buyer_email', sa.String(length=255), nullable=False),
+            sa.Column('buyer_phone', sa.String(length=50), nullable=True),
+            sa.Column('buyer_note', sa.Text(), nullable=True),
+            sa.Column('scheduled_start', sa.DateTime(), nullable=False),
+            sa.Column('scheduled_end', sa.DateTime(), nullable=False),
+            sa.Column('duration_minutes', sa.Integer(), nullable=False),
+            sa.Column('status', sa.String(length=20), nullable=True),
+            sa.Column('pickup_address', sa.Text(), nullable=True),
+            sa.Column('seller_contact_email', sa.String(length=255), nullable=True),
+            sa.Column('seller_contact_phone', sa.String(length=50), nullable=True),
+            sa.Column('seller_instructions', sa.Text(), nullable=True),
+            sa.Column('public_token', sa.String(length=64), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.Column('updated_at', sa.DateTime(), nullable=True),
+        )
+
+    appointment_indexes = {idx['name'] for idx in inspector.get_indexes('pickup_appointments')}
+    if 'ix_pickup_appointments_seller_id' not in appointment_indexes:
+        op.create_index('ix_pickup_appointments_seller_id', 'pickup_appointments', ['seller_id'])
+    if 'ix_pickup_appointments_scheduled_start' not in appointment_indexes:
+        op.create_index('ix_pickup_appointments_scheduled_start', 'pickup_appointments', ['scheduled_start'])
+    if 'ix_pickup_appointments_status' not in appointment_indexes:
+        op.create_index('ix_pickup_appointments_status', 'pickup_appointments', ['status'])
+    if 'ix_pickup_appointments_public_token' not in appointment_indexes:
+        op.create_index('ix_pickup_appointments_public_token', 'pickup_appointments', ['public_token'], unique=True)
+    if 'ix_pickup_appointments_created_at' not in appointment_indexes:
+        op.create_index('ix_pickup_appointments_created_at', 'pickup_appointments', ['created_at'])
+
+    if not inspector.has_table('pickup_messages'):
+        op.create_table(
+            'pickup_messages',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('pickup_id', sa.Integer(), sa.ForeignKey('pickup_appointments.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('sender_role', sa.String(length=20), nullable=False),
+            sa.Column('sender_user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='SET NULL'), nullable=True),
+            sa.Column('message', sa.Text(), nullable=False),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+        )
+
+    message_indexes = {idx['name'] for idx in inspector.get_indexes('pickup_messages')}
+    if 'ix_pickup_messages_pickup_id' not in message_indexes:
+        op.create_index('ix_pickup_messages_pickup_id', 'pickup_messages', ['pickup_id'])
+    if 'ix_pickup_messages_created_at' not in message_indexes:
+        op.create_index('ix_pickup_messages_created_at', 'pickup_messages', ['created_at'])
 
 
 def downgrade():
