@@ -1,0 +1,199 @@
+{% extends "base_new.html" %}
+{% block title %}Pickup Details - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.pickup_upcoming') }}">Upcoming Pickups</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">{{ appointment.buyer_name }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="pickup-detail">
+  <div class="card pickup-detail-card">
+    <div class="pickup-detail-head">
+      <div>
+        <div class="pickup-detail-date">{{ appointment.scheduled_start.strftime('%b %d, %Y') }} - {{ appointment.scheduled_start.strftime('%I:%M %p').lstrip('0') }}</div>
+        <h2>{{ appointment.buyer_name }}</h2>
+        <div class="pickup-detail-status pickup-detail-status--{{ appointment.status }}">{{ appointment.status|capitalize }}</div>
+      </div>
+      <div class="pickup-detail-actions">
+        {% if appointment.status == 'scheduled' %}
+        <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=appointment.id) }}">
+          <input type="hidden" name="action" value="complete">
+          <button class="btn" type="submit"><i class="fas fa-check"></i> Complete</button>
+        </form>
+        <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=appointment.id) }}">
+          <input type="hidden" name="action" value="cancel">
+          <button class="btn" type="submit" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="fas fa-ban"></i> Cancel</button>
+        </form>
+        {% endif %}
+        {% if appointment.status != 'archived' %}
+        <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=appointment.id) }}">
+          <input type="hidden" name="action" value="archive">
+          <button class="btn" type="submit"><i class="fas fa-box-archive"></i> Archive</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="pickup-detail-grid">
+      <div>
+        <h4>Buyer info</h4>
+        <div class="pickup-detail-row"><span>Email</span><span>{{ appointment.buyer_email }}</span></div>
+        {% if appointment.buyer_phone %}
+        <div class="pickup-detail-row"><span>Phone</span><span>{{ appointment.buyer_phone }}</span></div>
+        {% endif %}
+      </div>
+      <div>
+        <h4>Pickup address</h4>
+        <div class="pickup-detail-row"><span>Address</span><span>{{ appointment.pickup_address or 'Not provided' }}</span></div>
+      </div>
+      <div>
+        <h4>Buyer note</h4>
+        <p class="muted">{{ appointment.buyer_note or 'No note provided.' }}</p>
+      </div>
+      <div>
+        <h4>Public link</h4>
+        <div class="pickup-detail-link">
+          <input class="input" type="text" readonly value="{{ url_for('main.pickup_public_detail', token=appointment.public_token, _external=True) }}">
+          <button class="btn" type="button" data-copy="{{ url_for('main.pickup_public_detail', token=appointment.public_token, _external=True) }}"><i class="fas fa-copy"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card pickup-message-card">
+    <h3>Messages</h3>
+    <div class="pickup-thread">
+      {% if messages %}
+      {% for message in messages %}
+      <div class="pickup-message pickup-message--{{ message.sender_role }}">
+        <div class="pickup-message-meta">
+          <span>{{ message.sender_role|capitalize }}</span>
+          <span>{{ message.created_at.strftime('%b %d, %Y %I:%M %p').lstrip('0') }}</span>
+        </div>
+        <div class="pickup-message-body">{{ message.message }}</div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="muted">No messages yet.</div>
+      {% endif %}
+    </div>
+    {% if appointment.status == 'scheduled' %}
+    <form method="post" action="{{ url_for('main.pickup_send_message', pickup_id=appointment.id) }}" class="pickup-message-form">
+      <textarea class="input" name="message" rows="3" placeholder="Write a message to the buyer"></textarea>
+      <button class="btn btn-primary" type="submit"><i class="fas fa-paper-plane"></i> Send message</button>
+    </form>
+    {% else %}
+    <div class="muted" style="margin-top:12px;">Messaging is closed for this pickup.</div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .pickup-detail-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .pickup-detail-date {
+    font-size: 13px;
+    color: var(--sub);
+  }
+  .pickup-detail-status {
+    margin-top: 6px;
+    display: inline-flex;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    background: rgba(96,165,250,0.15);
+    color: #93c5fd;
+  }
+  .pickup-detail-status--completed {
+    background: rgba(34,197,94,0.15);
+    color: #86efac;
+  }
+  .pickup-detail-status--cancelled {
+    background: rgba(239,68,68,0.15);
+    color: #fca5a5;
+  }
+  .pickup-detail-status--archived {
+    background: rgba(148,163,184,0.2);
+    color: #cbd5f5;
+  }
+  .pickup-detail-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pickup-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .pickup-detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--sub);
+  }
+  .pickup-detail-row span:last-child {
+    color: var(--text);
+  }
+  .pickup-detail-link {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .pickup-thread {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .pickup-message {
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(15,23,42,0.6);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .pickup-message--seller {
+    border-color: rgba(96,165,250,0.35);
+  }
+  .pickup-message-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--sub);
+    margin-bottom: 6px;
+  }
+  .pickup-message-body {
+    font-size: 14px;
+  }
+  .pickup-message-form {
+    margin-top: 16px;
+    display: grid;
+    gap: 10px;
+  }
+</style>
+
+<script>
+  (function() {
+    document.querySelectorAll('[data-copy]').forEach(button => {
+      button.addEventListener('click', () => {
+        const value = button.getAttribute('data-copy');
+        navigator.clipboard?.writeText(value);
+        button.innerHTML = '<i class="fas fa-check"></i>';
+        setTimeout(() => {
+          button.innerHTML = '<i class="fas fa-copy"></i>';
+        }, 1500);
+      });
+    });
+  })();
+</script>
+{% endblock %}

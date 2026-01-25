@@ -20,6 +20,18 @@ class Setting(db.Model):
     link_bio_bio = db.Column(db.Text, nullable=True)
     link_bio_links_json = db.Column(db.Text, nullable=True)
     link_bio_featured_json = db.Column(db.Text, nullable=True)
+    pickup_scheduler_enabled = db.Column(db.Boolean, default=False)
+    pickup_availability_mode = db.Column(db.String(20), default="weekly")
+    pickup_specific_dates_json = db.Column(db.Text, nullable=True)
+    pickup_weekly_days_json = db.Column(db.Text, nullable=True)
+    pickup_start_time = db.Column(db.String(5), nullable=True)
+    pickup_end_time = db.Column(db.String(5), nullable=True)
+    pickup_breaks_json = db.Column(db.Text, nullable=True)
+    pickup_slot_minutes = db.Column(db.Integer, default=15)
+    pickup_address = db.Column(db.Text, nullable=True)
+    pickup_contact_email = db.Column(db.String(255), nullable=True)
+    pickup_contact_phone = db.Column(db.String(50), nullable=True)
+    pickup_instructions = db.Column(db.Text, nullable=True)
 
     def enabled_levels(self):
         levels = []

@@ -1,0 +1,166 @@
+{% extends "base_new.html" %}
+{% block title %}Upcoming Pickups - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Upcoming Pickups</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="pickup-wrap">
+  <div class="pickup-header">
+    <div>
+      <h2>Upcoming Pickups</h2>
+      <p class="muted">Track every scheduled pickup, mark it complete, or archive it.</p>
+    </div>
+    <a class="btn" href="{{ url_for('main.settings_pickup_scheduler') }}"><i class="fas fa-gear"></i> Scheduler settings</a>
+  </div>
+
+  <div class="pickup-tabs">
+    {% for key,label in [('scheduled','Upcoming'),('completed','Completed'),('cancelled','Cancelled'),('archived','Archived'),('all','All')] %}
+    <a class="pickup-tab {% if status_filter == key %}is-active{% endif %}" href="{{ url_for('main.pickup_upcoming', status=key) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  {% if pickups %}
+  <div class="pickup-list">
+    {% for pickup in pickups %}
+    <div class="card pickup-card">
+      <div class="pickup-card-main">
+        <div>
+          <div class="pickup-date">{{ pickup.scheduled_start.strftime('%b %d, %Y') }} - {{ pickup.scheduled_start.strftime('%I:%M %p').lstrip('0') }}</div>
+          <div class="pickup-title">{{ pickup.buyer_name }}</div>
+          <div class="pickup-meta">
+            <span class="pickup-status pickup-status--{{ pickup.status }}">{{ pickup.status|capitalize }}</span>
+            <span>{{ pickup.buyer_email }}</span>
+            {% if pickup.buyer_phone %}
+            <span>{{ pickup.buyer_phone }}</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="pickup-actions">
+          <a class="btn" href="{{ url_for('main.pickup_detail', pickup_id=pickup.id) }}"><i class="fas fa-eye"></i> View</a>
+          {% if pickup.status == 'scheduled' %}
+          <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=pickup.id) }}">
+            <input type="hidden" name="action" value="complete">
+            <button class="btn" type="submit"><i class="fas fa-check"></i> Complete</button>
+          </form>
+          <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=pickup.id) }}">
+            <input type="hidden" name="action" value="cancel">
+            <button class="btn" type="submit" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.4);color:#ef4444"><i class="fas fa-ban"></i> Cancel</button>
+          </form>
+          {% endif %}
+          {% if pickup.status != 'archived' %}
+          <form method="post" action="{{ url_for('main.pickup_update_status', pickup_id=pickup.id) }}">
+            <input type="hidden" name="action" value="archive">
+            <button class="btn" type="submit"><i class="fas fa-box-archive"></i> Archive</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      {% if pickup.buyer_note %}
+      <div class="pickup-note">Buyer note: {{ pickup.buyer_note }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:24px;">
+    <div style="font-size:18px;font-weight:600;">No pickups yet</div>
+    <p class="muted">Once buyers schedule a pickup, it will appear here.</p>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+  .pickup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .pickup-tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .pickup-tab {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 12px;
+    background: rgba(15,23,42,0.5);
+  }
+  .pickup-tab.is-active {
+    background: rgba(96,165,250,0.2);
+    border-color: rgba(96,165,250,0.5);
+    color: #93c5fd;
+  }
+  .pickup-list {
+    display: grid;
+    gap: 14px;
+  }
+  .pickup-card-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .pickup-date {
+    font-size: 13px;
+    color: var(--sub);
+  }
+  .pickup-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  .pickup-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--sub);
+    margin-top: 6px;
+  }
+  .pickup-status {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    text-transform: capitalize;
+    background: rgba(96,165,250,0.15);
+    color: #93c5fd;
+  }
+  .pickup-status--completed {
+    background: rgba(34,197,94,0.15);
+    color: #86efac;
+  }
+  .pickup-status--cancelled {
+    background: rgba(239,68,68,0.15);
+    color: #fca5a5;
+  }
+  .pickup-status--archived {
+    background: rgba(148,163,184,0.2);
+    color: #cbd5f5;
+  }
+  .pickup-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pickup-note {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--sub);
+  }
+</style>
+{% endblock %}

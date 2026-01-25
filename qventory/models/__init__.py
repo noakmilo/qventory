@@ -19,6 +19,7 @@ from .receipt_usage import ReceiptUsage
 from .tax_report import TaxReport, TaxReportExport
 from .ebay_finance import EbayPayout, EbayFinanceTransaction
 from .help_article import HelpArticle
+from .pickup import PickupAppointment, PickupMessage
 
 __all__ = [
     'User',
@@ -46,5 +47,7 @@ __all__ = [
     'TaxReportExport',
     'EbayPayout',
     'EbayFinanceTransaction',
-    'HelpArticle'
+    'HelpArticle',
+    'PickupAppointment',
+    'PickupMessage'
 ]

@@ -51,6 +51,15 @@ def get_or_create_settings(user):
     if not (s.label_C or "").strip():
         s.label_C = "Container"
         dirty = True
+    if s.pickup_scheduler_enabled is None:
+        s.pickup_scheduler_enabled = False
+        dirty = True
+    if not (s.pickup_availability_mode or "").strip():
+        s.pickup_availability_mode = "weekly"
+        dirty = True
+    if s.pickup_slot_minutes is None:
+        s.pickup_slot_minutes = 15
+        dirty = True
     if dirty:
         db.session.commit()
     return s

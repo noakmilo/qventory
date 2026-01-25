@@ -86,6 +86,14 @@
         <span>Fulfillment</span>
       </a>
 
+      {% if current_user.is_authenticated and current_user.settings and current_user.settings.pickup_scheduler_enabled %}
+      <a href="{{ url_for('main.pickup_upcoming') }}" class="sidebar-item {% if request.endpoint in ['main.pickup_upcoming', 'main.pickup_detail'] %}active{% endif %}" title="Upcoming Pickups">
+        <i class="fas fa-calendar-check"></i>
+        <span>Upcoming Pickups</span>
+        <span class="sidebar-item-badge" id="pickupBadge"></span>
+      </a>
+      {% endif %}
+
       <a href="{{ url_for('auto_relist.dashboard') }}" class="sidebar-item {% if 'auto_relist' in request.endpoint %}active{% endif %}" title="Auto Relist">
         <i class="fas fa-sync-alt"></i>
         <span>Auto Relist</span>
@@ -319,6 +327,17 @@
     let lastCheckTime = Date.now();
     const CHECK_INTERVAL = 10000; // Check every 10 seconds
 
+    function updatePickupBadge(count) {
+      const badge = document.getElementById("pickupBadge");
+      if (!badge) return;
+      if (count && count > 0) {
+        badge.textContent = count > 99 ? "99+" : String(count);
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+    }
+
     function checkNotifications() {
       fetch('/api/notifications/unread')
         .then(res => res.json())
@@ -329,11 +348,16 @@
               const createdAt = new Date(notification.created_at).getTime();
               if (createdAt > lastCheckTime) {
                 showNotification(notification);
-                // Mark as read immediately to prevent showing again
-                fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
-                  .catch(err => console.error('Error marking notification as read:', err));
+                if (notification.source !== 'pickup') {
+                  // Mark as read immediately to prevent showing again
+                  fetch(`/api/notifications/${notification.id}/read`, { method: 'POST' })
+                    .catch(err => console.error('Error marking notification as read:', err));
+                }
               }
             });
+          }
+          if (data.ok && typeof data.pickup_unread_count === 'number') {
+            updatePickupBadge(data.pickup_unread_count);
           }
           // Update lastCheckTime regardless of whether there were notifications
           lastCheckTime = Date.now();

@@ -2480,6 +2480,20 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   color: #60a5fa;
 }
 
+.sidebar-item-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  display: none;
+}
+
 .sidebar-footer {
   padding: 16px;
   border-top: 1px solid var(--glass-border);

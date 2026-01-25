@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pickup Details - Qventory</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #38bdf8;
+        --border: rgba(255,255,255,0.08);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
+        color: var(--text);
+      }
+      .shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .page {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: clamp(24px, 6vw, 36px) clamp(18px, 6vw, 28px) 40px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 16px;
+      }
+      h1 {
+        font-size: 24px;
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .detail-row {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .detail-row strong {
+        color: var(--text);
+        display: block;
+        margin-bottom: 4px;
+      }
+      .btn {
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(56,189,248,0.6);
+        background: rgba(56,189,248,0.2);
+        color: #bae6fd;
+        font-size: 13px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .link-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      .input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(15,23,42,0.6);
+        color: var(--text);
+      }
+      .pickup-thread {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .pickup-message {
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(15,23,42,0.6);
+        border: 1px solid rgba(255,255,255,0.08);
+      }
+      .pickup-message--buyer {
+        border-color: rgba(56,189,248,0.5);
+      }
+      .pickup-message-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      #pickupMap {
+        width: 100%;
+        height: 220px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      footer {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: auto;
+        padding: 0 0 24px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="page">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="card">
+          {% for category, message in messages %}
+          <div class="muted">{{ message }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% if appointment.status in ['completed', 'archived'] %}
+        <div class="card">
+          <h1>Pickup completed</h1>
+          <p class="muted">Your pickup has been marked completed by the seller.</p>
+        </div>
+        {% elif appointment.status == 'cancelled' %}
+        <div class="card">
+          <h1>Pickup cancelled</h1>
+          <p class="muted">This pickup was cancelled by the seller.</p>
+        </div>
+        {% else %}
+        <div class="card">
+          <h1>Pickup details</h1>
+          <p class="muted">Scheduled with {{ appointment.seller.username }}.</p>
+          <div class="detail-grid" style="margin-top:12px;">
+            <div class="detail-row">
+              <strong>Date</strong>
+              {{ pickup_date }}
+            </div>
+            <div class="detail-row">
+              <strong>Time</strong>
+              {{ pickup_time }}
+            </div>
+            {% if appointment.pickup_address %}
+            <div class="detail-row">
+              <strong>Address</strong>
+              {{ appointment.pickup_address }}
+            </div>
+            {% endif %}
+            {% if appointment.seller_contact_email %}
+            <div class="detail-row">
+              <strong>Email</strong>
+              {{ appointment.seller_contact_email }}
+            </div>
+            {% endif %}
+            {% if appointment.seller_contact_phone %}
+            <div class="detail-row">
+              <strong>Phone</strong>
+              {{ appointment.seller_contact_phone }}
+            </div>
+            {% endif %}
+          </div>
+          {% if appointment.seller_instructions %}
+          <p class="muted" style="margin-top:12px;">{{ appointment.seller_instructions }}</p>
+          {% endif %}
+          <div class="link-row" style="margin-top:12px;">
+            <a class="btn" href="{{ url_for('main.pickup_calendar', token=appointment.public_token) }}"><i class="fas fa-calendar-plus"></i> Download calendar</a>
+            <button class="btn" type="button" data-copy="{{ url_for('main.pickup_public_detail', token=appointment.public_token, _external=True) }}"><i class="fas fa-copy"></i> Copy link</button>
+          </div>
+        </div>
+
+        {% if appointment.pickup_address %}
+        <div class="card">
+          <h3>Pickup location</h3>
+          <div id="pickupMap"></div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+          <h3>Messages</h3>
+          <div class="pickup-thread">
+            {% if messages %}
+            {% for message in messages %}
+            <div class="pickup-message pickup-message--{{ message.sender_role }}">
+              <div class="pickup-message-meta">
+                <span>{{ message.sender_role|capitalize }}</span>
+                <span>{{ message.created_at.strftime('%b %d, %Y %I:%M %p').lstrip('0') }}</span>
+              </div>
+              <div>{{ message.message }}</div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="muted">No messages yet.</div>
+            {% endif %}
+          </div>
+          {% if appointment.status == 'scheduled' %}
+          <form method="post" action="{{ url_for('main.pickup_public_message', token=appointment.public_token) }}" style="margin-top:16px;display:grid;gap:10px;">
+            <textarea class="input" name="message" rows="3" placeholder="Send a message to the seller"></textarea>
+            <button class="btn" type="submit"><i class="fas fa-paper-plane"></i> Send message</button>
+          </form>
+          {% else %}
+          <div class="muted" style="margin-top:12px;">Messaging is closed for this pickup.</div>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <footer>Made with Qventory - Inventory power for hustlers.</footer>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+      (function() {
+        document.querySelectorAll('[data-copy]').forEach(button => {
+          button.addEventListener('click', () => {
+            const value = button.getAttribute('data-copy');
+            navigator.clipboard?.writeText(value);
+            button.innerHTML = '<i class="fas fa-check"></i> Copied';
+            setTimeout(() => {
+              button.innerHTML = '<i class="fas fa-copy"></i> Copy link';
+            }, 1500);
+          });
+        });
+
+        {% if appointment.pickup_address and appointment.status not in ['completed','archived','cancelled'] %}
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent({{ appointment.pickup_address|tojson }})}`)
+          .then(response => response.json())
+          .then(results => {
+            if (!results.length) return;
+            const { lat, lon } = results[0];
+            const map = L.map('pickupMap').setView([lat, lon], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+            L.marker([lat, lon]).addTo(map);
+          })
+          .catch(() => {});
+        {% endif %}
+      })();
+    </script>
+  </body>
+</html>

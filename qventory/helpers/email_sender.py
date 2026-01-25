@@ -450,3 +450,118 @@ Upgrade anytime: https://qventory.com/upgrade
 © 2025 Qventory. All rights reserved.
     """
     return send_email(to_email, subject, html_body, text_body)
+
+
+def send_pickup_scheduled_email(to_email, buyer_name, seller_name, pickup_date, pickup_time, address, details_url, calendar_url):
+    subject = f"Pickup scheduled with {seller_name}"
+
+    address_block = f"<p><strong>Pickup address:</strong> {address}</p>" if address else ""
+    calendar_block = f'<a class="button" href="{calendar_url}">Add to calendar</a>' if calendar_url else ""
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
+            .header {{ text-align: center; margin-bottom: 30px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .card {{ background: #f3f4f6; border-radius: 10px; padding: 16px; margin: 20px 0; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin-top: 12px; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Pickup scheduled</h2>
+                <p>Hi {buyer_name}, your pickup with <strong>{seller_name}</strong> is confirmed.</p>
+                <div class="card">
+                    <p><strong>Date:</strong> {pickup_date}</p>
+                    <p><strong>Time:</strong> {pickup_time}</p>
+                    {address_block}
+                </div>
+                <a class="button" href="{details_url}">View appointment details</a>
+                {calendar_block}
+                <p>If you need to message the seller, use the appointment link above.</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    text_body = f"""
+Pickup scheduled
+
+Hi {buyer_name}, your pickup with {seller_name} is confirmed.
+
+Date: {pickup_date}
+Time: {pickup_time}
+{f'Address: {address}' if address else ''}
+
+View details: {details_url}
+{f'Add to calendar: {calendar_url}' if calendar_url else ''}
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+
+    return send_email(to_email, subject, html_body, text_body)
+
+
+def send_pickup_message_email(to_email, sender_label, message, reply_url):
+    subject = f"New pickup message from {sender_label}"
+
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 40px 20px; }}
+            .header {{ text-align: center; margin-bottom: 30px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .message {{ background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin-top: 16px; }}
+            .footer {{ margin-top: 30px; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <h2>New pickup message</h2>
+            <p><strong>{sender_label}</strong> sent you a message:</p>
+            <div class="message">{message}</div>
+            <a class="button" href="{reply_url}">Reply to message</a>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    text_body = f"""
+New pickup message from {sender_label}
+
+{message}
+
+Reply: {reply_url}
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+
+    return send_email(to_email, subject, html_body, text_body)

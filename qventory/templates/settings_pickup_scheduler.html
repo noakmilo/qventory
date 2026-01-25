@@ -1,0 +1,301 @@
+{% extends "base_new.html" %}
+{% block title %}Pickup Scheduler - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Pickup Scheduler</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card pickup-card">
+  <div class="pickup-head">
+    <div>
+      <h2>Pickup Scheduler</h2>
+      <p class="pickup-sub">Let buyers book pickup times directly from your public link.</p>
+    </div>
+    <div class="pickup-pill">
+      <i class="fas fa-calendar-check"></i>
+      {{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}/pickup
+    </div>
+  </div>
+
+  <form method="post" id="pickupSchedulerForm">
+    <div class="pickup-section">
+      <label class="pickup-toggle">
+        <input type="checkbox" name="pickup_scheduler_enabled" {% if settings.pickup_scheduler_enabled %}checked{% endif %}>
+        <span>Activate Pickup Scheduler</span>
+      </label>
+      <div class="muted">When active, buyers can schedule pickups from your public link.</div>
+    </div>
+
+    <div class="pickup-section">
+      <h3>Availability</h3>
+      <div class="pickup-mode">
+        <label class="pickup-radio">
+          <input type="radio" name="availability_mode" value="specific" {% if settings.pickup_availability_mode == 'specific' %}checked{% endif %}>
+          <span>Specific dates</span>
+        </label>
+        <label class="pickup-radio">
+          <input type="radio" name="availability_mode" value="weekly" {% if settings.pickup_availability_mode != 'specific' %}checked{% endif %}>
+          <span>Weekly schedule</span>
+        </label>
+      </div>
+
+      <div class="pickup-specific" id="pickupSpecific">
+        <label>Choose dates</label>
+        <div class="pickup-date-row">
+          <input class="input" type="date" id="pickupDateInput">
+          <button class="btn" type="button" id="pickupDateAdd"><i class="fas fa-plus"></i> Add date</button>
+        </div>
+        <div class="pickup-date-list" id="pickupDateList"></div>
+        <input type="hidden" name="pickup_specific_dates" id="pickupSpecificDates" value="{{ specific_dates|join(',') }}">
+      </div>
+
+      <div class="pickup-weekly" id="pickupWeekly">
+        <label>Select weekly days</label>
+        <div class="pickup-days">
+          {% for day in ['mon','tue','wed','thu','fri','sat','sun'] %}
+          <label>
+            <input type="checkbox" name="pickup_weekly_days" value="{{ day }}" {% if day in weekly_days %}checked{% endif %}>
+            <span>{{ day|capitalize }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="pickup-section">
+      <h3>Pickup Hours</h3>
+      <div class="pickup-grid">
+        <div>
+          <label>Start time</label>
+          <input class="input" type="time" name="pickup_start_time" value="{{ settings.pickup_start_time or '' }}">
+        </div>
+        <div>
+          <label>End time</label>
+          <input class="input" type="time" name="pickup_end_time" value="{{ settings.pickup_end_time or '' }}">
+        </div>
+        {% set break_data = breaks[0] if breaks|length > 0 else {} %}
+        <div>
+          <label>Break start (optional)</label>
+          <input class="input" type="time" name="pickup_break_start" value="{{ break_data.get('start','') }}">
+        </div>
+        <div>
+          <label>Break end (optional)</label>
+          <input class="input" type="time" name="pickup_break_end" value="{{ break_data.get('end','') }}">
+        </div>
+        <div>
+          <label>Pickup slot length</label>
+          <select class="input" name="pickup_slot_minutes">
+            {% for minutes in [10,15,20,30] %}
+            <option value="{{ minutes }}" {% if settings.pickup_slot_minutes == minutes %}selected{% endif %}>{{ minutes }} minutes</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="pickup-section">
+      <h3>Pickup Details</h3>
+      <div class="pickup-grid">
+        <div style="grid-column:1/-1;">
+          <label>Pickup address</label>
+          <textarea class="input" name="pickup_address" rows="3" placeholder="123 Main St, Miami, FL">{{ settings.pickup_address or '' }}</textarea>
+        </div>
+        <div>
+          <label>Contact email (optional)</label>
+          <input class="input" type="email" name="pickup_contact_email" value="{{ settings.pickup_contact_email or '' }}" placeholder="you@example.com">
+        </div>
+        <div>
+          <label>Contact phone (optional)</label>
+          <input class="input" type="text" name="pickup_contact_phone" value="{{ settings.pickup_contact_phone or '' }}" placeholder="+1 (555) 000-0000">
+        </div>
+        <div style="grid-column:1/-1;">
+          <label>Buyer instructions</label>
+          <textarea class="input" name="pickup_instructions" rows="3" placeholder="Parking instructions, building info, etc.">{{ settings.pickup_instructions or '' }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save Pickup Scheduler</button>
+      <a class="btn" href="{{ request.url_root.rstrip('/') }}/{{ settings.link_bio_slug or current_user.username }}/pickup" target="_blank" rel="noopener">
+        <i class="fas fa-external-link-alt"></i> Preview
+      </a>
+      <a class="btn" href="{{ url_for('main.settings') }}"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+  </form>
+</div>
+
+<style>
+  .pickup-card {
+    border: 1px solid rgba(96,165,250,0.15);
+    background: linear-gradient(180deg, rgba(15,23,42,0.85), rgba(15,23,42,0.55));
+    box-shadow: 0 16px 40px rgba(15,23,42,0.35);
+  }
+  .pickup-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .pickup-sub {
+    margin: 6px 0 0;
+    color: var(--sub);
+    font-size: 13px;
+  }
+  .pickup-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(96,165,250,0.12);
+    border: 1px solid rgba(96,165,250,0.35);
+    color: #93c5fd;
+  }
+  .pickup-section {
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(15,23,42,0.5);
+    margin-bottom: 16px;
+  }
+  .pickup-toggle {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    font-weight: 600;
+  }
+  .pickup-mode {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .pickup-radio {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(15,23,42,0.6);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+  .pickup-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+  .pickup-date-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .pickup-date-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .pickup-date-chip {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(34,197,94,0.15);
+    border: 1px solid rgba(34,197,94,0.35);
+    color: #86efac;
+    font-size: 12px;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .pickup-date-chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+  }
+  .pickup-days {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .pickup-days label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+</style>
+
+<script>
+  (function() {
+    const availabilityRadios = document.querySelectorAll('input[name="availability_mode"]');
+    const specificBlock = document.getElementById('pickupSpecific');
+    const weeklyBlock = document.getElementById('pickupWeekly');
+    const dateInput = document.getElementById('pickupDateInput');
+    const dateAdd = document.getElementById('pickupDateAdd');
+    const dateList = document.getElementById('pickupDateList');
+    const hiddenDates = document.getElementById('pickupSpecificDates');
+
+    function renderDates() {
+      const dates = hiddenDates.value ? hiddenDates.value.split(',').filter(Boolean) : [];
+      dateList.innerHTML = '';
+      dates.forEach(dateStr => {
+        const chip = document.createElement('div');
+        chip.className = 'pickup-date-chip';
+        chip.innerHTML = `<span>${dateStr}</span><button type="button" data-date="${dateStr}">x</button>`;
+        dateList.appendChild(chip);
+      });
+    }
+
+    function toggleAvailability() {
+      const selected = document.querySelector('input[name="availability_mode"]:checked')?.value || 'weekly';
+      if (selected === 'specific') {
+        specificBlock.style.display = 'block';
+        weeklyBlock.style.display = 'none';
+      } else {
+        specificBlock.style.display = 'none';
+        weeklyBlock.style.display = 'block';
+      }
+    }
+
+    dateAdd?.addEventListener('click', () => {
+      const value = dateInput.value;
+      if (!value) return;
+      const dates = hiddenDates.value ? hiddenDates.value.split(',').filter(Boolean) : [];
+      if (!dates.includes(value)) {
+        dates.push(value);
+        dates.sort();
+        hiddenDates.value = dates.join(',');
+        renderDates();
+      }
+      dateInput.value = '';
+    });
+
+    dateList?.addEventListener('click', (event) => {
+      const button = event.target.closest('button[data-date]');
+      if (!button) return;
+      const dateStr = button.getAttribute('data-date');
+      const dates = hiddenDates.value ? hiddenDates.value.split(',').filter(Boolean) : [];
+      hiddenDates.value = dates.filter(d => d !== dateStr).join(',');
+      renderDates();
+    });
+
+    availabilityRadios.forEach(radio => {
+      radio.addEventListener('change', toggleAvailability);
+    });
+
+    renderDates();
+    toggleAvailability();
+  })();
+</script>
+{% endblock %}

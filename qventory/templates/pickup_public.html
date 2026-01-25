@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ seller.username }} - Pickup Scheduler</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <style>
+      :root {
+        --bg: #0b0f14;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #38bdf8;
+        --border: rgba(255,255,255,0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Georgia", "Times New Roman", serif;
+        background: radial-gradient(circle at top, #162030, #0b0f14 60%);
+        color: var(--text);
+      }
+      .shell {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .page {
+        max-width: 720px;
+        width: 100%;
+        margin: 0 auto;
+        padding: clamp(24px, 6vw, 36px) clamp(18px, 6vw, 28px) 40px;
+      }
+      h1 {
+        font-size: 26px;
+        margin: 0 0 8px;
+      }
+      .intro {
+        color: var(--muted);
+        margin-bottom: 20px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        margin-bottom: 16px;
+      }
+      .calendar {
+        display: grid;
+        gap: 12px;
+      }
+      .calendar-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+      }
+      .calendar-day {
+        text-align: center;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .calendar-cell {
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        background: rgba(15,23,42,0.6);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--text);
+      }
+      .calendar-cell.is-muted {
+        opacity: 0.3;
+        cursor: default;
+      }
+      .calendar-cell.is-available {
+        border-color: rgba(56,189,248,0.5);
+        color: #7dd3fc;
+      }
+      .calendar-cell.is-selected {
+        background: rgba(56,189,248,0.25);
+        color: #bae6fd;
+      }
+      .time-slots {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .time-slot {
+        padding: 8px 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(15,23,42,0.6);
+        color: var(--text);
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .time-slot.is-selected {
+        background: rgba(56,189,248,0.25);
+        border-color: rgba(56,189,248,0.6);
+        color: #bae6fd;
+      }
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(15,23,42,0.6);
+        color: var(--text);
+      }
+      .btn {
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 1px solid rgba(56,189,248,0.6);
+        background: rgba(56,189,248,0.2);
+        color: #bae6fd;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .contact-list {
+        display: grid;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      #pickupMap {
+        width: 100%;
+        height: 220px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+      footer {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: auto;
+        padding: 0 0 24px;
+        text-align: center;
+      }
+      @media (max-width: 520px) {
+        .calendar-cell {
+          font-size: 11px;
+        }
+        .time-slot {
+          flex: 1 1 40%;
+          text-align: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="page">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="card">
+          {% for category, message in messages %}
+          <div class="muted">{{ message }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        <h1>{{ seller.username }}</h1>
+        {% if instructions %}
+        <p class="intro">{{ instructions }}</p>
+        {% else %}
+        <p class="intro">Schedule a pickup time that works for you.</p>
+        {% endif %}
+
+        {% if availability_enabled %}
+        <form method="post" class="card">
+          <div class="calendar">
+            <div class="calendar-head">
+              <button type="button" class="btn" id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+              <div id="calendarLabel"></div>
+              <button type="button" class="btn" id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="calendar-grid" id="calendarDays"></div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div style="font-weight:600;margin-bottom:8px;">Available times</div>
+            <div class="time-slots" id="timeSlots"></div>
+            <div class="muted" id="timeSlotsEmpty" style="margin-top:8px;display:none;">Select a date to see times.</div>
+          </div>
+
+          <div class="form-grid" style="margin-top:16px;">
+            <div>
+              <label>Name</label>
+              <input class="input" name="buyer_name" required>
+            </div>
+            <div>
+              <label>Email</label>
+              <input class="input" type="email" name="buyer_email" required>
+            </div>
+            <div>
+              <label>Phone (optional)</label>
+              <input class="input" name="buyer_phone">
+            </div>
+            <div style="grid-column:1/-1;">
+              <label>Note to seller</label>
+              <textarea class="input" name="buyer_note" rows="3"></textarea>
+            </div>
+          </div>
+
+          <input type="hidden" name="pickup_date" id="pickupDate">
+          <input type="hidden" name="pickup_time" id="pickupTime">
+
+          <div style="margin-top:16px;">
+            <button class="btn" type="submit"><i class="fas fa-calendar-check"></i> Schedule pickup</button>
+          </div>
+        </form>
+        {% else %}
+        <div class="card">
+          <strong>Pickup scheduler is currently offline.</strong>
+          <p class="intro">Please check back later or contact the seller directly.</p>
+        </div>
+        {% endif %}
+
+        <div class="card">
+          <h3>Seller contact</h3>
+          <div class="contact-list">
+            {% if settings.pickup_address %}
+            <div><i class="fas fa-map-marker-alt"></i> {{ settings.pickup_address }}</div>
+            {% endif %}
+            {% if settings.pickup_contact_email %}
+            <div><i class="fas fa-envelope"></i> {{ settings.pickup_contact_email }}</div>
+            {% endif %}
+            {% if settings.pickup_contact_phone %}
+            <div><i class="fas fa-phone"></i> {{ settings.pickup_contact_phone }}</div>
+            {% endif %}
+          </div>
+          {% if settings.pickup_address %}
+          <div style="margin-top:12px;" id="pickupMap"></div>
+          {% endif %}
+        </div>
+      </div>
+      <footer>Made with Qventory - Inventory power for hustlers.</footer>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+      (function() {
+        const availabilityMap = {{ availability_map | tojson }};
+        const availableDates = Object.keys(availabilityMap).sort();
+        const calendarDays = document.getElementById('calendarDays');
+        const calendarGrid = document.getElementById('calendarGrid');
+        const calendarLabel = document.getElementById('calendarLabel');
+        const timeSlots = document.getElementById('timeSlots');
+        const timeSlotsEmpty = document.getElementById('timeSlotsEmpty');
+        const pickupDate = document.getElementById('pickupDate');
+        const pickupTime = document.getElementById('pickupTime');
+        const prevMonth = document.getElementById('prevMonth');
+        const nextMonth = document.getElementById('nextMonth');
+        const dayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+        if (!calendarDays || !calendarGrid) {
+          return;
+        }
+
+        let currentMonth = new Date();
+        let selectedDate = null;
+        let selectedTime = null;
+
+        if (availableDates.length) {
+          const parts = availableDates[0].split('-').map(Number);
+          if (parts.length === 3) {
+            selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
+            currentMonth = new Date(parts[0], parts[1] - 1, 1);
+            pickupDate.value = availableDates[0];
+          }
+        }
+
+        function formatDateKey(dateObj) {
+          const year = dateObj.getFullYear();
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        }
+
+        function renderDaysHeader() {
+          calendarDays.innerHTML = '';
+          dayLabels.forEach(label => {
+            const el = document.createElement('div');
+            el.className = 'calendar-day';
+            el.textContent = label;
+            calendarDays.appendChild(el);
+          });
+        }
+
+        function renderCalendar() {
+          const year = currentMonth.getFullYear();
+          const month = currentMonth.getMonth();
+          calendarLabel.textContent = currentMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+          const firstDay = new Date(year, month, 1);
+          const startDay = firstDay.getDay();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          calendarGrid.innerHTML = '';
+
+          for (let i = 0; i < startDay; i++) {
+            const empty = document.createElement('div');
+            calendarGrid.appendChild(empty);
+          }
+
+          for (let day = 1; day <= daysInMonth; day++) {
+            const cell = document.createElement('div');
+            const dateObj = new Date(year, month, day);
+            const key = formatDateKey(dateObj);
+            cell.className = 'calendar-cell';
+            cell.textContent = day;
+
+            if (availableDates.includes(key)) {
+              cell.classList.add('is-available');
+              cell.addEventListener('click', () => selectDate(dateObj));
+            } else {
+              cell.classList.add('is-muted');
+            }
+
+            if (selectedDate && formatDateKey(selectedDate) === key) {
+              cell.classList.add('is-selected');
+            }
+            calendarGrid.appendChild(cell);
+          }
+        }
+
+        function selectDate(dateObj) {
+          selectedDate = dateObj;
+          pickupDate.value = formatDateKey(dateObj);
+          selectedTime = null;
+          pickupTime.value = '';
+          renderCalendar();
+          renderTimeSlots();
+        }
+
+        function renderTimeSlots() {
+          timeSlots.innerHTML = '';
+          const key = selectedDate ? formatDateKey(selectedDate) : null;
+          const slots = key ? availabilityMap[key] || [] : [];
+          if (!slots.length) {
+            timeSlotsEmpty.style.display = 'block';
+            timeSlots.innerHTML = '';
+            return;
+          }
+          timeSlotsEmpty.style.display = 'none';
+          slots.forEach(slot => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'time-slot';
+            button.textContent = slot;
+            button.addEventListener('click', () => {
+              selectedTime = slot;
+              pickupTime.value = slot;
+              document.querySelectorAll('.time-slot').forEach(el => el.classList.remove('is-selected'));
+              button.classList.add('is-selected');
+            });
+            timeSlots.appendChild(button);
+          });
+        }
+
+        prevMonth?.addEventListener('click', () => {
+          currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+          renderCalendar();
+        });
+        nextMonth?.addEventListener('click', () => {
+          currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+          renderCalendar();
+        });
+
+        renderDaysHeader();
+        renderCalendar();
+        renderTimeSlots();
+
+        {% if settings.pickup_address %}
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent({{ settings.pickup_address|tojson }})}`)
+          .then(response => response.json())
+          .then(results => {
+            if (!results.length) return;
+            const { lat, lon } = results[0];
+            const map = L.map('pickupMap').setView([lat, lon], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '&copy; OpenStreetMap'
+            }).addTo(map);
+            L.marker([lat, lon]).addTo(map);
+          })
+          .catch(() => {});
+        {% endif %}
+      })();
+    </script>
+  </body>
+</html>

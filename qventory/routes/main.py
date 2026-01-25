@@ -5217,11 +5217,17 @@ def get_unread_notifications():
 
     notifications = Notification.get_recent(current_user.id, limit=10, include_read=False)
     unread_count = Notification.get_unread_count(current_user.id)
+    pickup_unread_count = Notification.query.filter_by(
+        user_id=current_user.id,
+        is_read=False,
+        source="pickup"
+    ).count()
 
     return jsonify({
         "ok": True,
         "notifications": [n.to_dict() for n in notifications],
-        "unread_count": unread_count
+        "unread_count": unread_count,
+        "pickup_unread_count": pickup_unread_count
     })
 
 
