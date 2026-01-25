@@ -79,4 +79,34 @@
     color: var(--text);
   }
 </style>
+
+<script>
+  (function() {
+    const cards = Array.from(document.querySelectorAll('.theme-card'));
+    const inputs = Array.from(document.querySelectorAll('input[name="theme_preference"]'));
+    if (!cards.length || !inputs.length) return;
+
+    function applyTheme(value) {
+      document.body.setAttribute('data-theme', value);
+      cards.forEach(card => card.classList.remove('is-active'));
+      const active = cards.find(card => card.querySelector(`input[value="${value}"]`));
+      if (active) {
+        active.classList.add('is-active');
+      }
+    }
+
+    inputs.forEach(input => {
+      input.addEventListener('change', () => {
+        if (input.checked) {
+          applyTheme(input.value);
+        }
+      });
+    });
+
+    const checked = inputs.find(input => input.checked);
+    if (checked) {
+      applyTheme(checked.value);
+    }
+  })();
+</script>
 {% endblock %}
