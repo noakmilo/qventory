@@ -66,9 +66,11 @@
     <div class="filters-bar">
       <h2>Filters</h2>
       <div style="display:flex;gap:8px;align-items:center;">
+        {% if view_type == 'sold' %}
         <button id="resetHiddenColumns" class="btn submitbtn" type="button" title="Restore hidden columns">
           <i class="fas fa-eye"></i> Restore Columns
         </button>
+        {% endif %}
         <button id="filtersToggle" class="btn filters-toggle submitbtn" type="button" aria-expanded="true">
           <i class="fas fa-filter"></i> Toggle
         </button>
@@ -220,60 +222,76 @@
             <th data-col="select" style="width:40px;text-align:center">
               <span class="col-header col-header--center">
                 <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="select" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="photo" style="width:44px"></th>
             <th data-col="title">Title</th>
             <th data-col="sku">
               <span class="col-header">SKU
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="supplier" class="mobile-hide">
               <span class="col-header">Supplier
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="cost">
               <span class="col-header">Cost
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="sold_price">
               <span class="col-header">Sold Price
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sold_price" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="tax" class="mobile-hide">
               <span class="col-header">Tax
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="tax" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="shipping" class="mobile-hide">
               <span class="col-header">Shipping Cost
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="shipping" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="fees" class="mobile-hide">
               <span class="col-header">Total Marketplace Fees
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="fees" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="net_profit">
@@ -281,37 +299,47 @@
                 <span class="tooltip-icon" data-tooltip="Net Profit = (Total Sales - Tax - Cost) - Shipping Cost - Total Marketplace Fees">
                   <i class="fas fa-info-circle"></i>
                 </span>
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="net_profit" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="sold_at">
               <span class="col-header">Sold At
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sold_at" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="location">
               <span class="col-header">Location
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="listings" class="mobile-hide">
               <span class="col-header">Listings
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="actions">
               <span class="col-header col-header--center">
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="actions" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
           </tr>
@@ -320,67 +348,85 @@
             <th data-col="select" style="width:40px;text-align:center">
               <span class="col-header col-header--center">
                 <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="select" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="photo" style="width:44px"></th>
             <th data-col="title">Title</th>
             <th data-col="sku">
               <span class="col-header">SKU
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="supplier" class="mobile-hide">
               <span class="col-header">Supplier
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="cost">
               <span class="col-header">Cost
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="price">
               <span class="col-header">Price
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="price" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="roi" class="mobile-hide">
               <span class="col-header">ROI
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="roi" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="location">
               <span class="col-header">Location
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="listings" class="mobile-hide">
               <span class="col-header">Listings
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
             <th data-col="actions">
               <span class="col-header col-header--center">
+                {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="actions" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
+                {% endif %}
               </span>
             </th>
           </tr>
@@ -982,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (!table) return;
 
   const viewType = '{{ view_type }}';
+  if (viewType !== 'sold') return;
   const storageKey = `qventory.inventory.columns.${viewType}`;
   const resetBtn = document.getElementById('resetHiddenColumns');
   let stored = {};
