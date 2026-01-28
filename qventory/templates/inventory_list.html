@@ -65,9 +65,14 @@
   <div id="filtersShell" class="card cardfilters filters-shell" style="margin-bottom:20px;">
     <div class="filters-bar">
       <h2>Filters</h2>
-      <button id="filtersToggle" class="btn filters-toggle submitbtn" type="button" aria-expanded="true">
-        <i class="fas fa-filter"></i> Toggle
-      </button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="resetHiddenColumns" class="btn submitbtn" type="button" title="Restore hidden columns">
+          <i class="fas fa-eye"></i> Restore Columns
+        </button>
+        <button id="filtersToggle" class="btn filters-toggle submitbtn" type="button" aria-expanded="true">
+          <i class="fas fa-filter"></i> Toggle
+        </button>
+      </div>
     </div>
     <div id="filtersContent" class="filters-content">
       <form id="filterForm" method="get" action="{{ request.path }}" class="filters-grid">
@@ -978,6 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const viewType = '{{ view_type }}';
   const storageKey = `qventory.inventory.columns.${viewType}`;
+  const resetBtn = document.getElementById('resetHiddenColumns');
   let stored = {};
 
   try {
@@ -1019,6 +1025,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggles = table.querySelectorAll('[data-col-toggle]');
   if (!toggles.length) return;
+
+  resetBtn?.addEventListener('click', () => {
+    table.querySelectorAll('[data-col]').forEach(cell => {
+      cell.style.display = '';
+    });
+    toggles.forEach(btn => updateButton(btn, false));
+    stored = {};
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch (_err) {
+      // Ignore storage errors
+    }
+  });
 
   toggles.forEach(btn => {
     const col = btn.dataset.colToggle;
