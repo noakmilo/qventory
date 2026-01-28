@@ -3479,12 +3479,14 @@ def _build_link_bio_context(user, settings):
         .order_by(Item.title.asc())
         .all()
     )
+    featured_titles = {item.id: item.title for item in items_active}
 
     return {
         "ebay_store_url": ebay_store_url,
         "link_bio_links": link_bio_links,
         "link_bio_featured_ids": featured_ids,
-        "items_active": items_active
+        "items_active": items_active,
+        "link_bio_featured_titles": featured_titles,
     }
 
 
@@ -3536,7 +3538,13 @@ def _save_link_bio_settings(settings, form, user_id):
     settings.link_bio_links_json = json.dumps(links)
 
     featured_ids = []
-    for key in ("link_bio_featured_1", "link_bio_featured_2", "link_bio_featured_3"):
+    for key in (
+        "link_bio_featured_1",
+        "link_bio_featured_2",
+        "link_bio_featured_3",
+        "link_bio_featured_4",
+        "link_bio_featured_5",
+    ):
         raw = (form.get(key) or "").strip()
         if not raw:
             continue
@@ -3545,7 +3553,7 @@ def _save_link_bio_settings(settings, form, user_id):
         except ValueError:
             continue
     if featured_ids:
-        featured_ids = list(dict.fromkeys(featured_ids))[:3]
+        featured_ids = list(dict.fromkeys(featured_ids))[:5]
     settings.link_bio_featured_json = json.dumps(featured_ids)
 
     return None

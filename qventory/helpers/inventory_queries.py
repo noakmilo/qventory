@@ -197,8 +197,7 @@ FROM sales AS s
 LEFT JOIN items AS i
   ON i.id = s.item_id
  AND i.user_id = s.user_id
-WHERE s.user_id = :user_id
-  AND s.status IN ('paid','shipped','completed')
+WHERE {where_clause}
 ORDER BY s.sold_at DESC NULLS LAST, s.id DESC
 LIMIT :limit OFFSET :offset;
 """
@@ -206,8 +205,7 @@ LIMIT :limit OFFSET :offset;
 SOLD_COUNT_SQL = """
 SELECT COUNT(*)
 FROM sales AS s
-WHERE s.user_id = :user_id
-  AND s.status IN ('paid','shipped','completed');
+WHERE {where_clause};
 """
 
 ENDED_ITEMS_SQL = """
@@ -417,12 +415,23 @@ def fetch_sold_items(
     """
     Fetch sold items (sales records) for a user.
     NOTE: This returns SALES, not items from inventory.
-    Filters are currently ignored but kept for API compatibility.
     """
-    query_params = {"user_id": user_id, "limit": limit, "offset": offset}
+    clauses = ["s.user_id = :user_id", "s.status IN ('paid','shipped','completed')"]
+    params: Dict[str, object] = {"user_id": user_id}
 
-    items = _rows_to_objects(session.execute(text(SOLD_ITEMS_SQL), query_params))
-    total = session.execute(text(SOLD_COUNT_SQL), {"user_id": user_id}).scalar_one()
+    if search:
+        clauses.append("(s.item_title ILIKE :search OR s.item_sku ILIKE :search)")
+        params["search"] = f"%{search}%"
+
+    where_clause = " AND ".join(clauses)
+    query_sql = SOLD_ITEMS_SQL.format(where_clause=where_clause)
+    count_sql = SOLD_COUNT_SQL.format(where_clause=where_clause)
+
+    query_params = dict(params)
+    query_params.update({"limit": limit, "offset": offset})
+
+    items = _rows_to_objects(session.execute(text(query_sql), query_params))
+    total = session.execute(text(count_sql), params).scalar_one()
     return items, total
 
 

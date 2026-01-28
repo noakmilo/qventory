@@ -792,6 +792,31 @@ th{
   -webkit-backdrop-filter:blur(var(--blur));
 }
 
+.col-header{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+
+.col-header--center{
+  justify-content:center;
+  width:100%;
+}
+
+.col-toggle{
+  background:transparent;
+  border:none;
+  padding:0;
+  color:var(--sub);
+  font-size:12px;
+  cursor:pointer;
+  line-height:1;
+}
+
+.col-toggle:hover{
+  color:var(--text);
+}
+
 /* Table Cells - Mejor espaciado y legibilidad */
 td{
   padding:14px;
@@ -800,6 +825,11 @@ td{
   font-size:var(--fs-sm);
   vertical-align:middle;
   transition:background-color .15s ease;
+}
+
+.table-wrap td.profit-value{
+  color:#10b981;
+  font-weight:700;
 }
 
 /* Hover en filas - Feedback visual */

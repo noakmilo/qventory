@@ -1,5 +1,5 @@
 // static/sw.js
-const CACHE = 'qventory-v3'; // <-- sube versión (v2, v3...) cuando cambies el SW
+const CACHE = 'qventory-v4'; // <-- sube versión (v2, v3...) cuando cambies el SW
 const APP_SHELL = [
   '/',                     // landing pública
   '/offline',              // fallback sin conexión

@@ -9,7 +9,7 @@
 <tr data-item-row="{{ it.id }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
     data-item-cost="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}">
-  <td style="text-align:center">
+  <td data-col="select" style="text-align:center">
     {% if view_type == 'sold' %}
       {# No checkbox for sold items (no bulk actions) #}
       <span style="color:var(--sub);font-size:12px">—</span>
@@ -17,7 +17,7 @@
       <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
     {% endif %}
   </td>
-  <td>
+  <td data-col="photo">
     {% if it.item_thumb %}
       <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
         <img src="{{ it.item_thumb }}" alt="{{ it.title }}" class="thumb-img" referrerpolicy="no-referrer">
@@ -27,10 +27,10 @@
       <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
     {% endif %}
   </td>
-  <td>{{ it.title }}</td>
-  <td><span class="tag itsku">{{ it.sku }}</span></td>
+  <td data-col="title">{{ it.title }}</td>
+  <td data-col="sku"><span class="tag itsku">{{ it.sku }}</span></td>
 
-  <td class="mobile-hide">
+  <td data-col="supplier" class="mobile-hide">
     {% if view_type == 'sold' %}
       {# Read-only supplier for sold items #}
       {% if it.supplier %}
@@ -56,7 +56,7 @@
       </div>
     {% endif %}
   </td>
-  <td>
+  <td data-col="cost">
     {# Cost is ALWAYS editable - even for sold items (for profit calculation) #}
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
       <div class="inline-edit__display" tabindex="0" role="button">
@@ -72,7 +72,7 @@
       </form>
     </div>
   </td>
-  <td>
+  <td data-col="{{ 'sold_price' if view_type == 'sold' else 'price' }}">
     {% if view_type == 'sold' %}
       {% set total_sales = (it.item_price or 0) + (it.tax_collected or 0) %}
       <span class="tag"><i class="fas fa-tag"></i> ${{ '%.2f'|format(total_sales) }}</span>
@@ -81,15 +81,15 @@
     {% endif %}
   </td>
   {% if view_type == 'sold' %}
-  <td class="mobile-hide">${{ '%.2f'|format(it.tax_collected or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format(it.shipping_charged or 0) }}</td>
-  <td class="mobile-hide">${{ '%.2f'|format((it.marketplace_fee or 0) + (it.payment_processing_fee or 0) + (it.other_fees or 0)) }}</td>
-  <td class="{{ 'positive' if (it.net_profit or 0) >= 0 else 'negative' }}">
+  <td data-col="tax" class="mobile-hide">${{ '%.2f'|format(it.tax_collected or 0) }}</td>
+  <td data-col="shipping" class="mobile-hide">${{ '%.2f'|format(it.shipping_charged or 0) }}</td>
+  <td data-col="fees" class="mobile-hide">${{ '%.2f'|format((it.marketplace_fee or 0) + (it.payment_processing_fee or 0) + (it.other_fees or 0)) }}</td>
+  <td data-col="net_profit" class="{{ 'positive' if (it.net_profit or 0) >= 0 else 'negative' }} profit-value">
     ${{ '%.2f'|format(it.net_profit or 0) }}
   </td>
-  <td>{{ it.sold_at.strftime('%Y-%m-%d') if it.sold_at else '—' }}</td>
+  <td data-col="sold_at">{{ it.sold_at.strftime('%Y-%m-%d') if it.sold_at else '—' }}</td>
   {% else %}
-  <td class="mobile-hide roi-cell">
+  <td data-col="roi" class="mobile-hide roi-cell">
     {% if roi_infinite %}
       <span class="tag roi-value">ROI ∞</span>
     {% elif has_price and has_cost %}
@@ -101,7 +101,7 @@
   {% endif %}
 
   <!-- Location con QR -->
-  <td>
+  <td data-col="location">
     {% if view_type == 'sold' %}
       {# Read-only location for sold items #}
       {% if it.location_code %}
@@ -153,7 +153,7 @@
     {% endif %}
   </td>
 
-  <td class="mobile-hide">
+  <td data-col="listings" class="mobile-hide">
     <div class="platform-badges">
       {% if it.web_url %}<a class="tag" href="{{ it.web_url }}" target="_blank">Web</a>{% endif %}
       {% if it.ebay_url or it.listing_link %}<a class="tag" href="{{ it.ebay_url or it.listing_link }}" target="_blank">eBay</a>{% endif %}
@@ -165,7 +165,7 @@
     </div>
   </td>
 
-  <td>
+  <td data-col="actions">
     {% if current_user.is_authenticated %}
       {% if view_type == 'sold' %}
         {# Sold items: Only show view/info buttons, no edit/delete #}

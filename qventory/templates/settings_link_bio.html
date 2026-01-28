@@ -91,20 +91,34 @@
     </div>
 
     <div style="margin-top:16px;">
-      <label>Featured Products (up to 3)</label>
-      <div class="grid cols-3" style="margin-top:8px;">
-        {% for idx in [0,1,2] %}
+      <label>Featured Products (up to 5)</label>
+      <div id="linkBioFeatured" style="margin-top:8px;display:grid;gap:10px;">
+        {% for idx in [0,1,2,3,4] %}
         {% set selected_id = link_bio_featured_ids[idx] if link_bio_featured_ids|length > idx else None %}
-        <select class="input" name="link_bio_featured_{{ idx + 1 }}">
-          <option value="">Select item</option>
-          {% for item in items_active %}
-          <option value="{{ item.id }}" {% if selected_id == item.id %}selected{% endif %}>
-            {{ item.title }}{% if item.item_price %} - ${{ '%.2f'|format(item.item_price) }}{% endif %}
-          </option>
-          {% endfor %}
-        </select>
+        {% set selected_title = link_bio_featured_titles.get(selected_id, '') if selected_id else '' %}
+        <div class="link-bio-featured-row {% if idx >= 3 and not selected_id %}is-hidden{% endif %}" data-featured-row>
+          <div style="position:relative;flex:1;">
+            <input class="input featured-autocomplete"
+                   type="text"
+                   placeholder="Search active inventory…"
+                   autocomplete="off"
+                   data-featured-input="{{ idx }}"
+                   value="{{ selected_title }}">
+            <input type="hidden"
+                   name="link_bio_featured_{{ idx + 1 }}"
+                   value="{{ selected_id or '' }}"
+                   data-featured-hidden="{{ idx }}">
+            <div class="autocomplete-list featured-autocomplete-list" data-featured-list="{{ idx }}"></div>
+          </div>
+          <button type="button" class="btn link-bio-featured-clear" data-featured-clear="{{ idx }}" title="Clear">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
         {% endfor %}
       </div>
+      <button type="button" class="btn" id="linkBioAddFeatured" style="margin-top:10px;">
+        <i class="fas fa-plus"></i> Add featured product
+      </button>
     </div>
 
     <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
@@ -124,6 +138,14 @@
     gap: 8px;
     align-items: center;
     margin-bottom: 8px;
+  }
+  .link-bio-featured-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .link-bio-featured-row.is-hidden {
+    display: none;
   }
   .link-bio-card {
     border: 1px solid var(--glass-border);
@@ -196,9 +218,21 @@
     font-size: 12px;
     color: var(--sub);
   }
+  .link-bio-featured-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .link-bio-featured-row.is-hidden {
+    display: none;
+  }
   @media (max-width: 768px) {
     .link-bio-row {
       grid-template-columns: 1fr;
+    }
+    .link-bio-featured-row {
+      flex-direction: column;
+      align-items: stretch;
     }
   }
 </style>
@@ -235,6 +269,158 @@
       const removeBtn = row.querySelector('.link-bio-remove');
       if (removeBtn) bindRemove(removeBtn);
     });
+
+    const addFeaturedBtn = document.getElementById('linkBioAddFeatured');
+    const featuredRows = Array.from(document.querySelectorAll('[data-featured-row]'));
+    const viewType = 'active';
+    const debounceMap = new Map();
+
+    function updateFeaturedAddButton() {
+      const hiddenRows = featuredRows.filter(row => row.classList.contains('is-hidden'));
+      if (addFeaturedBtn) {
+        addFeaturedBtn.style.display = hiddenRows.length ? 'inline-flex' : 'none';
+      }
+    }
+
+    addFeaturedBtn?.addEventListener('click', () => {
+      const next = featuredRows.find(row => row.classList.contains('is-hidden'));
+      if (next) {
+        next.classList.remove('is-hidden');
+      }
+      updateFeaturedAddButton();
+    });
+
+    function clearSelection(input, hidden) {
+      hidden.value = '';
+      input.dataset.selectedId = '';
+      input.dataset.selectedTitle = '';
+    }
+
+    function highlightMatch(text, query) {
+      if (!text || !query) return text || '';
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+      return text.replace(regex, '<mark style="background:#fbbf24;color:#000;padding:0 2px">$1</mark>');
+    }
+
+    function fetchAutocomplete(query, listEl, input, hidden) {
+      fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}&view_type=${viewType}`)
+        .then(response => response.json())
+        .then(data => {
+          listEl.innerHTML = '';
+          if (!data.ok || !data.items || data.items.length === 0) {
+            listEl.classList.remove('show');
+            return;
+          }
+
+          data.items.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.innerHTML = `
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <strong style="color:var(--text)">${highlightMatch(item.title, input.value)}</strong>
+                <div style="font-size:12px;color:var(--text-secondary);display:flex;gap:12px;flex-wrap:wrap">
+                  ${item.sku ? `<span>SKU: ${highlightMatch(item.sku, input.value)}</span>` : ''}
+                  ${item.supplier ? `<span>Supplier: ${highlightMatch(item.supplier, input.value)}</span>` : ''}
+                </div>
+              </div>
+            `;
+            div.addEventListener('click', () => {
+              input.value = item.title;
+              input.dataset.selectedId = item.id;
+              input.dataset.selectedTitle = item.title;
+              hidden.value = item.id;
+              listEl.classList.remove('show');
+              listEl.innerHTML = '';
+            });
+            listEl.appendChild(div);
+          });
+
+          listEl.classList.add('show');
+        })
+        .catch(() => {
+          listEl.classList.remove('show');
+        });
+    }
+
+    function setActiveItem(items, index) {
+      items.forEach((item, i) => {
+        if (i === index) {
+          item.classList.add('active');
+          item.scrollIntoView({ block: 'nearest' });
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
+    featuredRows.forEach(row => {
+      const input = row.querySelector('[data-featured-input]');
+      const hidden = row.querySelector('[data-featured-hidden]');
+      const listEl = row.querySelector('[data-featured-list]');
+      const clearBtn = row.querySelector('[data-featured-clear]');
+
+      if (!input || !hidden || !listEl) return;
+
+      if (hidden.value) {
+        input.dataset.selectedId = hidden.value;
+        input.dataset.selectedTitle = input.value || '';
+      }
+
+      input.addEventListener('input', (e) => {
+        const query = e.target.value.trim();
+        if (input.dataset.selectedTitle && query !== input.dataset.selectedTitle) {
+          clearSelection(input, hidden);
+        }
+        if (query.length < 2) {
+          listEl.classList.remove('show');
+          listEl.innerHTML = '';
+          if (!query) {
+            clearSelection(input, hidden);
+          }
+          return;
+        }
+        clearTimeout(debounceMap.get(input));
+        debounceMap.set(input, setTimeout(() => {
+          fetchAutocomplete(query, listEl, input, hidden);
+        }, 300));
+      });
+
+      input.addEventListener('keydown', (e) => {
+        const items = listEl.querySelectorAll('.autocomplete-item');
+        const activeItem = listEl.querySelector('.autocomplete-item.active');
+        let index = Array.from(items).indexOf(activeItem);
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          index = Math.min(index + 1, items.length - 1);
+          setActiveItem(items, index);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          index = Math.max(index - 1, 0);
+          setActiveItem(items, index);
+        } else if (e.key === 'Enter' && activeItem) {
+          e.preventDefault();
+          activeItem.click();
+        } else if (e.key === 'Escape') {
+          listEl.classList.remove('show');
+        }
+      });
+
+      clearBtn?.addEventListener('click', () => {
+        input.value = '';
+        clearSelection(input, hidden);
+        listEl.classList.remove('show');
+        listEl.innerHTML = '';
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !listEl.contains(e.target)) {
+          listEl.classList.remove('show');
+        }
+      });
+    });
+
+    updateFeaturedAddButton();
 
     uploadBtn?.addEventListener('click', async () => {
       if (!fileInput?.files?.length) {

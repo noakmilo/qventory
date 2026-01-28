@@ -212,44 +212,172 @@
         <thead>
           {% if view_type == 'sold' %}
           <tr>
-            <th style="width:40px;text-align:center">
-              <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
-            </th>
-            <th style="width:44px"></th>
-            <th>Title</th>
-            <th>SKU</th>
-            <th class="mobile-hide">Supplier</th>
-            <th>Cost</th>
-            <th>Sold Price</th>
-            <th class="mobile-hide">Tax</th>
-            <th class="mobile-hide">Shipping Cost</th>
-            <th class="mobile-hide">Total Marketplace Fees</th>
-            <th>
-              Net Profit
-              <span class="tooltip-icon" data-tooltip="Net Profit = (Total Sales - Tax - Cost) - Shipping Cost - Total Marketplace Fees">
-                <i class="fas fa-info-circle"></i>
+            <th data-col="select" style="width:40px;text-align:center">
+              <span class="col-header col-header--center">
+                <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+                <button class="col-toggle" type="button" data-col-toggle="select" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
               </span>
             </th>
-            <th>Sold At</th>
-            <th>Location</th>
-            <th class="mobile-hide">Listings</th>
-            <th></th>
+            <th data-col="photo" style="width:44px"></th>
+            <th data-col="title">Title</th>
+            <th data-col="sku">
+              <span class="col-header">SKU
+                <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="supplier" class="mobile-hide">
+              <span class="col-header">Supplier
+                <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="cost">
+              <span class="col-header">Cost
+                <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="sold_price">
+              <span class="col-header">Sold Price
+                <button class="col-toggle" type="button" data-col-toggle="sold_price" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="tax" class="mobile-hide">
+              <span class="col-header">Tax
+                <button class="col-toggle" type="button" data-col-toggle="tax" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="shipping" class="mobile-hide">
+              <span class="col-header">Shipping Cost
+                <button class="col-toggle" type="button" data-col-toggle="shipping" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="fees" class="mobile-hide">
+              <span class="col-header">Total Marketplace Fees
+                <button class="col-toggle" type="button" data-col-toggle="fees" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="net_profit">
+              <span class="col-header">Net Profit
+                <span class="tooltip-icon" data-tooltip="Net Profit = (Total Sales - Tax - Cost) - Shipping Cost - Total Marketplace Fees">
+                  <i class="fas fa-info-circle"></i>
+                </span>
+                <button class="col-toggle" type="button" data-col-toggle="net_profit" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="sold_at">
+              <span class="col-header">Sold At
+                <button class="col-toggle" type="button" data-col-toggle="sold_at" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="location">
+              <span class="col-header">Location
+                <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="listings" class="mobile-hide">
+              <span class="col-header">Listings
+                <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="actions">
+              <span class="col-header col-header--center">
+                <button class="col-toggle" type="button" data-col-toggle="actions" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
           </tr>
           {% else %}
           <tr>
-            <th style="width:40px;text-align:center">
-              <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+            <th data-col="select" style="width:40px;text-align:center">
+              <span class="col-header col-header--center">
+                <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
+                <button class="col-toggle" type="button" data-col-toggle="select" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
             </th>
-            <th style="width:44px"></th>
-            <th>Title</th>
-            <th>SKU</th>
-            <th class="mobile-hide">Supplier</th>
-            <th>Cost</th>
-            <th>Price</th>
-            <th class="mobile-hide">ROI</th>
-            <th>Location</th>
-            <th class="mobile-hide">Listings</th>
-            <th></th>
+            <th data-col="photo" style="width:44px"></th>
+            <th data-col="title">Title</th>
+            <th data-col="sku">
+              <span class="col-header">SKU
+                <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="supplier" class="mobile-hide">
+              <span class="col-header">Supplier
+                <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="cost">
+              <span class="col-header">Cost
+                <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="price">
+              <span class="col-header">Price
+                <button class="col-toggle" type="button" data-col-toggle="price" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="roi" class="mobile-hide">
+              <span class="col-header">ROI
+                <button class="col-toggle" type="button" data-col-toggle="roi" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="location">
+              <span class="col-header">Location
+                <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="listings" class="mobile-hide">
+              <span class="col-header">Listings
+                <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
+            <th data-col="actions">
+              <span class="col-header col-header--center">
+                <button class="col-toggle" type="button" data-col-toggle="actions" title="Hide column" aria-label="Hide column" aria-pressed="false">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </span>
+            </th>
           </tr>
           {% endif %}
         </thead>
@@ -841,6 +969,72 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+})();
+
+// ==================== COLUMN TOGGLES ====================
+(function() {
+  const table = document.querySelector('.table-wrap table');
+  if (!table) return;
+
+  const viewType = '{{ view_type }}';
+  const storageKey = `qventory.inventory.columns.${viewType}`;
+  let stored = {};
+
+  try {
+    stored = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+  } catch (_err) {
+    stored = {};
+  }
+
+  function updateButton(btn, hidden) {
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.classList.toggle('fa-eye', !hidden);
+      icon.classList.toggle('fa-eye-slash', hidden);
+    }
+    btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+    btn.setAttribute('title', hidden ? 'Show column' : 'Hide column');
+    btn.setAttribute('aria-label', hidden ? 'Show column' : 'Hide column');
+  }
+
+  function setColumnHidden(col, hidden, persist = true) {
+    table.querySelectorAll(`[data-col="${col}"]`).forEach(cell => {
+      cell.style.display = hidden ? 'none' : '';
+    });
+
+    const btn = table.querySelector(`[data-col-toggle="${col}"]`);
+    if (btn) {
+      updateButton(btn, hidden);
+    }
+
+    if (persist) {
+      try {
+        stored[col] = hidden;
+        window.localStorage.setItem(storageKey, JSON.stringify(stored));
+      } catch (_err) {
+        // Ignore storage errors (private mode, etc.)
+      }
+    }
+  }
+
+  const toggles = table.querySelectorAll('[data-col-toggle]');
+  if (!toggles.length) return;
+
+  toggles.forEach(btn => {
+    const col = btn.dataset.colToggle;
+    if (!col) return;
+
+    if (Object.prototype.hasOwnProperty.call(stored, col)) {
+      setColumnHidden(col, stored[col], false);
+    } else {
+      updateButton(btn, false);
+    }
+
+    btn.addEventListener('click', () => {
+      const isHidden = btn.getAttribute('aria-pressed') === 'true';
+      setColumnHidden(col, !isHidden, true);
+    });
+  });
 })();
 
 // ==================== EBAY SYNC ====================
