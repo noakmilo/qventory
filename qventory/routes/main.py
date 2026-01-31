@@ -716,6 +716,14 @@ def _get_inventory_filter_params():
     }
 
 
+def _get_inventory_sort_params():
+    sort_by = _normalize_arg(request.args.get("sort"))
+    sort_dir = _normalize_arg(request.args.get("dir"))
+    if sort_dir and sort_dir.lower() not in {"asc", "desc"}:
+        sort_dir = None
+    return sort_by, sort_dir
+
+
 def _get_pagination_params(default_per_page: int = 20):
     try:
         page = int(request.args.get("page", 1))
@@ -1343,11 +1351,14 @@ def inventory_active():
 
     page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
+    sort_by, sort_dir = _get_inventory_sort_params()
     items, total_items = fetch_active_items(
         db.session,
         user_id=current_user.id,
         limit=per_page,
         offset=offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         **filters,
     )
 
@@ -1360,6 +1371,8 @@ def inventory_active():
             user_id=current_user.id,
             limit=per_page,
             offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
             **filters,
         )
 
@@ -1406,6 +1419,8 @@ def inventory_active():
         pagination=pagination,
         view_type="active",
         page_title="Active Inventory",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
         show_upgrade_banner=show_upgrade_banner,
@@ -1421,11 +1436,14 @@ def inventory_sold():
 
     page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
+    sort_by, sort_dir = _get_inventory_sort_params()
     items, total_items = fetch_sold_items(
         db.session,
         user_id=current_user.id,
         limit=per_page,
         offset=offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         **filters,
     )
 
@@ -1438,6 +1456,8 @@ def inventory_sold():
             user_id=current_user.id,
             limit=per_page,
             offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
             **filters,
         )
 
@@ -1484,6 +1504,8 @@ def inventory_sold():
         pagination=pagination,
         view_type="sold",
         page_title="Sold Items",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
         show_upgrade_banner=False,

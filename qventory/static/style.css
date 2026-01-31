@@ -798,6 +798,17 @@ th{
   gap:6px;
 }
 
+.sort-header{
+  cursor:pointer;
+  user-select:none;
+}
+
+.sort-indicator{
+  font-size:10px;
+  color:var(--text);
+  opacity:0.8;
+}
+
 .col-header--center{
   justify-content:center;
   width:100%;

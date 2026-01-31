@@ -38,7 +38,9 @@ def _build_item_filters(
     params: Dict[str, object] = {"user_id": user_id}
 
     if search:
-        clauses.append(f"({alias}.title ILIKE :search OR {alias}.sku ILIKE :search)")
+        clauses.append(
+            f"({alias}.title ILIKE :search OR {alias}.sku ILIKE :search OR {alias}.supplier ILIKE :search)"
+        )
         params["search"] = f"%{search}%"
 
     if A:
@@ -146,7 +148,7 @@ LEFT JOIN LATERAL (
     ORDER BY l.listed_at DESC NULLS LAST, l.created_at DESC NULLS LAST
     LIMIT 1
 ) AS ls ON TRUE
-ORDER BY n.sort_ts DESC NULLS LAST, n.id DESC
+ORDER BY {order_by}
 LIMIT :limit OFFSET :offset;
 """
 
@@ -198,7 +200,7 @@ LEFT JOIN items AS i
   ON i.id = s.item_id
  AND i.user_id = s.user_id
 WHERE {where_clause}
-ORDER BY s.sold_at DESC NULLS LAST, s.id DESC
+ORDER BY {order_by}
 LIMIT :limit OFFSET :offset;
 """
 
@@ -372,6 +374,8 @@ def fetch_active_items(
     C: Optional[str] = None,
     platform: Optional[str] = None,
     missing_data: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
@@ -387,7 +391,21 @@ def fetch_active_items(
     )
     where_clause = f"{where_clause} AND i.is_active IS TRUE"
 
-    query_sql = ACTIVE_ITEMS_SQL.format(where_clause=where_clause)
+    order_map = {
+        "title": "n.title",
+        "sku": "n.sku",
+        "supplier": "n.supplier",
+        "cost": "n.item_cost",
+        "price": "n.item_price",
+        "location": "n.location_code",
+        "listed_at": "n.sort_ts",
+        "updated_at": "n.updated_at",
+    }
+    direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+    order_col = order_map.get((sort_by or "").lower(), "n.sort_ts")
+    order_by = f"{order_col} {direction} NULLS LAST, n.id DESC"
+
+    query_sql = ACTIVE_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
     count_sql = ACTIVE_COUNT_SQL.format(where_clause=where_clause)
 
     query_params = dict(params)
@@ -409,6 +427,8 @@ def fetch_sold_items(
     C: Optional[str] = None,
     platform: Optional[str] = None,
     missing_data: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
@@ -420,11 +440,27 @@ def fetch_sold_items(
     params: Dict[str, object] = {"user_id": user_id}
 
     if search:
-        clauses.append("(s.item_title ILIKE :search OR s.item_sku ILIKE :search)")
+        clauses.append(
+            "(s.item_title ILIKE :search OR s.item_sku ILIKE :search OR i.supplier ILIKE :search)"
+        )
         params["search"] = f"%{search}%"
 
     where_clause = " AND ".join(clauses)
-    query_sql = SOLD_ITEMS_SQL.format(where_clause=where_clause)
+    order_map = {
+        "title": "s.item_title",
+        "sku": "s.item_sku",
+        "supplier": "i.supplier",
+        "cost": "COALESCE(s.item_cost, i.item_cost)",
+        "sold_price": "s.sold_price",
+        "net_profit": "s.net_profit",
+        "sold_at": "s.sold_at",
+        "location": "i.location_code",
+    }
+    direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+    order_col = order_map.get((sort_by or "").lower(), "s.sold_at")
+    order_by = f"{order_col} {direction} NULLS LAST, s.id DESC"
+
+    query_sql = SOLD_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
     count_sql = SOLD_COUNT_SQL.format(where_clause=where_clause)
 
     query_params = dict(params)

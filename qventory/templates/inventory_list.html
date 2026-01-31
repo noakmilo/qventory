@@ -80,6 +80,12 @@
       <form id="filterForm" method="get" action="{{ request.path }}" class="filters-grid">
         <input type="hidden" name="page" value="1">
         <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
+        {% if sort_by %}
+        <input type="hidden" name="sort" value="{{ sort_by }}">
+        {% endif %}
+        {% if sort_dir %}
+        <input type="hidden" name="dir" value="{{ sort_dir }}">
+        {% endif %}
         <div style="grid-column:1/-1">
           <div class="input-with-button" style="position:relative">
             <input class="input" type="text" id="q" name="q" placeholder="Search title / SKU / supplier…" autocomplete="off">
@@ -230,9 +236,19 @@
               </span>
             </th>
             <th data-col="photo" style="width:44px"></th>
-            <th data-col="title">Title</th>
+            <th data-col="title">
+              <span class="col-header sort-header" data-sort-key="title" data-default-dir="asc">
+                Title
+                {% if sort_by == 'title' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
+              </span>
+            </th>
             <th data-col="sku">
-              <span class="col-header">SKU
+              <span class="col-header sort-header" data-sort-key="sku" data-default-dir="asc">SKU
+                {% if sort_by == 'sku' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -241,7 +257,10 @@
               </span>
             </th>
             <th data-col="supplier" class="mobile-hide">
-              <span class="col-header">Supplier
+              <span class="col-header sort-header" data-sort-key="supplier" data-default-dir="asc">Supplier
+                {% if sort_by == 'supplier' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -250,7 +269,10 @@
               </span>
             </th>
             <th data-col="cost">
-              <span class="col-header">Cost
+              <span class="col-header sort-header" data-sort-key="cost" data-default-dir="desc">Cost
+                {% if sort_by == 'cost' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -259,7 +281,10 @@
               </span>
             </th>
             <th data-col="sold_price">
-              <span class="col-header">Sold Price
+              <span class="col-header sort-header" data-sort-key="sold_price" data-default-dir="desc">Sold Price
+                {% if sort_by == 'sold_price' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sold_price" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -295,10 +320,13 @@
               </span>
             </th>
             <th data-col="net_profit">
-              <span class="col-header">Net Profit
+              <span class="col-header sort-header" data-sort-key="net_profit" data-default-dir="desc">Net Profit
                 <span class="tooltip-icon" data-tooltip="Net Profit = (Total Sales - Tax - Cost) - Shipping Cost - Total Marketplace Fees">
                   <i class="fas fa-info-circle"></i>
                 </span>
+                {% if sort_by == 'net_profit' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="net_profit" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -307,7 +335,10 @@
               </span>
             </th>
             <th data-col="sold_at">
-              <span class="col-header">Sold At
+              <span class="col-header sort-header" data-sort-key="sold_at" data-default-dir="desc">Sold At
+                {% if sort_by == 'sold_at' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sold_at" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -316,7 +347,10 @@
               </span>
             </th>
             <th data-col="location">
-              <span class="col-header">Location
+              <span class="col-header sort-header" data-sort-key="location" data-default-dir="asc">Location
+                {% if sort_by == 'location' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -356,9 +390,19 @@
               </span>
             </th>
             <th data-col="photo" style="width:44px"></th>
-            <th data-col="title">Title</th>
+            <th data-col="title">
+              <span class="col-header sort-header" data-sort-key="title" data-default-dir="asc">
+                Title
+                {% if sort_by == 'title' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
+              </span>
+            </th>
             <th data-col="sku">
-              <span class="col-header">SKU
+              <span class="col-header sort-header" data-sort-key="sku" data-default-dir="asc">SKU
+                {% if sort_by == 'sku' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -367,7 +411,10 @@
               </span>
             </th>
             <th data-col="supplier" class="mobile-hide">
-              <span class="col-header">Supplier
+              <span class="col-header sort-header" data-sort-key="supplier" data-default-dir="asc">Supplier
+                {% if sort_by == 'supplier' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -376,7 +423,10 @@
               </span>
             </th>
             <th data-col="cost">
-              <span class="col-header">Cost
+              <span class="col-header sort-header" data-sort-key="cost" data-default-dir="desc">Cost
+                {% if sort_by == 'cost' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -385,7 +435,10 @@
               </span>
             </th>
             <th data-col="price">
-              <span class="col-header">Price
+              <span class="col-header sort-header" data-sort-key="price" data-default-dir="desc">Price
+                {% if sort_by == 'price' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="price" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -403,7 +456,10 @@
               </span>
             </th>
             <th data-col="location">
-              <span class="col-header">Location
+              <span class="col-header sort-header" data-sort-key="location" data-default-dir="asc">Location
+                {% if sort_by == 'location' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
@@ -1099,6 +1155,34 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       const isHidden = btn.getAttribute('aria-pressed') === 'true';
       setColumnHidden(col, !isHidden, true);
+    });
+  });
+})();
+
+// ==================== SORTING ====================
+(function() {
+  const headers = document.querySelectorAll('.sort-header');
+  if (!headers.length) return;
+
+  headers.forEach(header => {
+    header.addEventListener('click', () => {
+      const sortKey = header.getAttribute('data-sort-key');
+      if (!sortKey) return;
+
+      const url = new URL(window.location.href);
+      const currentSort = url.searchParams.get('sort');
+      const currentDir = url.searchParams.get('dir') || '';
+      const defaultDir = header.getAttribute('data-default-dir') || 'asc';
+
+      let nextDir = defaultDir;
+      if (currentSort === sortKey) {
+        nextDir = currentDir.toLowerCase() === 'asc' ? 'desc' : 'asc';
+      }
+
+      url.searchParams.set('sort', sortKey);
+      url.searchParams.set('dir', nextDir);
+      url.searchParams.set('page', '1');
+      window.location.href = url.toString();
     });
   });
 })();
