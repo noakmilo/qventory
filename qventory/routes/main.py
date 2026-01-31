@@ -185,11 +185,10 @@ def stripe_webhook():
             stripe_subscription_id=subscription_id
         ).first()
         if subscription:
+            now = datetime.utcnow()
             old_plan = subscription.plan
             if plan_name:
                 subscription.plan = plan_name
-            if status:
-                subscription.status = status
             if period_end:
                 subscription.current_period_end = datetime.utcfromtimestamp(period_end)
             if trial_end:
@@ -200,12 +199,26 @@ def stripe_webhook():
                 subscription.user.has_used_trial = True
             if plan_name:
                 _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
+            if status:
+                subscription.status = status
+            if cancel_at_period_end and status in {"active", "suspended"}:
+                subscription.cancelled_at = now
             if status == "cancelled":
-                subscription.plan = "free"
-                subscription.on_trial = False
-                subscription.trial_ends_at = None
-                subscription.current_period_end = None
-                _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
+                if raw_status == "trialing":
+                    subscription.plan = "free"
+                    subscription.on_trial = False
+                    subscription.trial_ends_at = None
+                    subscription.current_period_end = None
+                    _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
+                elif subscription.current_period_end and subscription.current_period_end > now:
+                    subscription.status = "active"
+                    subscription.cancelled_at = now
+                else:
+                    subscription.plan = "free"
+                    subscription.on_trial = False
+                    subscription.trial_ends_at = None
+                    subscription.current_period_end = None
+                    _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
             db.session.commit()
 
             if plan_name and old_plan != plan_name:
