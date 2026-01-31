@@ -90,15 +90,19 @@
       </div>
       <div style="min-width:200px;">
         <div style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Status</div>
-        <div style="font-size:16px;color:var(--text);margin-top:4px;">{{ subscription.status|capitalize }}</div>
-        {% if subscription.on_trial and subscription.trial_ends_at %}
-          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
-            Trial ends {{ subscription.trial_ends_at.strftime('%b %d, %Y') }}
-          </div>
-        {% elif subscription.status == 'active' and subscription.current_period_end %}
-          <div style="font-size:13px;color:var(--sub);margin-top:4px;">
-            Renews {{ subscription.current_period_end.strftime('%b %d, %Y') }}
-          </div>
+        {% if subscription.plan == 'free' %}
+          <div style="font-size:16px;color:var(--text);margin-top:4px;">Free</div>
+        {% else %}
+          <div style="font-size:16px;color:var(--text);margin-top:4px;">{{ subscription.status|capitalize }}</div>
+          {% if subscription.on_trial and subscription.trial_ends_at %}
+            <div style="font-size:13px;color:var(--sub);margin-top:4px;">
+              Trial ends {{ subscription.trial_ends_at.strftime('%b %d, %Y') }}
+            </div>
+          {% elif subscription.status == 'active' and subscription.current_period_end %}
+            <div style="font-size:13px;color:var(--sub);margin-top:4px;">
+              Renews {{ subscription.current_period_end.strftime('%b %d, %Y') }}
+            </div>
+          {% endif %}
         {% endif %}
       </div>
       <div style="margin-left:auto;">
