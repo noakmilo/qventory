@@ -152,6 +152,17 @@ def stripe_webhook():
                 subscription.updated_at = datetime.utcnow()
                 if plan_name:
                     _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
+                    if old_plan == "free" and plan_name != "free":
+                        _reactivate_items_after_upgrade(subscription.user_id)
+                        from qventory.models.marketplace_credential import MarketplaceCredential
+                        ebay_cred = MarketplaceCredential.query.filter_by(
+                            user_id=subscription.user_id,
+                            marketplace='ebay',
+                            is_active=True
+                        ).first()
+                        if ebay_cred:
+                            from qventory.tasks import import_ebay_inventory
+                            import_ebay_inventory.delay(subscription.user_id, import_mode='sync_all', listing_status='ACTIVE')
                 db.session.commit()
                 if plan_name and old_plan != plan_name:
                     try:
@@ -199,26 +210,29 @@ def stripe_webhook():
                 subscription.user.has_used_trial = True
             if plan_name:
                 _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
+                if old_plan == "free" and plan_name != "free":
+                    _reactivate_items_after_upgrade(subscription.user_id)
+                    from qventory.models.marketplace_credential import MarketplaceCredential
+                    ebay_cred = MarketplaceCredential.query.filter_by(
+                        user_id=subscription.user_id,
+                        marketplace='ebay',
+                        is_active=True
+                    ).first()
+                    if ebay_cred:
+                        from qventory.tasks import import_ebay_inventory
+                        import_ebay_inventory.delay(subscription.user_id, import_mode='sync_all', listing_status='ACTIVE')
             if status:
                 subscription.status = status
             if cancel_at_period_end and status in {"active", "suspended"}:
                 subscription.cancelled_at = now
             if status == "cancelled":
                 if raw_status == "trialing":
-                    subscription.plan = "free"
-                    subscription.on_trial = False
-                    subscription.trial_ends_at = None
-                    subscription.current_period_end = None
-                    _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
+                    _downgrade_to_free_and_enforce(subscription.user, subscription, now)
                 elif subscription.current_period_end and subscription.current_period_end > now:
                     subscription.status = "active"
                     subscription.cancelled_at = now
                 else:
-                    subscription.plan = "free"
-                    subscription.on_trial = False
-                    subscription.trial_ends_at = None
-                    subscription.current_period_end = None
-                    _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
+                    _downgrade_to_free_and_enforce(subscription.user, subscription, now)
             db.session.commit()
 
             if plan_name and old_plan != plan_name:
@@ -250,14 +264,8 @@ def stripe_webhook():
         ).first()
         if subscription:
             was_cancelled = subscription.cancelled_at is not None
-            subscription.plan = "free"
-            subscription.status = "cancelled"
-            subscription.ended_at = datetime.utcnow()
-            subscription.updated_at = datetime.utcnow()
-            subscription.on_trial = False
-            subscription.trial_ends_at = None
-            subscription.current_period_end = None
-            _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
+            now = datetime.utcnow()
+            _downgrade_to_free_and_enforce(subscription.user, subscription, now)
             db.session.commit()
             if not was_cancelled:
                 try:
@@ -513,16 +521,22 @@ def _enforce_free_plan_limit(user_id: int) -> int:
     if over_limit <= 0:
         return 0
 
-    items_to_delete = (
+    items_to_deactivate = (
         Item.query.filter_by(user_id=user_id, is_active=True)
         .order_by(Item.created_at.asc())
         .limit(over_limit)
         .all()
     )
-    for item in items_to_delete:
-        db.session.delete(item)
+    tag = "[FREE_PLAN_LIMIT_DEACTIVATED]"
+    for item in items_to_deactivate:
+        item.is_active = False
+        notes = item.notes or ""
+        if tag not in notes:
+            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+            marker = f"\n[{timestamp}] {tag}"
+            item.notes = (notes + marker).strip()
 
-    return len(items_to_delete)
+    return len(items_to_deactivate)
 
 
 def _downgrade_to_free_and_enforce(user: User, subscription: Subscription, now: datetime) -> int:
@@ -535,9 +549,31 @@ def _downgrade_to_free_and_enforce(user: User, subscription: Subscription, now: 
     subscription.current_period_end = None
     subscription.updated_at = now
 
-    user.role = "free"
+    _sync_user_role_from_plan(user, "free", allow_downgrade=True)
     deleted_count = _enforce_free_plan_limit(user.id)
     return deleted_count
+
+
+def _reactivate_items_after_upgrade(user_id: int) -> int:
+    tag = "[FREE_PLAN_LIMIT_DEACTIVATED]"
+    items = Item.query.filter(
+        Item.user_id == user_id,
+        Item.is_active.is_(False),
+        Item.sold_at.is_(None),
+        Item.notes.ilike(f"%{tag}%")
+    ).all()
+    if not items:
+        return 0
+
+    for item in items:
+        item.is_active = True
+        if item.notes:
+            cleaned = "\n".join(
+                line for line in item.notes.splitlines() if tag not in line
+            ).strip()
+            item.notes = cleaned or None
+
+    return len(items)
 
 
 # ---------------------- Help Center (public) ----------------------
