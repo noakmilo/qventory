@@ -15,6 +15,7 @@ class User(UserMixin, db.Model):
     last_login = db.Column(db.DateTime, nullable=True)  # Last explicit login (username/password)
     last_activity = db.Column(db.DateTime, nullable=True)  # Last activity (any authenticated request)
     monthly_expense_budget = db.Column(db.Numeric(10, 2), nullable=True)  # Monthly budget for expenses
+    has_used_trial = db.Column(db.Boolean, default=False, nullable=False)  # Stripe trial eligibility
 
     # opcional: relaciones convenientes
     items = db.relationship("Item", backref="owner", lazy="dynamic", cascade="all, delete-orphan")

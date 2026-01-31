@@ -196,6 +196,8 @@ def stripe_webhook():
                 subscription.trial_ends_at = datetime.utcfromtimestamp(trial_end)
                 subscription.on_trial = raw_status == "trialing"
             subscription.updated_at = datetime.utcnow()
+            if raw_status == "trialing":
+                subscription.user.has_used_trial = True
             if plan_name:
                 _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
             if status == "cancelled":
@@ -466,7 +468,7 @@ def _start_stripe_checkout(plan_name, success_redirect, cancel_redirect):
             "allow_promotion_codes": True,
         }
         subscription_data = {"metadata": metadata}
-        if trial_days and trial_days > 0:
+        if trial_days and trial_days > 0 and not current_user.has_used_trial:
             subscription_data["trial_period_days"] = int(trial_days)
         if subscription_data:
             session_params["subscription_data"] = subscription_data
