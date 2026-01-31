@@ -198,6 +198,9 @@ def stripe_webhook():
             subscription.updated_at = datetime.utcnow()
             if plan_name:
                 _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
+            if status == "cancelled":
+                subscription.plan = "free"
+                _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
             db.session.commit()
 
             if plan_name and old_plan != plan_name:
@@ -229,9 +232,11 @@ def stripe_webhook():
         ).first()
         if subscription:
             was_cancelled = subscription.cancelled_at is not None
+            subscription.plan = "free"
             subscription.status = "cancelled"
             subscription.ended_at = datetime.utcnow()
             subscription.updated_at = datetime.utcnow()
+            _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
             db.session.commit()
             if not was_cancelled:
                 try:

@@ -20,11 +20,6 @@ tax_reports_bp = Blueprint('tax_reports', __name__, url_prefix='/tax-reports')
 @login_required
 def index():
     """Tax reports dashboard - list all available reports"""
-    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
-    if not current_user.is_premium and not current_user.is_god_mode:
-        flash('Tax Reports are available for Premium and Pro users only. Upgrade your plan to access this feature.', 'error')
-        return redirect(url_for('main.dashboard'))
-
     current_year = datetime.now().year
 
     # Get all user's tax reports
@@ -47,11 +42,6 @@ def index():
 @login_required
 def annual_report(year):
     """View annual tax report for specific year"""
-    # Restrict to paid users only (Premium, Pro, Early Adopter, God Mode)
-    if not current_user.is_premium and not current_user.is_god_mode:
-        flash('Tax Reports are available for Premium and Pro users only.', 'error')
-        return redirect(url_for('main.dashboard'))
-
     # Get or generate report
     report = get_or_create_tax_report(current_user.id, year)
 
