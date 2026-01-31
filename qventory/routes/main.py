@@ -150,6 +150,8 @@ def stripe_webhook():
                     subscription.plan = plan_name
                 subscription.status = "active"
                 subscription.updated_at = datetime.utcnow()
+                if plan_name:
+                    _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
                 db.session.commit()
                 if plan_name and old_plan != plan_name:
                     try:
@@ -194,6 +196,8 @@ def stripe_webhook():
                 subscription.trial_ends_at = datetime.utcfromtimestamp(trial_end)
                 subscription.on_trial = raw_status == "trialing"
             subscription.updated_at = datetime.utcnow()
+            if plan_name:
+                _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
             db.session.commit()
 
             if plan_name and old_plan != plan_name:
@@ -262,6 +266,19 @@ def stripe_webhook():
             db.session.commit()
 
     return Response(status=200)
+
+
+def _sync_user_role_from_plan(user, plan_name: str | None, *, allow_downgrade: bool = False) -> None:
+    if not user or not plan_name:
+        return
+    if plan_name in {"god", "early_adopter"}:
+        return
+    if user.role in {"god", "early_adopter"}:
+        return
+    if plan_name == "free" and not allow_downgrade:
+        return
+    if user.role != plan_name:
+        user.role = plan_name
 
 
 @main_bp.route("/stripe/checkout", methods=["POST"])
@@ -2351,6 +2368,11 @@ def sync_ebay_inventory():
                     print(f"[SYNC_INVENTORY] Item no longer on eBay, marking inactive: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
                     if item.is_active:
                         item.is_active = False
+                        try:
+                            from qventory.helpers.link_bio import remove_featured_items_for_user
+                            remove_featured_items_for_user(current_user.id, [item.id])
+                        except Exception:
+                            pass
                         deleted_count += 1
                 else:
                     skipped_inactive += 1
@@ -3479,6 +3501,13 @@ def _build_link_bio_context(user, settings):
         .order_by(Item.title.asc())
         .all()
     )
+    if featured_ids:
+        active_ids = {item.id for item in items_active}
+        filtered_ids = [item_id for item_id in featured_ids if item_id in active_ids]
+        if filtered_ids != featured_ids:
+            settings.link_bio_featured_json = json.dumps(filtered_ids)
+            db.session.commit()
+            featured_ids = filtered_ids
     featured_titles = {item.id: item.title for item in items_active}
 
     return {
@@ -3554,6 +3583,15 @@ def _save_link_bio_settings(settings, form, user_id):
             continue
     if featured_ids:
         featured_ids = list(dict.fromkeys(featured_ids))[:5]
+        active_ids = {
+            item.id
+            for item in Item.query.filter(
+                Item.user_id == user_id,
+                Item.is_active.is_(True),
+                Item.id.in_(featured_ids)
+            ).all()
+        }
+        featured_ids = [item_id for item_id in featured_ids if item_id in active_ids]
     settings.link_bio_featured_json = json.dumps(featured_ids)
 
     return None
@@ -4555,11 +4593,13 @@ def admin_users_roles():
     user_data = []
 
     for user in users:
+        subscription = user.get_subscription()
         today_usage = AITokenUsage.get_today_usage(user.id)
         token_limit = AITokenConfig.get_token_limit(user.role)
 
         user_data.append({
             'user': user,
+            'subscription': subscription,
             'tokens_used_today': today_usage.tokens_used if today_usage else 0,
             'token_limit': token_limit,
             'tokens_remaining': token_limit - (today_usage.tokens_used if today_usage else 0)
@@ -4935,6 +4975,7 @@ def api_autocomplete_items():
     """Autocomplete items by title, SKU, or supplier"""
     q = (request.args.get("q") or "").strip()
     view_type = request.args.get("view_type", "active")  # active, sold, ended
+    exclude_ids_raw = (request.args.get("exclude_ids") or "").strip()
 
     if not q or len(q) < 2:
         return jsonify({"ok": True, "items": []})
@@ -4959,6 +5000,19 @@ def api_autocomplete_items():
             Item.supplier.ilike(like)
         )
     )
+
+    if exclude_ids_raw:
+        exclude_ids = []
+        for part in exclude_ids_raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                exclude_ids.append(int(part))
+            except ValueError:
+                continue
+        if exclude_ids:
+            query = query.filter(~Item.id.in_(exclude_ids))
 
     items = query.order_by(Item.updated_at.desc()).limit(10).all()
 

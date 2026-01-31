@@ -875,6 +875,11 @@ def import_ebay_sales(self, user_id, days_back=None):
                             item.sold_at = sold_at
                             item.sold_price = sold_price
                             log_task(f"    → Marked item as sold (soft delete)")
+                            try:
+                                from qventory.helpers.link_bio import remove_featured_items_for_user
+                                remove_featured_items_for_user(user_id, [item.id])
+                            except Exception:
+                                pass
 
                         existing_sale.calculate_profit()
                         updated_count += 1
@@ -913,6 +918,11 @@ def import_ebay_sales(self, user_id, days_back=None):
                             item.sold_at = sold_at
                             item.sold_price = sold_price
                             log_task(f"    → Marked item as sold (soft delete)")
+                            try:
+                                from qventory.helpers.link_bio import remove_featured_items_for_user
+                                remove_featured_items_for_user(user_id, [item.id])
+                            except Exception:
+                                pass
 
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
@@ -1969,6 +1979,11 @@ def process_item_sold_event(event):
             item.sold_at = datetime.utcnow()
             item.sold_price = sold_price
             log_task(f"  → Marked item as sold (soft delete)")
+            try:
+                from qventory.helpers.link_bio import remove_featured_items_for_user
+                remove_featured_items_for_user(event.user_id, [item.id])
+            except Exception:
+                pass
 
         new_sale.calculate_profit()
         db.session.add(new_sale)
@@ -3009,6 +3024,11 @@ def poll_user_listings(credential):
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                 relist_note = f"\n[{timestamp}] Relist transfer to {item_id} completed"
                 relist_source.notes = (relist_source.notes or '') + relist_note
+                try:
+                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                    remove_featured_items_for_user(user_id, [relist_source.id])
+                except Exception:
+                    pass
                 db.session.commit()
                 log_task(
                     f"    ✓ Transferred cost/supplier/location from {relist_source.id} "
@@ -3048,6 +3068,11 @@ def poll_user_listings(credential):
                     log_task(f"    ↻ Skip inactive (pending relist): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
                     continue
                 db_item.is_active = False
+                try:
+                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                    remove_featured_items_for_user(user_id, [db_item.id])
+                except Exception:
+                    pass
                 marked_inactive += 1
                 log_task(f"    ⊗ Marked inactive (ended on eBay): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
 
@@ -3299,6 +3324,11 @@ def sync_ebay_active_inventory_auto(self):
                             # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
                             if item.is_active:
                                 item.is_active = False
+                                try:
+                                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                                    remove_featured_items_for_user(user.id, [item.id])
+                                except Exception:
+                                    pass
                                 deleted_count += 1
                 
                 db.session.commit()
@@ -3422,6 +3452,16 @@ def sync_ebay_sold_orders_auto(self):
                                 item.sold_at = order.get('sold_at')
                                 item.sold_price = order.get('sold_price')
                                 log_task(f"      Marked item {item.sku} as sold (soft delete)")
+                                try:
+                                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                                    remove_featured_items_for_user(user.id, [item.id])
+                                except Exception:
+                                    pass
+                                try:
+                                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                                    remove_featured_items_for_user(user.id, [item.id])
+                                except Exception:
+                                    pass
 
                     if existing_sale:
                         # Update existing sale
@@ -4411,6 +4451,11 @@ def sync_and_purge_inactive_items(self):
                     if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
                         # Item no longer active on eBay
                         db_item.is_active = False
+                        try:
+                            from qventory.helpers.link_bio import remove_featured_items_for_user
+                            remove_featured_items_for_user(user.id, [db_item.id])
+                        except Exception:
+                            pass
                         log_task(f"    ⊗ Marked inactive: {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
                         marked_inactive += 1
                         total_marked_inactive += 1

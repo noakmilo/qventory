@@ -70,6 +70,8 @@
             <th>User</th>
             <th>Email</th>
             <th>Current Role</th>
+            <th>Subscription Plan</th>
+            <th>Status</th>
             <th>Tokens Today</th>
             <th>Daily Limit</th>
             <th>Remaining</th>
@@ -88,6 +90,22 @@
                 {% elif data.user.role == 'enterprise' %}Enterprise
                 {% else %}{{ data.user.role|capitalize }}{% endif %}
               </span>
+            </td>
+            <td>
+              <span class="role-badge role-{{ data.subscription.plan }}">
+                {% if data.subscription.plan == 'early_adopter' %}Early Adopter
+                {% elif data.subscription.plan == 'god' %}God Mode
+                {% elif data.subscription.plan == 'enterprise' %}Enterprise
+                {% else %}{{ data.subscription.plan|capitalize }}{% endif %}
+              </span>
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);">
+              {{ data.subscription.status|capitalize }}
+              {% if data.subscription.on_trial and data.subscription.trial_ends_at %}
+                <span style="color:#fbbf24;">(Trial until {{ data.subscription.trial_ends_at.strftime('%Y-%m-%d') }})</span>
+              {% elif data.subscription.on_trial %}
+                <span style="color:#fbbf24;">(Trial)</span>
+              {% endif %}
             </td>
             <td style="text-align:center;">
               <span style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">
