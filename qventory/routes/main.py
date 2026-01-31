@@ -202,6 +202,9 @@ def stripe_webhook():
                 _sync_user_role_from_plan(subscription.user, plan_name, allow_downgrade=False)
             if status == "cancelled":
                 subscription.plan = "free"
+                subscription.on_trial = False
+                subscription.trial_ends_at = None
+                subscription.current_period_end = None
                 _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
             db.session.commit()
 
@@ -238,6 +241,9 @@ def stripe_webhook():
             subscription.status = "cancelled"
             subscription.ended_at = datetime.utcnow()
             subscription.updated_at = datetime.utcnow()
+            subscription.on_trial = False
+            subscription.trial_ends_at = None
+            subscription.current_period_end = None
             _sync_user_role_from_plan(subscription.user, "free", allow_downgrade=True)
             db.session.commit()
             if not was_cancelled:
@@ -513,7 +519,7 @@ def _downgrade_to_free_and_enforce(user: User, subscription: Subscription, now: 
     subscription.trial_ends_at = None
     subscription.cancelled_at = now
     subscription.ended_at = now
-    subscription.current_period_end = now
+    subscription.current_period_end = None
     subscription.updated_at = now
 
     user.role = "free"

@@ -31,7 +31,7 @@
           <div style="font-size:13px;color:var(--sub);margin-top:4px;">
             Trial ends {{ subscription.trial_ends_at.strftime('%b %d, %Y') }}
           </div>
-        {% elif subscription.current_period_end %}
+        {% elif subscription.status == 'active' and subscription.current_period_end %}
           <div style="font-size:13px;color:var(--sub);margin-top:4px;">
             Renews {{ subscription.current_period_end.strftime('%b %d, %Y') }}
           </div>
