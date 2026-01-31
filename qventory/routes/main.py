@@ -469,6 +469,90 @@ def _stripe_price_for_plan(plan_name: str | None) -> str | None:
     return mapping.get(plan_name)
 
 
+def _refresh_subscription_from_stripe(subscription: Subscription):
+    if not subscription or not STRIPE_SECRET_KEY or not subscription.stripe_subscription_id:
+        return subscription
+
+    try:
+        stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+    except Exception as exc:
+        current_app.logger.exception("Stripe subscription refresh failed: %s", exc)
+        return subscription
+
+    now = datetime.utcnow()
+    raw_status = stripe_sub.get("status")
+    cancel_at_period_end = stripe_sub.get("cancel_at_period_end")
+    canceled_at = stripe_sub.get("canceled_at")
+    period_end_ts = stripe_sub.get("current_period_end")
+    trial_end_ts = stripe_sub.get("trial_end")
+    items = stripe_sub.get("items", {}).get("data", [])
+    price_id = items[0].get("price", {}).get("id") if items else None
+    plan_name = _plan_from_stripe_price(price_id)
+
+    status = None
+    if raw_status in {"active", "trialing"}:
+        status = "active"
+    elif raw_status in {"past_due", "unpaid"}:
+        status = "suspended"
+    elif raw_status in {"canceled", "incomplete_expired"}:
+        status = "cancelled"
+    elif raw_status:
+        status = raw_status
+
+    dirty = False
+
+    if plan_name and subscription.plan != plan_name:
+        subscription.plan = plan_name
+        dirty = True
+
+    if period_end_ts:
+        new_end = datetime.utcfromtimestamp(period_end_ts)
+        if subscription.current_period_end != new_end:
+            subscription.current_period_end = new_end
+            dirty = True
+
+    if trial_end_ts:
+        new_trial_end = datetime.utcfromtimestamp(trial_end_ts)
+        if subscription.trial_ends_at != new_trial_end:
+            subscription.trial_ends_at = new_trial_end
+            dirty = True
+
+    on_trial = raw_status == "trialing"
+    if subscription.on_trial != on_trial:
+        subscription.on_trial = on_trial
+        dirty = True
+
+    if raw_status == "trialing" and not subscription.user.has_used_trial:
+        subscription.user.has_used_trial = True
+        dirty = True
+
+    if status == "cancelled":
+        if subscription.current_period_end and subscription.current_period_end > now:
+            status = "active"
+        else:
+            subscription.on_trial = False
+            subscription.trial_ends_at = None
+            subscription.current_period_end = None
+            dirty = True
+
+    if status and subscription.status != status:
+        subscription.status = status
+        dirty = True
+
+    if cancel_at_period_end and not subscription.cancelled_at:
+        if canceled_at:
+            subscription.cancelled_at = datetime.utcfromtimestamp(canceled_at)
+        else:
+            subscription.cancelled_at = now
+        dirty = True
+
+    if dirty:
+        subscription.updated_at = now
+        db.session.commit()
+
+    return subscription
+
+
 def _start_stripe_checkout(plan_name, success_redirect, cancel_redirect):
     price_id = _stripe_price_for_plan(plan_name)
     if not price_id:
@@ -3521,7 +3605,7 @@ def settings():
     ebay_connected = ebay_cred is not None
     ebay_username = ebay_cred.ebay_user_id if ebay_cred else None
     from qventory.models.subscription import PlanLimit
-    subscription = current_user.get_subscription()
+    subscription = _refresh_subscription_from_stripe(current_user.get_subscription())
     plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
 
     return render_template("settings.html",
@@ -3722,7 +3806,7 @@ def settings_theme():
 @login_required
 def settings_subscription():
     from qventory.models.subscription import PlanLimit
-    subscription = current_user.get_subscription()
+    subscription = _refresh_subscription_from_stripe(current_user.get_subscription())
     plan_limits = PlanLimit.query.filter_by(plan=subscription.plan).first() if subscription else None
     return render_template(
         "settings_subscription.html",
