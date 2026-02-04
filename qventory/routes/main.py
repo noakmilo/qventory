@@ -4090,16 +4090,22 @@ def ebay_deletions_notify():
 
 @main_bp.route("/robots.txt")
 def robots_txt():
-    return Response("User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n", mimetype="text/plain")
+    sitemap_url = f"{request.url_root.rstrip('/')}/sitemap.xml"
+    body = f"User-agent: *\nAllow: /\nSitemap: {sitemap_url}\n"
+    return Response(body, mimetype="text/plain")
 
 
 @main_bp.route("/sitemap.xml")
 def sitemap_xml():
     xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>{request.url_root.rstrip('/')}/</loc></url>
+  <url><loc>{request.url_root.rstrip('/')}/pricing</loc></url>
+  <url><loc>{request.url_root.rstrip('/')}/privacy</loc></url>
   <url><loc>{request.url_root.rstrip('/')}/login</loc></url>
   <url><loc>{request.url_root.rstrip('/')}/register</loc></url>
+  <url><loc>{request.url_root.rstrip('/')}/forgot-password</loc></url>
+  <url><loc>{request.url_root.rstrip('/')}/offline</loc></url>
 </urlset>"""
     return Response(xml, mimetype="application/xml")
 
