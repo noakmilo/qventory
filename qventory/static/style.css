@@ -844,13 +844,24 @@ td{
 }
 
 .fulfillment-table-wrap{
-  max-height:70vh;
-  overflow:auto;
+  overflow-x:auto;
+  overflow-y:visible;
 }
 
-.fulfillment-table-wrap table td,
-.fulfillment-table-wrap table th{
+.fulfillment-table-wrap table{
+  min-width:1100px;
+}
+
+.fulfillment-table-wrap table th,
+.fulfillment-table-wrap table td{
   vertical-align:top;
+  white-space:nowrap;
+}
+
+.fulfillment-table-wrap table td:nth-child(2),
+.fulfillment-table-wrap table th:nth-child(2){
+  min-width:260px;
+  white-space:normal;
 }
 
 /* Hover en filas - Feedback visual */
