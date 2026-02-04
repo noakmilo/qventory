@@ -18,6 +18,12 @@
   <meta name="twitter:title" content="{% block twitter_title %}Qventory{% endblock %}">
   <meta name="twitter:description" content="{% block twitter_description %}Inventory management for resellers. Track listings, costs, sales, and fulfillment in one place.{% endblock %}">
   <meta name="twitter:image" content="{{ social_image }}">
+  <link rel="preconnect" href="https://t.contentsquare.net" crossorigin>
+  <link rel="preconnect" href="https://c.ba.contentsquare.net" crossorigin>
+  <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+  <link rel="preload" href="{{ url_for('static', filename='style.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></noscript>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <!-- Favicon -->
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32.png') }}">
@@ -34,18 +40,31 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Qventory">
 
-  <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-2XW4TBCC7Y"></script>
+  <!-- Google tag (gtag.js) - deferred -->
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-2XW4TBCC7Y');
+  window.addEventListener('load', function() {
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=G-2XW4TBCC7Y';
+    s.onload = function() {
+      gtag('js', new Date());
+      gtag('config', 'G-2XW4TBCC7Y');
+    };
+    document.head.appendChild(s);
+  });
 </script>
 
-<!--Hotjar-->
-<script src="https://t.contentsquare.net/uxa/6575ac7c265b6.js"></script>
+<!--ContentSquare-->
+<script>
+  window.addEventListener('load', function() {
+    var cs = document.createElement('script');
+    cs.src = 'https://t.contentsquare.net/uxa/6575ac7c265b6.js';
+    cs.async = true;
+    document.head.appendChild(cs);
+  });
+</script>
 
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
