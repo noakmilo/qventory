@@ -93,6 +93,27 @@ if cloudinary_enabled:
         cloudinary_enabled = False
 
 
+# ==================== ADMIN BACKOFFICE ====================
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+def check_admin_auth():
+    """Check if admin is authenticated via session"""
+    return request.cookies.get("admin_auth") == "authenticated"
+
+def require_admin(f):
+    """Decorator to require admin authentication"""
+    from functools import wraps
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not check_admin_auth():
+            flash("Admin authentication required", "error")
+            return redirect(url_for('main.admin_login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 # ---------------------- Landing pública ----------------------
 
 @main_bp.route("/")
@@ -4731,27 +4752,6 @@ def print_item_preview(item_id):
         item=it,
         pdf_url=pdf_url,
     )
-
-
-# ==================== ADMIN BACKOFFICE ====================
-
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
-
-def check_admin_auth():
-    """Check if admin is authenticated via session"""
-    return request.cookies.get("admin_auth") == "authenticated"
-
-def require_admin(f):
-    """Decorator to require admin authentication"""
-    from functools import wraps
-
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not check_admin_auth():
-            flash("Admin authentication required", "error")
-            return redirect(url_for('main.admin_login'))
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @main_bp.route("/admin")
