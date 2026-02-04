@@ -846,6 +846,7 @@ td{
 .fulfillment-table-wrap{
   overflow-x:auto;
   overflow-y:visible;
+  max-height:none;
 }
 
 .fulfillment-table-wrap table{
