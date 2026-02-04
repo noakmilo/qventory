@@ -849,7 +849,7 @@ td{
 }
 
 .fulfillment-table-wrap table{
-  min-width:1100px;
+  min-width:1300px;
 }
 
 .fulfillment-table-wrap table th,
@@ -862,6 +862,16 @@ td{
 .fulfillment-table-wrap table th:nth-child(2){
   min-width:260px;
   white-space:normal;
+}
+
+.fulfillment-table-wrap table td:nth-child(7),
+.fulfillment-table-wrap table th:nth-child(7){
+  min-width:180px;
+}
+
+.fulfillment-table-wrap table td:nth-child(8),
+.fulfillment-table-wrap table th:nth-child(8){
+  min-width:140px;
 }
 
 /* Hover en filas - Feedback visual */
