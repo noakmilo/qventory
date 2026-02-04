@@ -843,6 +843,16 @@ td{
   font-weight:700;
 }
 
+.fulfillment-table-wrap{
+  max-height:70vh;
+  overflow:auto;
+}
+
+.fulfillment-table-wrap table td,
+.fulfillment-table-wrap table th{
+  vertical-align:top;
+}
+
 /* Hover en filas - Feedback visual */
 tbody tr{
   transition:all .15s ease;
