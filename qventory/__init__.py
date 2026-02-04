@@ -138,6 +138,31 @@ def create_app():
                 theme = "dark"
         return {"theme_preference": theme}
 
+    @app.context_processor
+    def inject_support_counts():
+        from flask_login import current_user
+        support_unread_count = 0
+        admin_support_unread_count = 0
+
+        try:
+            if current_user.is_authenticated and current_user.role in {"early_adopter", "premium", "plus", "pro", "god"}:
+                from qventory.routes.main import _support_unread_for_user
+                support_unread_count = _support_unread_for_user(current_user.id)
+        except Exception:
+            support_unread_count = 0
+
+        try:
+            from qventory.routes.main import check_admin_auth, _support_unread_for_admin
+            if check_admin_auth():
+                admin_support_unread_count = _support_unread_for_admin()
+        except Exception:
+            admin_support_unread_count = 0
+
+        return {
+            "support_unread_count": support_unread_count,
+            "admin_support_unread_count": admin_support_unread_count,
+        }
+
     # Register template filters
     @app.template_filter('timeago')
     def timeago_filter(dt):

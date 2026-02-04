@@ -71,6 +71,11 @@
           <i class="fas fa-life-ring"></i>
           <span>Help Center</span>
         </a>
+        <a href="{{ url_for('main.admin_support_inbox') }}" class="admin-sidebar-item {% if 'admin_support' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-inbox"></i>
+          <span>Support Tickets</span>
+          <span class="admin-sidebar-badge" {% if admin_support_unread_count %}style="display:inline-flex"{% endif %}>{{ admin_support_unread_count if admin_support_unread_count else '' }}</span>
+        </a>
       </div>
 
       <!-- Divider -->
@@ -295,6 +300,20 @@
 
   .admin-sidebar-item.active i {
     color: #ef4444;
+  }
+
+  .admin-sidebar-badge {
+    margin-left: auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+    display: none;
   }
 
   .admin-sidebar-divider {

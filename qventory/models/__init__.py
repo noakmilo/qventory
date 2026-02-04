@@ -6,6 +6,7 @@ from .sale import Sale
 from .listing import Listing
 from .marketplace_credential import MarketplaceCredential
 from .subscription import Subscription, PlanLimit
+from .support import SupportTicket, SupportMessage, SupportAttachment
 from .report import Report
 from .ai_token import AITokenConfig, AITokenUsage
 from .import_job import ImportJob

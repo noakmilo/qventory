@@ -1,0 +1,68 @@
+{% extends "base_admin.html" %}
+{% block title %}Support Tickets – Admin – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Support Tickets</span>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="width:98%;margin:0 auto;">
+  <div class="admin-header">
+    <div>
+      <h1><i class="fas fa-inbox"></i> Support Tickets</h1>
+      <p style="color:var(--sub);">All user support conversations</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>User</th>
+          <th>Subject</th>
+          <th>Status</th>
+          <th>Updated</th>
+          <th>Unread</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if tickets|length == 0 %}
+        <tr>
+          <td colspan="6" style="text-align:center;padding:40px;color:var(--sub);">No tickets yet.</td>
+        </tr>
+        {% else %}
+        {% for ticket in tickets %}
+        {% set unread = unread_counts.get(ticket.id, 0) %}
+        <tr>
+          <td style="font-family:monospace;">
+            <a href="{{ url_for('main.admin_support_detail', ticket_code=ticket.ticket_code) }}">
+              {{ ticket.ticket_code }}
+            </a>
+          </td>
+          <td>{{ ticket.user.username }}</td>
+          <td>
+            <a href="{{ url_for('main.admin_support_detail', ticket_code=ticket.ticket_code) }}">
+              {{ ticket.subject }}
+            </a>
+          </td>
+          <td><span class="tag">{{ ticket.status|capitalize }}</span></td>
+          <td style="font-size:12px;color:var(--sub);">{{ ticket.updated_at.strftime('%b %d, %Y') }}</td>
+          <td>
+            {% if unread %}
+            <span class="tag" style="background:#ef4444;color:white;">{{ unread }}</span>
+            {% else %}
+            —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

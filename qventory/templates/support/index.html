@@ -1,0 +1,88 @@
+{% extends "base_new.html" %}
+{% block title %}Support – Qventory{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h2><i class="fas fa-life-ring" style="color:#60a5fa;"></i> Support Inbox</h2>
+      <p class="muted">Create a ticket and chat with support. Max 3 open tickets.</p>
+    </div>
+    <div class="tag">Open: {{ open_count }}/{{ max_open }}</div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <h3 style="margin-top:0;">New Ticket</h3>
+  <form method="post" enctype="multipart/form-data" style="display:grid;gap:12px;">
+    <div>
+      <label>Subject</label>
+      <input class="input" type="text" name="subject" maxlength="200" required>
+    </div>
+    <div>
+      <label>Message</label>
+      <textarea class="input" name="body" rows="5" required></textarea>
+    </div>
+    <div>
+      <label>Attachments (up to 3 images, 2MB each)</label>
+      <input class="input" type="file" name="attachments" accept="image/*" multiple>
+    </div>
+    <div>
+      <button class="btn submitbtn" type="submit"><i class="fas fa-paper-plane"></i> Send Ticket</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Your Tickets</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Subject</th>
+          <th>Status</th>
+          <th>Updated</th>
+          <th>Unread</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if tickets|length == 0 %}
+        <tr>
+          <td colspan="5" style="text-align:center;color:var(--text-secondary);padding:30px;">No tickets yet.</td>
+        </tr>
+        {% else %}
+        {% for ticket in tickets %}
+        {% set unread = unread_counts.get(ticket.id, 0) %}
+        <tr>
+          <td style="font-family:monospace;color:var(--text-secondary);">
+            <a href="{{ url_for('main.support_detail', ticket_code=ticket.ticket_code) }}" style="color:var(--text);text-decoration:none;">
+              {{ ticket.ticket_code }}
+            </a>
+          </td>
+          <td>
+            <a href="{{ url_for('main.support_detail', ticket_code=ticket.ticket_code) }}" style="color:var(--text);text-decoration:none;font-weight:600;">
+              {{ ticket.subject }}
+            </a>
+          </td>
+          <td>
+            <span class="tag">{{ ticket.status|capitalize }}</span>
+          </td>
+          <td style="color:var(--text-secondary);font-size:12px;">
+            {{ ticket.updated_at.strftime('%b %d, %Y') }}
+          </td>
+          <td>
+            {% if unread %}
+              <span class="tag" style="background:#ef4444;color:white;">{{ unread }}</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

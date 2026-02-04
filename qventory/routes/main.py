@@ -38,6 +38,7 @@ from ..models.setting import Setting
 from ..models.user import User
 from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
+from ..models.support import SupportTicket, SupportMessage, SupportAttachment
 from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
     get_or_create_settings, generate_sku, compose_location_code,
@@ -62,6 +63,7 @@ CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
 CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
 CLOUDINARY_UPLOAD_FOLDER = os.environ.get("CLOUDINARY_UPLOAD_FOLDER", "qventory/items")
 CLOUDINARY_STORE_FOLDER = os.environ.get("CLOUDINARY_STORE_FOLDER", "qventory/stores")
+CLOUDINARY_SUPPORT_FOLDER = os.environ.get("CLOUDINARY_SUPPORT_FOLDER", "qventory/support")
 EBAY_VERIFICATION_TOKEN = os.environ.get("EBAY_VERIFICATION_TOKEN", "")
 EBAY_DELETIONS_ENDPOINT_URL = os.environ.get("EBAY_DELETIONS_ENDPOINT_URL", "")
 
@@ -696,6 +698,88 @@ def _normalize_arg(value: str | None) -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+SUPPORT_ROLES = {"early_adopter", "premium", "plus", "pro", "god"}
+
+
+def _support_access_allowed(user: User) -> bool:
+    return user is not None and user.role in SUPPORT_ROLES
+
+
+def _support_open_count(user_id: int) -> int:
+    return SupportTicket.query.filter_by(user_id=user_id, status="open").count()
+
+
+def _support_ticket_code() -> str:
+    code = SupportTicket.generate_ticket_code()
+    while SupportTicket.query.filter_by(ticket_code=code).first() is not None:
+        code = SupportTicket.generate_ticket_code()
+    return code
+
+
+def _support_unread_for_user(user_id: int) -> int:
+    return (
+        db.session.query(func.count(func.distinct(SupportMessage.ticket_id)))
+        .join(SupportTicket, SupportTicket.id == SupportMessage.ticket_id)
+        .filter(
+            SupportTicket.user_id == user_id,
+            SupportMessage.sender_role == "admin",
+            SupportMessage.is_read_by_user.is_(False),
+        )
+        .scalar()
+    )
+
+
+def _support_unread_for_admin() -> int:
+    return (
+        db.session.query(func.count(func.distinct(SupportMessage.ticket_id)))
+        .join(SupportTicket, SupportTicket.id == SupportMessage.ticket_id)
+        .filter(
+            SupportTicket.status == "open",
+            SupportMessage.sender_role == "user",
+            SupportMessage.is_read_by_admin.is_(False),
+        )
+        .scalar()
+    )
+
+
+def _upload_support_attachments(files, *, user_id: int, ticket_code: str):
+    if not cloudinary_enabled:
+        return [], "Cloudinary not configured"
+    if not files:
+        return [], None
+    files = [f for f in files if f and getattr(f, "filename", "")]
+    if not files:
+        return [], None
+    if len(files) > 3:
+        return [], "You can upload up to 3 images."
+
+    uploads = []
+    for file in files:
+        if not file or not getattr(file, "filename", ""):
+            continue
+        if not (file.mimetype or "").startswith("image/"):
+            return [], "Only image files are allowed."
+        file.stream.seek(0, os.SEEK_END)
+        size = file.stream.tell()
+        file.stream.seek(0)
+        if size > 2 * 1024 * 1024:
+            return [], "Each image must be 2MB or less."
+
+        up = cloudinary.uploader.upload(
+            file,
+            folder=f"{CLOUDINARY_SUPPORT_FOLDER}/{user_id}/{ticket_code}",
+            resource_type="image",
+        )
+        uploads.append({
+            "url": up.get("secure_url"),
+            "public_id": up.get("public_id"),
+            "bytes": up.get("bytes"),
+            "filename": file.filename,
+        })
+
+    return uploads, None
 
 
 def _get_inventory_filter_params():
@@ -3843,6 +3927,291 @@ def settings_support():
     return render_template("settings_support.html")
 
 
+# ---------------------- Support Tickets ----------------------
+
+@main_bp.route("/support", methods=["GET", "POST"])
+@login_required
+def support_inbox():
+    if not _support_access_allowed(current_user):
+        flash("Support is available for paid plans only.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    open_count = _support_open_count(current_user.id)
+    max_open = 3
+
+    if request.method == "POST":
+        if open_count >= max_open:
+            flash("You already have 3 open tickets. Close one to create a new ticket.", "error")
+            return redirect(url_for("main.support_inbox"))
+
+        subject = (request.form.get("subject") or "").strip()
+        body = (request.form.get("body") or "").strip()
+
+        if not subject or not body:
+            flash("Subject and message are required.", "error")
+            return redirect(url_for("main.support_inbox"))
+
+        ticket = SupportTicket(
+            ticket_code=_support_ticket_code(),
+            user_id=current_user.id,
+            subject=subject[:200],
+            status="open",
+        )
+        db.session.add(ticket)
+        db.session.flush()
+
+        message = SupportMessage(
+            ticket_id=ticket.id,
+            sender_role="user",
+            body=body,
+            is_read_by_user=True,
+            is_read_by_admin=False,
+        )
+        db.session.add(message)
+        db.session.flush()
+
+        files = request.files.getlist("attachments")
+        uploads, error = _upload_support_attachments(
+            files, user_id=current_user.id, ticket_code=ticket.ticket_code
+        )
+        if error:
+            db.session.rollback()
+            flash(error, "error")
+            return redirect(url_for("main.support_inbox"))
+
+        for item in uploads:
+            db.session.add(SupportAttachment(
+                message_id=message.id,
+                image_url=item["url"],
+                public_id=item.get("public_id"),
+                filename=item.get("filename"),
+                bytes=item.get("bytes"),
+            ))
+
+        db.session.commit()
+        flash("Support ticket created.", "ok")
+        return redirect(url_for("main.support_detail", ticket_code=ticket.ticket_code))
+
+    tickets = SupportTicket.query.filter_by(user_id=current_user.id)\
+        .order_by(SupportTicket.updated_at.desc()).all()
+
+    unread_counts = dict(
+        db.session.query(SupportMessage.ticket_id, func.count(SupportMessage.id))
+        .join(SupportTicket, SupportTicket.id == SupportMessage.ticket_id)
+        .filter(
+            SupportTicket.user_id == current_user.id,
+            SupportMessage.sender_role == "admin",
+            SupportMessage.is_read_by_user.is_(False),
+        )
+        .group_by(SupportMessage.ticket_id)
+        .all()
+    )
+
+    return render_template(
+        "support/index.html",
+        tickets=tickets,
+        unread_counts=unread_counts,
+        open_count=open_count,
+        max_open=max_open,
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/support/<ticket_code>")
+@login_required
+def support_detail(ticket_code):
+    if not _support_access_allowed(current_user):
+        flash("Support is available for paid plans only.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+
+    SupportMessage.query.filter_by(
+        ticket_id=ticket.id,
+        sender_role="admin",
+        is_read_by_user=False
+    ).update({"is_read_by_user": True})
+    db.session.commit()
+
+    messages = ticket.messages.order_by(SupportMessage.created_at.asc()).all()
+
+    return render_template(
+        "support/detail.html",
+        ticket=ticket,
+        messages=messages,
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/support/<ticket_code>/message", methods=["POST"])
+@login_required
+def support_send_message(ticket_code):
+    if not _support_access_allowed(current_user):
+        flash("Support is available for paid plans only.", "error")
+        return redirect(url_for("main.dashboard"))
+
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+
+    if ticket.status != "open":
+        flash("This ticket is closed. You can’t reply.", "error")
+        return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Message cannot be empty.", "error")
+        return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+    message = SupportMessage(
+        ticket_id=ticket.id,
+        sender_role="user",
+        body=body,
+        is_read_by_user=True,
+        is_read_by_admin=False,
+    )
+    db.session.add(message)
+    db.session.flush()
+
+    files = request.files.getlist("attachments")
+    uploads, error = _upload_support_attachments(
+        files, user_id=current_user.id, ticket_code=ticket.ticket_code
+    )
+    if error:
+        db.session.rollback()
+        flash(error, "error")
+        return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+    for item in uploads:
+        db.session.add(SupportAttachment(
+            message_id=message.id,
+            image_url=item["url"],
+            public_id=item.get("public_id"),
+            filename=item.get("filename"),
+            bytes=item.get("bytes"),
+        ))
+
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+
+@main_bp.route("/admin/support")
+@require_admin
+def admin_support_inbox():
+    tickets = SupportTicket.query.order_by(SupportTicket.updated_at.desc()).all()
+
+    unread_counts = dict(
+        db.session.query(SupportMessage.ticket_id, func.count(SupportMessage.id))
+        .filter(
+            SupportMessage.sender_role == "user",
+            SupportMessage.is_read_by_admin.is_(False),
+        )
+        .group_by(SupportMessage.ticket_id)
+        .all()
+    )
+
+    return render_template(
+        "admin_support/index.html",
+        tickets=tickets,
+        unread_counts=unread_counts,
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/admin/support/<ticket_code>")
+@require_admin
+def admin_support_detail(ticket_code):
+    ticket = SupportTicket.query.filter_by(ticket_code=ticket_code).first_or_404()
+
+    SupportMessage.query.filter_by(
+        ticket_id=ticket.id,
+        sender_role="user",
+        is_read_by_admin=False
+    ).update({"is_read_by_admin": True})
+    db.session.commit()
+
+    messages = ticket.messages.order_by(SupportMessage.created_at.asc()).all()
+
+    return render_template(
+        "admin_support/detail.html",
+        ticket=ticket,
+        messages=messages,
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/admin/support/<ticket_code>/message", methods=["POST"])
+@require_admin
+def admin_support_message(ticket_code):
+    ticket = SupportTicket.query.filter_by(ticket_code=ticket_code).first_or_404()
+
+    if ticket.status != "open":
+        flash("This ticket is closed.", "error")
+        return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Message cannot be empty.", "error")
+        return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+    message = SupportMessage(
+        ticket_id=ticket.id,
+        sender_role="admin",
+        body=body,
+        is_read_by_user=False,
+        is_read_by_admin=True,
+    )
+    db.session.add(message)
+    db.session.flush()
+
+    files = request.files.getlist("attachments")
+    uploads, error = _upload_support_attachments(
+        files, user_id=ticket.user_id, ticket_code=ticket.ticket_code
+    )
+    if error:
+        db.session.rollback()
+        flash(error, "error")
+        return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+    for item in uploads:
+        db.session.add(SupportAttachment(
+            message_id=message.id,
+            image_url=item["url"],
+            public_id=item.get("public_id"),
+            filename=item.get("filename"),
+            bytes=item.get("bytes"),
+        ))
+
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+
+@main_bp.route("/admin/support/<ticket_code>/status", methods=["POST"])
+@require_admin
+def admin_support_status(ticket_code):
+    ticket = SupportTicket.query.filter_by(ticket_code=ticket_code).first_or_404()
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in {"resolved", "closed"}:
+        flash("Invalid status.", "error")
+        return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+    now = datetime.utcnow()
+    ticket.status = status
+    if status == "resolved":
+        ticket.resolved_at = now
+    if status == "closed":
+        ticket.closed_at = now
+    ticket.updated_at = now
+    db.session.commit()
+    return redirect(url_for("main.admin_support_detail", ticket_code=ticket_code))
+
+
 # ---------------------- Batch QR (protegido) ----------------------
 
 @main_bp.route("/qr/batch", methods=["GET", "POST"])
@@ -4780,6 +5149,20 @@ def admin_users_roles():
         })
 
     return render_template("admin_user_roles.html", user_data=user_data)
+
+
+@main_bp.route("/admin/users/roles/emails.txt")
+@require_admin
+def admin_users_roles_emails_txt():
+    emails = [
+        (u.email or "").strip().lower()
+        for u in User.query.order_by(User.created_at.desc()).all()
+        if (u.email or "").strip()
+    ]
+    content = ",".join(emails)
+    resp = Response(content, mimetype="text/plain")
+    resp.headers["Content-Disposition"] = "attachment; filename=emails.txt"
+    return resp
 
 
 @main_bp.route("/admin/user/<int:user_id>/role", methods=["POST"])

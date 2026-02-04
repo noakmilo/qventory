@@ -15,6 +15,9 @@
         <p style="color:var(--sub);">Manage user access levels and AI Research usage</p>
       </div>
       <div class="admin-actions">
+        <a href="{{ url_for('main.admin_users_roles_emails_txt') }}" class="btn">
+          <i class="fas fa-download"></i> Download Emails
+        </a>
         <a href="{{ url_for('main.admin_token_config') }}" class="btn">
           <i class="fas fa-cog"></i> Token Config
         </a>

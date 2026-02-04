@@ -1,0 +1,103 @@
+{% extends "base_new.html" %}
+{% block title %}Support Ticket – Qventory{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">{{ ticket.subject }}</h2>
+      <div class="muted" style="margin-top:6px;">
+        {{ ticket.ticket_code }} · {{ ticket.status|capitalize }}
+      </div>
+    </div>
+    <a class="btn" href="{{ url_for('main.support_inbox') }}"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="support-thread">
+    {% for message in messages %}
+    <div class="support-message support-message--{{ message.sender_role }}">
+      <div class="support-message-meta">
+        <span>{{ message.sender_role|capitalize }}</span>
+        <span>{{ message.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+      </div>
+      <div class="support-message-body">{{ message.body }}</div>
+      {% if message.attachments.count() %}
+      <div class="support-attachments">
+        {% for att in message.attachments %}
+        <a href="{{ att.image_url }}" target="_blank" rel="noopener">
+          <img src="{{ att.image_url }}" alt="Attachment">
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Reply</h3>
+  {% if ticket.status != 'open' %}
+    <div class="muted">This ticket is closed. You can’t reply.</div>
+  {% else %}
+  <form method="post" action="{{ url_for('main.support_send_message', ticket_code=ticket.ticket_code) }}" enctype="multipart/form-data" style="display:grid;gap:12px;">
+    <div>
+      <label>Message</label>
+      <textarea class="input" name="body" rows="4" required></textarea>
+    </div>
+    <div>
+      <label>Attachments (up to 3 images, 2MB each)</label>
+      <input class="input" type="file" name="attachments" accept="image/*" multiple>
+    </div>
+    <div>
+      <button class="btn submitbtn" type="submit"><i class="fas fa-paper-plane"></i> Send Reply</button>
+    </div>
+  </form>
+  {% endif %}
+</div>
+
+<style>
+  .support-thread {
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .support-message {
+    padding:14px 16px;
+    border-radius:12px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid var(--border);
+  }
+  .support-message--user {
+    border-color: rgba(96,165,250,0.3);
+  }
+  .support-message--admin {
+    border-color: rgba(16,185,129,0.3);
+  }
+  .support-message-meta {
+    display:flex;
+    gap:10px;
+    font-size:12px;
+    color:var(--text-secondary);
+    margin-bottom:8px;
+  }
+  .support-message-body {
+    white-space:pre-wrap;
+  }
+  .support-attachments {
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+  .support-attachments img {
+    width:120px;
+    height:90px;
+    object-fit:cover;
+    border-radius:10px;
+    border:1px solid var(--border);
+  }
+</style>
+{% endblock %}
