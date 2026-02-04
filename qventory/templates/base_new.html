@@ -101,14 +101,6 @@
         <span>Receipts</span>
       </a>
 
-      {% if current_user.is_authenticated and current_user.role in ['early_adopter','premium','plus','pro','god'] %}
-      <a href="{{ url_for('main.support_inbox') }}" class="sidebar-item {% if 'support' in request.endpoint %}active{% endif %}" title="Support">
-        <i class="fas fa-life-ring"></i>
-        <span>Support</span>
-        <span class="sidebar-item-badge" {% if support_unread_count %}style="display:inline-flex"{% endif %}>{{ support_unread_count if support_unread_count else '' }}</span>
-      </a>
-      {% endif %}
-
       <a href="{{ url_for('tax_reports.index') }}" class="sidebar-item {% if 'tax_reports' in request.endpoint %}active{% endif %}" title="Tax Reports">
         <i class="fas fa-file-invoice-dollar"></i>
         <span>Tax Reports</span>
@@ -171,6 +163,14 @@
           <span>Admin Panel</span>
         </a>
       </div>
+      {% endif %}
+
+      {% if current_user.is_authenticated and current_user.role in ['early_adopter','premium','plus','pro','god'] %}
+      <a href="{{ url_for('main.support_inbox') }}" class="sidebar-item {% if 'support' in request.endpoint %}active{% endif %}" title="Support">
+        <i class="fas fa-headset"></i>
+        <span>Support</span>
+        <span class="sidebar-item-badge" {% if support_unread_count %}style="display:inline-flex"{% endif %}>{{ support_unread_count if support_unread_count else '' }}</span>
+      </a>
       {% endif %}
 
       {% if current_user.is_authenticated %}
