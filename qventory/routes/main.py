@@ -1553,6 +1553,11 @@ def inventory_active():
 
 
 @main_bp.route("/inventory/inactive")
+def inventory_inactive_legacy():
+    return redirect(url_for("main.inventory_inactive_by_user"))
+
+
+@main_bp.route("/inventory/hidden")
 @login_required
 def inventory_inactive_by_user():
     """Show items hidden by the user (inactive_by_user=True)"""
