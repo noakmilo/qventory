@@ -1475,7 +1475,6 @@ def inventory_active():
 
     page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
-    filters.pop("missing_data", None)
     sort_by, sort_dir = _get_inventory_sort_params()
     items, total_items = fetch_active_items(
         db.session,
