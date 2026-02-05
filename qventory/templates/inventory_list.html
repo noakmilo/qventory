@@ -21,6 +21,8 @@
         <i class="fas fa-box"></i> Active Inventory
       {% elif view_type == 'sold' %}
         <i class="fas fa-check-circle"></i> Sold Items
+      {% elif view_type == 'inactive_user' %}
+        <i class="fas fa-eye-slash"></i> Inactive Items
       {% elif view_type == 'ended' %}
         <i class="fas fa-times-circle"></i> Ended Inventory
       {% endif %}
@@ -30,6 +32,8 @@
         Items currently active and available for sale
       {% elif view_type == 'sold' %}
         Items that have been sold
+      {% elif view_type == 'inactive_user' %}
+        Items hidden from your active inventory
       {% elif view_type == 'ended' %}
         Items that are no longer active
       {% endif %}
@@ -175,6 +179,9 @@
             <option value="">Bulk Actions</option>
             {% if view_type == 'active' %}
             <option value="bulk_update">Batch Update Fields</option>
+            <option value="deactivate_by_user">Deactivate (Hide from Active)</option>
+            {% elif view_type == 'inactive_user' %}
+            <option value="reactivate_by_user">Reactivate (Show in Active)</option>
             {% endif %}
             {# Sync to eBay (kept for later) #}
             {#

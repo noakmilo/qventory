@@ -115,7 +115,7 @@ class User(UserMixin, db.Model):
         # Efficient count query - use same optimization as items_remaining()
         from sqlalchemy import text
         result = db.session.execute(
-            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"),
             {"user_id": self.id}
         )
         current_count = result.scalar()
@@ -150,7 +150,7 @@ class User(UserMixin, db.Model):
         # Use text query to avoid ORM overhead and potential circular imports
         from sqlalchemy import text
         result = db.session.execute(
-            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"),
             {"user_id": self.id}
         )
         current_count = result.scalar()

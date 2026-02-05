@@ -47,6 +47,7 @@ from ..helpers import (
 from . import main_bp
 from ..helpers.inventory_queries import (
     fetch_active_items,
+    fetch_inactive_by_user_items,
     fetch_sold_items,
     fetch_ended_items,
     fetch_fulfillment_orders,
@@ -623,13 +624,21 @@ def _enforce_free_plan_limit(user_id: int) -> int:
     if not free_limits or free_limits.max_items is None:
         return 0
 
-    active_items = Item.query.filter_by(user_id=user_id, is_active=True).count()
+    active_items = Item.query.filter(
+        Item.user_id == user_id,
+        Item.is_active.is_(True),
+        Item.inactive_by_user.is_(False)
+    ).count()
     over_limit = active_items - free_limits.max_items
     if over_limit <= 0:
         return 0
 
     items_to_deactivate = (
-        Item.query.filter_by(user_id=user_id, is_active=True)
+        Item.query.filter(
+            Item.user_id == user_id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
+        )
         .order_by(Item.created_at.asc())
         .limit(over_limit)
         .all()
@@ -1103,7 +1112,10 @@ def inventory_count():
 
     try:
         result = db.session.execute(
-            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+            text(
+                "SELECT COUNT(*) FROM items "
+                "WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"
+            ),
             {"user_id": current_user.id}
         )
         count = result.scalar()
@@ -1135,7 +1147,10 @@ def inventory_stream():
             try:
                 # Send initial count - use efficient SQL query instead of ORM .count()
                 result = db.session.execute(
-                    text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                    text(
+                        "SELECT COUNT(*) FROM items "
+                        "WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"
+                    ),
                     {"user_id": uid}
                 )
                 initial_count = result.scalar()
@@ -1153,7 +1168,10 @@ def inventory_stream():
                     # Use efficient SQL query with fresh session each time
                     try:
                         result = db.session.execute(
-                            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true"),
+                            text(
+                                "SELECT COUNT(*) FROM items "
+                                "WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"
+                            ),
                             {"user_id": uid}
                         )
                         current_count = result.scalar()
@@ -1198,6 +1216,7 @@ def api_recent_items():
     items = Item.query.filter(
         Item.user_id == current_user.id,
         Item.is_active == True,
+        Item.inactive_by_user.is_(False),
         db.or_(
             Item.created_at > since_dt,
             Item.updated_at > since_dt
@@ -1529,6 +1548,73 @@ def inventory_active():
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
         show_upgrade_banner=show_upgrade_banner,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
+    )
+
+
+@main_bp.route("/inventory/inactive")
+@login_required
+def inventory_inactive_by_user():
+    """Show items hidden by the user (inactive_by_user=True)"""
+    s = get_or_create_settings(current_user)
+
+    page, per_page, offset = _get_pagination_params()
+    filters = _get_inventory_filter_params()
+    sort_by, sort_dir = _get_inventory_sort_params()
+    items, total_items = fetch_inactive_by_user_items(
+        db.session,
+        user_id=current_user.id,
+        limit=per_page,
+        offset=offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        **filters,
+    )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        items, total_items = fetch_inactive_by_user_items(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            **filters,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
+
+    def distinct(col):
+        return [
+            r[0] for r in db.session.query(col)
+            .filter(col.isnot(None), Item.user_id == current_user.id)
+            .distinct().order_by(col.asc()).all()
+        ]
+
+    options = {
+        "A": distinct(Item.A) if s.enable_A else [],
+        "B": distinct(Item.B) if s.enable_B else [],
+        "S": distinct(Item.S) if s.enable_S else [],
+        "C": distinct(Item.C) if s.enable_C else [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        pagination=pagination,
+        view_type="inactive_user",
+        page_title="Inactive Items",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        items_remaining=None,
+        plan_max_items=None,
+        show_upgrade_banner=False,
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
@@ -2528,7 +2614,11 @@ def sync_ebay_inventory():
             }), 403
 
         # Check how many items they're trying to sync vs their plan limit
-        current_item_count = Item.query.filter_by(user_id=current_user.id, is_active=True).count()
+        current_item_count = Item.query.filter(
+            Item.user_id == current_user.id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
+        ).count()
 
         # Free plan should only sync up to their max_items limit
         if plan_limits.max_items is not None:
@@ -2545,7 +2635,9 @@ def sync_ebay_inventory():
         # Get all items with eBay listing IDs
         items_query = Item.query.filter(
             Item.user_id == current_user.id,
-            Item.ebay_listing_id.isnot(None)
+            Item.ebay_listing_id.isnot(None),
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
         )
 
         # Limit sync to plan limits (only for non-god users)
@@ -3366,6 +3458,114 @@ def bulk_delete_items():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@main_bp.route("/items/bulk_deactivate_by_user", methods=["POST"])
+@login_required
+def bulk_deactivate_by_user():
+    """
+    Bulk hide items from active inventory (inactive_by_user=True)
+    Expects JSON: {"item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = data['item_ids']
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        try:
+            item_ids = [int(x) for x in item_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id,
+            Item.is_active.is_(True)
+        ).all()
+
+        if not items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        updated_count = 0
+        for item in items:
+            if not item.inactive_by_user:
+                item.inactive_by_user = True
+                item.updated_at = datetime.utcnow()
+                updated_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated_count": updated_count,
+            "message": f"Hidden {updated_count} item(s) from active inventory"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_DEACTIVATE_BY_USER] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/items/bulk_reactivate_by_user", methods=["POST"])
+@login_required
+def bulk_reactivate_by_user():
+    """
+    Bulk show items in active inventory (inactive_by_user=False)
+    Expects JSON: {"item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or 'item_ids' not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = data['item_ids']
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        try:
+            item_ids = [int(x) for x in item_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(True)
+        ).all()
+
+        if not items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        updated_count = 0
+        for item in items:
+            item.inactive_by_user = False
+            item.updated_at = datetime.utcnow()
+            updated_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "updated_count": updated_count,
+            "message": f"Reactivated {updated_count} item(s) into active inventory"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_REACTIVATE_BY_USER] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @main_bp.route("/item/sync_to_ebay", methods=["POST"])
 @login_required
 def sync_item_to_ebay():
@@ -3770,7 +3970,11 @@ def _build_link_bio_context(user, settings):
             featured_ids = []
 
     items_active = (
-        Item.query.filter_by(user_id=user.id, is_active=True)
+        Item.query.filter(
+            Item.user_id == user.id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
+        )
         .order_by(Item.title.asc())
         .all()
     )
@@ -4244,7 +4448,11 @@ def qr_batch():
         enabled_levels = list(s.enabled_levels())
 
         rows = (
-            Item.query.filter_by(user_id=current_user.id, is_active=True)
+            Item.query.filter(
+                Item.user_id == current_user.id,
+                Item.is_active.is_(True),
+                Item.inactive_by_user.is_(False)
+            )
             .with_entities(Item.location_code)
             .filter(Item.location_code.isnot(None), Item.location_code != "")
             .distinct()
@@ -4388,7 +4596,11 @@ def public_view_location(username, code):
     normalized_code = (code or "").strip()
     parts = parse_location_code(normalized_code)
 
-    q = Item.query.filter_by(user_id=user.id, is_active=True)
+    q = Item.query.filter(
+        Item.user_id == user.id,
+        Item.is_active.is_(True),
+        Item.inactive_by_user.is_(False)
+    )
 
     # Match explicit location_code to support eBay-imported SKUs without parsed A/B/S/C.
     code_filters = [Item.location_code == normalized_code]
@@ -5544,7 +5756,7 @@ def api_autocomplete_items():
 
     # Filter by view type
     if view_type == "active":
-        query = query.filter(Item.is_active == True)
+        query = query.filter(Item.is_active == True, Item.inactive_by_user.is_(False))
     elif view_type == "ended":
         query = query.filter(Item.is_active == False)
     # sold items are handled separately via Sales table
@@ -5965,6 +6177,7 @@ def public_link_bio(slug):
             Item.query.filter(
                 Item.user_id == user.id,
                 Item.is_active.is_(True),
+                Item.inactive_by_user.is_(False),
                 Item.id.in_(featured_ids)
             ).all()
         )

@@ -91,6 +91,52 @@ if (bulkActionApply) {
       openBulkLocationModal(itemIds);
     } else if (action === 'bulk_update') {
       openBulkEditModal(itemIds);
+    } else if (action === 'deactivate_by_user') {
+      if (!confirm(`Hide ${itemIds.length} item(s) from active inventory?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/items/bulk_deactivate_by_user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_ids: itemIds })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk deactivate error:', error);
+        alert('Failed to hide items');
+      }
+    } else if (action === 'reactivate_by_user') {
+      if (!confirm(`Reactivate ${itemIds.length} item(s) into active inventory?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/items/bulk_reactivate_by_user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_ids: itemIds })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk reactivate error:', error);
+        alert('Failed to reactivate items');
+      }
     } else if (action === 'sync_to_ebay') {
       if (!confirm(`Sync ${itemIds.length} item(s) to eBay?`)) {
         return;

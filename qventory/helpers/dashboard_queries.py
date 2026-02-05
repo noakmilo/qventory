@@ -119,6 +119,7 @@ WITH listing_dates AS (
     LEFT JOIN listings AS l ON l.item_id = i.id AND l.user_id = i.user_id
     WHERE i.user_id = :user_id
       AND i.is_active = TRUE
+      AND COALESCE(i.inactive_by_user, FALSE) = FALSE
     GROUP BY i.id, i.user_id, i.title, i.sku, i.item_price, i.item_thumb,
              i.ebay_url, i.web_url, i.listing_date, i.last_ebay_sync, i.created_at
 )
@@ -208,8 +209,8 @@ LIMIT :limit;
 
 PENDING_TASKS_SQL = """
 SELECT
-    (SELECT COUNT(*) FROM items WHERE user_id = :user_id AND item_cost IS NULL) AS items_missing_cost,
-    (SELECT COUNT(*) FROM items WHERE user_id = :user_id AND supplier IS NULL) AS items_missing_supplier,
+    (SELECT COUNT(*) FROM items WHERE user_id = :user_id AND item_cost IS NULL AND COALESCE(inactive_by_user, FALSE) = FALSE) AS items_missing_cost,
+    (SELECT COUNT(*) FROM items WHERE user_id = :user_id AND supplier IS NULL AND COALESCE(inactive_by_user, FALSE) = FALSE) AS items_missing_supplier,
     (SELECT COUNT(*) FROM marketplace_credentials WHERE user_id = :user_id AND marketplace = 'ebay' AND is_active IS TRUE) AS ebay_connected
 ;
 """

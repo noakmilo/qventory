@@ -104,6 +104,7 @@ normalized AS (
         i.location_code,
         i.quantity,
         i.is_active,
+        i.inactive_by_user,
         i.web_url,
         i.ebay_url,
         i.amazon_url,
@@ -389,7 +390,63 @@ def fetch_active_items(
         platform=platform,
         missing_data=missing_data,
     )
-    where_clause = f"{where_clause} AND i.is_active IS TRUE"
+    where_clause = (
+        f"{where_clause} AND i.is_active IS TRUE AND COALESCE(i.inactive_by_user, FALSE) = FALSE"
+    )
+
+    order_map = {
+        "title": "n.title",
+        "sku": "n.sku",
+        "supplier": "n.supplier",
+        "cost": "n.item_cost",
+        "price": "n.item_price",
+        "location": "n.location_code",
+        "listed_at": "n.sort_ts",
+        "updated_at": "n.updated_at",
+    }
+    direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+    order_col = order_map.get((sort_by or "").lower(), "n.sort_ts")
+    order_by = f"{order_col} {direction} NULLS LAST, n.id DESC"
+
+    query_sql = ACTIVE_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
+    count_sql = ACTIVE_COUNT_SQL.format(where_clause=where_clause)
+
+    query_params = dict(params)
+    query_params.update({"limit": limit, "offset": offset})
+
+    items = _rows_to_objects(session.execute(text(query_sql), query_params))
+    total = session.execute(text(count_sql), params).scalar_one()
+    return items, total
+
+
+def fetch_inactive_by_user_items(
+    session: Session,
+    *,
+    user_id: int,
+    search: Optional[str] = None,
+    A: Optional[str] = None,
+    B: Optional[str] = None,
+    S: Optional[str] = None,
+    C: Optional[str] = None,
+    platform: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[SimpleNamespace], int]:
+    where_clause, params = _build_item_filters(
+        user_id,
+        search=search,
+        A=A,
+        B=B,
+        S=S,
+        C=C,
+        platform=platform,
+        missing_data=None,
+    )
+    where_clause = (
+        f"{where_clause} AND i.is_active IS TRUE AND COALESCE(i.inactive_by_user, FALSE) = TRUE"
+    )
 
     order_map = {
         "title": "n.title",

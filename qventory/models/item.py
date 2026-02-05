@@ -52,6 +52,7 @@ class Item(db.Model):
     quantity = db.Column(db.Integer, default=1, nullable=False)  # Cantidad en stock
     low_stock_threshold = db.Column(db.Integer, default=1)  # Alerta de bajo stock
     is_active = db.Column(db.Boolean, default=True, index=True)  # Item activo o archivado
+    inactive_by_user = db.Column(db.Boolean, default=False, nullable=False, index=True)  # Hidden by user
 
     # Categorización
     category = db.Column(db.String, nullable=True, index=True)
