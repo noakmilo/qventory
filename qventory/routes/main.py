@@ -1554,11 +1554,6 @@ def inventory_active():
 
 
 @main_bp.route("/inventory/inactive")
-def inventory_inactive_legacy():
-    return redirect(url_for("main.inventory_inactive_by_user"))
-
-
-@main_bp.route("/inventory/hidden")
 @login_required
 def inventory_inactive_by_user():
     """Show items hidden by the user (inactive_by_user=True)"""
@@ -1566,6 +1561,7 @@ def inventory_inactive_by_user():
 
     page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
+    filters.pop("missing_data", None)
     sort_by, sort_dir = _get_inventory_sort_params()
     items, total_items = fetch_inactive_by_user_items(
         db.session,
