@@ -51,97 +51,6 @@
       </div>
     </div>
 
-    <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-        <div style="flex:1;">
-          <h3 style="color:#60a5fa;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-            <i class="fas fa-database"></i> Rebuild eBay Inventory Dates (Run This)
-          </h3>
-          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-            Launches a global task that runs a sync_all import and backfills eBay listing creation dates
-            so inventories sort chronologically.
-          </p>
-        </div>
-        <form method="POST" action="{{ url_for('main.admin_resync_all_inventory') }}" onsubmit="return confirm('This task will run a sync_all import for every account and backfill listing creation dates. It can take a long time. Continue?');">
-          <button type="submit" class="btn" style="background:#3b82f6;color:#fff;white-space:nowrap;">
-            <i class="fas fa-redo-alt"></i> Rebuild Listings
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <div style="background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-        <div style="flex:1;">
-          <h3 style="color:#fb923c;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-            <i class="fas fa-sync"></i> Sync Active Listings (Mark Inactive)
-          </h3>
-          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-            Syncs all connected eBay accounts and marks items inactive when they no longer exist on eBay.
-          </p>
-        </div>
-        <form method="POST" action="{{ url_for('main.admin_sync_and_purge_items') }}" onsubmit="return confirm('This will sync all eBay accounts and mark inactive items that are no longer active on eBay. Continue?');">
-          <button type="submit" class="btn" style="background:#fb923c;color:#fff;white-space:nowrap;">
-            <i class="fas fa-sync-alt"></i> Sync & Mark Inactive
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-        <div style="flex:1;">
-          <h3 style="color:#22c55e;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-            <i class="fas fa-check-circle"></i> Reactivate Active Listings
-          </h3>
-          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-            Reactivates items marked inactive that are still active on eBay.
-          </p>
-        </div>
-        <form method="POST" action="{{ url_for('main.admin_reactivate_ebay_items') }}" onsubmit="return confirm('This will scan all eBay accounts and reactivate items still active on eBay. Continue?');">
-          <button type="submit" class="btn" style="background:#22c55e;color:#fff;white-space:nowrap;">
-            <i class="fas fa-check"></i> Reactivate
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <div style="background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-        <div style="flex:1;">
-          <h3 style="color:#0ea5e9;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-            <i class="fas fa-user-check"></i> Refresh eBay User IDs
-          </h3>
-          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-            Refreshes tokens and attempts to resolve ebay_user_id for all connected eBay accounts.
-          </p>
-        </div>
-        <form method="POST" action="{{ url_for('main.admin_refresh_ebay_user_ids') }}" onsubmit="return confirm('This will refresh eBay tokens and update ebay_user_id when possible. Continue?');">
-          <button type="submit" class="btn" style="background:#0ea5e9;color:#fff;white-space:nowrap;">
-            <i class="fas fa-sync"></i> Refresh IDs
-          </button>
-        </form>
-      </div>
-    </div>
-
-    <div style="background:rgba(244,114,182,0.12);border:1px solid rgba(244,114,182,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);">
-        <div style="flex:1;">
-          <h3 style="color:#f472b6;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
-            <i class="fas fa-chart-line"></i> Recalculate Analytics (All Users)
-          </h3>
-          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
-            Full history refresh using Orders + Finances APIs. Updates fees, taxes, and profit accuracy.
-          </p>
-        </div>
-        <form method="POST" action="{{ url_for('main.admin_recalculate_analytics') }}" onsubmit="return confirm('This will re-import sales, sync finances, and reconcile fees for all users. Continue?');">
-          <button type="submit" class="btn" style="background:#f472b6;color:#fff;white-space:nowrap;">
-            <i class="fas fa-sync-alt"></i> Recalculate Analytics
-          </button>
-        </form>
-      </div>
-    </div>
-
     <div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
         <div style="flex:1;min-width:220px;">
@@ -208,6 +117,7 @@
             <th>Username</th>
             <th>Email</th>
             <th>Items</th>
+            <th>Missing Cost</th>
             <th>Status</th>
             <th>Last Activity</th>
             <th>Last Login</th>
@@ -223,6 +133,15 @@
             <td>
               {% if stat.item_count > 0 %}
                 <span class="tag">{{ stat.item_count }} items</span>
+              {% else %}
+                <span style="color:var(--sub);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if stat.missing_cost_count > 0 %}
+                <span class="tag" style="background:rgba(248,113,113,0.15);border-color:rgba(248,113,113,0.3);color:#f87171;">
+                  {{ stat.missing_cost_count }}
+                </span>
               {% else %}
                 <span style="color:var(--sub);">—</span>
               {% endif %}

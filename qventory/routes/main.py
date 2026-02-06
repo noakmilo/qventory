@@ -5147,9 +5147,16 @@ def admin_dashboard():
 
     for user in users:
         item_count = Item.query.filter_by(user_id=user.id, is_active=True).count()
+        missing_cost_count = Item.query.filter(
+            Item.user_id == user.id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False),
+            Item.item_cost.is_(None)
+        ).count()
         user_stats.append({
             'user': user,
             'item_count': item_count,
+            'missing_cost_count': missing_cost_count,
             'has_inventory': item_count > 0
         })
 
