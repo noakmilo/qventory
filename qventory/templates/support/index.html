@@ -66,7 +66,7 @@
             </a>
           </td>
           <td>
-            <span class="tag">{{ ticket.status|capitalize }}</span>
+            <span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span>
           </td>
           <td style="color:var(--text-secondary);font-size:12px;">
             {{ ticket.updated_at.strftime('%b %d, %Y') }}
@@ -85,4 +85,24 @@
     </table>
   </div>
 </div>
+<style>
+  .status-badge {
+    border-color: transparent;
+  }
+  .status-open {
+    background: rgba(34,197,94,0.15);
+    color: #22c55e;
+    border-color: rgba(34,197,94,0.35);
+  }
+  .status-resolved {
+    background: rgba(59,130,246,0.15);
+    color: #60a5fa;
+    border-color: rgba(59,130,246,0.35);
+  }
+  .status-closed {
+    background: rgba(148,163,184,0.2);
+    color: #94a3b8;
+    border-color: rgba(148,163,184,0.4);
+  }
+</style>
 {% endblock %}

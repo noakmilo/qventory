@@ -13,7 +13,7 @@
   <div class="admin-header">
     <div>
       <h1>{{ ticket.subject }}</h1>
-      <p style="color:var(--sub);">{{ ticket.ticket_code }} · {{ ticket.status|capitalize }} · {{ ticket.user.email }}</p>
+      <p style="color:var(--sub);">{{ ticket.ticket_code }} · <span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span> · {{ ticket.user.email }}</p>
     </div>
     <div class="admin-actions">
       <form method="post" action="{{ url_for('main.admin_support_status', ticket_code=ticket.ticket_code) }}">
@@ -113,6 +113,24 @@
     object-fit:cover;
     border-radius:10px;
     border:1px solid var(--glass-border);
+  }
+  .status-badge {
+    border-color: transparent;
+  }
+  .status-open {
+    background: rgba(34,197,94,0.15);
+    color: #22c55e;
+    border-color: rgba(34,197,94,0.35);
+  }
+  .status-resolved {
+    background: rgba(59,130,246,0.15);
+    color: #60a5fa;
+    border-color: rgba(59,130,246,0.35);
+  }
+  .status-closed {
+    background: rgba(148,163,184,0.2);
+    color: #94a3b8;
+    border-color: rgba(148,163,184,0.4);
   }
 </style>
 {% endblock %}

@@ -232,34 +232,12 @@
         <thead>
           {% if view_type == 'sold' %}
           <tr>
-            <th data-col="select" style="width:40px;text-align:center">
-              <span class="col-header col-header--center">
-                <input type="checkbox" id="selectAllCheckbox" title="Select all items" style="cursor:pointer">
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="select" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
-              </span>
-            </th>
             <th data-col="photo" style="width:44px"></th>
             <th data-col="title">
               <span class="col-header sort-header" data-sort-key="title" data-default-dir="asc">
                 Title
                 {% if sort_by == 'title' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
-                {% endif %}
-              </span>
-            </th>
-            <th data-col="sku">
-              <span class="col-header sort-header" data-sort-key="sku" data-default-dir="asc">SKU
-                {% if sort_by == 'sku' %}
-                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
-                {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="sku" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
                 {% endif %}
               </span>
             </th>
@@ -369,15 +347,6 @@
               <span class="col-header">Listings
                 {% if view_type == 'sold' %}
                 <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
-              </span>
-            </th>
-            <th data-col="actions">
-              <span class="col-header col-header--center">
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="actions" title="Hide column" aria-label="Hide column" aria-pressed="false">
                   <i class="fas fa-eye"></i>
                 </button>
                 {% endif %}

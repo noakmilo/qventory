@@ -9,14 +9,11 @@
 <tr data-item-row="{{ it.id }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
     data-item-cost="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}">
+  {% if view_type != 'sold' %}
   <td data-col="select" style="text-align:center">
-    {% if view_type == 'sold' %}
-      {# No checkbox for sold items (no bulk actions) #}
-      <span style="color:var(--sub);font-size:12px">—</span>
-    {% else %}
-      <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
-    {% endif %}
+    <input type="checkbox" class="item-checkbox" data-item-id="{{ it.id }}" style="cursor:pointer">
   </td>
+  {% endif %}
   <td data-col="photo">
     {% if it.item_thumb %}
       <button class="thumb-wrap" type="button" data-full="{{ it.item_thumb }}" aria-label="View image">
@@ -28,7 +25,9 @@
     {% endif %}
   </td>
   <td data-col="title">{{ it.title }}</td>
+  {% if view_type != 'sold' %}
   <td data-col="sku"><span class="tag itsku">{{ it.sku }}</span></td>
+  {% endif %}
 
   <td data-col="supplier" class="mobile-hide">
     {% if view_type == 'sold' %}
@@ -165,39 +164,21 @@
     </div>
   </td>
 
+  {% if view_type != 'sold' %}
   <td data-col="actions">
     {% if current_user.is_authenticated %}
-      {% if view_type == 'sold' %}
-        {# Sold items: Only show view/info buttons, no edit/delete #}
-        <button class="btn settingsbtn profit-calc-btn"
-                data-item-id="{{ it.id }}"
-                data-item-title="{{ it.title }}"
-                data-item-cost="{{ it.item_cost if it.item_cost else '' }}"
-                data-item-price="{{ it.item_price if it.item_price else '' }}"
-                title="View Profit Details">
-          <i class="fas fa-calculator"></i>
+      {# Active items: Dropdown menu with all actions #}
+      <div class="item-actions-dropdown" style="position:relative;display:inline-block">
+        <button class="btn settingsbtn" type="button" onclick="toggleItemActionsMenu(this)" title="Actions" style="padding:6px 10px">
+          <i class="fas fa-ellipsis-v"></i>
         </button>
-        {% if it.ebay_url or it.listing_link %}
-        <a class="btn settingsbtn" href="{{ it.ebay_url or it.listing_link }}" target="_blank" title="View on eBay" style="background:rgba(229,50,56,0.1);border-color:rgba(229,50,56,0.3);color:#E53238">
-          <i class="fab fa-ebay"></i>
-        </a>
-        {% endif %}
-        <span class="tag" style="background:rgba(156,163,175,0.05);color:var(--sub);font-size:11px;padding:4px 8px">
-          <i class="fas fa-lock"></i> Sold (Read-only)
-        </span>
-      {% else %}
-        {# Active items: Dropdown menu with all actions #}
-        <div class="item-actions-dropdown" style="position:relative;display:inline-block">
-          <button class="btn settingsbtn" type="button" onclick="toggleItemActionsMenu(this)" title="Actions" style="padding:6px 10px">
-            <i class="fas fa-ellipsis-v"></i>
-          </button>
-          <div class="item-actions-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:200px;z-index:1000;overflow:hidden">
-            <button class="item-action-option ai-research-btn"
-                    data-item-id="{{ it.id }}"
-                    data-item-title="{{ it.title }}"
-                    type="button"
-                    style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
-              <i class="fas fa-robot" style="width:16px;color:#8b5cf6;font-size:15px"></i>
+        <div class="item-actions-menu" style="display:none;position:absolute;right:0;top:100%;margin-top:4px;background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);min-width:200px;z-index:1000;overflow:hidden">
+          <button class="item-action-option ai-research-btn"
+                  data-item-id="{{ it.id }}"
+                  data-item-title="{{ it.title }}"
+                  type="button"
+                  style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+            <i class="fas fa-robot" style="width:16px;color:#8b5cf6;font-size:15px"></i>
               <span>AI Research</span>
             </button>
             <button class="item-action-option profit-calc-btn"
@@ -265,9 +246,9 @@
             {% endif %}
           </div>
         </div>
-      {% endif %}
     {% else %}
-    <span class="tag">Login to edit</span>
+      <span class="tag">Login to edit</span>
     {% endif %}
   </td>
+  {% endif %}
 </tr>

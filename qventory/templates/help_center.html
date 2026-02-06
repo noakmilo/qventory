@@ -11,8 +11,8 @@
     </p>
   </div>
 
-  <div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;align-items:start;">
-    <aside style="position:sticky;top:96px;align-self:start;">
+  <div class="help-center-layout" style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;align-items:start;">
+    <aside class="help-center-sidebar" style="position:sticky;top:96px;align-self:start;">
       <div style="border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);padding:12px;">
         <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.08em;">
           Articles
@@ -28,7 +28,7 @@
       </div>
     </aside>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
+    <div class="help-center-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
       {% for article in articles %}
         <a href="{{ url_for('main.help_center_article', slug=article.slug) }}"
            style="display:block;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-secondary);text-decoration:none;">
@@ -41,4 +41,19 @@
     </div>
   </div>
 </div>
+
+<style>
+  @media (max-width: 900px) {
+    .help-center-layout {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+    .help-center-sidebar {
+      display: none !important;
+    }
+    .help-center-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
 {% endblock %}
