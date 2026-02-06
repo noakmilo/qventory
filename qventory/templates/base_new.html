@@ -228,6 +228,20 @@
     {% endif %}
     {% endwith %}
 
+    {% if impersonating %}
+    <div class="flash ok" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+      <div>
+        <strong>Impersonating user account.</strong>
+        <span style="color:var(--sub);font-size:12px;">You can view the app as this user.</span>
+      </div>
+      <form method="post" action="{{ url_for('main.admin_stop_impersonation') }}" style="margin:0;">
+        <button type="submit" class="btn" style="background:#f59e0b;border-color:#f59e0b;color:#0b1020;">
+          Stop impersonation
+        </button>
+      </form>
+    </div>
+    {% endif %}
+
     <!-- Page Content -->
     <div class="content-wrapper">
       {% block content %}{% endblock %}

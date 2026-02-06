@@ -1,8 +1,8 @@
 from flask import (
     render_template, request, redirect, url_for, send_file, flash, Response,
-    jsonify, send_from_directory, make_response, current_app, abort
+    jsonify, send_from_directory, make_response, current_app, abort, session
 )
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, login_user, logout_user
 from sqlalchemy import func, or_
 import math
 import io
@@ -5175,6 +5175,27 @@ def admin_dashboard():
         heuristic_days=heuristic_days,
         trial_days=trial_days
     )
+
+
+@main_bp.route("/admin/impersonate/<int:user_id>", methods=["POST"])
+@require_admin
+def admin_impersonate_user(user_id):
+    user = User.query.get_or_404(user_id)
+    login_user(user)
+    session["impersonating"] = True
+    session["impersonated_user_id"] = user.id
+    flash(f"Impersonating {user.username}.", "ok")
+    return redirect(url_for("main.dashboard"))
+
+
+@main_bp.route("/admin/impersonate/stop", methods=["POST"])
+@require_admin
+def admin_stop_impersonation():
+    session.pop("impersonating", None)
+    session.pop("impersonated_user_id", None)
+    logout_user()
+    flash("Returned to admin panel.", "ok")
+    return redirect(url_for("main.admin_dashboard"))
 
 
 @main_bp.route("/admin/user/<int:user_id>/inventory-text")

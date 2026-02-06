@@ -188,6 +188,13 @@
                 <a href="{{ url_for('main.admin_user_diagnostics', user_id=stat.user.id) }}" class="btn settingsbtn" title="View import diagnostics">
                   <i class="fas fa-stethoscope"></i>
                 </a>
+                <form method="post" action="{{ url_for('main.admin_impersonate_user', user_id=stat.user.id) }}"
+                      onsubmit="return confirm('Impersonate {{ stat.user.username }}?');"
+                      style="display:inline;">
+                  <button type="submit" class="btn settingsbtn" title="Login as user">
+                    <i class="fas fa-user-secret"></i>
+                  </button>
+                </form>
                 <form method="post" action="{{ url_for('main.admin_delete_user', user_id=stat.user.id) }}"
                       onsubmit="return confirm('Delete user \'{{ stat.user.username }}\' and all their data ({{ stat.item_count }} items)? This cannot be undone!')"
                       style="display:inline;">

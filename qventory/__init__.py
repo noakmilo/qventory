@@ -163,6 +163,16 @@ def create_app():
             "admin_support_unread_count": admin_support_unread_count,
         }
 
+    @app.context_processor
+    def inject_impersonation_state():
+        from flask import session
+        impersonating = bool(session.get("impersonating"))
+        impersonated_user_id = session.get("impersonated_user_id")
+        return {
+            "impersonating": impersonating,
+            "impersonated_user_id": impersonated_user_id,
+        }
+
     # Register template filters
     @app.template_filter('timeago')
     def timeago_filter(dt):
