@@ -5146,7 +5146,11 @@ def admin_dashboard():
     user_stats = []
 
     for user in users:
-        item_count = Item.query.filter_by(user_id=user.id, is_active=True).count()
+        item_count = Item.query.filter(
+            Item.user_id == user.id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
+        ).count()
         missing_cost_count = Item.query.filter(
             Item.user_id == user.id,
             Item.is_active.is_(True),
@@ -5177,9 +5181,15 @@ def admin_dashboard():
 @require_admin
 def admin_user_inventory_text(user_id):
     user = User.query.get_or_404(user_id)
-    items = Item.query.filter_by(user_id=user_id, is_active=True).order_by(
-        Item.created_at.desc()
-    ).all()
+    items = (
+        Item.query.filter(
+            Item.user_id == user_id,
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False)
+        )
+        .order_by(Item.created_at.desc())
+        .all()
+    )
     return render_template(
         "admin_user_inventory_text.html",
         user=user,

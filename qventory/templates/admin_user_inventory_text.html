@@ -31,6 +31,7 @@
     <table>
       <thead>
         <tr>
+          <th>Image</th>
           <th>Title</th>
           <th>SKU</th>
           <th>Location</th>
@@ -44,6 +45,13 @@
       <tbody>
         {% for item in items %}
         <tr>
+          <td style="width:54px;">
+            {% if item.item_thumb %}
+              <img src="{{ item.item_thumb }}" alt="{{ item.title }}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--border);" referrerpolicy="no-referrer">
+            {% else %}
+              <span style="color:var(--sub);font-size:12px;">—</span>
+            {% endif %}
+          </td>
           <td style="max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</td>
           <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;">{{ item.sku }}</td>
           <td>{{ item.location_code or '—' }}</td>
@@ -56,7 +64,7 @@
         {% endfor %}
         {% if not items %}
         <tr>
-          <td colspan="8" style="text-align:center;color:var(--sub);padding:20px;">
+          <td colspan="9" style="text-align:center;color:var(--sub);padding:20px;">
             No active items found.
           </td>
         </tr>
