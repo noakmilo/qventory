@@ -768,6 +768,14 @@ i {color:#8ab4fd;}
   overflow:visible;
   background:transparent;
 }
+.table-wrap .inventory-table--sold{
+  table-layout:auto;
+  min-width:1200px;
+}
+.table-wrap .inventory-table--sold th{
+  white-space:normal;
+  line-height:1.2;
+}
 .table-wrap th, .table-wrap td{
   overflow:visible;
   background:transparent;

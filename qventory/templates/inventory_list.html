@@ -228,7 +228,7 @@
 
     <div class="table-wrap">
       {% set un = current_user.username %}
-      <table>
+      <table class="inventory-table{% if view_type == 'sold' %} inventory-table--sold{% endif %}">
         <thead>
           {% if view_type == 'sold' %}
           <tr>
