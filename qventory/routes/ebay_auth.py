@@ -2,7 +2,7 @@
 eBay OAuth Integration Routes
 Handles user-level OAuth flow for eBay account connection
 """
-from flask import Blueprint, request, redirect, url_for, flash, session
+from flask import Blueprint, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import requests
@@ -762,3 +762,43 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         log(f"ERROR saving credentials: {str(e)}")
         db.session.rollback()
         raise
+
+
+@ebay_auth_bp.route('/finances-debug', methods=['GET'])
+@login_required
+def finances_debug():
+    """
+    Debug route to verify Finances API authorization for the current user.
+    Returns minimal metadata (no sensitive payloads).
+    """
+    from qventory.helpers.ebay_finances import fetch_ebay_payouts, fetch_ebay_transactions
+    from qventory.helpers.ebay_inventory import get_user_access_token
+
+    access_token = get_user_access_token(current_user.id)
+    if not access_token:
+        return jsonify({
+            'success': False,
+            'error': 'missing_access_token'
+        }), 400
+
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=30)
+
+    payouts_result = fetch_ebay_payouts(current_user.id, start_date, end_date, limit=5, offset=0)
+    transactions_result = fetch_ebay_transactions(current_user.id, start_date, end_date, limit=5, offset=0)
+
+    return jsonify({
+        'success': bool(payouts_result.get('success')) and bool(transactions_result.get('success')),
+        'payouts': {
+            'success': payouts_result.get('success'),
+            'error': payouts_result.get('error'),
+            'count': len(payouts_result.get('payouts', []) or []),
+            'total': payouts_result.get('total')
+        },
+        'transactions': {
+            'success': transactions_result.get('success'),
+            'error': transactions_result.get('error'),
+            'count': len(transactions_result.get('transactions', []) or []),
+            'total': transactions_result.get('total')
+        }
+    }), 200
