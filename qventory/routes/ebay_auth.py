@@ -793,12 +793,16 @@ def finances_debug():
             'success': payouts_result.get('success'),
             'error': payouts_result.get('error'),
             'count': len(payouts_result.get('payouts', []) or []),
-            'total': payouts_result.get('total')
+            'total': payouts_result.get('total'),
+            'status_code': payouts_result.get('status_code'),
+            'correlation_id': payouts_result.get('correlation_id')
         },
         'transactions': {
             'success': transactions_result.get('success'),
             'error': transactions_result.get('error'),
             'count': len(transactions_result.get('transactions', []) or []),
-            'total': transactions_result.get('total')
+            'total': transactions_result.get('total'),
+            'status_code': transactions_result.get('status_code'),
+            'correlation_id': transactions_result.get('correlation_id')
         }
     }), 200

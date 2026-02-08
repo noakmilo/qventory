@@ -18,7 +18,13 @@ def _format_iso(dt):
 def _fetch_finances_endpoint(user_id, path, params):
     token = get_user_access_token(user_id)
     if not token:
-        return {'success': False, 'error': 'missing_access_token', 'data': []}
+        return {
+            'success': False,
+            'error': 'missing_access_token',
+            'data': [],
+            'status_code': None,
+            'correlation_id': None
+        }
 
     url = f"{EBAY_API_BASE}{path}"
     headers = {
@@ -30,7 +36,13 @@ def _fetch_finances_endpoint(user_id, path, params):
     try:
         response = requests.get(url, headers=headers, params=params, timeout=20)
     except requests.RequestException as exc:
-        return {'success': False, 'error': str(exc), 'data': []}
+        return {
+            'success': False,
+            'error': str(exc),
+            'data': [],
+            'status_code': None,
+            'correlation_id': None
+        }
 
     if response.status_code != 200:
         body_preview = response.text[:500] if response.text else ""
@@ -43,22 +55,43 @@ def _fetch_finances_endpoint(user_id, path, params):
             return {
                 'success': False,
                 'error': 'finances_api_unavailable',
-                'data': []
+                'data': [],
+                'status_code': response.status_code,
+                'correlation_id': correlation_id
             }
         if response.status_code == 403:
             return {
                 'success': False,
                 'error': 'finances_api_forbidden',
-                'data': []
+                'data': [],
+                'status_code': response.status_code,
+                'correlation_id': correlation_id
             }
-        return {'success': False, 'error': response.text or 'unknown_error', 'data': []}
+        return {
+            'success': False,
+            'error': response.text or 'unknown_error',
+            'data': [],
+            'status_code': response.status_code,
+            'correlation_id': correlation_id
+        }
 
     try:
         payload = response.json()
     except ValueError:
-        return {'success': False, 'error': 'invalid_json', 'data': []}
+        return {
+            'success': False,
+            'error': 'invalid_json',
+            'data': [],
+            'status_code': response.status_code,
+            'correlation_id': response.headers.get("x-ebay-correlation-id")
+        }
 
-    return {'success': True, 'data': payload}
+    return {
+        'success': True,
+        'data': payload,
+        'status_code': response.status_code,
+        'correlation_id': response.headers.get("x-ebay-correlation-id")
+    }
 
 
 def fetch_ebay_payouts(user_id, start_date, end_date, limit=200, offset=0):
@@ -77,11 +110,23 @@ def fetch_ebay_payouts(user_id, start_date, end_date, limit=200, offset=0):
 
     result = _fetch_finances_endpoint(user_id, "/sell/finances/v1/payout", params)
     if not result.get('success'):
-        return {'success': False, 'error': result.get('error'), 'payouts': []}
+        return {
+            'success': False,
+            'error': result.get('error'),
+            'payouts': [],
+            'status_code': result.get('status_code'),
+            'correlation_id': result.get('correlation_id')
+        }
 
     payload = result.get('data', {}) or {}
     payouts = payload.get('payouts', []) or []
-    return {'success': True, 'payouts': payouts, 'total': payload.get('total')}
+    return {
+        'success': True,
+        'payouts': payouts,
+        'total': payload.get('total'),
+        'status_code': result.get('status_code'),
+        'correlation_id': result.get('correlation_id')
+    }
 
 
 def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0, order_id=None):
@@ -102,11 +147,23 @@ def fetch_ebay_transactions(user_id, start_date, end_date, limit=200, offset=0, 
 
     result = _fetch_finances_endpoint(user_id, "/sell/finances/v1/transaction", params)
     if not result.get('success'):
-        return {'success': False, 'error': result.get('error'), 'transactions': []}
+        return {
+            'success': False,
+            'error': result.get('error'),
+            'transactions': [],
+            'status_code': result.get('status_code'),
+            'correlation_id': result.get('correlation_id')
+        }
 
     payload = result.get('data', {}) or {}
     transactions = payload.get('transactions', []) or []
-    return {'success': True, 'transactions': transactions, 'total': payload.get('total')}
+    return {
+        'success': True,
+        'transactions': transactions,
+        'total': payload.get('total'),
+        'status_code': result.get('status_code'),
+        'correlation_id': result.get('correlation_id')
+    }
 
 
 def fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200, max_pages=10):
