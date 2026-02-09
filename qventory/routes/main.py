@@ -1014,6 +1014,7 @@ def api_update_item_inline(item_id):
             item.supplier = value or None
         elif field == "item_cost":
             old_cost = item.item_cost
+            cost_history_added = False
             raw_value = data.get("value")
             if raw_value in (None, ""):
                 item.item_cost = None
@@ -1047,6 +1048,7 @@ def api_update_item_inline(item_id):
                     note="Inline edit"
                 )
                 db.session.add(history)
+                cost_history_added = True
         elif field == "location":
             components = data.get("components") or {}
             settings = get_or_create_settings(current_user)
@@ -1102,6 +1104,7 @@ def api_update_item_inline(item_id):
             response_data["supplier"] = item.supplier
         elif field == "item_cost":
             response_data["item_cost"] = item.item_cost
+            response_data["cost_history_added"] = cost_history_added
         elif field == "location":
             response_data["location_code"] = item.location_code
             response_data["A"] = item.A
@@ -3384,6 +3387,7 @@ def update_sale_cost(sale_id):
     sale.item_cost = item_cost
 
     # If there's a linked item, update its cost too and record history if needed
+    cost_history_added = False
     if sale.item_id:
         item = Item.query.filter_by(id=sale.item_id, user_id=current_user.id).first()
         if item:
@@ -3401,6 +3405,7 @@ def update_sale_cost(sale_id):
                     note="Sold view edit"
                 )
                 db.session.add(history)
+                cost_history_added = True
 
     # Recalculate profit with new cost
     sale.calculate_profit()
@@ -3413,7 +3418,8 @@ def update_sale_cost(sale_id):
             "sale_id": sale.id,
             "item_cost": sale.item_cost,
             "gross_profit": sale.gross_profit,
-            "net_profit": sale.net_profit
+            "net_profit": sale.net_profit,
+            "cost_history_added": cost_history_added
         })
 
     flash("Item cost updated and profit recalculated.", "ok")

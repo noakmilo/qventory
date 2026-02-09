@@ -1172,7 +1172,7 @@ async function submitInlineForm(container, form, display) {
     if (data.field === 'supplier') {
       updateSupplierDisplay(container, data.supplier);
     } else if (data.field === 'item_cost') {
-      updateCostDisplay(container, data.item_cost);
+      updateCostDisplay(container, data.item_cost, data.cost_history_added);
     } else if (data.field === 'location') {
       updateLocationDisplay(container, data.location_code, data.A, data.B, data.S, data.C);
     }
@@ -1216,11 +1216,12 @@ function updateSupplierDisplay(container, supplierValue) {
   }
 }
 
-function updateCostDisplay(container, costValue) {
+function updateCostDisplay(container, costValue, costHistoryAdded = false) {
   const display = container.querySelector('.inline-edit__display');
   const valueSpan = display ? display.querySelector('.inline-edit__value') : null;
   const placeholder = display ? display.querySelector('.inline-edit__placeholder') : null;
   const row = container.closest('tr[data-item-row]');
+  const existingHistoryBtn = display ? display.querySelector('.cost-history-btn') : null;
 
   if (costValue !== null && costValue !== undefined) {
     const formattedCost = `$${parseFloat(costValue).toFixed(2)}`;
@@ -1232,6 +1233,24 @@ function updateCostDisplay(container, costValue) {
       newValueSpan.className = 'inline-edit__value tag';
       newValueSpan.innerHTML = `<i class="fas fa-receipt"></i> ${formattedCost}`;
       placeholder.replaceWith(newValueSpan);
+    }
+    const currentValueSpan = display ? display.querySelector('.inline-edit__value') : null;
+    if (currentValueSpan && (costHistoryAdded || existingHistoryBtn)) {
+      const btn = existingHistoryBtn || document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cost-history-btn';
+      btn.dataset.itemId = row ? row.dataset.itemId : '';
+      btn.setAttribute('title', 'Cost history');
+      btn.setAttribute('data-inline-ignore', '');
+      btn.style.marginLeft = '6px';
+      btn.style.border = 'none';
+      btn.style.background = 'none';
+      btn.style.color = 'var(--sub)';
+      btn.style.cursor = 'pointer';
+      if (!btn.innerHTML) {
+        btn.innerHTML = '<i class="fas fa-clock"></i>';
+      }
+      currentValueSpan.appendChild(btn);
     }
     if (row) {
       row.dataset.itemCost = parseFloat(costValue).toFixed(2);

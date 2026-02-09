@@ -75,7 +75,7 @@
               (it.cost_history.count is defined and it.cost_history.count() > 0)
           ) %}
           {% if has_expense_cost or has_receipt_cost or has_manual_cost %}
-          <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history"
+          <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history" data-inline-ignore
                   style="margin-left:6px;border:none;background:none;color:var(--sub);cursor:pointer;">
             <i class="fas fa-clock"></i>
           </button>
