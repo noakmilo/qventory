@@ -62,9 +62,15 @@
         {% if it.item_cost is not none %}
         <span class="inline-edit__value tag">
           <i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}
-          {% set has_expense_cost = it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
-          {% set has_receipt_cost = it.receipt_items.count() > 0 %}
-          {% set has_manual_cost = it.cost_history.count() > 0 %}
+          {% set has_expense_cost = it.expenses is defined and it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+          {% set has_receipt_cost = it.receipt_items is defined and (
+              (it.receipt_items_count is defined and it.receipt_items_count > 0) or
+              (it.receipt_items.count is defined and it.receipt_items.count() > 0)
+          ) %}
+          {% set has_manual_cost = it.cost_history is defined and (
+              (it.cost_history_count is defined and it.cost_history_count > 0) or
+              (it.cost_history.count is defined and it.cost_history.count() > 0)
+          ) %}
           {% if has_expense_cost or has_receipt_cost or has_manual_cost %}
           <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history"
                   style="margin-left:6px;border:none;background:none;color:var(--sub);cursor:pointer;">
