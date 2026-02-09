@@ -2241,7 +2241,21 @@ async function openCostHistoryModal(itemId) {
       `;
     });
 
-    content.innerHTML = `${expensesHtml}${receiptsHtml}`;
+    const manualHtml = renderCostHistorySection('Manual Cost Changes', data.manual_changes, (entry) => `
+      <div style="border:1px solid var(--glass-border);border-radius:8px;padding:10px;background:var(--card);">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <strong>Cost updated</strong>
+          <span style="color:#ef4444;font-weight:600;">
+            $${(entry.previous_cost ?? 0).toFixed(2)} → $${(entry.new_cost ?? 0).toFixed(2)}
+          </span>
+        </div>
+        <div style="color:var(--sub);font-size:var(--fs-xs);margin-top:6px;">
+          Added: ${formatCostHistoryDate(entry.created_at)}${entry.note ? ` • ${entry.note}` : ''}
+        </div>
+      </div>
+    `);
+
+    content.innerHTML = `${expensesHtml}${receiptsHtml}${manualHtml}`;
   } catch (err) {
     content.innerHTML = `<div style="color:#ef4444;">${err.message}</div>`;
   }

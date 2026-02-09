@@ -1013,6 +1013,7 @@ def api_update_item_inline(item_id):
             value = (data.get("value") or "").strip()
             item.supplier = value or None
         elif field == "item_cost":
+            old_cost = item.item_cost
             raw_value = data.get("value")
             if raw_value in (None, ""):
                 item.item_cost = None
@@ -1032,6 +1033,20 @@ def api_update_item_inline(item_id):
             for sale in sales:
                 sale.item_cost = item.item_cost
                 sale.calculate_profit()  # Recalculate gross_profit and net_profit
+
+            # Record manual cost change only if cost already existed
+            if old_cost is not None and old_cost != item.item_cost:
+                from qventory.models.item_cost_history import ItemCostHistory
+                history = ItemCostHistory(
+                    user_id=current_user.id,
+                    item_id=item.id,
+                    source="manual",
+                    previous_cost=old_cost,
+                    new_cost=item.item_cost,
+                    delta=(item.item_cost - old_cost) if item.item_cost is not None else (-old_cost),
+                    note="Inline edit"
+                )
+                db.session.add(history)
         elif field == "location":
             components = data.get("components") or {}
             settings = get_or_create_settings(current_user)
@@ -3368,11 +3383,24 @@ def update_sale_cost(sale_id):
     # Update sale's item_cost
     sale.item_cost = item_cost
 
-    # If there's a linked item, update its cost too
+    # If there's a linked item, update its cost too and record history if needed
     if sale.item_id:
         item = Item.query.filter_by(id=sale.item_id, user_id=current_user.id).first()
-        if item and item_cost is not None:
+        if item:
+            old_cost = item.item_cost
             item.item_cost = item_cost
+            if old_cost is not None and old_cost != item.item_cost:
+                from qventory.models.item_cost_history import ItemCostHistory
+                history = ItemCostHistory(
+                    user_id=current_user.id,
+                    item_id=item.id,
+                    source="manual",
+                    previous_cost=old_cost,
+                    new_cost=item.item_cost,
+                    delta=(item.item_cost - old_cost) if item.item_cost is not None else (-old_cost),
+                    note="Sold view edit"
+                )
+                db.session.add(history)
 
     # Recalculate profit with new cost
     sale.calculate_profit()
@@ -5864,6 +5892,7 @@ def api_item_cost_history(item_id):
     from qventory.models.item import Item
     from qventory.models.expense import Expense
     from qventory.models.receipt_item import ReceiptItem
+    from qventory.models.item_cost_history import ItemCostHistory
 
     item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
     if not item:
@@ -5880,6 +5909,11 @@ def api_item_cost_history(item_id):
         ReceiptItem.associated_at.desc().nullslast(),
         ReceiptItem.created_at.desc()
     ).all()
+
+    manual_history = ItemCostHistory.query.filter_by(
+        user_id=current_user.id,
+        item_id=item_id
+    ).order_by(ItemCostHistory.created_at.desc()).all()
 
     expense_rows = []
     for exp in expenses:
@@ -5907,11 +5941,23 @@ def api_item_cost_history(item_id):
             "merchant_name": receipt.merchant_name if receipt else None
         })
 
+    manual_rows = []
+    for entry in manual_history:
+        manual_rows.append({
+            "id": entry.id,
+            "previous_cost": entry.previous_cost,
+            "new_cost": entry.new_cost,
+            "delta": entry.delta,
+            "note": entry.note,
+            "created_at": entry.created_at.isoformat() if entry.created_at else None
+        })
+
     return jsonify({
         "ok": True,
         "item": {"id": item.id, "title": item.title},
         "expenses": expense_rows,
-        "receipt_items": receipt_rows
+        "receipt_items": receipt_rows,
+        "manual_changes": manual_rows
     })
 
 

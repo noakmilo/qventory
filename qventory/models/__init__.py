@@ -17,6 +17,7 @@ from .email_verification import EmailVerification
 from .receipt import Receipt
 from .receipt_item import ReceiptItem
 from .receipt_usage import ReceiptUsage
+from .item_cost_history import ItemCostHistory
 from .tax_report import TaxReport, TaxReportExport
 from .ebay_finance import EbayPayout, EbayFinanceTransaction
 from .help_article import HelpArticle
@@ -44,6 +45,7 @@ __all__ = [
     'Receipt',
     'ReceiptItem',
     'ReceiptUsage',
+    'ItemCostHistory',
     'TaxReport',
     'TaxReportExport',
     'EbayPayout',
