@@ -60,7 +60,15 @@
     <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
       <div class="inline-edit__display" tabindex="0" role="button">
         {% if it.item_cost is not none %}
-        <span class="inline-edit__value tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+        <span class="inline-edit__value tag">
+          <i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}
+          {% if it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+          <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history"
+                  style="margin-left:6px;border:none;background:none;color:var(--sub);cursor:pointer;">
+            <i class="fas fa-clock"></i>
+          </button>
+          {% endif %}
+        </span>
         {% else %}
         <span class="inline-edit__placeholder">Add cost</span>
         {% endif %}

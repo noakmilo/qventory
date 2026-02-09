@@ -196,6 +196,23 @@
 
         <div class="form-group">
           <label>
+            <input type="checkbox" id="link_item" onchange="toggleItemLink()">
+            Link this expense to an item (example: laptop charger)
+          </label>
+        </div>
+
+        <div id="itemLinkFields" style="display:none;padding:16px;background:var(--card);border-radius:8px;margin-top:16px">
+          <div class="form-group" style="position:relative;">
+            <label>Item</label>
+            <input type="text" id="item_search" class="form-control" placeholder="Start typing item title...">
+            <input type="hidden" id="item_id">
+            <div id="expenseItemAutocompleteList" class="autocomplete-list"></div>
+            <small style="color:var(--sub);font-size:12px">Select an item from the list to link this expense.</small>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>
             <input type="checkbox" id="is_recurring" onchange="toggleRecurring()">
             Recurring Expense
           </label>
@@ -313,6 +330,11 @@ function openAddExpenseModal() {
   document.getElementById('modalTitle').textContent = 'Add Expense';
   document.getElementById('expenseForm').reset();
   document.getElementById('expenseId').value = '';
+  document.getElementById('link_item').checked = false;
+  document.getElementById('item_id').value = '';
+  document.getElementById('item_search').value = '';
+  document.getElementById('itemLinkFields').style.display = 'none';
+  hideExpenseItemAutocomplete();
   document.getElementById('expense_date').valueAsDate = new Date();
   document.getElementById('expenseModal').hidden = false;
 }
@@ -326,11 +348,108 @@ function toggleRecurring() {
   document.getElementById('recurringFields').style.display = isRecurring ? 'block' : 'none';
 }
 
+function toggleItemLink() {
+  const isLinked = document.getElementById('link_item').checked;
+  const linkFields = document.getElementById('itemLinkFields');
+  linkFields.style.display = isLinked ? 'block' : 'none';
+  if (!isLinked) {
+    document.getElementById('item_id').value = '';
+    document.getElementById('item_search').value = '';
+    hideExpenseItemAutocomplete();
+  }
+}
+
+let expenseItemAutocompleteTimeout = null;
+
+function hideExpenseItemAutocomplete() {
+  const list = document.getElementById('expenseItemAutocompleteList');
+  list.classList.remove('show');
+  list.innerHTML = '';
+}
+
+async function fetchExpenseItemAutocomplete(query) {
+  const list = document.getElementById('expenseItemAutocompleteList');
+  try {
+    const response = await fetch(`/api/autocomplete-items?q=${encodeURIComponent(query)}`);
+    const result = await response.json();
+    const items = (result && result.items) ? result.items : [];
+
+    if (!items.length) {
+      list.innerHTML = '<div class="autocomplete-item">No items found</div>';
+      list.classList.add('show');
+      return;
+    }
+
+    list.innerHTML = items.map(item => `
+      <div class="autocomplete-item" data-item-id="${item.id}" data-item-title="${item.title}">
+        <strong>${item.title}</strong>
+        <small>${item.sku || ''}${item.location_code ? ` • ${item.location_code}` : ''}</small>
+      </div>
+    `).join('');
+
+    list.classList.add('show');
+
+    list.querySelectorAll('.autocomplete-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const itemId = el.dataset.itemId;
+        const itemTitle = el.dataset.itemTitle;
+        document.getElementById('item_id').value = itemId;
+        document.getElementById('item_search').value = itemTitle;
+        hideExpenseItemAutocomplete();
+      });
+    });
+  } catch (err) {
+    list.innerHTML = '<div class="autocomplete-item">Error fetching items</div>';
+    list.classList.add('show');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('item_search');
+  const list = document.getElementById('expenseItemAutocompleteList');
+
+  if (!input || !list) {
+    return;
+  }
+
+  input.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    document.getElementById('item_id').value = '';
+
+    if (expenseItemAutocompleteTimeout) {
+      clearTimeout(expenseItemAutocompleteTimeout);
+    }
+
+    if (query.length < 2) {
+      hideExpenseItemAutocomplete();
+      return;
+    }
+
+    expenseItemAutocompleteTimeout = setTimeout(() => {
+      fetchExpenseItemAutocomplete(query);
+    }, 250);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.contains(e.target) && !list.contains(e.target)) {
+      hideExpenseItemAutocomplete();
+    }
+  });
+});
+
 async function saveExpense(e) {
   e.preventDefault();
 
   const expenseId = document.getElementById('expenseId').value;
   const isEdit = expenseId !== '';
+  const linkItem = document.getElementById('link_item').checked;
+  const linkedItemIdRaw = document.getElementById('item_id').value;
+  const linkedItemId = linkedItemIdRaw ? parseInt(linkedItemIdRaw) : null;
+
+  if (linkItem && !linkedItemId) {
+    alert('Please select an item to link this expense.');
+    return;
+  }
 
   const data = {
     description: document.getElementById('description').value,
@@ -341,7 +460,8 @@ async function saveExpense(e) {
     recurring_frequency: document.getElementById('recurring_frequency').value,
     recurring_day: parseInt(document.getElementById('recurring_day').value) || null,
     recurring_until: document.getElementById('recurring_until').value || null,
-    notes: document.getElementById('notes').value
+    notes: document.getElementById('notes').value,
+    item_id: linkItem ? linkedItemId : null
   };
 
   const url = isEdit

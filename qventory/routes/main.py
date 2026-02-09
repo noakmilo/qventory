@@ -5857,6 +5857,64 @@ def api_autocomplete_items():
     return jsonify({"ok": True, "items": results})
 
 
+@main_bp.route("/api/items/<int:item_id>/cost-history")
+@login_required
+def api_item_cost_history(item_id):
+    """Return cost history for an item (expenses + receipt items)."""
+    from qventory.models.item import Item
+    from qventory.models.expense import Expense
+    from qventory.models.receipt_item import ReceiptItem
+
+    item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+    if not item:
+        return jsonify({"ok": False, "error": "Item not found"}), 404
+
+    expenses = Expense.query.filter_by(user_id=current_user.id, item_id=item_id).order_by(
+        Expense.item_cost_applied_at.desc().nullslast(),
+        Expense.created_at.desc()
+    ).all()
+
+    receipt_items = ReceiptItem.query.filter_by(
+        inventory_item_id=item_id
+    ).order_by(
+        ReceiptItem.associated_at.desc().nullslast(),
+        ReceiptItem.created_at.desc()
+    ).all()
+
+    expense_rows = []
+    for exp in expenses:
+        expense_rows.append({
+            "id": exp.id,
+            "description": exp.description,
+            "amount": float(exp.amount) if exp.amount is not None else None,
+            "category": exp.category,
+            "expense_date": exp.expense_date.isoformat() if exp.expense_date else None,
+            "applied_at": exp.item_cost_applied_at.isoformat() if exp.item_cost_applied_at else None,
+            "notes": exp.notes
+        })
+
+    receipt_rows = []
+    for ri in receipt_items:
+        receipt = ri.receipt
+        receipt_rows.append({
+            "id": ri.id,
+            "description": ri.final_description,
+            "amount": float(ri.final_total_price) if ri.final_total_price is not None else None,
+            "unit_price": float(ri.final_unit_price) if ri.final_unit_price is not None else None,
+            "quantity": ri.final_quantity,
+            "associated_at": ri.associated_at.isoformat() if ri.associated_at else None,
+            "receipt_date": receipt.receipt_date.isoformat() if receipt and receipt.receipt_date else None,
+            "merchant_name": receipt.merchant_name if receipt else None
+        })
+
+    return jsonify({
+        "ok": True,
+        "item": {"id": item.id, "title": item.title},
+        "expenses": expense_rows,
+        "receipt_items": receipt_rows
+    })
+
+
 # ==================== AI Research ====================
 @main_bp.route("/ai-research")
 @login_required

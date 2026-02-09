@@ -4253,6 +4253,7 @@ def process_recurring_expenses(self):
 
     with app.app_context():
         from qventory.models.expense import Expense
+        from qventory.models.item import Item
         from datetime import date, datetime
         from dateutil.relativedelta import relativedelta
 
@@ -4315,6 +4316,7 @@ def process_recurring_expenses(self):
                     Expense.description == expense.description,
                     Expense.amount == expense.amount,
                     Expense.category == expense.category,
+                    Expense.item_id == expense.item_id,
                     Expense.expense_date >= month_start,
                     Expense.expense_date < next_month
                 ).first()
@@ -4330,7 +4332,8 @@ def process_recurring_expenses(self):
                 Expense.description == expense.description,
                 Expense.amount == expense.amount,
                 Expense.expense_date == today,
-                Expense.category == expense.category
+                Expense.category == expense.category,
+                Expense.item_id == expense.item_id
             ).first()
 
             if existing:
@@ -4345,8 +4348,17 @@ def process_recurring_expenses(self):
                 category=expense.category,
                 expense_date=today,
                 is_recurring=False,  # The copy is not recurring itself
-                notes=f"Auto-created from recurring expense #{expense.id}"
+                notes=f"Auto-created from recurring expense #{expense.id}",
+                item_id=expense.item_id
             )
+
+            if new_expense.item_id:
+                linked_item = Item.query.get(new_expense.item_id)
+                if linked_item:
+                    linked_item.item_cost = (linked_item.item_cost or 0) + new_expense.amount
+                    new_expense.item_cost_applied = True
+                    new_expense.item_cost_applied_amount = new_expense.amount
+                    new_expense.item_cost_applied_at = datetime.utcnow()
 
             db.session.add(new_expense)
             created_count += 1
@@ -4373,6 +4385,7 @@ def revive_recurring_expenses(self):
 
     with app.app_context():
         from qventory.models.expense import Expense
+        from qventory.models.item import Item
         from datetime import date
         from dateutil.relativedelta import relativedelta
 
@@ -4416,6 +4429,7 @@ def revive_recurring_expenses(self):
                 Expense.description == expense.description,
                 Expense.amount == expense.amount,
                 Expense.category == expense.category,
+                Expense.item_id == expense.item_id,
                 Expense.expense_date >= month_start,
                 Expense.expense_date < next_month
             ).first()
@@ -4429,8 +4443,17 @@ def revive_recurring_expenses(self):
                 category=expense.category,
                 expense_date=today,
                 is_recurring=False,
-                notes=f"Auto-created (revived) from recurring expense #{expense.id}"
+                notes=f"Auto-created (revived) from recurring expense #{expense.id}",
+                item_id=expense.item_id
             )
+
+            if new_expense.item_id:
+                linked_item = Item.query.get(new_expense.item_id)
+                if linked_item:
+                    linked_item.item_cost = (linked_item.item_cost or 0) + new_expense.amount
+                    new_expense.item_cost_applied = True
+                    new_expense.item_cost_applied_amount = new_expense.amount
+                    new_expense.item_cost_applied_at = datetime.utcnow()
             db.session.add(new_expense)
             created_count += 1
 

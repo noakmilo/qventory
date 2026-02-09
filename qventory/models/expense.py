@@ -25,6 +25,12 @@ class Expense(db.Model):
     recurring_day = db.Column(db.Integer, nullable=True)  # Día del mes (1-31) para monthly
     recurring_until = db.Column(db.Date, nullable=True)  # Fecha final de recurrencia (null = indefinido)
 
+    # Optional link to inventory item
+    item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=True, index=True)
+    item_cost_applied = db.Column(db.Boolean, default=False, index=True)
+    item_cost_applied_amount = db.Column(db.Float, nullable=True)
+    item_cost_applied_at = db.Column(db.DateTime, nullable=True)
+
     # Metadata
     notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -32,6 +38,7 @@ class Expense(db.Model):
 
     # Relación
     user = db.relationship("User", backref="expenses")
+    item = db.relationship("Item", backref="expenses")
 
     def __repr__(self):
         return f"<Expense {self.description} - ${self.amount}>"

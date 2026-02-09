@@ -6,6 +6,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 from flask_login import login_required, current_user
 from qventory import db
 from qventory.models.expense import Expense, EXPENSE_CATEGORIES
+from qventory.models.item import Item
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 
@@ -96,12 +97,20 @@ def create_expense():
         recurring_frequency = data.get('recurring_frequency')
         recurring_day = data.get('recurring_day')
         recurring_until = datetime.strptime(data.get('recurring_until'), '%Y-%m-%d').date() if data.get('recurring_until') else None
+        item_id = data.get('item_id')
 
         if is_recurring and recurring_day is None:
             if recurring_frequency == 'monthly':
                 recurring_day = expense_date.day
             elif recurring_frequency == 'weekly':
                 recurring_day = expense_date.weekday()
+
+        linked_item_id = None
+        if item_id:
+            linked_item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+            if not linked_item:
+                return jsonify({"ok": False, "error": "Invalid item for this user"}), 400
+            linked_item_id = linked_item.id
 
         expense = Expense(
             user_id=current_user.id,
@@ -113,8 +122,15 @@ def create_expense():
             recurring_frequency=recurring_frequency,
             recurring_day=recurring_day,
             recurring_until=recurring_until,
-            notes=data.get('notes')
+            notes=data.get('notes'),
+            item_id=linked_item_id
         )
+
+        if linked_item_id:
+            linked_item.item_cost = (linked_item.item_cost or 0) + expense.amount
+            expense.item_cost_applied = True
+            expense.item_cost_applied_amount = expense.amount
+            expense.item_cost_applied_at = datetime.utcnow()
 
         db.session.add(expense)
         db.session.commit()
@@ -127,7 +143,8 @@ def create_expense():
                 "amount": expense.amount,
                 "category": expense.category,
                 "expense_date": expense.expense_date.isoformat(),
-                "is_recurring": expense.is_recurring
+                "is_recurring": expense.is_recurring,
+                "item_id": expense.item_id
             }
         })
 
@@ -147,6 +164,8 @@ def update_expense(expense_id):
             return jsonify({"ok": False, "error": "Expense not found"}), 404
 
         data = request.get_json()
+        old_item_id = expense.item_id
+        old_applied_amount = expense.item_cost_applied_amount if expense.item_cost_applied else 0.0
 
         if 'description' in data:
             expense.description = data['description']
@@ -164,6 +183,15 @@ def update_expense(expense_id):
             expense.recurring_day = data['recurring_day']
         if 'recurring_until' in data:
             expense.recurring_until = datetime.strptime(data['recurring_until'], '%Y-%m-%d').date() if data['recurring_until'] else None
+        if 'item_id' in data:
+            item_id = data.get('item_id')
+            if item_id:
+                linked_item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+                if not linked_item:
+                    return jsonify({"ok": False, "error": "Invalid item for this user"}), 400
+                expense.item_id = linked_item.id
+            else:
+                expense.item_id = None
 
         if expense.is_recurring and expense.recurring_day is None:
             if expense.recurring_frequency == 'monthly':
@@ -172,6 +200,24 @@ def update_expense(expense_id):
                 expense.recurring_day = expense.expense_date.weekday()
         if 'notes' in data:
             expense.notes = data['notes']
+
+        # Adjust item cost if link/amount changed
+        if old_item_id and old_applied_amount:
+            old_item = Item.query.filter_by(id=old_item_id, user_id=current_user.id).first()
+            if old_item:
+                old_item.item_cost = (old_item.item_cost or 0) - old_applied_amount
+
+        if expense.item_id:
+            new_item = Item.query.filter_by(id=expense.item_id, user_id=current_user.id).first()
+            if new_item:
+                new_item.item_cost = (new_item.item_cost or 0) + expense.amount
+                expense.item_cost_applied = True
+                expense.item_cost_applied_amount = expense.amount
+                expense.item_cost_applied_at = datetime.utcnow()
+        else:
+            expense.item_cost_applied = False
+            expense.item_cost_applied_amount = None
+            expense.item_cost_applied_at = None
 
         expense.updated_at = datetime.utcnow()
         db.session.commit()
@@ -192,6 +238,11 @@ def delete_expense(expense_id):
 
         if not expense:
             return jsonify({"ok": False, "error": "Expense not found"}), 404
+
+        if expense.item_id and expense.item_cost_applied and expense.item_cost_applied_amount:
+            linked_item = Item.query.filter_by(id=expense.item_id, user_id=current_user.id).first()
+            if linked_item:
+                linked_item.item_cost = (linked_item.item_cost or 0) - expense.item_cost_applied_amount
 
         db.session.delete(expense)
         db.session.commit()
