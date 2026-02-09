@@ -5509,6 +5509,24 @@ def admin_process_recurring_expenses():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/revive-recurring-expenses", methods=["POST"])
+@require_admin
+def admin_revive_recurring_expenses():
+    """
+    Manually trigger recurring expenses revival for users who had recurring expenses last month
+    """
+    from qventory.tasks import revive_recurring_expenses
+
+    task = revive_recurring_expenses.delay()
+
+    flash(
+        f"Recurring expenses revive task launched (Task ID: {task.id}). "
+        "This will create missing current-month entries for users with recurring expenses last month.",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/sync-and-purge-items", methods=["POST"])
 @require_admin
 def admin_sync_and_purge_items():

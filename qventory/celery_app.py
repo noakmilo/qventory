@@ -104,6 +104,13 @@ celery.conf.beat_schedule = {
             'expires': 60 * 60 * 3,
         }
     },
+    'process-recurring-expenses-daily': {
+        'task': 'qventory.tasks.process_recurring_expenses',
+        'schedule': crontab(hour=6, minute=0),
+        'options': {
+            'expires': 60 * 60 * 2,
+        }
+    },
 }
 
 

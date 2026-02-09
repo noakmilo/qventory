@@ -4254,11 +4254,14 @@ def process_recurring_expenses(self):
     with app.app_context():
         from qventory.models.expense import Expense
         from datetime import date, datetime
+        from dateutil.relativedelta import relativedelta
 
         log_task("=== Processing recurring expenses ===")
 
+        import calendar
         today = date.today()
         current_day = today.day
+        last_day_of_month = calendar.monthrange(today.year, today.month)[1]
 
         # Find all active recurring expenses
         recurring_expenses = Expense.query.filter(
@@ -4279,8 +4282,13 @@ def process_recurring_expenses(self):
 
             if expense.recurring_frequency == 'monthly':
                 recurring_day = expense.recurring_day or expense.expense_date.day
-                # Check if today matches the recurring day
-                if recurring_day == current_day:
+                target_day = min(recurring_day, last_day_of_month)
+
+                # If today is the target day, create it
+                if target_day == current_day:
+                    should_create = True
+                # Catch-up: if we've passed the target day this month and it's missing, create now
+                elif current_day > target_day:
                     should_create = True
             elif expense.recurring_frequency == 'weekly':
                 recurring_day = expense.recurring_day
@@ -4297,6 +4305,24 @@ def process_recurring_expenses(self):
 
             if not should_create:
                 continue
+
+            # For monthly recurring, avoid duplicates if one already exists this month
+            if expense.recurring_frequency == 'monthly':
+                month_start = today.replace(day=1)
+                next_month = (month_start + relativedelta(months=1))
+                existing_month = Expense.query.filter(
+                    Expense.user_id == expense.user_id,
+                    Expense.description == expense.description,
+                    Expense.amount == expense.amount,
+                    Expense.category == expense.category,
+                    Expense.expense_date >= month_start,
+                    Expense.expense_date < next_month
+                ).first()
+                if existing_month:
+                    log_task(
+                        f"  Skipping {expense.description} for user {expense.user_id} - already exists this month"
+                    )
+                    continue
 
             # Check if we already created this expense today (avoid duplicates)
             existing = Expense.query.filter(
@@ -4334,6 +4360,89 @@ def process_recurring_expenses(self):
             'success': True,
             'created': created_count,
             'total_checked': len(recurring_expenses)
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.revive_recurring_expenses')
+def revive_recurring_expenses(self):
+    """
+    Create current-month entries for users who had recurring expenses last month.
+    Useful for recovery if recurring jobs did not run.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.expense import Expense
+        from datetime import date
+        from dateutil.relativedelta import relativedelta
+
+        log_task("=== Reviving recurring expenses (last-month users) ===")
+
+        today = date.today()
+        month_start = today.replace(day=1)
+        next_month = month_start + relativedelta(months=1)
+        last_month_start = month_start - relativedelta(months=1)
+
+        # Users who had any recurring expense activity last month
+        last_month_user_ids = {
+            row.user_id
+            for row in Expense.query.filter(
+                Expense.expense_date >= last_month_start,
+                Expense.expense_date < month_start,
+                (
+                    Expense.is_recurring == True
+                ) | (
+                    Expense.notes.ilike('%recurring expense%')
+                )
+            ).all()
+        }
+
+        if not last_month_user_ids:
+            log_task("No users with recurring expenses last month")
+            return {'success': True, 'created': 0, 'users_checked': 0}
+
+        recurring_expenses = Expense.query.filter(
+            Expense.user_id.in_(last_month_user_ids),
+            Expense.is_recurring == True
+        ).all()
+
+        created_count = 0
+        for expense in recurring_expenses:
+            if not expense.is_active_recurring:
+                continue
+
+            existing_month = Expense.query.filter(
+                Expense.user_id == expense.user_id,
+                Expense.description == expense.description,
+                Expense.amount == expense.amount,
+                Expense.category == expense.category,
+                Expense.expense_date >= month_start,
+                Expense.expense_date < next_month
+            ).first()
+            if existing_month:
+                continue
+
+            new_expense = Expense(
+                user_id=expense.user_id,
+                description=expense.description,
+                amount=expense.amount,
+                category=expense.category,
+                expense_date=today,
+                is_recurring=False,
+                notes=f"Auto-created (revived) from recurring expense #{expense.id}"
+            )
+            db.session.add(new_expense)
+            created_count += 1
+
+        db.session.commit()
+
+        log_task(
+            f"=== Revive complete: {created_count} expenses created for {len(last_month_user_ids)} users ==="
+        )
+        return {
+            'success': True,
+            'created': created_count,
+            'users_checked': len(last_month_user_ids)
         }
 
 
