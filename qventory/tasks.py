@@ -4469,6 +4469,79 @@ def revive_recurring_expenses(self):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.backfill_failed_payments')
+def backfill_failed_payments(self):
+    """
+    Admin task: backfill failed Stripe payments and downgrade users after trial.
+    """
+    app = create_app()
+
+    with app.app_context():
+        import os
+        import stripe
+        from datetime import datetime
+        from qventory.models.subscription import Subscription
+        from qventory.helpers.email_sender import send_payment_failed_email
+        from qventory.routes.main import _downgrade_to_free_and_enforce
+
+        stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
+        if not stripe_secret:
+            return {'success': False, 'error': 'STRIPE_SECRET_KEY not configured'}
+
+        stripe.api_key = stripe_secret
+
+        now = datetime.utcnow()
+        processed = 0
+        downgraded = 0
+        emails_sent = 0
+        errors = 0
+
+        subs = Subscription.query.filter(
+            Subscription.stripe_subscription_id.isnot(None)
+        ).all()
+
+        for subscription in subs:
+            try:
+                stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+                status = stripe_sub.get("status")
+                trial_end = stripe_sub.get("trial_end")
+                trial_over = True
+                if trial_end:
+                    trial_over = datetime.utcfromtimestamp(trial_end) <= now
+
+                if status not in {"past_due", "unpaid"} or not trial_over:
+                    continue
+
+                if subscription.plan == "free":
+                    continue
+
+                processed += 1
+
+                if subscription.plan != "free":
+                    _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+                    downgraded += 1
+                subscription.status = "suspended"
+                subscription.updated_at = now
+                db.session.commit()
+
+                try:
+                    send_payment_failed_email(subscription.user.email, subscription.user.username)
+                    emails_sent += 1
+                except Exception:
+                    pass
+
+            except Exception:
+                errors += 1
+
+        return {
+            'success': True,
+            'processed': processed,
+            'downgraded': downgraded,
+            'emails_sent': emails_sent,
+            'errors': errors
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.sync_and_purge_inactive_items')
 def sync_and_purge_inactive_items(self):
     """

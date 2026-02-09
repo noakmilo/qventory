@@ -62,7 +62,10 @@
         {% if it.item_cost is not none %}
         <span class="inline-edit__value tag">
           <i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}
-          {% set has_expense_cost = it.expenses is defined and it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+          {% set has_expense_cost = it.expense_cost_count is defined and it.expense_cost_count > 0 %}
+          {% if not has_expense_cost %}
+            {% set has_expense_cost = it.expenses is defined and it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+          {% endif %}
           {% set has_receipt_cost = it.receipt_items is defined and (
               (it.receipt_items_count is defined and it.receipt_items_count > 0) or
               (it.receipt_items.count is defined and it.receipt_items.count() > 0)

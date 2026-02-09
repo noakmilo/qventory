@@ -186,7 +186,7 @@ def stripe_webhook():
                         ).first()
                         if ebay_cred:
                             from qventory.tasks import import_ebay_inventory
-                            import_ebay_inventory.delay(subscription.user_id, import_mode='sync_all', listing_status='ACTIVE')
+                            import_ebay_inventory.delay(subscription.user_id, import_mode='new_only', listing_status='ACTIVE')
                 db.session.commit()
                 if plan_name and old_plan != plan_name:
                     try:
@@ -244,7 +244,7 @@ def stripe_webhook():
                     ).first()
                     if ebay_cred:
                         from qventory.tasks import import_ebay_inventory
-                        import_ebay_inventory.delay(subscription.user_id, import_mode='sync_all', listing_status='ACTIVE')
+                        import_ebay_inventory.delay(subscription.user_id, import_mode='new_only', listing_status='ACTIVE')
             if status:
                 subscription.status = status
             if cancel_at_period_end and status in {"active", "suspended"}:
@@ -5550,6 +5550,24 @@ def admin_revive_recurring_expenses():
     flash(
         f"Recurring expenses revive task launched (Task ID: {task.id}). "
         "This will create missing current-month entries for users with recurring expenses last month.",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/backfill-failed-payments", methods=["POST"])
+@require_admin
+def admin_backfill_failed_payments():
+    """
+    Manually trigger a backfill for failed Stripe payments after trial.
+    """
+    from qventory.tasks import backfill_failed_payments
+
+    task = backfill_failed_payments.delay()
+
+    flash(
+        f"Backfill failed payments task launched (Task ID: {task.id}). "
+        "This will downgrade users with past_due/unpaid Stripe status after trial and send emails.",
         "ok"
     )
     return redirect(url_for('main.admin_dashboard'))

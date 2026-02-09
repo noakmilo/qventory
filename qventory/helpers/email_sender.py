@@ -452,6 +452,61 @@ Upgrade anytime: https://qventory.com/upgrade
     return send_email(to_email, subject, html_body, text_body)
 
 
+def send_payment_failed_email(to_email, username):
+    subject = "Your Qventory payment failed"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .highlight {{ background: #fef2f2; border: 1px solid #fecaca; padding: 12px 14px; border-radius: 8px; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 12px 0; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Your payment failed</h2>
+                <p>Hi {username},</p>
+                <div class="highlight">
+                    <p>We couldn't process your payment after the trial period. To restore your plan privileges, please upgrade again.</p>
+                </div>
+                <p>No data is lost. All items and associated information remain intact and will be restored once payment is completed.</p>
+                <a class="button" href="https://qventory.com/upgrade">Upgrade Now</a>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+Your payment failed
+
+Hi {username},
+We couldn't process your payment after the trial period. To restore your plan privileges, please upgrade again.
+
+No data is lost. All items and associated information remain intact and will be restored once payment is completed.
+
+Upgrade: https://qventory.com/upgrade
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, subject, html_body, text_body)
+
+
 def send_pickup_scheduled_email(to_email, buyer_name, seller_name, pickup_date, pickup_time, address, details_url, calendar_url):
     subject = f"Pickup scheduled with {seller_name}"
 

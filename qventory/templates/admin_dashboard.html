@@ -109,6 +109,26 @@
       </div>
     </div>
 
+    <div style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <h3 style="color:#ef4444;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-credit-card"></i> Backfill Failed Payments
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Downgrade users with past_due/unpaid Stripe status after trial and send payment-failed emails.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_backfill_failed_payments') }}"
+              onsubmit="return confirm('Run backfill for failed payments?');"
+              style="display:flex;align-items:center;gap:10px;">
+          <button type="submit" class="btn" style="background:#ef4444;color:#fff;white-space:nowrap;">
+            <i class="fas fa-bolt"></i> Run Task
+          </button>
+        </form>
+      </div>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->
