@@ -74,19 +74,24 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = (Sold Price + Shipping Charged) - Item Cost - Total Selling Cost - Shipping Cost
+        Net Profit = Sold Price - Item Cost - Total Fees - Shipping Cost
+
+        Note: sold_price (from eBay lineItem.total) already includes
+        shipping_charged, so we do NOT add it again.
+        shipping_charged is stored for informational purposes only.
 
         Si no hay item_cost:
         - gross_profit = None
         - net_profit = sold_price - fees (muestra pérdida/ganancia sin conocer costo)
         """
+        sold_price = self.sold_price or 0
         tax_collected = self.tax_collected or 0
-        total_sales = (self.sold_price or 0) + tax_collected
-        shipping_charged = round(self.shipping_charged or 0, 2)
 
         # Calculate gross profit only if we know item cost
+        # Subtract tax because sold_price includes tax but tax is remitted
+        # to the government by eBay, it's not seller revenue
         if self.item_cost is not None:
-            self.gross_profit = total_sales - tax_collected - self.item_cost
+            self.gross_profit = sold_price - tax_collected - self.item_cost
         else:
             self.gross_profit = None
 
@@ -105,11 +110,7 @@ class Sale(db.Model):
         )
 
         # Calculate net profit
-        # If we have item_cost, use gross_profit + shipping_charged - fees - shipping_cost
-        # If we don't have item_cost, show sold_price - fees (partial profit)
         if self.gross_profit is not None:
-            self.net_profit = self.gross_profit + shipping_charged - total_fees - shipping_cost
+            self.net_profit = self.gross_profit - total_fees - shipping_cost
         else:
-            # Even without item_cost, show what's left after fees
-            # This gives the seller visibility of actual payout
-            self.net_profit = (total_sales - tax_collected + shipping_charged) - total_fees - shipping_cost
+            self.net_profit = (sold_price - tax_collected) - total_fees - shipping_cost

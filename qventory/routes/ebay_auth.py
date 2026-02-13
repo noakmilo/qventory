@@ -847,67 +847,67 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
         raise
 
 
-@ebay_auth_bp.route('/finances-debug', methods=['GET'])
-@login_required
-def finances_debug():
-    """
-    Debug route to verify Finances API authorization for the current user.
-    Returns raw eBay error body and token scope info for diagnosis.
-    """
-    import base64 as _base64
-    import json as _json
-    from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE, EBAY_FINANCES_API_BASE
-
-    access_token = get_user_access_token(current_user.id)
-    if not access_token:
-        return jsonify({'success': False, 'error': 'missing_access_token'}), 400
-
-    # Decode token claims (JWT middle part) to inspect scopes - no verification needed
-    token_claims = {}
-    try:
-        parts = access_token.split('.')
-        if len(parts) == 3:
-            padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
-            token_claims = _json.loads(_base64.urlsafe_b64decode(padded).decode('utf-8', errors='replace'))
-    except Exception as e:
-        token_claims = {'decode_error': str(e)}
-
-    # Hit the payout endpoint directly and return the raw response body
-    headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-    }
-    end_date = datetime.utcnow()
-    start_date = end_date - timedelta(days=30)
-    start_iso = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-    end_iso = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    raw_results = {}
-    test_endpoints = [
-        ('finances_payout', EBAY_FINANCES_API_BASE, '/sell/finances/v1/payout'),
-        ('finances_transaction', EBAY_FINANCES_API_BASE, '/sell/finances/v1/transaction'),
-        ('account_privilege', EBAY_API_BASE, '/sell/account/v1/privilege'),
-    ]
-    for label, base, path in test_endpoints:
-        try:
-            full_url = f"{base}{path}"
-            log(f"[FINANCES_DEBUG] Calling: {full_url}")
-            resp = requests.get(full_url, headers=headers, params={'limit': 1}, timeout=20)
-            try:
-                body = resp.json()
-            except Exception:
-                body = resp.text
-            raw_results[label] = {
-                'url_called': full_url,
-                'status_code': resp.status_code,
-                'body': body
-            }
-        except Exception as exc:
-            raw_results[label] = {'error': str(exc)}
-
-    return jsonify({
-        'token_prefix': access_token[:20] + '...',
-        'token_claims': token_claims,
-        'raw_results': raw_results
-    }), 200
+# @ebay_auth_bp.route('/finances-debug', methods=['GET'])
+# @login_required
+# def finances_debug():
+#     """
+#     Debug route to verify Finances API authorization for the current user.
+#     Returns raw eBay error body and token scope info for diagnosis.
+#     """
+#     import base64 as _base64
+#     import json as _json
+#     from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE, EBAY_FINANCES_API_BASE
+#
+#     access_token = get_user_access_token(current_user.id)
+#     if not access_token:
+#         return jsonify({'success': False, 'error': 'missing_access_token'}), 400
+#
+#     # Decode token claims (JWT middle part) to inspect scopes - no verification needed
+#     token_claims = {}
+#     try:
+#         parts = access_token.split('.')
+#         if len(parts) == 3:
+#             padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
+#             token_claims = _json.loads(_base64.urlsafe_b64decode(padded).decode('utf-8', errors='replace'))
+#     except Exception as e:
+#         token_claims = {'decode_error': str(e)}
+#
+#     # Hit the payout endpoint directly and return the raw response body
+#     headers = {
+#         'Authorization': f'Bearer {access_token}',
+#         'Content-Type': 'application/json',
+#         'Accept': 'application/json'
+#     }
+#     end_date = datetime.utcnow()
+#     start_date = end_date - timedelta(days=30)
+#     start_iso = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+#     end_iso = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+#
+#     raw_results = {}
+#     test_endpoints = [
+#         ('finances_payout', EBAY_FINANCES_API_BASE, '/sell/finances/v1/payout'),
+#         ('finances_transaction', EBAY_FINANCES_API_BASE, '/sell/finances/v1/transaction'),
+#         ('account_privilege', EBAY_API_BASE, '/sell/account/v1/privilege'),
+#     ]
+#     for label, base, path in test_endpoints:
+#         try:
+#             full_url = f"{base}{path}"
+#             log(f"[FINANCES_DEBUG] Calling: {full_url}")
+#             resp = requests.get(full_url, headers=headers, params={'limit': 1}, timeout=20)
+#             try:
+#                 body = resp.json()
+#             except Exception:
+#                 body = resp.text
+#             raw_results[label] = {
+#                 'url_called': full_url,
+#                 'status_code': resp.status_code,
+#                 'body': body
+#             }
+#         except Exception as exc:
+#             raw_results[label] = {'error': str(exc)}
+#
+#     return jsonify({
+#         'token_prefix': access_token[:20] + '...',
+#         'token_claims': token_claims,
+#         'raw_results': raw_results
+#     }), 200
