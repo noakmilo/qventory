@@ -88,19 +88,25 @@ def connect():
     log(f"Generated state token: {state[:10]}...")
 
     # Build authorization URL with proper URL encoding
+    # eBay requires scopes separated by %20 (not +) and the scope param
+    # must NOT double-encode the URLs within each scope string.
     from urllib.parse import urlencode, quote
 
     scope_string = ' '.join(EBAY_SCOPES)
 
-    params = {
+    base_params = {
         'client_id': EBAY_CLIENT_ID,
         'response_type': 'code',
         'redirect_uri': EBAY_REDIRECT_URI,
-        'scope': scope_string,
         'state': state
     }
 
-    auth_url = f"{EBAY_OAUTH_URL}?{urlencode(params)}"
+    # quote_via=quote encodes spaces as %20 instead of +, which eBay requires
+    query_string = urlencode(base_params, quote_via=quote)
+    # Append scope separately, already space-joined; quote encodes spaces as %20
+    query_string += '&scope=' + quote(scope_string, safe='')
+
+    auth_url = f"{EBAY_OAUTH_URL}?{query_string}"
 
     log(f"Full auth URL: {auth_url}")
     log(f"Redirecting to eBay authorization page...")
