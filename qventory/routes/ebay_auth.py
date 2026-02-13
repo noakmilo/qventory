@@ -455,6 +455,10 @@ def exchange_code_for_token(auth_code):
 
         token_data = response.json()
         log("Token exchange successful!")
+        # Log all fields except the actual token values for debugging
+        safe_data = {k: (v[:15] + '...' if k in ('access_token', 'refresh_token') and v else v)
+                     for k, v in token_data.items()}
+        log(f"Token response fields: {safe_data}")
         log(f"Granted scopes: {token_data.get('scope', 'NOT IN RESPONSE')}")
 
         return {
