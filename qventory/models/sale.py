@@ -34,7 +34,7 @@ class Sale(db.Model):
 
     # Profit calculado
     gross_profit = db.Column(db.Float, nullable=True)  # sold_price - item_cost
-    net_profit = db.Column(db.Float, nullable=True)  # gross_profit - fees - shipping_cost + shipping_charged
+    net_profit = db.Column(db.Float, nullable=True)  # (sold_price + shipping_charged) - item_cost - fees - shipping_cost
 
     # Fechas
     sold_at = db.Column(db.DateTime, nullable=False, index=True)  # Fecha de venta
@@ -73,7 +73,7 @@ class Sale(db.Model):
         Calcula gross y net profit
 
         Gross Profit = Sold Price - Item Cost
-        Net Profit = Total Sales - Item Cost - Taxes - Total Selling Cost - Shipping Cost
+        Net Profit = (Sold Price + Shipping Charged) - Item Cost - Total Selling Cost - Shipping Cost
 
         Si no hay item_cost:
         - gross_profit = None
@@ -81,6 +81,7 @@ class Sale(db.Model):
         """
         tax_collected = self.tax_collected or 0
         total_sales = (self.sold_price or 0) + tax_collected
+        shipping_charged = round(self.shipping_charged or 0, 2)
 
         # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
@@ -92,7 +93,7 @@ class Sale(db.Model):
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
-        shipping_cost = round(self.shipping_charged or 0, 2)
+        shipping_cost = round(self.shipping_cost or 0, 2)
 
         total_fees = (
             marketplace_fee +
@@ -101,11 +102,11 @@ class Sale(db.Model):
         )
 
         # Calculate net profit
-        # If we have item_cost, use gross_profit - fees
+        # If we have item_cost, use gross_profit + shipping_charged - fees - shipping_cost
         # If we don't have item_cost, show sold_price - fees (partial profit)
         if self.gross_profit is not None:
-            self.net_profit = self.gross_profit - total_fees - shipping_cost
+            self.net_profit = self.gross_profit + shipping_charged - total_fees - shipping_cost
         else:
             # Even without item_cost, show what's left after fees
             # This gives the seller visibility of actual payout
-            self.net_profit = (total_sales - tax_collected) - total_fees - shipping_cost
+            self.net_profit = (total_sales - tax_collected + shipping_charged) - total_fees - shipping_cost

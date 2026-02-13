@@ -129,6 +129,26 @@
       </div>
     </div>
 
+    <div style="background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <h3 style="color:#3b82f6;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-chart-line"></i> Reconcile eBay Analytics
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Re-sync sales + finances and reconcile analytics for all eBay-connected accounts.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_recalculate_analytics') }}"
+              onsubmit="return confirm('Run global analytics reconciliation for all eBay accounts?');"
+              style="display:flex;align-items:center;gap:10px;">
+          <button type="submit" class="btn" style="background:#3b82f6;color:#fff;white-space:nowrap;">
+            <i class="fas fa-bolt"></i> Run Task
+          </button>
+        </form>
+      </div>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->

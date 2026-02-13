@@ -513,7 +513,8 @@ def analytics():
         "inventory": sum(s.item_cost or 0 for s in sales),
         "supplies": 0,  # Reserved for future use (packaging, labels, etc.)
         "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales),
-        "shipping": sum(s.shipping_charged or 0 for s in sales),
+        "shipping_charged": sum(s.shipping_charged or 0 for s in sales),
+        "shipping_cost": sum(s.shipping_cost or 0 for s in sales),
         "store_subscription": store_subscription_total,
         "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
     }

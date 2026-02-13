@@ -32,7 +32,7 @@ This means Analytics does not “infer” sales; it rolls up persisted sales dat
 
 ### Net Profit
 - Sum of Sale.net_profit (precomputed on each Sale).
-- Net profit uses item cost, fees, and shipping to reflect true margin.
+- Net profit uses item cost, fees, buyer-paid shipping (charged), and actual shipping cost to reflect true margin.
 
 ### Avg Gross / Sale and Avg Net / Sale
 - Gross and Net totals divided by Total Sales.
