@@ -4047,13 +4047,20 @@ def api_suppliers_rename():
 def api_suppliers_delete():
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
+    target = (data.get("target") or "").strip()
     if not name:
         return jsonify({"ok": False, "error": "Missing supplier name"}), 400
 
-    updated = Item.query.filter(
-        Item.user_id == current_user.id,
-        Item.supplier == name
-    ).update({Item.supplier: None})
+    if target and target.lower() != "unassigned":
+        updated = Item.query.filter(
+            Item.user_id == current_user.id,
+            Item.supplier == name
+        ).update({Item.supplier: target})
+    else:
+        updated = Item.query.filter(
+            Item.user_id == current_user.id,
+            Item.supplier == name
+        ).update({Item.supplier: None})
 
     db.session.commit()
     return jsonify({"ok": True, "updated": updated})

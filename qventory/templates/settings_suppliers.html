@@ -49,6 +49,35 @@
   </div>
 </div>
 
+<div id="supplierDeleteModal" style="position:fixed;inset:0;background:rgba(9,12,18,0.6);display:none;align-items:center;justify-content:center;z-index:9999;">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;max-width:520px;width:92%;padding:22px 24px;box-shadow:0 18px 48px rgba(0,0,0,0.35);">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:rgba(239,68,68,0.12);color:#ef4444;">
+          <i class="fas fa-triangle-exclamation"></i>
+        </div>
+        <div style="font-size:18px;font-weight:600;color:var(--text);">Delete Supplier</div>
+      </div>
+      <button type="button" id="supplier-delete-close" class="btn" style="padding:6px 10px;">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <p id="supplier-delete-description" style="color:var(--sub);line-height:1.7;margin:14px 0 16px 0;">
+      Choose where to move items before deleting this supplier.
+    </p>
+    <div style="display:grid;gap:10px;">
+      <label for="supplier-delete-target" style="font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:0.08em;">Reassign items to</label>
+      <select id="supplier-delete-target" class="input">
+        <option value="unassigned">Unassigned</option>
+      </select>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:18px;">
+      <button type="button" class="btn" id="supplier-delete-cancel">Cancel</button>
+      <button type="button" class="btn" id="supplier-delete-confirm" style="background:#ef4444;border-color:#ef4444;color:#fff;">Delete</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
   let suppliersChartInstance = null;
@@ -169,17 +198,66 @@
     }
   }
 
-  async function deleteSupplier(name) {
+  async function deleteSupplier(name, target) {
     const response = await fetch('/api/suppliers/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, target })
     });
     const data = await response.json();
     if (!response.ok || !data.ok) {
       throw new Error(data.error || 'Failed to delete supplier');
     }
   }
+
+  let supplierDeleteState = { name: null };
+
+  function openSupplierDeleteModal(name, supplierOptions) {
+    const modal = document.getElementById('supplierDeleteModal');
+    const targetSelect = document.getElementById('supplier-delete-target');
+    const desc = document.getElementById('supplier-delete-description');
+    if (!modal || !targetSelect) return;
+
+    supplierDeleteState.name = name;
+    desc.textContent = `Choose where to move items before deleting "${name}".`;
+    targetSelect.innerHTML = '<option value="unassigned">Unassigned</option>';
+
+    supplierOptions.filter(opt => opt !== name).forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt;
+      option.textContent = opt;
+      targetSelect.appendChild(option);
+    });
+
+    modal.style.display = 'flex';
+  }
+
+  function closeSupplierDeleteModal() {
+    const modal = document.getElementById('supplierDeleteModal');
+    if (modal) modal.style.display = 'none';
+    supplierDeleteState.name = null;
+  }
+
+  document.getElementById('supplier-delete-close')?.addEventListener('click', closeSupplierDeleteModal);
+  document.getElementById('supplier-delete-cancel')?.addEventListener('click', closeSupplierDeleteModal);
+  document.getElementById('supplierDeleteModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'supplierDeleteModal') {
+      closeSupplierDeleteModal();
+    }
+  });
+
+  document.getElementById('supplier-delete-confirm')?.addEventListener('click', async () => {
+    const name = supplierDeleteState.name;
+    if (!name) return;
+    const target = document.getElementById('supplier-delete-target')?.value || 'unassigned';
+    try {
+      await deleteSupplier(name, target);
+      closeSupplierDeleteModal();
+      await refreshSuppliers();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
 
   document.addEventListener('click', async (event) => {
     const row = event.target.closest('tr[data-supplier-name]');
@@ -236,15 +314,9 @@
     }
 
     if (event.target.closest('.supplier-delete-btn')) {
-      if (!confirm(`Delete supplier "${supplierName}" and set its items to Unassigned?`)) {
-        return;
-      }
-      try {
-        await deleteSupplier(supplierName);
-        await refreshSuppliers();
-      } catch (err) {
-        alert(err.message);
-      }
+      const { suppliers } = await fetchSuppliersData();
+      const names = suppliers.map(s => s.name);
+      openSupplierDeleteModal(supplierName, names);
     }
   });
 
