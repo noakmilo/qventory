@@ -246,22 +246,12 @@
                 {% if sort_by == 'supplier' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="supplier" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
             <th data-col="cost">
               <span class="col-header sort-header" data-sort-key="cost" data-default-dir="desc">Cost
                 {% if sort_by == 'cost' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
-                {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="cost" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
                 {% endif %}
               </span>
             </th>
@@ -270,38 +260,20 @@
                 {% if sort_by == 'sold_price' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="sold_price" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
             <th data-col="tax" class="mobile-hide">
               <span class="col-header">Tax
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="tax" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
-            <th data-col="shipping" class="mobile-hide">
-              <span class="col-header">Shipping Cost
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="shipping" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
-              </span>
+            <th data-col="shipping_charged" class="mobile-hide">
+              <span class="col-header">Shipping Charged</span>
+            </th>
+            <th data-col="shipping_cost" class="mobile-hide">
+              <span class="col-header">Shipping Cost</span>
             </th>
             <th data-col="fees" class="mobile-hide">
               <span class="col-header">Total Marketplace Fees
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="fees" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
             <th data-col="net_profit">
@@ -312,22 +284,12 @@
                 {% if sort_by == 'net_profit' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="net_profit" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
             <th data-col="sold_at">
               <span class="col-header sort-header" data-sort-key="sold_at" data-default-dir="desc">Sold At
                 {% if sort_by == 'sold_at' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
-                {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="sold_at" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
                 {% endif %}
               </span>
             </th>
@@ -336,20 +298,10 @@
                 {% if sort_by == 'location' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="location" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
             <th data-col="listings" class="mobile-hide">
               <span class="col-header">Listings
-                {% if view_type == 'sold' %}
-                <button class="col-toggle" type="button" data-col-toggle="listings" title="Hide column" aria-label="Hide column" aria-pressed="false">
-                  <i class="fas fa-eye"></i>
-                </button>
-                {% endif %}
               </span>
             </th>
           </tr>
