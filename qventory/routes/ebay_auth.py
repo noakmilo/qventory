@@ -846,40 +846,60 @@ def save_ebay_credentials(user_id, access_token, refresh_token, expires_in, ebay
 def finances_debug():
     """
     Debug route to verify Finances API authorization for the current user.
-    Returns minimal metadata (no sensitive payloads).
+    Returns raw eBay error body and token scope info for diagnosis.
     """
-    from qventory.helpers.ebay_finances import fetch_ebay_payouts, fetch_ebay_transactions
-    from qventory.helpers.ebay_inventory import get_user_access_token
+    import base64 as _base64
+    import json as _json
+    from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE
 
     access_token = get_user_access_token(current_user.id)
     if not access_token:
-        return jsonify({
-            'success': False,
-            'error': 'missing_access_token'
-        }), 400
+        return jsonify({'success': False, 'error': 'missing_access_token'}), 400
 
+    # Decode token claims (JWT middle part) to inspect scopes - no verification needed
+    token_claims = {}
+    try:
+        parts = access_token.split('.')
+        if len(parts) == 3:
+            padded = parts[1] + '=' * (4 - len(parts[1]) % 4)
+            token_claims = _json.loads(_base64.urlsafe_b64decode(padded).decode('utf-8', errors='replace'))
+    except Exception as e:
+        token_claims = {'decode_error': str(e)}
+
+    # Hit the payout endpoint directly and return the raw response body
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=30)
+    start_iso = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+    end_iso = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    payouts_result = fetch_ebay_payouts(current_user.id, start_date, end_date, limit=5, offset=0)
-    transactions_result = fetch_ebay_transactions(current_user.id, start_date, end_date, limit=5, offset=0)
+    raw_results = {}
+    for label, path in [('payouts', '/sell/finances/v1/payout'), ('transactions', '/sell/finances/v1/transaction')]:
+        try:
+            resp = requests.get(
+                f"{EBAY_API_BASE}{path}",
+                headers=headers,
+                params={'limit': 1, 'filter': f'{"payoutDate" if label == "payouts" else "transactionDate"}:[{start_iso}..{end_iso}]'},
+                timeout=20
+            )
+            try:
+                body = resp.json()
+            except Exception:
+                body = resp.text
+            raw_results[label] = {
+                'status_code': resp.status_code,
+                'response_headers': dict(resp.headers),
+                'body': body
+            }
+        except Exception as exc:
+            raw_results[label] = {'error': str(exc)}
 
     return jsonify({
-        'success': bool(payouts_result.get('success')) and bool(transactions_result.get('success')),
-        'payouts': {
-            'success': payouts_result.get('success'),
-            'error': payouts_result.get('error'),
-            'count': len(payouts_result.get('payouts', []) or []),
-            'total': payouts_result.get('total'),
-            'status_code': payouts_result.get('status_code'),
-            'correlation_id': payouts_result.get('correlation_id')
-        },
-        'transactions': {
-            'success': transactions_result.get('success'),
-            'error': transactions_result.get('error'),
-            'count': len(transactions_result.get('transactions', []) or []),
-            'total': transactions_result.get('total'),
-            'status_code': transactions_result.get('status_code'),
-            'correlation_id': transactions_result.get('correlation_id')
-        }
+        'token_prefix': access_token[:20] + '...',
+        'token_claims': token_claims,
+        'raw_results': raw_results
     }), 200
