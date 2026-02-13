@@ -98,7 +98,8 @@ def connect():
         'client_id': EBAY_CLIENT_ID,
         'response_type': 'code',
         'redirect_uri': EBAY_REDIRECT_URI,
-        'state': state
+        'state': state,
+        'prompt': 'login',
     }
 
     # quote_via=quote encodes spaces as %20 instead of +, which eBay requires
