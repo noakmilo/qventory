@@ -455,6 +455,7 @@ def exchange_code_for_token(auth_code):
 
         token_data = response.json()
         log("Token exchange successful!")
+        log(f"Granted scopes: {token_data.get('scope', 'NOT IN RESPONSE')}")
 
         return {
             'access_token': token_data['access_token'],
