@@ -880,10 +880,13 @@ def finances_debug():
     raw_results = {}
     for label, path in [('payouts', '/sell/finances/v1/payout'), ('transactions', '/sell/finances/v1/transaction')]:
         try:
+            full_url = f"{EBAY_API_BASE}{path}"
+            log(f"[FINANCES_DEBUG] Calling: {full_url}")
+            # No date filter - simplest possible request to isolate the 404
             resp = requests.get(
-                f"{EBAY_API_BASE}{path}",
+                full_url,
                 headers=headers,
-                params={'limit': 1, 'filter': f'{"payoutDate" if label == "payouts" else "transactionDate"}:[{start_iso}..{end_iso}]'},
+                params={'limit': 1},
                 timeout=20
             )
             try:
@@ -891,6 +894,7 @@ def finances_debug():
             except Exception:
                 body = resp.text
             raw_results[label] = {
+                'url_called': full_url,
                 'status_code': resp.status_code,
                 'response_headers': dict(resp.headers),
                 'body': body
