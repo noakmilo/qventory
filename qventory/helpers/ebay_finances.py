@@ -86,11 +86,16 @@ def _fetch_finances_endpoint(user_id, path, params):
             'correlation_id': response.headers.get("x-ebay-correlation-id")
         }
 
+    correlation_id = response.headers.get("x-ebay-correlation-id")
+    log_inv(
+        f"Finances API OK {response.status_code} "
+        f"(correlation_id={correlation_id})"
+    )
     return {
         'success': True,
         'data': payload,
         'status_code': response.status_code,
-        'correlation_id': response.headers.get("x-ebay-correlation-id")
+        'correlation_id': correlation_id
     }
 
 
