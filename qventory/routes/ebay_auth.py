@@ -497,6 +497,77 @@ def refresh_access_token(refresh_token):
     }
 
 
+def refresh_access_token_debug(refresh_token):
+    """
+    Refresh access token and return raw response for debugging (do not store tokens).
+    """
+    credentials = f"{EBAY_CLIENT_ID}:{EBAY_CLIENT_SECRET}"
+    b64_credentials = base64.b64encode(credentials.encode()).decode()
+
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': f'Basic {b64_credentials}'
+    }
+
+    data = {
+        'grant_type': 'refresh_token',
+        'refresh_token': refresh_token,
+        'scope': ' '.join(EBAY_SCOPES)
+    }
+
+    response = requests.post(EBAY_TOKEN_URL, headers=headers, data=data, timeout=10)
+    raw_text = response.text
+    try:
+        token_data = response.json()
+    except Exception:
+        token_data = None
+
+    log(f"[OAUTH_DEBUG] Refresh status: {response.status_code}")
+    log(f"[OAUTH_DEBUG] Response body: {raw_text[:2000]}")
+
+    return {
+        'status_code': response.status_code,
+        'json': token_data,
+        'text': raw_text
+    }
+
+
+@ebay_auth_bp.route('/oauth-debug', methods=['GET'])
+@login_required
+def oauth_debug():
+    """
+    Debug route to log and return OAuth token refresh response (redacted).
+    """
+    credential = MarketplaceCredential.query.filter_by(
+        user_id=current_user.id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+
+    if not credential:
+        return jsonify({'ok': False, 'error': 'ebay_not_connected'}), 400
+
+    refresh_token_val = credential.get_refresh_token()
+    if not refresh_token_val:
+        return jsonify({'ok': False, 'error': 'missing_refresh_token'}), 400
+
+    debug_result = refresh_access_token_debug(refresh_token_val)
+    token_json = debug_result.get('json') or {}
+
+    # Redact tokens before returning
+    redacted = dict(token_json)
+    if 'access_token' in redacted:
+        redacted['access_token'] = f"{str(redacted['access_token'])[:12]}...redacted"
+    if 'refresh_token' in redacted:
+        redacted['refresh_token'] = f"{str(redacted['refresh_token'])[:12]}...redacted"
+
+    return jsonify({
+        'ok': True,
+        'status_code': debug_result.get('status_code'),
+        'token_response': redacted
+    })
+
+
 def get_ebay_user_info(access_token):
     """
     Get eBay user information using access token
