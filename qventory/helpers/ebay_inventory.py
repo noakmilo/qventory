@@ -2370,6 +2370,29 @@ def parse_ebay_order_to_sale(order_data, user_id=None, top_rated=None):
         if sold_at is None:
             sold_at = datetime.utcnow()
 
+        # Extract refund info from paymentSummary.refunds
+        refund_amount = 0.0
+        refund_reason = None
+        payment_summary = order_data.get('paymentSummary') or {}
+        refunds_list = payment_summary.get('refunds') or []
+        for refund in refunds_list:
+            refund_amt = refund.get('amount') or {}
+            try:
+                refund_amount += abs(float(refund_amt.get('value', 0) or 0))
+            except (TypeError, ValueError):
+                pass
+            if not refund_reason:
+                refund_reason = refund.get('reasonType') or refund.get('reason')
+
+        # Check cancelStatus for cancelled orders
+        cancel_status = order_data.get('cancelStatus') or {}
+        if cancel_status.get('cancelState') == 'CANCELLED':
+            status = 'cancelled'
+
+        # Mark as refunded if there was a refund
+        if refund_amount > 0 and status not in ('cancelled',):
+            status = 'refunded'
+
         return {
             'marketplace': 'ebay',
             'marketplace_order_id': order_id,
@@ -2382,6 +2405,8 @@ def parse_ebay_order_to_sale(order_data, user_id=None, top_rated=None):
             'marketplace_fee': marketplace_fee,
             'payment_processing_fee': payment_processing_fee,
             'other_fees': other_fees,
+            'refund_amount': refund_amount if refund_amount > 0 else None,
+            'refund_reason': refund_reason,
             'buyer_username': buyer_username,
             'ebay_buyer_username': buyer_username,
             'tracking_number': tracking_number,

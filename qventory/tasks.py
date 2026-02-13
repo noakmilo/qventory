@@ -780,6 +780,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                     sold_at = sale_data.get('sold_at') or shipped_at or delivered_at or datetime.utcnow()
                     status = sale_data.get('status', 'pending')
                     ebay_transaction_id = sale_data.get('ebay_transaction_id')
+                    refund_amount = sale_data.get('refund_amount')
+                    refund_reason = sale_data.get('refund_reason')
 
                     # Use real fees from Fulfillment API if available.
                     # Do NOT estimate — reconcile_sales_from_finances will fill
@@ -841,6 +843,9 @@ def import_ebay_sales(self, user_id, days_back=None):
                             existing_sale.shipping_charged = shipping_charged
                         if tax_collected is not None:
                             existing_sale.tax_collected = tax_collected
+                        if refund_amount is not None:
+                            existing_sale.refund_amount = refund_amount
+                            existing_sale.refund_reason = refund_reason
                         existing_sale.updated_at = datetime.utcnow()
 
                         # Update item_id if we found a match and it wasn't set before
@@ -903,7 +908,9 @@ def import_ebay_sales(self, user_id, days_back=None):
                             status=status,
                             buyer_username=buyer_username,
                             ebay_transaction_id=ebay_transaction_id,
-                            ebay_buyer_username=buyer_username
+                            ebay_buyer_username=buyer_username,
+                            refund_amount=refund_amount,
+                            refund_reason=refund_reason
                         )
 
                         # Mark item as sold if not already marked
@@ -4111,7 +4118,8 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
         'ad_fee': 0.0,
         'payment_processing': 0.0,
         'other': 0.0,
-        'shipping_label': 0.0
+        'shipping_label': 0.0,
+        'refund': 0.0
     }
 
     for txn in transactions:
@@ -4128,6 +4136,17 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
 
         target_order_ids = order_ids or set()
         target_line_ids = line_item_ids or set()
+
+        # REFUND transactions — track refund amount per order
+        if transaction_type == 'REFUND':
+            value = abs(amount)
+            for order_id in target_order_ids:
+                totals = totals_by_order.setdefault(order_id, dict(EMPTY_FEES))
+                totals['refund'] += value
+            for line_id in target_line_ids:
+                totals = totals_by_line_item.setdefault(line_id, dict(EMPTY_FEES))
+                totals['refund'] += value
+            continue
 
         # For SALE transactions, try to extract granular per-fee breakdown
         # from orderLineItems.marketplaceFees
@@ -4174,6 +4193,10 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
             sale.ad_fee = fees['ad_fee']
             sale.other_fees = fees['other']
             sale.shipping_cost = fees['shipping_label']
+            if fees['refund'] > 0:
+                sale.refund_amount = fees['refund']
+                if sale.status not in ('cancelled',):
+                    sale.status = 'refunded'
             updated += 1
             updated_this_sale = True
         elif not has_finances:
@@ -4221,6 +4244,25 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
             if parsed and parsed.get('tax_collected') is not None:
                 sale.tax_collected = parsed.get('tax_collected')
                 taxes_updated += 1
+                updated_this_sale = True
+
+        # Always sync refund info from Fulfillment API if not already set by Finances API
+        if not sale.refund_amount and sale.marketplace_order_id:
+            parsed = parsed_order_cache.get(sale.marketplace_order_id)
+            if parsed is None:
+                order_detail = order_detail_cache.get(sale.marketplace_order_id)
+                if order_detail is None:
+                    order_detail = fetch_ebay_order_details(user_id, sale.marketplace_order_id)
+                    order_detail_cache[sale.marketplace_order_id] = order_detail
+                if order_detail:
+                    parsed = parse_ebay_order_to_sale(order_detail, user_id=user_id)
+                    parsed_order_cache[sale.marketplace_order_id] = parsed
+
+            if parsed and parsed.get('refund_amount'):
+                sale.refund_amount = parsed['refund_amount']
+                sale.refund_reason = parsed.get('refund_reason')
+                if sale.status not in ('cancelled',):
+                    sale.status = 'refunded'
                 updated_this_sale = True
 
         if updated_this_sale or force_recalculate:

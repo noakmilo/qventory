@@ -96,6 +96,7 @@ class Sale(db.Model):
         ad_fee = round(self.ad_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
         shipping_cost = round(self.shipping_cost or 0, 2)
+        refund = round(self.refund_amount or 0, 2)
 
         total_fees = (
             marketplace_fee +
@@ -106,6 +107,6 @@ class Sale(db.Model):
 
         # Calculate net profit
         if self.gross_profit is not None:
-            self.net_profit = self.gross_profit - total_fees - shipping_cost
+            self.net_profit = self.gross_profit - total_fees - shipping_cost - refund
         else:
-            self.net_profit = sold_price - total_fees - shipping_cost
+            self.net_profit = sold_price - total_fees - shipping_cost - refund
