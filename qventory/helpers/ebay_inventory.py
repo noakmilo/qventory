@@ -18,8 +18,10 @@ EBAY_ENV = os.environ.get('EBAY_ENV', 'production')
 
 if EBAY_ENV == 'production':
     EBAY_API_BASE = "https://api.ebay.com"
+    EBAY_FINANCES_API_BASE = "https://apiz.ebay.com"
 else:
     EBAY_API_BASE = "https://api.sandbox.ebay.com"
+    EBAY_FINANCES_API_BASE = "https://apiz.sandbox.ebay.com"
 
 if EBAY_ENV == 'production':
     TRADING_API_URL = "https://api.ebay.com/ws/api.dll"

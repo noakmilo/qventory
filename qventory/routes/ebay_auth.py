@@ -856,7 +856,7 @@ def finances_debug():
     """
     import base64 as _base64
     import json as _json
-    from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE
+    from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE, EBAY_FINANCES_API_BASE
 
     access_token = get_user_access_token(current_user.id)
     if not access_token:
@@ -885,13 +885,13 @@ def finances_debug():
 
     raw_results = {}
     test_endpoints = [
-        ('finances_payout', '/sell/finances/v1/payout'),
-        ('finances_transaction', '/sell/finances/v1/transaction'),
-        ('account_privilege', '/sell/account/v1/privilege'),
+        ('finances_payout', EBAY_FINANCES_API_BASE, '/sell/finances/v1/payout'),
+        ('finances_transaction', EBAY_FINANCES_API_BASE, '/sell/finances/v1/transaction'),
+        ('account_privilege', EBAY_API_BASE, '/sell/account/v1/privilege'),
     ]
-    for label, path in test_endpoints:
+    for label, base, path in test_endpoints:
         try:
-            full_url = f"{EBAY_API_BASE}{path}"
+            full_url = f"{base}{path}"
             log(f"[FINANCES_DEBUG] Calling: {full_url}")
             resp = requests.get(full_url, headers=headers, params={'limit': 1}, timeout=20)
             try:

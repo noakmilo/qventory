@@ -4,7 +4,7 @@ Helpers for eBay Finances API (payouts and transactions).
 from datetime import datetime, timedelta
 import requests
 
-from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_API_BASE, log_inv
+from qventory.helpers.ebay_inventory import get_user_access_token, EBAY_FINANCES_API_BASE, log_inv
 
 
 def _format_iso(dt):
@@ -26,7 +26,7 @@ def _fetch_finances_endpoint(user_id, path, params):
             'correlation_id': None
         }
 
-    url = f"{EBAY_API_BASE}{path}"
+    url = f"{EBAY_FINANCES_API_BASE}{path}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
