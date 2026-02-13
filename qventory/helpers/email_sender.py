@@ -507,6 +507,61 @@ Upgrade: https://qventory.com/upgrade
     return send_email(to_email, subject, html_body, text_body)
 
 
+def send_support_broadcast_email(to_email, username, subject, body, ticket_url):
+    email_subject = f"Qventory Announcement: {subject}"
+    safe_name = username or "there"
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; }}
+            .container {{ max-width: 600px; margin: 0 auto; padding: 36px 20px; }}
+            .header {{ text-align: center; margin-bottom: 24px; }}
+            .logo {{ font-size: 24px; font-weight: bold; color: #2563eb; }}
+            .content {{ line-height: 1.6; color: #374151; }}
+            .message {{ white-space: pre-wrap; background: #f8fafc; border: 1px solid #e5e7eb; padding: 14px 16px; border-radius: 10px; }}
+            .button {{ display: inline-block; background: #2563eb; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none; margin: 16px 0; }}
+            .footer {{ margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="logo">Qventory</div>
+            </div>
+            <div class="content">
+                <h2>Hi {safe_name},</h2>
+                <p>You have a new announcement from Qventory:</p>
+                <div class="message">{body}</div>
+                <a class="button" href="{ticket_url}">View Announcement</a>
+                <p>Need help? Contact us at support@qventory.com</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2025 Qventory. All rights reserved.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    text_body = f"""
+Hi {safe_name},
+
+You have a new announcement from Qventory:
+
+{body}
+
+View it here: {ticket_url}
+
+Need help? Contact us at support@qventory.com
+
+---
+© 2025 Qventory. All rights reserved.
+    """
+    return send_email(to_email, email_subject, html_body, text_body)
+
+
 def send_pickup_scheduled_email(to_email, buyer_name, seller_name, pickup_date, pickup_time, address, details_url, calendar_url):
     subject = f"Pickup scheduled with {seller_name}"
 
@@ -616,7 +671,7 @@ New pickup message from {sender_label}
 Reply: {reply_url}
 
 ---
-© 2025 Qventory. All rights reserved.
+© 2026 Qventory. All rights reserved.
     """
 
     return send_email(to_email, subject, html_body, text_body)

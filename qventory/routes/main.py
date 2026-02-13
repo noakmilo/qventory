@@ -4541,6 +4541,8 @@ def admin_support_broadcast():
 
         broadcast_id = f"BRD-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
         created_count = 0
+        email_failures = 0
+        from qventory.helpers.email_sender import send_support_broadcast_email
         for user in users:
             ticket = SupportTicket(
                 ticket_code=_support_ticket_code(),
@@ -4562,9 +4564,22 @@ def admin_support_broadcast():
             )
             db.session.add(message)
             created_count += 1
+            ticket_url = url_for("main.support_detail", ticket_code=ticket.ticket_code, _external=True)
+            ok, _err = send_support_broadcast_email(
+                user.email,
+                user.username or user.email,
+                subject,
+                body,
+                ticket_url,
+            )
+            if not ok:
+                email_failures += 1
 
         db.session.commit()
-        flash(f"Broadcast sent to {created_count} users.", "ok")
+        if email_failures:
+            flash(f"Broadcast sent to {created_count} users. Email failures: {email_failures}.", "error")
+        else:
+            flash(f"Broadcast sent to {created_count} users.", "ok")
         return redirect(url_for("main.admin_support_inbox"))
 
     return render_template("admin_support/broadcast.html")

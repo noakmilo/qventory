@@ -1173,6 +1173,9 @@ async function submitInlineForm(container, form, display) {
       updateSupplierDisplay(container, data.supplier);
     } else if (data.field === 'item_cost') {
       updateCostDisplay(container, data.item_cost, data.cost_history_added);
+      if (isSoldView && typeof data.net_profit !== 'undefined') {
+        updateNetProfitDisplay(container, data.net_profit);
+      }
     } else if (data.field === 'location') {
       updateLocationDisplay(container, data.location_code, data.A, data.B, data.S, data.C);
     }
@@ -1337,6 +1340,18 @@ function updateLocationDisplay(container, locationCode, A, B, S, C) {
       if (qrLink) qrLink.remove();
     }
   }
+}
+
+function updateNetProfitDisplay(container, netProfitValue) {
+  const row = container.closest('tr[data-item-row]');
+  if (!row) return;
+  const netCell = row.querySelector('td[data-col="net_profit"]');
+  if (!netCell) return;
+  const value = parseFloat(netProfitValue);
+  if (!isFinite(value)) return;
+  netCell.textContent = `$${value.toFixed(2)}`;
+  netCell.classList.remove('positive', 'negative');
+  netCell.classList.add(value >= 0 ? 'positive' : 'negative');
 }
 
 function updateRoiDisplay(row) {

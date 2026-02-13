@@ -276,9 +276,9 @@
             </th>
             <th data-col="net_profit">
               <span class="col-header sort-header" data-sort-key="net_profit" data-default-dir="desc">Net Profit
-                <span class="tooltip-icon" data-tooltip="Net Profit = Sold Price - Cost - Shipping Cost - All Fees (Marketplace + Ad + Other)">
+                <button class="tooltip-icon net-profit-info" type="button" aria-label="Net profit calculation info">
                   <i class="fas fa-info-circle"></i>
-                </span>
+                </button>
                 {% if sort_by == 'net_profit' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
@@ -1308,6 +1308,29 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<div id="netProfitModal" class="modal" hidden>
+  <div class="modal__backdrop" onclick="closeNetProfitModal()"></div>
+  <div class="modal__dialog" style="max-width:620px">
+    <div class="modal__header">
+      <h3 style="margin:0;">Net Profit Calculation</h3>
+      <button class="modal__close" onclick="closeNetProfitModal()">×</button>
+    </div>
+    <div class="modal__body">
+      <div style="font-weight:600;margin-bottom:8px;">Formula</div>
+      <div style="padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,0.03);">
+        Net Profit = Sold Price - Cost - Shipping Cost - Total Marketplace Fees - Refund
+      </div>
+      <div style="margin-top:14px;color:var(--sub);font-size:13px;line-height:1.5;">
+        Sold Price does not include tax. Shipping Charged is displayed separately.
+        Total Marketplace Fees include marketplace, processing, ad, and other fees.
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button class="btn" onclick="closeNetProfitModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ===== AUTO-REFRESH WITH SERVER-SENT EVENTS ===== */
 {% if view_type == 'active' %}
@@ -2121,6 +2144,26 @@ function closeCostHistoryModal() {
   const modal = document.getElementById('costHistoryModal');
   if (modal) modal.hidden = true;
 }
+
+function openNetProfitModal() {
+  const modal = document.getElementById('netProfitModal');
+  if (!modal) return;
+  modal.hidden = false;
+}
+
+function closeNetProfitModal() {
+  const modal = document.getElementById('netProfitModal');
+  if (modal) modal.hidden = true;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const infoBtn = document.querySelector('.net-profit-info');
+  if (infoBtn) {
+    infoBtn.addEventListener('click', () => {
+      openNetProfitModal();
+    });
+  }
+});
 
 function formatCostHistoryDate(value) {
   if (!value) return '—';
