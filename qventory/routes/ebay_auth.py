@@ -878,17 +878,16 @@ def finances_debug():
     end_iso = end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     raw_results = {}
-    for label, path in [('payouts', '/sell/finances/v1/payout'), ('transactions', '/sell/finances/v1/transaction')]:
+    test_endpoints = [
+        ('finances_payout', '/sell/finances/v1/payout'),
+        ('finances_transaction', '/sell/finances/v1/transaction'),
+        ('account_privilege', '/sell/account/v1/privilege'),
+    ]
+    for label, path in test_endpoints:
         try:
             full_url = f"{EBAY_API_BASE}{path}"
             log(f"[FINANCES_DEBUG] Calling: {full_url}")
-            # No date filter - simplest possible request to isolate the 404
-            resp = requests.get(
-                full_url,
-                headers=headers,
-                params={'limit': 1},
-                timeout=20
-            )
+            resp = requests.get(full_url, headers=headers, params={'limit': 1}, timeout=20)
             try:
                 body = resp.json()
             except Exception:
@@ -896,7 +895,6 @@ def finances_debug():
             raw_results[label] = {
                 'url_called': full_url,
                 'status_code': resp.status_code,
-                'response_headers': dict(resp.headers),
                 'body': body
             }
         except Exception as exc:
