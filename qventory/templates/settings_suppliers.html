@@ -1,0 +1,253 @@
+{% extends "base_new.html" %}
+{% block title %}Suppliers – Settings{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Suppliers</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin-bottom:6px;"><i class="fas fa-truck" style="color:#f97316"></i> Suppliers</h2>
+      <p style="color:var(--sub);font-size:14px;margin:0;max-width:520px;">
+        Edit or remove suppliers, see how many items are assigned, and track unassigned inventory.
+      </p>
+    </div>
+    <a class="btn" href="{{ url_for('main.settings') }}" style="white-space:nowrap;">
+      <i class="fas fa-arrow-left"></i> Back to Settings
+    </a>
+  </div>
+
+  <div style="margin-top:20px;display:grid;grid-template-columns:1fr;gap:16px;">
+    <div style="border:1px solid var(--glass-border);border-radius:12px;padding:12px;background:var(--glass-bg);">
+      <canvas id="suppliersChart" style="width:100%;max-height:280px;"></canvas>
+    </div>
+
+    <div class="table-wrap" style="border-radius:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Supplier</th>
+            <th style="text-align:right;">Items</th>
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="suppliersTableBody">
+          <tr>
+            <td colspan="3" style="color:var(--sub);">Loading suppliers...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  let suppliersChartInstance = null;
+
+  function renderSuppliersTable(rows, unassignedCount) {
+    const tbody = document.getElementById('suppliersTableBody');
+    if (!tbody) return;
+
+    if (!rows.length && !unassignedCount) {
+      tbody.innerHTML = '<tr><td colspan="3" style="color:var(--sub);">No suppliers found.</td></tr>';
+      return;
+    }
+
+    const html = [];
+    rows.forEach(row => {
+      html.push(`
+        <tr data-supplier-name="${row.name}">
+          <td>
+            <span class="supplier-name">${row.name}</span>
+            <input class="input supplier-edit-input" type="text" value="${row.name}" style="display:none;max-width:220px;">
+          </td>
+          <td style="text-align:right;">${row.count}</td>
+          <td style="text-align:right;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+              <button class="btn btn-sm supplier-edit-btn" type="button">Edit</button>
+              <button class="btn btn-sm supplier-save-btn" type="button" style="display:none;background:#10b981;color:#fff;">Save</button>
+              <button class="btn btn-sm supplier-cancel-btn" type="button" style="display:none;">Cancel</button>
+              <button class="btn btn-sm supplier-delete-btn" type="button" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.3);color:#ef4444;">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `);
+    });
+
+    if (unassignedCount) {
+      html.push(`
+        <tr>
+          <td style="color:var(--sub);">Unassigned</td>
+          <td style="text-align:right;">${unassignedCount}</td>
+          <td style="text-align:right;color:var(--sub);">—</td>
+        </tr>
+      `);
+    }
+
+    tbody.innerHTML = html.join('');
+  }
+
+  function renderSuppliersChart(rows, unassignedCount) {
+    const canvas = document.getElementById('suppliersChart');
+    if (!canvas) return;
+
+    const labels = rows.map(r => r.name);
+    const data = rows.map(r => r.count);
+    if (unassignedCount) {
+      labels.push('Unassigned');
+      data.push(unassignedCount);
+    }
+
+    const palette = ['#38bdf8', '#22c55e', '#f97316', '#a855f7', '#f43f5e', '#facc15', '#14b8a6', '#8b5cf6'];
+    const colors = labels.map((_, idx) => palette[idx % palette.length]);
+
+    if (suppliersChartInstance) {
+      suppliersChartInstance.destroy();
+    }
+
+    if (!labels.length) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    suppliersChartInstance = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [{
+          data,
+          backgroundColor: colors,
+          borderColor: 'rgba(17,24,39,0.2)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#cbd5f5' }
+          }
+        }
+      }
+    });
+  }
+
+  async function fetchSuppliersData() {
+    const response = await fetch('/api/suppliers');
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      return { suppliers: [], unassigned: 0 };
+    }
+    return { suppliers: data.suppliers || [], unassigned: data.unassigned || 0 };
+  }
+
+  async function refreshSuppliers() {
+    const { suppliers, unassigned } = await fetchSuppliersData();
+    renderSuppliersTable(suppliers, unassigned);
+    renderSuppliersChart(suppliers, unassigned);
+  }
+
+  async function renameSupplier(oldName, newName) {
+    const response = await fetch('/api/suppliers/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_name: oldName, new_name: newName })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to rename supplier');
+    }
+  }
+
+  async function deleteSupplier(name) {
+    const response = await fetch('/api/suppliers/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to delete supplier');
+    }
+  }
+
+  document.addEventListener('click', async (event) => {
+    const row = event.target.closest('tr[data-supplier-name]');
+    if (!row) return;
+
+    const supplierName = row.dataset.supplierName;
+    const nameSpan = row.querySelector('.supplier-name');
+    const input = row.querySelector('.supplier-edit-input');
+    const editBtn = row.querySelector('.supplier-edit-btn');
+    const saveBtn = row.querySelector('.supplier-save-btn');
+    const cancelBtn = row.querySelector('.supplier-cancel-btn');
+
+    if (event.target.closest('.supplier-edit-btn')) {
+      nameSpan.style.display = 'none';
+      input.style.display = 'inline-block';
+      editBtn.style.display = 'none';
+      saveBtn.style.display = 'inline-block';
+      cancelBtn.style.display = 'inline-block';
+      input.focus();
+      return;
+    }
+
+    if (event.target.closest('.supplier-cancel-btn')) {
+      input.value = supplierName;
+      input.style.display = 'none';
+      nameSpan.style.display = 'inline-block';
+      editBtn.style.display = 'inline-block';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+      return;
+    }
+
+    if (event.target.closest('.supplier-save-btn')) {
+      const newName = input.value.trim();
+      if (!newName) {
+        alert('Supplier name cannot be empty.');
+        return;
+      }
+      if (newName === supplierName) {
+        input.style.display = 'none';
+        nameSpan.style.display = 'inline-block';
+        editBtn.style.display = 'inline-block';
+        saveBtn.style.display = 'none';
+        cancelBtn.style.display = 'none';
+        return;
+      }
+      try {
+        await renameSupplier(supplierName, newName);
+        await refreshSuppliers();
+      } catch (err) {
+        alert(err.message);
+      }
+      return;
+    }
+
+    if (event.target.closest('.supplier-delete-btn')) {
+      if (!confirm(`Delete supplier "${supplierName}" and set its items to Unassigned?`)) {
+        return;
+      }
+      try {
+        await deleteSupplier(supplierName);
+        await refreshSuppliers();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  });
+
+  document.addEventListener('DOMContentLoaded', refreshSuppliers);
+</script>
+{% endblock %}

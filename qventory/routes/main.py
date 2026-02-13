@@ -3978,6 +3978,13 @@ def settings():
                          plan_limits=plan_limits)
 
 
+@main_bp.route("/settings/suppliers", methods=["GET"])
+@login_required
+def settings_suppliers():
+    s = get_or_create_settings(current_user)
+    return render_template("settings_suppliers.html", settings=s)
+
+
 @main_bp.route("/api/suppliers", methods=["GET"])
 @login_required
 def api_suppliers():
