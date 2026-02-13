@@ -1,0 +1,52 @@
+{% extends "base_admin.html" %}
+{% block title %}New Broadcast – Admin – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a class="breadcrumb-link" href="{{ url_for('main.admin_support_inbox') }}">Support Tickets</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">New Broadcast</span>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="width:98%;margin:0 auto;">
+  <div class="admin-header">
+    <div>
+      <h1><i class="fas fa-bullhorn"></i> New Broadcast</h1>
+      <p style="color:var(--sub);">Send an announcement ticket that users can only acknowledge.</p>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <form method="post" style="display:grid;gap:14px;max-width:720px;">
+    <div>
+      <label>Subject</label>
+      <input class="input" type="text" name="subject" maxlength="200" required>
+    </div>
+    <div>
+      <label>Message</label>
+      <textarea class="input" name="body" rows="6" required></textarea>
+    </div>
+    <div>
+      <label>Recipients</label>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input type="radio" name="target" value="all" checked>
+          All users
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;">
+          <input type="radio" name="target" value="specific">
+          Specific users
+        </label>
+      </div>
+      <textarea class="input" name="recipients" rows="3" placeholder="comma-separated emails or usernames (only for specific users)"></textarea>
+      <div class="muted" style="margin-top:6px;">If "Specific users" is selected, add emails or usernames separated by commas.</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button class="btn submitbtn" type="submit"><i class="fas fa-paper-plane"></i> Send Broadcast</button>
+      <a class="btn" href="{{ url_for('main.admin_support_inbox') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

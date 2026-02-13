@@ -13,6 +13,9 @@
       <h1><i class="fas fa-inbox"></i> Support Tickets</h1>
       <p style="color:var(--sub);">All user support conversations</p>
     </div>
+    <div>
+      <a class="btn" href="{{ url_for('main.admin_support_broadcast') }}"><i class="fas fa-bullhorn"></i> New Broadcast</a>
+    </div>
   </div>
 
   <hr class="divider">
@@ -48,6 +51,9 @@
             <a href="{{ url_for('main.admin_support_detail', ticket_code=ticket.ticket_code) }}">
               {{ ticket.subject }}
             </a>
+            {% if ticket.kind == 'broadcast' %}
+            <span class="tag" style="margin-left:6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">Broadcast</span>
+            {% endif %}
           </td>
           <td><span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span></td>
           <td style="font-size:12px;color:var(--sub);">{{ ticket.updated_at.strftime('%b %d, %Y') }}</td>

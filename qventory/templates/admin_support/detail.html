@@ -14,6 +14,11 @@
     <div>
       <h1>{{ ticket.subject }}</h1>
       <p style="color:var(--sub);">{{ ticket.ticket_code }} · <span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span> · {{ ticket.user.email }}</p>
+      {% if ticket.kind == 'broadcast' and broadcast_stats %}
+      <div class="muted" style="margin-top:6px;">
+        Broadcast Acknowledged: {{ broadcast_stats.acknowledged }}/{{ broadcast_stats.total }}
+      </div>
+      {% endif %}
     </div>
     <div class="admin-actions">
       <form method="post" action="{{ url_for('main.admin_support_status', ticket_code=ticket.ticket_code) }}">

@@ -6,12 +6,17 @@
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
     <div>
       <h2><i class="fas fa-life-ring" style="color:#60a5fa;"></i> Support Inbox</h2>
+      {% if can_create_ticket %}
       <p class="muted">Create a ticket and chat with support. Max 3 open tickets.</p>
+      {% else %}
+      <p class="muted">Support tickets are available for paid plans. You can still view announcements.</p>
+      {% endif %}
     </div>
     <div class="tag">Open: {{ open_count }}/{{ max_open }}</div>
   </div>
 </div>
 
+{% if can_create_ticket %}
 <div class="card" style="margin-bottom:20px;">
   <h3 style="margin-top:0;">New Ticket</h3>
   <form method="post" enctype="multipart/form-data" style="display:grid;gap:12px;">
@@ -32,6 +37,7 @@
     </div>
   </form>
 </div>
+{% endif %}
 
 <div class="card">
   <h3 style="margin-top:0;">Your Tickets</h3>
@@ -64,9 +70,19 @@
             <a href="{{ url_for('main.support_detail', ticket_code=ticket.ticket_code) }}" style="color:var(--text);text-decoration:none;font-weight:600;">
               {{ ticket.subject }}
             </a>
+            {% if ticket.kind == 'broadcast' %}
+            <span class="tag" style="margin-left:6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">Announcement</span>
+            {% endif %}
           </td>
           <td>
             <span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span>
+            {% if ticket.requires_ack %}
+              {% if ticket.acknowledged_at %}
+              <span class="tag" style="margin-left:6px;background:rgba(16,185,129,0.15);color:#22c55e;border:1px solid rgba(16,185,129,0.35);">Acknowledged</span>
+              {% else %}
+              <span class="tag" style="margin-left:6px;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.35);">Needs Acknowledgement</span>
+              {% endif %}
+            {% endif %}
           </td>
           <td style="color:var(--text-secondary);font-size:12px;">
             {{ ticket.updated_at.strftime('%b %d, %Y') }}

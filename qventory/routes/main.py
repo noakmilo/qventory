@@ -17,6 +17,7 @@ import csv
 from datetime import datetime, date
 import hashlib
 import stripe
+import uuid
 
 
 # Dotenv: carga credenciales/vars desde /opt/qventory/qventory/.env
@@ -737,8 +738,16 @@ def _support_access_allowed(user: User) -> bool:
     return user is not None and user.role in SUPPORT_ROLES
 
 
+def _support_broadcast_exists(user_id: int) -> bool:
+    return SupportTicket.query.filter_by(user_id=user_id, kind="broadcast").count() > 0
+
+
 def _support_open_count(user_id: int) -> int:
-    return SupportTicket.query.filter_by(user_id=user_id, status="open").count()
+    return SupportTicket.query.filter(
+        SupportTicket.user_id == user_id,
+        SupportTicket.status == "open",
+        SupportTicket.kind != "broadcast",
+    ).count()
 
 
 def _support_ticket_code() -> str:
@@ -4280,7 +4289,8 @@ def settings_support():
 @main_bp.route("/support", methods=["GET", "POST"])
 @login_required
 def support_inbox():
-    if not _support_access_allowed(current_user):
+    can_create_ticket = _support_access_allowed(current_user)
+    if not can_create_ticket and not _support_broadcast_exists(current_user.id):
         flash("Support is available for paid plans only.", "error")
         return redirect(url_for("main.dashboard"))
 
@@ -4288,6 +4298,9 @@ def support_inbox():
     max_open = 3
 
     if request.method == "POST":
+        if not can_create_ticket:
+            flash("Support tickets are available for paid plans only.", "error")
+            return redirect(url_for("main.support_inbox"))
         if open_count >= max_open:
             flash("You already have 3 open tickets. Close one to create a new ticket.", "error")
             return redirect(url_for("main.support_inbox"))
@@ -4361,6 +4374,7 @@ def support_inbox():
         unread_counts=unread_counts,
         open_count=open_count,
         max_open=max_open,
+        can_create_ticket=can_create_ticket,
         cloudinary_enabled=cloudinary_enabled,
     )
 
@@ -4368,14 +4382,13 @@ def support_inbox():
 @main_bp.route("/support/<ticket_code>")
 @login_required
 def support_detail(ticket_code):
-    if not _support_access_allowed(current_user):
-        flash("Support is available for paid plans only.", "error")
-        return redirect(url_for("main.dashboard"))
-
     ticket = SupportTicket.query.filter_by(
         ticket_code=ticket_code,
         user_id=current_user.id
     ).first_or_404()
+    if not _support_access_allowed(current_user) and ticket.kind != "broadcast":
+        flash("Support is available for paid plans only.", "error")
+        return redirect(url_for("main.dashboard"))
 
     SupportMessage.query.filter_by(
         ticket_id=ticket.id,
@@ -4397,17 +4410,19 @@ def support_detail(ticket_code):
 @main_bp.route("/support/<ticket_code>/message", methods=["POST"])
 @login_required
 def support_send_message(ticket_code):
-    if not _support_access_allowed(current_user):
-        flash("Support is available for paid plans only.", "error")
-        return redirect(url_for("main.dashboard"))
-
     ticket = SupportTicket.query.filter_by(
         ticket_code=ticket_code,
         user_id=current_user.id
     ).first_or_404()
+    if not _support_access_allowed(current_user) and ticket.kind != "broadcast":
+        flash("Support is available for paid plans only.", "error")
+        return redirect(url_for("main.dashboard"))
 
     if ticket.status != "open":
         flash("This ticket is closed. You can’t reply.", "error")
+        return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+    if ticket.requires_ack or ticket.kind == "broadcast":
+        flash("This ticket does not accept replies.", "error")
         return redirect(url_for("main.support_detail", ticket_code=ticket_code))
 
     body = (request.form.get("body") or "").strip()
@@ -4448,6 +4463,24 @@ def support_send_message(ticket_code):
     return redirect(url_for("main.support_detail", ticket_code=ticket_code))
 
 
+@main_bp.route("/support/<ticket_code>/ack", methods=["POST"])
+@login_required
+def support_acknowledge(ticket_code):
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+    if ticket.kind != "broadcast" or not ticket.requires_ack:
+        flash("This ticket does not require acknowledgement.", "error")
+        return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+    if ticket.acknowledged_at is None:
+        ticket.acknowledged_at = datetime.utcnow()
+        ticket.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash("Acknowledged.", "ok")
+    return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+
 @main_bp.route("/admin/support")
 @require_admin
 def admin_support_inbox():
@@ -4471,6 +4504,72 @@ def admin_support_inbox():
     )
 
 
+@main_bp.route("/admin/support/broadcast", methods=["GET", "POST"])
+@require_admin
+def admin_support_broadcast():
+    from qventory.models.user import User
+    if request.method == "POST":
+        subject = (request.form.get("subject") or "").strip()
+        body = (request.form.get("body") or "").strip()
+        target = (request.form.get("target") or "all").strip().lower()
+        recipients_raw = (request.form.get("recipients") or "").strip()
+
+        if not subject or not body:
+            flash("Subject and message are required.", "error")
+            return redirect(url_for("main.admin_support_broadcast"))
+
+        users = []
+        if target == "all":
+            users = User.query.order_by(User.id.asc()).all()
+        else:
+            tokens = [t.strip() for t in recipients_raw.replace("\n", ",").split(",") if t.strip()]
+            if not tokens:
+                flash("Provide at least one username or email.", "error")
+                return redirect(url_for("main.admin_support_broadcast"))
+            users = User.query.filter(
+                (User.email.in_(tokens)) | (User.username.in_(tokens))
+            ).all()
+            found = {u.email for u in users} | {u.username for u in users}
+            missing = [t for t in tokens if t not in found]
+            if missing:
+                flash(f"Users not found: {', '.join(missing)}", "error")
+                return redirect(url_for("main.admin_support_broadcast"))
+
+        if not users:
+            flash("No recipients found.", "error")
+            return redirect(url_for("main.admin_support_broadcast"))
+
+        broadcast_id = f"BRD-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+        created_count = 0
+        for user in users:
+            ticket = SupportTicket(
+                ticket_code=_support_ticket_code(),
+                user_id=user.id,
+                subject=subject[:200],
+                status="open",
+                kind="broadcast",
+                broadcast_id=broadcast_id,
+                requires_ack=True,
+            )
+            db.session.add(ticket)
+            db.session.flush()
+            message = SupportMessage(
+                ticket_id=ticket.id,
+                sender_role="admin",
+                body=body,
+                is_read_by_user=False,
+                is_read_by_admin=True,
+            )
+            db.session.add(message)
+            created_count += 1
+
+        db.session.commit()
+        flash(f"Broadcast sent to {created_count} users.", "ok")
+        return redirect(url_for("main.admin_support_inbox"))
+
+    return render_template("admin_support/broadcast.html")
+
+
 @main_bp.route("/admin/support/<ticket_code>")
 @require_admin
 def admin_support_detail(ticket_code):
@@ -4485,10 +4584,20 @@ def admin_support_detail(ticket_code):
 
     messages = ticket.messages.order_by(SupportMessage.created_at.asc()).all()
 
+    broadcast_stats = None
+    if ticket.kind == "broadcast" and ticket.broadcast_id:
+        total = SupportTicket.query.filter_by(broadcast_id=ticket.broadcast_id).count()
+        acknowledged = SupportTicket.query.filter(
+            SupportTicket.broadcast_id == ticket.broadcast_id,
+            SupportTicket.acknowledged_at.isnot(None)
+        ).count()
+        broadcast_stats = {"total": total, "acknowledged": acknowledged}
+
     return render_template(
         "admin_support/detail.html",
         ticket=ticket,
         messages=messages,
+        broadcast_stats=broadcast_stats,
         cloudinary_enabled=cloudinary_enabled,
     )
 

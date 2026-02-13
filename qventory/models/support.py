@@ -12,6 +12,10 @@ class SupportTicket(db.Model):
     ticket_code = db.Column(db.String(32), unique=True, nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     subject = db.Column(db.String(200), nullable=False)
+    kind = db.Column(db.String(20), nullable=False, default="chat", index=True)  # chat, broadcast
+    broadcast_id = db.Column(db.String(32), nullable=True, index=True)
+    requires_ack = db.Column(db.Boolean, default=False, nullable=False)
+    acknowledged_at = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="open", index=True)  # open, resolved, closed
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
