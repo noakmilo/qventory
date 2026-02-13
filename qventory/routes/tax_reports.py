@@ -304,7 +304,10 @@ def export_schedule_c(report_id):
         'gross_income': float(report.business_income) if report.business_income else 0,
 
         # Part II: Expenses
-        'advertising': 0,  # TODO: Add if tracked
+        'advertising': sum(
+            (fees.get('ad_fees', 0) or 0)
+            for fees in (report.marketplace_fees_breakdown or {}).values()
+        ),
         'car_truck_expenses': 0,  # TODO: Add mileage tracking
         'commissions_fees': float(report.total_marketplace_fees) if report.total_marketplace_fees else 0,
         'contract_labor': 0,

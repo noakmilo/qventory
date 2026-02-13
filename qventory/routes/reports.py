@@ -438,7 +438,7 @@ def analytics():
     total_sales = len(sales)
     gross_sales = sum(max((s.sold_price or 0) + (s.tax_collected or 0), 0) for s in sales)
     total_costs = sum(s.item_cost or 0 for s in sales)
-    total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales)
+    total_fees = sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.ad_fee or 0) + (s.other_fees or 0) for s in sales)
     total_taxes_collected = sum(s.tax_collected or 0 for s in sales)
 
     net_sales = sum((s.net_profit or 0) for s in sales)
@@ -508,15 +508,15 @@ def analytics():
     store_subscription_total = sum(s.other_fees or 0 for s in sales) + insertion_fee_total
 
     # Expenses summary (based on sales)
-    # Note: other_fees now contains store subscription prorate
     expenses = {
         "inventory": sum(s.item_cost or 0 for s in sales),
         "supplies": 0,  # Reserved for future use (packaging, labels, etc.)
-        "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) + (s.other_fees or 0) for s in sales),
+        "marketplace": sum((s.marketplace_fee or 0) + (s.payment_processing_fee or 0) for s in sales),
+        "ad_fee": sum(s.ad_fee or 0 for s in sales),
         "shipping_charged": sum(s.shipping_charged or 0 for s in sales),
         "shipping_cost": sum(s.shipping_cost or 0 for s in sales),
         "store_subscription": store_subscription_total,
-        "business_expenses": business_expenses_total,  # NEW: Operational expenses (rent, supplies, etc.)
+        "business_expenses": business_expenses_total,
     }
 
     # Build daily trends

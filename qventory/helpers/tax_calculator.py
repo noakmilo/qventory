@@ -249,6 +249,7 @@ class TaxCalculator:
 
         total_marketplace_fees = Decimal('0.00')
         total_payment_fees = Decimal('0.00')
+        total_ad_fees = Decimal('0.00')
         total_other_fees = Decimal('0.00')
 
         marketplace_breakdown = {}
@@ -260,6 +261,7 @@ class TaxCalculator:
                 marketplace_breakdown[marketplace] = {
                     'final_value_fees': Decimal('0.00'),
                     'payment_processing': Decimal('0.00'),
+                    'ad_fees': Decimal('0.00'),
                     'other_fees': Decimal('0.00')
                 }
 
@@ -273,6 +275,11 @@ class TaxCalculator:
                 total_payment_fees += fee
                 marketplace_breakdown[marketplace]['payment_processing'] += fee
 
+            if sale.ad_fee:
+                fee = Decimal(str(sale.ad_fee))
+                total_ad_fees += fee
+                marketplace_breakdown[marketplace]['ad_fees'] += fee
+
             if sale.other_fees:
                 fee = Decimal(str(sale.other_fees))
                 total_other_fees += fee
@@ -281,10 +288,12 @@ class TaxCalculator:
         return {
             'total': float(total_marketplace_fees),
             'payment_processing': float(total_payment_fees),
+            'ad_fees': float(total_ad_fees),
             'other_fees': float(total_other_fees),
             'by_marketplace': {k: {
                 'final_value_fees': float(v['final_value_fees']),
                 'payment_processing': float(v['payment_processing']),
+                'ad_fees': float(v['ad_fees']),
                 'other_fees': float(v['other_fees'])
             } for k, v in marketplace_breakdown.items()}
         }
@@ -548,6 +557,7 @@ class TaxCalculator:
         total_expenses = (
             marketplace_fees['total'] +
             marketplace_fees['payment_processing'] +
+            marketplace_fees['ad_fees'] +
             marketplace_fees['other_fees'] +
             shipping_costs['total'] +
             business_expenses['total']

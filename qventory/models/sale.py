@@ -30,6 +30,7 @@ class Sale(db.Model):
     payment_processing_fee = db.Column(db.Float, nullable=True, default=0)  # Fee de procesamiento (PayPal, Stripe, etc)
     shipping_cost = db.Column(db.Float, nullable=True, default=0)  # Costo real de envío
     shipping_charged = db.Column(db.Float, nullable=True, default=0)  # Lo que cobró al comprador
+    ad_fee = db.Column(db.Float, nullable=True, default=0)  # eBay Promoted Listings / Advertising fee
     other_fees = db.Column(db.Float, nullable=True, default=0)  # Otros fees (promociones, etc)
 
     # Profit calculado
@@ -89,15 +90,17 @@ class Sale(db.Model):
         else:
             self.gross_profit = None
 
-        # Total selling cost: marketplace + processing + other fees (shipping cost tracked separately)
+        # Total selling cost: marketplace + processing + ad + other fees (shipping cost tracked separately)
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
+        ad_fee = round(self.ad_fee or 0, 2)
         other_fees = round(self.other_fees or 0, 2)
         shipping_cost = round(self.shipping_cost or 0, 2)
 
         total_fees = (
             marketplace_fee +
             processing_fee +
+            ad_fee +
             other_fees
         )
 

@@ -242,6 +242,16 @@
                             ${{ '{:,.2f}'.format(fees.final_value_fees) }}
                         </td>
                     </tr>
+                    {% if fees.ad_fees is defined and fees.ad_fees %}
+                    <tr style="border-bottom: 1px solid var(--border);">
+                        <td style="padding: 0.5rem 0 0.5rem 2rem; color: var(--sub); font-size: 0.9rem;">
+                            {{ marketplace|upper }} - Ad Fees (Promoted Listings)
+                        </td>
+                        <td style="padding: 0.5rem 0; text-align: right; font-size: 0.9rem;">
+                            ${{ '{:,.2f}'.format(fees.ad_fees) }}
+                        </td>
+                    </tr>
+                    {% endif %}
                 {% endfor %}
             {% endif %}
 

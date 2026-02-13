@@ -781,25 +781,13 @@ def import_ebay_sales(self, user_id, days_back=None):
                     status = sale_data.get('status', 'pending')
                     ebay_transaction_id = sale_data.get('ebay_transaction_id')
 
-                    # Calculate eBay fees (approximate) unless real fees are provided
-                    marketplace_fee_raw = sale_data.get('marketplace_fee')
-                    payment_fee_raw = sale_data.get('payment_processing_fee')
-                    other_fees = sale_data.get('other_fees')
-
-                    marketplace_fee = marketplace_fee_raw
-                    payment_fee = payment_fee_raw
-
-                    if marketplace_fee is None:
-                        marketplace_fee = sold_price * 0.1325  # ~13.25% eBay final value fee
-                    if payment_fee is None:
-                        payment_fee = sold_price * 0.029 + 0.30  # Payment processing
-
-                    # Calculate prorated store subscription fee
-                    store_fee_per_sale = 0.0
-                    if ebay_store_monthly_fee > 0 and len(orders) > 0:
-                        store_fee_per_sale = ebay_store_monthly_fee / len(orders)
-                    if other_fees is not None:
-                        store_fee_per_sale = other_fees
+                    # Use real fees from Fulfillment API if available.
+                    # Do NOT estimate — reconcile_sales_from_finances will fill
+                    # accurate fees from the Finances API after this import.
+                    marketplace_fee = sale_data.get('marketplace_fee') or 0
+                    payment_fee = sale_data.get('payment_processing_fee') or 0
+                    ad_fee = sale_data.get('ad_fee') or 0
+                    other_fees = sale_data.get('other_fees') or 0
 
                     # Try to find matching item in Qventory (multiple strategies)
                     item = None
@@ -835,15 +823,20 @@ def import_ebay_sales(self, user_id, days_back=None):
                         # Update existing sale
                         existing_sale.sold_price = sold_price
                         existing_sale.status = status
-                        if marketplace_fee_raw is not None:
-                            existing_sale.marketplace_fee = marketplace_fee_raw
-                        if payment_fee_raw is not None:
-                            existing_sale.payment_processing_fee = payment_fee_raw
+                        # Only set fees from Fulfillment API if available;
+                        # reconcile_sales_from_finances will overwrite with
+                        # accurate Finances API data later.
+                        if marketplace_fee:
+                            existing_sale.marketplace_fee = marketplace_fee
+                        if payment_fee:
+                            existing_sale.payment_processing_fee = payment_fee
+                        if ad_fee:
+                            existing_sale.ad_fee = ad_fee
+                        if other_fees:
+                            existing_sale.other_fees = other_fees
                         if shipping_cost is not None:
                             if shipping_cost > 0 or not existing_sale.shipping_cost:
                                 existing_sale.shipping_cost = shipping_cost
-                        if store_fee_per_sale is not None:
-                            existing_sale.other_fees = store_fee_per_sale
                         if shipping_charged is not None:
                             existing_sale.shipping_charged = shipping_charged
                         if tax_collected is not None:
@@ -898,9 +891,10 @@ def import_ebay_sales(self, user_id, days_back=None):
                             item_cost=item.item_cost if item else None,
                             marketplace_fee=marketplace_fee,
                             payment_processing_fee=payment_fee,
+                            ad_fee=ad_fee,
                             shipping_cost=shipping_cost,
                             shipping_charged=shipping_charged,
-                            other_fees=store_fee_per_sale,
+                            other_fees=other_fees,
                             sold_at=sold_at,
                             shipped_at=shipped_at,
                             delivered_at=delivered_at,
@@ -927,8 +921,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
                         imported_count += 1
-                        total_fees = marketplace_fee + payment_fee + store_fee_per_sale
-                        log_task(f"  Imported sale: {title[:50]} - ${sold_price} (Fees: ${total_fees:.2f})")
+                        total_fees_log = marketplace_fee + payment_fee + ad_fee + other_fees
+                        log_task(f"  Imported sale: {title[:50]} - ${sold_price} (Fees: ${total_fees_log:.2f})")
 
                 except Exception as item_error:
                     log_task(f"  ERROR processing sale: {str(item_error)}")
@@ -3997,6 +3991,11 @@ def classify_finance_fee(txn_raw, amount):
     if not amount:
         return None
 
+    # Shipping label: detect by transactionType first (eBay Finances API
+    # returns SHIPPING_LABEL as a separate transaction type)
+    if transaction_type == 'SHIPPING_LABEL':
+        return 'shipping_label'
+
     if 'PAYMENT_PROCESSING' in fee_type:
         return 'payment_processing'
     if 'FINAL_VALUE' in fee_type or 'MARKETPLACE' in fee_type:
@@ -4005,8 +4004,8 @@ def classify_finance_fee(txn_raw, amount):
         return 'shipping_label'
     if any('SHIPPING_LABEL' in ref_type for ref_type in reference_types):
         return 'shipping_label'
-    if 'ADVERTISING' in fee_type or 'PROMOTED' in fee_type or 'PROMOTION' in fee_type:
-        return 'other'
+    if 'AD_FEE' in fee_type or 'ADVERTISING' in fee_type or 'PROMOTED' in fee_type:
+        return 'ad_fee'
     if 'INTERNATIONAL' in fee_type or 'REGULATORY' in fee_type:
         return 'other'
     if transaction_type in {'NON_SALE_CHARGE', 'FEE', 'ADJUSTMENT', 'REFUND', 'DISPUTE'}:
@@ -4015,6 +4014,61 @@ def classify_finance_fee(txn_raw, amount):
         return 'other'
 
     return None
+
+
+def _classify_marketplace_fee_type(fee_type_str):
+    """Classify an individual marketplaceFees entry feeType from Finances API."""
+    ft = str(fee_type_str or '').upper()
+    if 'FINAL_VALUE' in ft:
+        return 'marketplace'
+    if 'AD_FEE' in ft or 'ADVERTISING' in ft or 'PROMOTED' in ft:
+        return 'ad_fee'
+    if 'INTERNATIONAL' in ft or 'REGULATORY' in ft:
+        return 'other'
+    return 'marketplace'
+
+
+def extract_granular_fees_from_transaction(txn_raw):
+    """
+    Extract granular per-fee-type totals from a Finances API SALE transaction.
+
+    The Finances API returns orderLineItems[].marketplaceFees[] with individual
+    fee entries (FINAL_VALUE_FEE, AD_FEE, etc.) plus totalFeeAmount for the
+    transaction total.
+
+    Returns a dict: {marketplace, ad_fee, payment_processing, shipping_label, other}
+    or None if no granular data is available.
+    """
+    order_line_items = txn_raw.get('orderLineItems') or []
+    if not order_line_items:
+        return None
+
+    fees = {
+        'marketplace': 0.0,
+        'ad_fee': 0.0,
+        'payment_processing': 0.0,
+        'shipping_label': 0.0,
+        'other': 0.0
+    }
+
+    found_any = False
+    for li in order_line_items:
+        marketplace_fees = li.get('marketplaceFees') or []
+        for mf in marketplace_fees:
+            fee_amount_obj = mf.get('amount') or {}
+            try:
+                fee_val = abs(float(fee_amount_obj.get('value', 0) or 0))
+            except (TypeError, ValueError):
+                continue
+            if fee_val == 0:
+                continue
+
+            fee_type = mf.get('feeType') or ''
+            bucket = _classify_marketplace_fee_type(fee_type)
+            fees[bucket] += fee_val
+            found_any = True
+
+    return fees if found_any else None
 
 
 def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False):
@@ -4052,13 +4106,18 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
     order_detail_cache = {}
     parsed_order_cache = {}
 
+    EMPTY_FEES = {
+        'marketplace': 0.0,
+        'ad_fee': 0.0,
+        'payment_processing': 0.0,
+        'other': 0.0,
+        'shipping_label': 0.0
+    }
+
     for txn in transactions:
         raw = txn.raw_json or {}
         amount = float(txn.amount or 0)
-        fee_bucket = classify_finance_fee(raw, amount)
-        if not fee_bucket:
-            continue
-        value = abs(amount)
+        transaction_type = str(raw.get('transactionType') or raw.get('type') or '').upper()
 
         order_ids, line_item_ids, reference_ids = extract_finance_reference_ids(raw)
         if txn.order_id:
@@ -4070,22 +4129,33 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
         target_order_ids = order_ids or set()
         target_line_ids = line_item_ids or set()
 
+        # For SALE transactions, try to extract granular per-fee breakdown
+        # from orderLineItems.marketplaceFees
+        if transaction_type == 'SALE':
+            granular = extract_granular_fees_from_transaction(raw)
+            if granular:
+                for order_id in target_order_ids:
+                    totals = totals_by_order.setdefault(order_id, dict(EMPTY_FEES))
+                    for bucket, val in granular.items():
+                        totals[bucket] += val
+                for line_id in target_line_ids:
+                    totals = totals_by_line_item.setdefault(line_id, dict(EMPTY_FEES))
+                    for bucket, val in granular.items():
+                        totals[bucket] += val
+                continue  # Skip the legacy classify path for this transaction
+
+        # Fallback: classify entire transaction amount by feeType/transactionType
+        fee_bucket = classify_finance_fee(raw, amount)
+        if not fee_bucket:
+            continue
+        value = abs(amount)
+
         for order_id in target_order_ids:
-            totals = totals_by_order.setdefault(order_id, {
-                'marketplace': 0.0,
-                'payment_processing': 0.0,
-                'other': 0.0,
-                'shipping_label': 0.0
-            })
+            totals = totals_by_order.setdefault(order_id, dict(EMPTY_FEES))
             totals[fee_bucket] += value
 
         for line_id in target_line_ids:
-            totals = totals_by_line_item.setdefault(line_id, {
-                'marketplace': 0.0,
-                'payment_processing': 0.0,
-                'other': 0.0,
-                'shipping_label': 0.0
-            })
+            totals = totals_by_line_item.setdefault(line_id, dict(EMPTY_FEES))
             totals[fee_bucket] += value
 
     updated = 0
@@ -4101,6 +4171,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
         if fees:
             sale.marketplace_fee = fees['marketplace']
             sale.payment_processing_fee = fees['payment_processing']
+            sale.ad_fee = fees['ad_fee']
             sale.other_fees = fees['other']
             sale.shipping_cost = fees['shipping_label']
             updated += 1
