@@ -3978,6 +3978,80 @@ def settings():
                          plan_limits=plan_limits)
 
 
+@main_bp.route("/api/suppliers", methods=["GET"])
+@login_required
+def api_suppliers():
+    from sqlalchemy import func
+
+    rows = db.session.query(
+        Item.supplier,
+        func.count(Item.id)
+    ).filter(
+        Item.user_id == current_user.id
+    ).group_by(Item.supplier).all()
+
+    suppliers = []
+    unassigned_count = 0
+
+    for name, count in rows:
+        supplier_name = (name or "").strip()
+        if not supplier_name:
+            unassigned_count += int(count or 0)
+            continue
+        suppliers.append({
+            "name": supplier_name,
+            "count": int(count or 0)
+        })
+
+    suppliers.sort(key=lambda s: (-s["count"], s["name"].lower()))
+
+    return jsonify({
+        "ok": True,
+        "suppliers": suppliers,
+        "unassigned": unassigned_count
+    })
+
+
+@main_bp.route("/api/suppliers/rename", methods=["POST"])
+@login_required
+def api_suppliers_rename():
+    data = request.get_json(silent=True) or {}
+    old_name = (data.get("old_name") or "").strip()
+    new_name = (data.get("new_name") or "").strip()
+
+    if not old_name:
+        return jsonify({"ok": False, "error": "Missing old supplier name"}), 400
+    if not new_name:
+        return jsonify({"ok": False, "error": "New supplier name required"}), 400
+    if old_name == new_name:
+        return jsonify({"ok": True, "updated": 0})
+
+    updated = Item.query.filter(
+        Item.user_id == current_user.id,
+        Item.supplier == old_name
+    ).update({Item.supplier: new_name})
+
+    db.session.commit()
+    return jsonify({"ok": True, "updated": updated})
+
+
+@main_bp.route("/api/suppliers/delete", methods=["POST"])
+@login_required
+def api_suppliers_delete():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Missing supplier name"}), 400
+
+    updated = Item.query.filter(
+        Item.user_id == current_user.id,
+        Item.supplier == name
+    ).update({Item.supplier: None})
+
+    db.session.commit()
+    return jsonify({"ok": True, "updated": updated})
+
+
 def _build_link_bio_context(user, settings):
     import json
     from qventory.models.marketplace_credential import MarketplaceCredential
