@@ -276,13 +276,13 @@
             </th>
             <th data-col="net_profit">
               <span class="col-header sort-header" data-sort-key="net_profit" data-default-dir="desc">Net Profit
-                <button class="tooltip-icon net-profit-info" type="button" aria-label="Net profit calculation info">
-                  <i class="fas fa-info-circle"></i>
-                </button>
                 {% if sort_by == 'net_profit' %}
                   <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
                 {% endif %}
               </span>
+              <button class="tooltip-icon net-profit-info" type="button" aria-label="Net profit calculation info">
+                <i class="fas fa-info-circle"></i>
+              </button>
             </th>
             <th data-col="sold_at">
               <span class="col-header sort-header" data-sort-key="sold_at" data-default-dir="desc">Sold At
@@ -2159,7 +2159,9 @@ function closeNetProfitModal() {
 document.addEventListener('DOMContentLoaded', () => {
   const infoBtn = document.querySelector('.net-profit-info');
   if (infoBtn) {
-    infoBtn.addEventListener('click', () => {
+    infoBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
       openNetProfitModal();
     });
   }
