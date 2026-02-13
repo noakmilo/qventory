@@ -104,6 +104,13 @@
   <td data-col="shipping_charged" class="mobile-hide">${{ '%.2f'|format(it.shipping_charged or 0) }}</td>
   <td data-col="shipping_cost" class="mobile-hide">${{ '%.2f'|format(it.shipping_cost or 0) }}</td>
   <td data-col="fees" class="mobile-hide">${{ '%.2f'|format((it.marketplace_fee or 0) + (it.payment_processing_fee or 0) + (it.ad_fee or 0) + (it.other_fees or 0)) }}</td>
+  <td data-col="refund" class="mobile-hide">
+    {% if it.refund_amount %}
+      <span style="color:#ef4444">-${{ '%.2f'|format(it.refund_amount) }}</span>
+    {% else %}
+      —
+    {% endif %}
+  </td>
   <td data-col="net_profit" class="{{ 'positive' if (it.net_profit or 0) >= 0 else 'negative' }} profit-value">
     ${{ '%.2f'|format(it.net_profit or 0) }}
   </td>

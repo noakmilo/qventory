@@ -70,11 +70,6 @@
     <div class="filters-bar">
       <h2>Filters</h2>
       <div style="display:flex;gap:8px;align-items:center;">
-        {% if view_type == 'sold' %}
-        <button id="resetHiddenColumns" class="btn submitbtn" type="button" title="Restore hidden columns">
-          <i class="fas fa-eye"></i> Restore Columns
-        </button>
-        {% endif %}
         <button id="filtersToggle" class="btn filters-toggle submitbtn" type="button" aria-expanded="true">
           <i class="fas fa-filter"></i> Toggle
         </button>
@@ -276,9 +271,12 @@
               <span class="col-header">Total Marketplace Fees
               </span>
             </th>
+            <th data-col="refund" class="mobile-hide">
+              <span class="col-header">Refund</span>
+            </th>
             <th data-col="net_profit">
               <span class="col-header sort-header" data-sort-key="net_profit" data-default-dir="desc">Net Profit
-                <span class="tooltip-icon" data-tooltip="Net Profit = (Sold Price + Shipping Charged) - Cost - Shipping Cost - All Fees (Marketplace + Ad + Other)">
+                <span class="tooltip-icon" data-tooltip="Net Profit = Sold Price - Cost - Shipping Cost - All Fees (Marketplace + Ad + Other)">
                   <i class="fas fa-info-circle"></i>
                 </span>
                 {% if sort_by == 'net_profit' %}
