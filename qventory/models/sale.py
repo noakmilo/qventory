@@ -73,33 +73,25 @@ class Sale(db.Model):
         """
         Calcula gross y net profit
 
-        eBay order total = sold_price + shipping_charged + tax_collected
-        But sold_price from lineItem.total does NOT include shipping_charged.
-        Tax is collected by eBay and remitted to the government, not seller revenue.
+        Gross Profit = Sold Price - Item Cost
+        Net Profit = Sold Price - Item Cost - Total Fees - Shipping Cost
 
-        Gross Profit = Sold Price + Shipping Charged - Tax Collected - Item Cost
-        Net Profit   = Gross Profit - Total Fees - Shipping Cost
+        shipping_charged is informational only (displayed in sold view).
 
         Si no hay item_cost:
         - gross_profit = None
-        - net_profit = (sold_price + shipping_charged - tax) - fees - shipping_cost
+        - net_profit = sold_price - fees - shipping_cost
         """
-        sold_price = self.sold_price or 0
         tax_collected = self.tax_collected or 0
-        shipping_charged = round(self.shipping_charged or 0, 2)
-
-        # Revenue = what the seller actually earns before fees
-        # sold_price does NOT include shipping_charged, so we add it
-        # tax is remitted by eBay, so we subtract it
-        revenue = sold_price + shipping_charged - tax_collected
+        total_sales = (self.sold_price or 0) + tax_collected
 
         # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
-            self.gross_profit = revenue - self.item_cost
+            self.gross_profit = total_sales - tax_collected - self.item_cost
         else:
             self.gross_profit = None
 
-        # Total selling cost: marketplace + processing + ad + other fees
+        # Total selling cost: marketplace + processing + ad + other fees (shipping cost tracked separately)
         marketplace_fee = round(self.marketplace_fee or 0, 2)
         processing_fee = round(self.payment_processing_fee or 0, 2)
         ad_fee = round(self.ad_fee or 0, 2)
@@ -117,4 +109,4 @@ class Sale(db.Model):
         if self.gross_profit is not None:
             self.net_profit = self.gross_profit - total_fees - shipping_cost
         else:
-            self.net_profit = revenue - total_fees - shipping_cost
+            self.net_profit = (total_sales - tax_collected) - total_fees - shipping_cost
