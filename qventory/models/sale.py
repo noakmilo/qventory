@@ -82,12 +82,11 @@ class Sale(db.Model):
         - gross_profit = None
         - net_profit = sold_price - fees - shipping_cost
         """
-        tax_collected = self.tax_collected or 0
-        total_sales = (self.sold_price or 0) + tax_collected
+        sold_price = self.sold_price or 0
 
         # Calculate gross profit only if we know item cost
         if self.item_cost is not None:
-            self.gross_profit = total_sales - tax_collected - self.item_cost
+            self.gross_profit = sold_price - self.item_cost
         else:
             self.gross_profit = None
 
@@ -109,4 +108,4 @@ class Sale(db.Model):
         if self.gross_profit is not None:
             self.net_profit = self.gross_profit - total_fees - shipping_cost
         else:
-            self.net_profit = (total_sales - tax_collected) - total_fees - shipping_cost
+            self.net_profit = sold_price - total_fees - shipping_cost
