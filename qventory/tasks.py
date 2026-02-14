@@ -4356,6 +4356,67 @@ def recalculate_ebay_analytics_global(self):
         return {'success': True, 'users_processed': users_processed, 'errors': errors}
 
 
+@celery.task(bind=True, name='qventory.tasks.backfill_shipping_costs_global')
+def backfill_shipping_costs_global(self):
+    """
+    Lightweight global task: sync finances + reconcile to populate shipping label
+    costs (and other fees) for all eBay-connected users.
+    Skips import_ebay_sales to avoid heavy Fulfillment API calls.
+    Adds a 5-second delay between users to avoid 429 rate limits.
+    """
+    import time
+    app = create_app()
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.user import User
+
+        log_task("=== Global shipping cost backfill ===")
+        credentials = MarketplaceCredential.query.filter_by(
+            marketplace='ebay',
+            is_active=True
+        ).all()
+
+        if not credentials:
+            log_task("No active eBay accounts found")
+            return {'success': True, 'users_processed': 0, 'errors': 0}
+
+        users_processed = 0
+        errors = 0
+        for i, cred in enumerate(credentials):
+            user = User.query.get(cred.user_id)
+            if not user:
+                continue
+
+            # Rate limit: wait between users (skip delay before first user)
+            if i > 0:
+                time.sleep(5)
+
+            try:
+                users_processed += 1
+                log_task(f"Backfilling shipping costs for user {cred.user_id} ({user.username})...")
+
+                # Step 1: Sync finances (fetches SHIPPING_LABEL transactions from Finances API)
+                sync_ebay_finances_user.run(cred.user_id, days_back=None)
+
+                # Step 2: Reconcile to map fees (including shipping_label) to sales
+                reconcile_sales_from_finances(
+                    user_id=cred.user_id,
+                    days_back=None,
+                    fetch_taxes=False,
+                    force_recalculate=True
+                )
+
+                log_task(f"Shipping cost backfill complete for user {cred.user_id}")
+            except Exception as exc:
+                errors += 1
+                log_task(f"Shipping cost backfill failed for user {cred.user_id}: {exc}")
+
+        log_task(
+            f"=== Global shipping cost backfill complete: {users_processed} users, {errors} errors ==="
+        )
+        return {'success': True, 'users_processed': users_processed, 'errors': errors}
+
+
 @celery.task(bind=True, name='qventory.tasks.process_recurring_expenses')
 def process_recurring_expenses(self):
     """

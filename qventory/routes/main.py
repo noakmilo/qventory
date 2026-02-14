@@ -5867,6 +5867,20 @@ def admin_recalculate_analytics():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/backfill-shipping-costs", methods=["POST"])
+@require_admin
+def admin_backfill_shipping_costs():
+    """Global action: sync finances + reconcile to populate shipping label costs."""
+    from qventory.tasks import backfill_shipping_costs_global
+
+    task = backfill_shipping_costs_global.delay()
+    flash(
+        f"Shipping cost backfill task launched (Task ID: {task.id}). Finances will be synced and shipping costs reconciled for all accounts.",
+        "ok"
+    )
+    return redirect(url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/delivery-heuristic", methods=["POST"])
 @require_admin
 def admin_update_delivery_heuristic():
