@@ -5917,6 +5917,28 @@ def admin_backfill_shipping_costs():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/reconcile-user/<int:user_id>", methods=["POST"])
+@require_admin
+def admin_reconcile_user(user_id):
+    """Reconcile finances + shipping costs for a single user."""
+    from qventory.tasks import sync_ebay_finances_user, reconcile_sales_from_finances
+
+    user = User.query.get_or_404(user_id)
+    try:
+        sync_ebay_finances_user.run(user_id, days_back=730)
+        reconcile_sales_from_finances(
+            user_id=user_id,
+            days_back=730,
+            fetch_taxes=False,
+            force_recalculate=True,
+            skip_fulfillment_api=True
+        )
+        flash(f"Reconciliation complete for {user.username}.", "ok")
+    except Exception as exc:
+        flash(f"Reconciliation failed for {user.username}: {exc}", "error")
+    return redirect(request.referrer or url_for('main.admin_dashboard'))
+
+
 @main_bp.route("/admin/delivery-heuristic", methods=["POST"])
 @require_admin
 def admin_update_delivery_heuristic():

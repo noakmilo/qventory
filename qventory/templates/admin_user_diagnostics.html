@@ -18,6 +18,13 @@
         <p style="color:var(--sub);">User: <strong>{{ user.username }}</strong> ({{ user.email }})</p>
       </div>
       <div class="admin-actions">
+        <form method="POST" action="{{ url_for('main.admin_reconcile_user', user_id=user.id) }}"
+              onsubmit="return confirm('Reconcile finances for {{ user.username }}?');"
+              style="display:inline;">
+          <button type="submit" class="btn" style="background:#10b981;color:#fff;">
+            <i class="fas fa-sync-alt"></i> Reconcile Finances
+          </button>
+        </form>
         <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
           <i class="fas fa-arrow-left"></i> Back to Dashboard
         </a>

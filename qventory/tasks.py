@@ -117,7 +117,7 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
             sales_result = {'success': False, 'error': str(e)}
 
         try:
-            finance_result = sync_ebay_finances_user.run(user_id, days_back=days_back or 120)
+            finance_result = sync_ebay_finances_user.run(user_id, days_back=7)
         except Exception as e:
             log_task(f"  ✗ Finance refresh failed: {e}")
             finance_result = {'success': False, 'error': str(e)}
@@ -125,9 +125,10 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
         try:
             reconcile_result = reconcile_sales_from_finances(
                 user_id=user_id,
-                days_back=days_back,
+                days_back=7,
                 fetch_taxes=False,
-                force_recalculate=True
+                force_recalculate=False,
+                only_missing=True
             )
         except Exception as e:
             log_task(f"  ✗ Finance reconcile failed: {e}")
@@ -4078,7 +4079,7 @@ def extract_granular_fees_from_transaction(txn_raw):
     return fees if found_any else None
 
 
-def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False, skip_fulfillment_api=False):
+def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False, skip_fulfillment_api=False, only_missing=False):
     from qventory.models.sale import Sale
     from qventory.models.ebay_finance import EbayFinanceTransaction
     from qventory.helpers.ebay_inventory import (
@@ -4188,6 +4189,12 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
             fees = totals_by_line_item[sale.ebay_transaction_id]
 
         if fees:
+            # In only_missing mode, skip sales that already have fees populated
+            if only_missing and (sale.shipping_cost or 0) > 0 and (sale.marketplace_fee or 0) > 0:
+                if force_recalculate:
+                    sale.calculate_profit()
+                continue
+
             sale.marketplace_fee = fees['marketplace']
             sale.payment_processing_fee = fees['payment_processing']
             sale.ad_fee = fees['ad_fee']
@@ -4347,15 +4354,15 @@ def recalculate_ebay_analytics_global(self):
                 users_processed += 1
                 log_task(f"Recalculating analytics for user {cred.user_id} ({user.username})... [{users_processed}/{len(credentials)}]")
 
-                import_ebay_sales.run(cred.user_id, days_back=None)
+                import_ebay_sales.run(cred.user_id, days_back=730)
                 time.sleep(2)
 
-                sync_ebay_finances_user.run(cred.user_id, days_back=None)
+                sync_ebay_finances_user.run(cred.user_id, days_back=730)
                 time.sleep(2)
 
                 reconcile_sales_from_finances(
                     user_id=cred.user_id,
-                    days_back=None,
+                    days_back=730,
                     fetch_taxes=True,
                     force_recalculate=True
                 )
@@ -4411,13 +4418,13 @@ def backfill_shipping_costs_global(self):
                 log_task(f"Backfilling shipping costs for user {cred.user_id} ({user.username})...")
 
                 # Step 1: Sync finances (fetches SHIPPING_LABEL transactions from Finances API)
-                sync_ebay_finances_user.run(cred.user_id, days_back=None)
+                sync_ebay_finances_user.run(cred.user_id, days_back=730)
 
                 # Step 2: Reconcile to map fees (including shipping_label) to sales
                 # skip_fulfillment_api=True to avoid 429 rate limits from Fulfillment API
                 reconcile_sales_from_finances(
                     user_id=cred.user_id,
-                    days_back=None,
+                    days_back=730,
                     fetch_taxes=False,
                     force_recalculate=True,
                     skip_fulfillment_api=True
