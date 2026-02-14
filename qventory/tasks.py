@@ -3842,9 +3842,9 @@ def sync_ebay_finances_user(self, user_id, days_back=120):
 
         log_task(f"=== Syncing eBay finances for user {user_id} ===")
         if days_back is None:
-            start_date = datetime.utcnow() - timedelta(days=7300)
+            start_date = datetime.utcnow() - timedelta(days=1825)  # eBay max: 5 years
         else:
-            start_date = datetime.utcnow() - timedelta(days=days_back)
+            start_date = datetime.utcnow() - timedelta(days=min(days_back, 1825))
         end_date = datetime.utcnow()
 
         payouts_result = fetch_all_ebay_payouts(user_id, start_date, end_date, limit=200)
@@ -4078,7 +4078,7 @@ def extract_granular_fees_from_transaction(txn_raw):
     return fees if found_any else None
 
 
-def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False):
+def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False, force_recalculate=False, skip_fulfillment_api=False):
     from qventory.models.sale import Sale
     from qventory.models.ebay_finance import EbayFinanceTransaction
     from qventory.helpers.ebay_inventory import (
@@ -4199,7 +4199,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
                     sale.status = 'refunded'
             updated += 1
             updated_this_sale = True
-        elif not has_finances:
+        elif not has_finances and not skip_fulfillment_api:
             parsed = None
             if sale.marketplace_order_id:
                 parsed = parsed_order_cache.get(sale.marketplace_order_id)
@@ -4230,7 +4230,7 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
                 sale.shipping_cost = shipping_charged
                 updated_this_sale = True
 
-        if fetch_taxes and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
+        if fetch_taxes and not skip_fulfillment_api and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
             parsed = parsed_order_cache.get(sale.marketplace_order_id)
             if parsed is None:
                 order_detail = order_detail_cache.get(sale.marketplace_order_id)
@@ -4246,8 +4246,8 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
                 taxes_updated += 1
                 updated_this_sale = True
 
-        # Always sync refund info from Fulfillment API if not already set by Finances API
-        if not sale.refund_amount and sale.marketplace_order_id:
+        # Sync refund info from Fulfillment API if not already set by Finances API
+        if not skip_fulfillment_api and not sale.refund_amount and sale.marketplace_order_id:
             parsed = parsed_order_cache.get(sale.marketplace_order_id)
             if parsed is None:
                 order_detail = order_detail_cache.get(sale.marketplace_order_id)
@@ -4399,11 +4399,13 @@ def backfill_shipping_costs_global(self):
                 sync_ebay_finances_user.run(cred.user_id, days_back=None)
 
                 # Step 2: Reconcile to map fees (including shipping_label) to sales
+                # skip_fulfillment_api=True to avoid 429 rate limits from Fulfillment API
                 reconcile_sales_from_finances(
                     user_id=cred.user_id,
                     days_back=None,
                     fetch_taxes=False,
-                    force_recalculate=True
+                    force_recalculate=True,
+                    skip_fulfillment_api=True
                 )
 
                 log_task(f"Shipping cost backfill complete for user {cred.user_id}")
