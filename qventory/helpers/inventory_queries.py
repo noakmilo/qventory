@@ -518,6 +518,8 @@ def fetch_sold_items(
         "supplier": "i.supplier",
         "cost": "COALESCE(s.item_cost, i.item_cost)",
         "sold_price": "s.sold_price",
+        "shipping_charged": "s.shipping_charged",
+        "shipping_cost": "s.shipping_cost",
         "net_profit": "s.net_profit",
         "sold_at": "s.sold_at",
         "location": "i.location_code",

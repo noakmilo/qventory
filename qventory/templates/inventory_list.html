@@ -262,10 +262,18 @@
               </span>
             </th>
             <th data-col="shipping_charged" class="mobile-hide">
-              <span class="col-header">Shipping Charged</span>
+              <span class="col-header sort-header" data-sort-key="shipping_charged" data-default-dir="desc">Shipping Charged
+                {% if sort_by == 'shipping_charged' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
+              </span>
             </th>
             <th data-col="shipping_cost" class="mobile-hide">
-              <span class="col-header">Shipping Cost</span>
+              <span class="col-header sort-header" data-sort-key="shipping_cost" data-default-dir="desc">Shipping Cost
+                {% if sort_by == 'shipping_cost' %}
+                  <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+                {% endif %}
+              </span>
             </th>
             <th data-col="fees" class="mobile-hide">
               <span class="col-header">Total Marketplace Fees
