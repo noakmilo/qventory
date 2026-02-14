@@ -200,7 +200,7 @@ def create_app():
             )
 
         # Cache static assets aggressively
-        if response.request.path.startswith("/static/"):
+        if request.path.startswith("/static/"):
             response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
         return response
 
