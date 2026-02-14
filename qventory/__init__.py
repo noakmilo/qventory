@@ -173,6 +173,37 @@ def create_app():
             "impersonated_user_id": impersonated_user_id,
         }
 
+    @app.after_request
+    def add_security_headers(response):
+        # Basic security headers for SEO/security scanners
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+
+        # HSTS: enable only when serving HTTPS
+        if response.headers.get("Strict-Transport-Security") is None and response.request.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+
+        # CSP: allow common inline styles/scripts used in templates; tighten later if needed
+        if "Content-Security-Policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = (
+                "default-src 'self'; "
+                "img-src 'self' data: https:; "
+                "script-src 'self' https: 'unsafe-inline'; "
+                "style-src 'self' https: 'unsafe-inline'; "
+                "connect-src 'self' https:; "
+                "font-src 'self' https: data:; "
+                "frame-ancestors 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self';"
+            )
+
+        # Cache static assets aggressively
+        if response.request.path.startswith("/static/"):
+            response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+        return response
+
     # Register template filters
     @app.template_filter('timeago')
     def timeago_filter(dt):

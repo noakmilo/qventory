@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Inventory Management Software for eBay Resellers | Qventory{% endblock %}
+{% block extra_head %}
+<link rel="preload" as="image" href="{{ url_for('static', filename='pics/dashpreview.webp') }}" imagesrcset="{{ url_for('static', filename='pics/dashpreview.webp') }} 1x" imagesizes="(max-width: 1200px) 100vw, 1164px">
+{% endblock %}
+
 {% block content %}
 
 {# ===== Canonical & SEO ===== #}
@@ -89,10 +93,16 @@
 {# ===== DASH PREVIEW ===== #}
 <section class="dash-preview">
   <div class="dash-preview__inner">
-    <img src="{{ url_for('static', filename='pics/dashpreview.png') }}"
-         alt="Qventory dashboard preview"
-         loading="lazy"
-         class="dash-preview__img">
+    <picture>
+      <source srcset="{{ url_for('static', filename='pics/dashpreview.webp') }}" type="image/webp">
+      <img src="{{ url_for('static', filename='pics/dashpreview-1164.png') }}"
+           alt="Qventory dashboard preview"
+           width="1164"
+           height="611"
+           fetchpriority="high"
+           decoding="async"
+           class="dash-preview__img">
+    </picture>
   </div>
 </section>
 

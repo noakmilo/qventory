@@ -33,18 +33,31 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Qventory">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
-        crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <!--ContentSquare-->
-<script>
-  window.addEventListener('load', function() {
-    var cs = document.createElement('script');
-    cs.src = 'https://t.contentsquare.net/uxa/6575ac7c265b6.js';
-    cs.async = true;
-    document.head.appendChild(cs);
-  });
-</script>
+  <!-- Font Awesome (non-blocking) -->
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+          integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+  </noscript>
+
+  <!-- ContentSquare (defer to idle) -->
+  <script>
+    function loadContentsquare() {
+      var cs = document.createElement('script');
+      cs.src = 'https://t.contentsquare.net/uxa/6575ac7c265b6.js';
+      cs.async = true;
+      document.head.appendChild(cs);
+    }
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(loadContentsquare, { timeout: 3000 });
+    } else {
+      setTimeout(loadContentsquare, 3000);
+    }
+  </script>
+
+  {% block extra_head %}{% endblock %}
 </head>
 
 <body class="new-layout" data-theme="{{ theme_preference }}">
