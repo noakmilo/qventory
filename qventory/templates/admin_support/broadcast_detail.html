@@ -1,0 +1,46 @@
+{% extends "base_admin.html" %}
+{% block title %}Broadcast – Admin – Qventory{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('main.admin_support_inbox') }}">Support Tickets</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ ticket.broadcast_id }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="width:98%;margin:0 auto;">
+  <div class="admin-header">
+    <div>
+      <h1>{{ ticket.subject }}</h1>
+      <p style="color:var(--sub);">{{ ticket.broadcast_id }} · Broadcast</p>
+      {% if broadcast_stats %}
+      <div class="muted" style="margin-top:6px;">
+        Acknowledged: {{ broadcast_stats.acknowledged }}/{{ broadcast_stats.total }}
+      </div>
+      {% endif %}
+    </div>
+    <div class="admin-actions">
+      <form method="post" action="{{ url_for('main.admin_support_archive') }}">
+        <input type="hidden" name="archive_targets" value="broadcast:{{ ticket.broadcast_id }}">
+        <button class="btn" type="submit"><i class="fas fa-archive"></i> Archive Broadcast</button>
+      </form>
+      <a class="btn" href="{{ url_for('main.admin_support_inbox') }}"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="support-thread">
+    {% for message in messages %}
+    <div class="support-message support-message--{{ message.sender_role }}">
+      <div class="support-message-meta">
+        <span>{{ message.sender_role|capitalize }}</span>
+        <span>{{ message.created_at.strftime('%b %d, %Y %I:%M %p') }}</span>
+      </div>
+      <div class="support-message-body">{{ message.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -3,7 +3,7 @@ from flask import (
     jsonify, send_from_directory, make_response, current_app, abort, session
 )
 from flask_login import login_required, current_user, login_user, logout_user
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, case
 import math
 import io
 import re
@@ -4484,7 +4484,14 @@ def support_acknowledge(ticket_code):
 @main_bp.route("/admin/support")
 @require_admin
 def admin_support_inbox():
-    tickets = SupportTicket.query.order_by(SupportTicket.updated_at.desc()).all()
+    show_archived = (request.args.get("show") or "").strip().lower() == "archived"
+
+    ticket_query = SupportTicket.query.filter(SupportTicket.kind != "broadcast")
+    if show_archived:
+        ticket_query = ticket_query.filter(SupportTicket.archived.is_(True))
+    else:
+        ticket_query = ticket_query.filter(SupportTicket.archived.is_(False))
+    tickets = ticket_query.order_by(SupportTicket.updated_at.desc()).all()
 
     unread_counts = dict(
         db.session.query(SupportMessage.ticket_id, func.count(SupportMessage.id))
@@ -4496,10 +4503,47 @@ def admin_support_inbox():
         .all()
     )
 
+    broadcast_query = SupportTicket.query.filter(SupportTicket.kind == "broadcast")
+    if show_archived:
+        broadcast_query = broadcast_query.filter(SupportTicket.archived.is_(True))
+    else:
+        broadcast_query = broadcast_query.filter(SupportTicket.archived.is_(False))
+    broadcast_tickets = broadcast_query.all()
+    broadcast_groups = {}
+    for ticket in broadcast_tickets:
+        if not ticket.broadcast_id:
+            continue
+        group = broadcast_groups.get(ticket.broadcast_id)
+        if not group:
+            group = {
+                "broadcast_id": ticket.broadcast_id,
+                "subject": ticket.subject,
+                "updated_at": ticket.updated_at,
+                "total": 0,
+                "acknowledged": 0,
+                "archived_all": True,
+            }
+            broadcast_groups[ticket.broadcast_id] = group
+        group["total"] += 1
+        if ticket.acknowledged_at:
+            group["acknowledged"] += 1
+        if ticket.updated_at and ticket.updated_at > group["updated_at"]:
+            group["updated_at"] = ticket.updated_at
+        if not ticket.archived:
+            group["archived_all"] = False
+
+    broadcasts = sorted(
+        broadcast_groups.values(),
+        key=lambda g: g["updated_at"] or datetime.min,
+        reverse=True
+    )
+
     return render_template(
         "admin_support/index.html",
         tickets=tickets,
         unread_counts=unread_counts,
+        broadcasts=broadcasts,
+        show_archived=show_archived,
         cloudinary_enabled=cloudinary_enabled,
     )
 
@@ -4589,6 +4633,8 @@ def admin_support_broadcast():
 @require_admin
 def admin_support_detail(ticket_code):
     ticket = SupportTicket.query.filter_by(ticket_code=ticket_code).first_or_404()
+    if ticket.kind == "broadcast" and ticket.broadcast_id:
+        return redirect(url_for("main.admin_support_broadcast_detail", broadcast_id=ticket.broadcast_id))
 
     SupportMessage.query.filter_by(
         ticket_id=ticket.id,
@@ -4599,20 +4645,10 @@ def admin_support_detail(ticket_code):
 
     messages = ticket.messages.order_by(SupportMessage.created_at.asc()).all()
 
-    broadcast_stats = None
-    if ticket.kind == "broadcast" and ticket.broadcast_id:
-        total = SupportTicket.query.filter_by(broadcast_id=ticket.broadcast_id).count()
-        acknowledged = SupportTicket.query.filter(
-            SupportTicket.broadcast_id == ticket.broadcast_id,
-            SupportTicket.acknowledged_at.isnot(None)
-        ).count()
-        broadcast_stats = {"total": total, "acknowledged": acknowledged}
-
     return render_template(
         "admin_support/detail.html",
         ticket=ticket,
         messages=messages,
-        broadcast_stats=broadcast_stats,
         cloudinary_enabled=cloudinary_enabled,
     )
 
@@ -6629,3 +6665,43 @@ def public_link_bio(slug):
         featured_cards=featured_cards,
         display_name=display_name
     )
+@main_bp.route("/admin/support/broadcast/<broadcast_id>")
+@require_admin
+def admin_support_broadcast_detail(broadcast_id):
+    ticket = SupportTicket.query.filter_by(broadcast_id=broadcast_id, kind="broadcast").order_by(SupportTicket.created_at.asc()).first_or_404()
+    messages = ticket.messages.order_by(SupportMessage.created_at.asc()).all()
+    total = SupportTicket.query.filter_by(broadcast_id=broadcast_id).count()
+    acknowledged = SupportTicket.query.filter(
+        SupportTicket.broadcast_id == broadcast_id,
+        SupportTicket.acknowledged_at.isnot(None)
+    ).count()
+    return render_template(
+        "admin_support/broadcast_detail.html",
+        ticket=ticket,
+        messages=messages,
+        broadcast_stats={"total": total, "acknowledged": acknowledged},
+    )
+
+
+@main_bp.route("/admin/support/archive", methods=["POST"])
+@require_admin
+def admin_support_archive():
+    targets = request.form.getlist("archive_targets")
+    if not targets:
+        flash("Select at least one ticket or broadcast to archive.", "error")
+        return redirect(url_for("main.admin_support_inbox"))
+
+    for token in targets:
+        if token.startswith("ticket:"):
+            try:
+                ticket_id = int(token.split(":", 1)[1])
+            except ValueError:
+                continue
+            SupportTicket.query.filter_by(id=ticket_id).update({"archived": True})
+        elif token.startswith("broadcast:"):
+            broadcast_id = token.split(":", 1)[1]
+            SupportTicket.query.filter_by(broadcast_id=broadcast_id).update({"archived": True})
+
+    db.session.commit()
+    flash("Selected items archived.", "ok")
+    return redirect(url_for("main.admin_support_inbox"))

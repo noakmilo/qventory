@@ -15,15 +15,28 @@
     </div>
     <div>
       <a class="btn" href="{{ url_for('main.admin_support_broadcast') }}"><i class="fas fa-bullhorn"></i> New Broadcast</a>
+      {% if show_archived %}
+      <a class="btn" href="{{ url_for('main.admin_support_inbox') }}">Show Active</a>
+      {% else %}
+      <a class="btn" href="{{ url_for('main.admin_support_inbox', show='archived') }}">Show Archived</a>
+      {% endif %}
     </div>
   </div>
 
   <hr class="divider">
 
+  <form method="post" action="{{ url_for('main.admin_support_archive') }}">
+  <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;">
+    <button class="btn" type="submit"><i class="fas fa-archive"></i> Archive Selected</button>
+    <span class="muted" style="font-size:12px;">Select one or more rows to archive.</span>
+  </div>
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
+          <th style="width:36px;text-align:center;">
+            <input type="checkbox" id="selectAllSupport" aria-label="Select all">
+          </th>
           <th>ID</th>
           <th>User</th>
           <th>Subject</th>
@@ -33,14 +46,40 @@
         </tr>
       </thead>
       <tbody>
-        {% if tickets|length == 0 %}
+        {% if tickets|length == 0 and (broadcasts|length == 0) %}
         <tr>
-          <td colspan="6" style="text-align:center;padding:40px;color:var(--sub);">No tickets yet.</td>
+          <td colspan="7" style="text-align:center;padding:40px;color:var(--sub);">No tickets yet.</td>
         </tr>
         {% else %}
+        {% for broadcast in broadcasts %}
+        <tr>
+          <td style="text-align:center;">
+            <input type="checkbox" name="archive_targets" value="broadcast:{{ broadcast.broadcast_id }}">
+          </td>
+          <td style="font-family:monospace;">
+            <a href="{{ url_for('main.admin_support_broadcast_detail', broadcast_id=broadcast.broadcast_id) }}">
+              {{ broadcast.broadcast_id }}
+            </a>
+          </td>
+          <td>—</td>
+          <td>
+            <a href="{{ url_for('main.admin_support_broadcast_detail', broadcast_id=broadcast.broadcast_id) }}">
+              {{ broadcast.subject }}
+            </a>
+            <span class="tag" style="margin-left:6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">Broadcast</span>
+            <span class="tag" style="margin-left:6px;background:rgba(16,185,129,0.15);color:#22c55e;border:1px solid rgba(16,185,129,0.35);">Ack {{ broadcast.acknowledged }}/{{ broadcast.total }}</span>
+          </td>
+          <td><span class="tag status-badge status-open">Open</span></td>
+          <td style="font-size:12px;color:var(--sub);">{{ broadcast.updated_at.strftime('%b %d, %Y') if broadcast.updated_at else '—' }}</td>
+          <td>—</td>
+        </tr>
+        {% endfor %}
         {% for ticket in tickets %}
         {% set unread = unread_counts.get(ticket.id, 0) %}
         <tr>
+          <td style="text-align:center;">
+            <input type="checkbox" name="archive_targets" value="ticket:{{ ticket.id }}">
+          </td>
           <td style="font-family:monospace;">
             <a href="{{ url_for('main.admin_support_detail', ticket_code=ticket.ticket_code) }}">
               {{ ticket.ticket_code }}
@@ -51,9 +90,6 @@
             <a href="{{ url_for('main.admin_support_detail', ticket_code=ticket.ticket_code) }}">
               {{ ticket.subject }}
             </a>
-            {% if ticket.kind == 'broadcast' %}
-            <span class="tag" style="margin-left:6px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);">Broadcast</span>
-            {% endif %}
           </td>
           <td><span class="tag status-badge status-{{ ticket.status }}">{{ ticket.status|capitalize }}</span></td>
           <td style="font-size:12px;color:var(--sub);">{{ ticket.updated_at.strftime('%b %d, %Y') }}</td>
@@ -70,6 +106,7 @@
       </tbody>
     </table>
   </div>
+  </form>
 </div>
 <style>
   .status-badge {
@@ -91,4 +128,14 @@
     border-color: rgba(148,163,184,0.4);
   }
 </style>
+<script>
+  const selectAll = document.getElementById('selectAllSupport');
+  if (selectAll) {
+    selectAll.addEventListener('change', () => {
+      document.querySelectorAll('input[name="archive_targets"]').forEach(cb => {
+        cb.checked = selectAll.checked;
+      });
+    });
+  }
+</script>
 {% endblock %}

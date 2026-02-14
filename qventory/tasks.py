@@ -4330,22 +4330,37 @@ def recalculate_ebay_analytics_global(self):
             log_task("No active eBay accounts found")
             return {'success': True, 'users_processed': 0, 'errors': 0}
 
+        import time
+
         users_processed = 0
         errors = 0
-        for cred in credentials:
+        for i, cred in enumerate(credentials):
             user = User.query.get(cred.user_id)
             if not user:
                 continue
+
+            # Rate limit: wait between users to avoid eBay 429s
+            if i > 0:
+                time.sleep(10)
+
             try:
                 users_processed += 1
+                log_task(f"Recalculating analytics for user {cred.user_id} ({user.username})... [{users_processed}/{len(credentials)}]")
+
                 import_ebay_sales.run(cred.user_id, days_back=None)
+                time.sleep(2)
+
                 sync_ebay_finances_user.run(cred.user_id, days_back=None)
+                time.sleep(2)
+
                 reconcile_sales_from_finances(
                     user_id=cred.user_id,
                     days_back=None,
                     fetch_taxes=True,
                     force_recalculate=True
                 )
+
+                log_task(f"Analytics recalculation complete for user {cred.user_id}")
             except Exception as exc:
                 errors += 1
                 log_task(f"Analytics recalculation failed for user {cred.user_id}: {exc}")
