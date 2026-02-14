@@ -4378,6 +4378,39 @@ def recalculate_ebay_analytics_global(self):
         return {'success': True, 'users_processed': users_processed, 'errors': errors}
 
 
+@celery.task(bind=True, name='qventory.tasks.reconcile_user_finances')
+def reconcile_user_finances(self, user_id):
+    """Reconcile finances + shipping costs for a single user."""
+    app = create_app()
+    with app.app_context():
+        from qventory.models.user import User
+
+        user = User.query.get(user_id)
+        username = user.username if user else f"ID {user_id}"
+        log_task(f"=== Reconciling finances for user {user_id} ({username}) ===")
+
+        try:
+            sync_ebay_finances_user.run(user_id, days_back=730)
+            log_task(f"Finance sync complete for user {user_id}")
+        except Exception as exc:
+            log_task(f"Finance sync failed for user {user_id}: {exc}")
+            return {'success': False, 'error': str(exc)}
+
+        try:
+            result = reconcile_sales_from_finances(
+                user_id=user_id,
+                days_back=730,
+                fetch_taxes=False,
+                force_recalculate=True,
+                skip_fulfillment_api=True
+            )
+            log_task(f"Reconciliation complete for user {user_id}: {result}")
+            return {'success': True, 'result': result}
+        except Exception as exc:
+            log_task(f"Reconciliation failed for user {user_id}: {exc}")
+            return {'success': False, 'error': str(exc)}
+
+
 @celery.task(bind=True, name='qventory.tasks.backfill_shipping_costs_global')
 def backfill_shipping_costs_global(self):
     """
