@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -182,7 +182,7 @@ def create_app():
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
 
         # HSTS: enable only when serving HTTPS
-        if response.headers.get("Strict-Transport-Security") is None and response.request.scheme == "https":
+        if response.headers.get("Strict-Transport-Security") is None and request.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
 
         # CSP: allow common inline styles/scripts used in templates; tighten later if needed
