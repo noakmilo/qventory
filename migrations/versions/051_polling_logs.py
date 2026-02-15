@@ -17,30 +17,33 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        "polling_logs",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("marketplace", sa.String(length=50), nullable=True),
-        sa.Column("started_at", sa.DateTime(), nullable=True),
-        sa.Column("ended_at", sa.DateTime(), nullable=True),
-        sa.Column("window_start", sa.DateTime(), nullable=True),
-        sa.Column("window_end", sa.DateTime(), nullable=True),
-        sa.Column("new_listings", sa.Integer(), default=0),
-        sa.Column("errors_count", sa.Integer(), default=0),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=20), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=True),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS polling_logs (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users (id),
+            marketplace VARCHAR(50),
+            started_at TIMESTAMP WITHOUT TIME ZONE,
+            ended_at TIMESTAMP WITHOUT TIME ZONE,
+            window_start TIMESTAMP WITHOUT TIME ZONE,
+            window_end TIMESTAMP WITHOUT TIME ZONE,
+            new_listings INTEGER,
+            errors_count INTEGER,
+            error_message TEXT,
+            status VARCHAR(20),
+            created_at TIMESTAMP WITHOUT TIME ZONE
+        )
+        """
     )
-    op.create_index("ix_polling_logs_user_id", "polling_logs", ["user_id"])
-    op.create_index("ix_polling_logs_marketplace", "polling_logs", ["marketplace"])
-    op.create_index("ix_polling_logs_status", "polling_logs", ["status"])
-    op.create_index("ix_polling_logs_created_at", "polling_logs", ["created_at"])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_polling_logs_user_id ON polling_logs (user_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_polling_logs_marketplace ON polling_logs (marketplace)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_polling_logs_status ON polling_logs (status)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_polling_logs_created_at ON polling_logs (created_at)")
 
 
 def downgrade():
-    op.drop_index("ix_polling_logs_created_at", table_name="polling_logs")
-    op.drop_index("ix_polling_logs_status", table_name="polling_logs")
-    op.drop_index("ix_polling_logs_marketplace", table_name="polling_logs")
-    op.drop_index("ix_polling_logs_user_id", table_name="polling_logs")
-    op.drop_table("polling_logs")
+    op.execute("DROP INDEX IF EXISTS ix_polling_logs_created_at")
+    op.execute("DROP INDEX IF EXISTS ix_polling_logs_status")
+    op.execute("DROP INDEX IF EXISTS ix_polling_logs_marketplace")
+    op.execute("DROP INDEX IF EXISTS ix_polling_logs_user_id")
+    op.execute("DROP TABLE IF EXISTS polling_logs")
