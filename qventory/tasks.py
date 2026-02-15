@@ -2687,12 +2687,27 @@ def poll_ebay_new_listings(self):
         from qventory.models.user import User
         from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.models.item import Item
+        from qventory.models.system_setting import SystemSetting
         from datetime import datetime, timedelta
         import math
         import os
         import requests
 
         log_task("=== Polling eBay for new listings ===")
+
+        cooldown_until_ts = SystemSetting.get_int('ebay_polling_cooldown_until')
+        if cooldown_until_ts:
+            now_ts = int(datetime.utcnow().timestamp())
+            if now_ts < cooldown_until_ts:
+                cooldown_until = datetime.utcfromtimestamp(cooldown_until_ts)
+                log_task(f"Polling paused due to rate limit cooldown until {cooldown_until.isoformat()} UTC")
+                return {
+                    'success': True,
+                    'users_checked': 0,
+                    'new_listings': 0,
+                    'errors': 0,
+                    'cooldown_until': cooldown_until.isoformat()
+                }
 
         # Get all users with active eBay credentials
         credentials = MarketplaceCredential.query.filter_by(
@@ -3034,6 +3049,10 @@ def poll_user_listings(credential):
                 credential.poll_cooldown_until = datetime.utcnow() + timedelta(hours=2)
                 credential.poll_cooldown_reason = 'rate_limit'
                 db.session.commit()
+                SystemSetting.set_int(
+                    'ebay_polling_cooldown_until',
+                    int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+                )
             finalize_poll('error', errors=[f'HTTP {response.status_code}'])
             return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
 
@@ -3051,6 +3070,10 @@ def poll_user_listings(credential):
                 credential.poll_cooldown_until = datetime.utcnow() + timedelta(hours=2)
                 credential.poll_cooldown_reason = 'rate_limit'
                 db.session.commit()
+                SystemSetting.set_int(
+                    'ebay_polling_cooldown_until',
+                    int((datetime.utcnow() + timedelta(hours=2)).timestamp())
+                )
             finalize_poll('error', errors=error_msgs)
             return {'new_listings': 0, 'errors': error_msgs}
 
