@@ -256,7 +256,7 @@ def create_app():
         return render_template('404.html'), 500
 
     with app.app_context():
-        print("DB URI ->", app.config.get("SQLALCHEMY_DATABASE_URI"), flush=True)
+        # Do not print DB URI to logs (sensitive)
         db.create_all()
 
         # Seed plan limits (always run to keep them updated)

@@ -2732,15 +2732,18 @@ def poll_ebay_new_listings(self):
             if total_batches <= 1:
                 return all_creds
             now_local = datetime.utcnow()
+            # Rotate list each run to avoid repeatedly hitting the same users
+            offset = (now_local.minute * 60 + now_local.second) % len(all_creds)
+            rotated = all_creds[offset:] + all_creds[:offset]
             bucket = int((now_local.minute * 60 + now_local.second) / interval_seconds)
             batch_index = bucket % total_batches
             start_idx = batch_index * batch_size
-            end_idx = min(start_idx + batch_size, len(all_creds))
-            return all_creds[start_idx:end_idx]
+            end_idx = min(start_idx + batch_size, len(rotated))
+            return rotated[start_idx:end_idx]
 
         # Batch users per execution to control API usage (adaptive batch size)
         active_count = len(active_credentials)
-        interval_seconds = int(os.environ.get('POLL_INTERVAL_SECONDS', 300))
+        interval_seconds = int(os.environ.get('POLL_INTERVAL_SECONDS', 60))
         target_minutes = int(os.environ.get('POLL_TARGET_COVERAGE_MINUTES', 10))
         min_batch_size = int(os.environ.get('POLL_MIN_BATCH_SIZE', 5))
         max_batch_size = int(os.environ.get('POLL_MAX_BATCH_SIZE', 100))
