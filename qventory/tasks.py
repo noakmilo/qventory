@@ -2711,6 +2711,7 @@ def poll_ebay_new_listings(self):
 
         # Smart polling: Filter to only "active" users and not in cooldown
         active_credentials = []
+        user_map = {}
         now = datetime.utcnow()
         for cred in credentials:
             user = User.query.get(cred.user_id)
@@ -2720,6 +2721,7 @@ def poll_ebay_new_listings(self):
             if cooldown_until and cooldown_until > now:
                 continue
             active_credentials.append(cred)
+            user_map[cred.user_id] = user.username or f"user_{cred.user_id}"
 
         log_task(f"Found {len(active_credentials)} active users to check (out of {len(credentials)} total)")
 
@@ -2756,9 +2758,15 @@ def poll_ebay_new_listings(self):
             batch_size=batch_size or 1,
             interval_seconds=interval_seconds
         )
+        batch_usernames = []
+        for cred in batch_credentials:
+            batch_usernames.append(user_map.get(cred.user_id, f"user_{cred.user_id}"))
+        usernames_csv = ", ".join(batch_usernames) if batch_usernames else "-"
+
         log_task(
             f"Processing polling batch of {len(batch_credentials)} users "
-            f"(active={active_count}, batch_size={batch_size}, target_minutes={target_minutes})"
+            f"(active={active_count}, batch_size={batch_size}, target_minutes={target_minutes}) "
+            f"users=[{usernames_csv}]"
         )
 
         total_new = 0
