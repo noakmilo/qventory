@@ -477,6 +477,19 @@ const ProfitCalc = (function() {
     elements.ebayCategoryTree.innerHTML = '';
     const roots = categoryByParent['__root__'] || [];
     const tree = document.createElement('div');
+    const rootWrapper = document.createElement('div');
+    const rootNode = document.createElement('div');
+    rootNode.className = 'category-node category-root';
+    const rootToggle = document.createElement('span');
+    rootToggle.className = 'category-toggle';
+    rootToggle.textContent = '−';
+    const rootLabel = document.createElement('span');
+    rootLabel.textContent = 'Categories';
+    rootNode.appendChild(rootToggle);
+    rootNode.appendChild(rootLabel);
+    rootWrapper.appendChild(rootNode);
+    const rootChildren = document.createElement('div');
+    rootChildren.className = 'category-children open';
     let allowedSet = null;
     if (filterTerm) {
       const term = filterTerm.toLowerCase();
@@ -497,8 +510,15 @@ const ProfitCalc = (function() {
     }
     roots.forEach(root => {
       const node = buildCategoryNode(root, filterTerm, allowedSet);
-      if (node) tree.appendChild(node);
+      if (node) rootChildren.appendChild(node);
     });
+    rootWrapper.appendChild(rootChildren);
+    rootToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = rootChildren.classList.toggle('open');
+      rootToggle.textContent = isOpen ? '−' : '+';
+    });
+    tree.appendChild(rootWrapper);
     elements.ebayCategoryTree.appendChild(tree);
 
     if (elements.ebayCategoryId.value) {
@@ -580,10 +600,18 @@ const ProfitCalc = (function() {
 
   async function updateEbayFeePreview() {
     if (elements.marketplace.value !== 'ebay') return;
+    const priceVal = parseFloat(elements.resalePrice.value) || 0;
+    const shippingVal = parseFloat(elements.shipping.value) || 0;
+    if (!priceVal) {
+      elements.fees.value = '0';
+      return;
+    }
     const params = new URLSearchParams({
       category_id: elements.ebayCategoryId.value || '',
       has_store: elements.hasStore.checked ? '1' : '0',
-      top_rated: elements.topRated.checked ? '1' : '0'
+      top_rated: elements.topRated.checked ? '1' : '0',
+      price: priceVal,
+      shipping_cost: shippingVal
     });
     try {
       const response = await fetch(`/api/ebay/fees/estimate?${params.toString()}`);

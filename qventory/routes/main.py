@@ -6345,6 +6345,30 @@ def api_ebay_fee_estimate():
     category_id = request.args.get("category_id")
     has_store = request.args.get("has_store", "0") == "1"
     top_rated = request.args.get("top_rated", "0") == "1"
+    price = request.args.get("price")
+    shipping_cost = request.args.get("shipping_cost", "0")
+    try:
+        price_val = float(price) if price is not None else 0.0
+        shipping_val = float(shipping_cost)
+    except ValueError:
+        return jsonify({"ok": False, "error": "Invalid price inputs"}), 400
+
+    from ..helpers.ebay_fee_live import get_live_fee_estimate
+    live = get_live_fee_estimate(
+        user_id=current_user.id,
+        category_id=category_id,
+        price=price_val,
+        shipping_cost=shipping_val,
+        has_store=has_store,
+        top_rated=top_rated
+    )
+    if live.get("success"):
+        return jsonify({
+            "ok": True,
+            "fee_rate_percent": live["fee_rate_percent"],
+            "total_fees": live["total_fees"],
+            "fees": live["fees"]
+        })
 
     rule = None
     if category_id:
@@ -6352,7 +6376,7 @@ def api_ebay_fee_estimate():
     if not rule:
         rule = EbayFeeRule.query.filter_by(category_id=None).first()
     if not rule:
-        return jsonify({"ok": False, "error": "Missing eBay fee rules"}), 400
+        return jsonify({"ok": False, "error": live.get("error") or "Missing eBay fee rules"}), 400
 
     rate = rule.resolve_rate(has_store=has_store, top_rated=top_rated)
     return jsonify({"ok": True, "fee_rate_percent": rate})
@@ -6379,19 +6403,40 @@ def api_profit_calculator_calc():
 
     if marketplace == "ebay":
         from ..helpers.ebay_fees import estimate_ebay_fees
+        from ..helpers.ebay_fee_live import get_live_fee_estimate
         has_store = bool(payload.get("has_store"))
         top_rated = bool(payload.get("top_rated"))
         include_fixed_fee = bool(payload.get("include_fixed_fee"))
 
-        fee_breakdown = estimate_ebay_fees(
+        live = get_live_fee_estimate(
+            user_id=current_user.id,
             category_id=category_id,
-            resale_price=resale_price,
+            price=resale_price,
             shipping_cost=shipping_cost,
             has_store=has_store,
-            top_rated=top_rated,
-            include_fixed_fee=include_fixed_fee,
-            ads_fee_rate=ads_fee_rate,
+            top_rated=top_rated
         )
+
+        if live.get("success"):
+            fee_breakdown = {
+                "fee_rate_percent": live["fee_rate_percent"],
+                "marketplace_fee": live["total_fees"],
+                "fixed_fee": 0.0,
+                "ads_fee": resale_price * (ads_fee_rate / 100),
+                "total_fees": live["total_fees"] + (resale_price * (ads_fee_rate / 100)),
+                "fees": live["fees"],
+                "source": "trading_api_verify_add_fixed_price_item"
+            }
+        else:
+            fee_breakdown = estimate_ebay_fees(
+                category_id=category_id,
+                resale_price=resale_price,
+                shipping_cost=shipping_cost,
+                has_store=has_store,
+                top_rated=top_rated,
+                include_fixed_fee=include_fixed_fee,
+                ads_fee_rate=ads_fee_rate,
+            )
 
         total_fees = fee_breakdown["total_fees"]
         net_sale = resale_price - total_fees - shipping_cost
@@ -6399,7 +6444,12 @@ def api_profit_calculator_calc():
         roi = (profit / buy_price * 100) if buy_price else 0
         markup = ((resale_price - buy_price) / buy_price * 100) if buy_price else 0
         denom = 1 - ((fee_breakdown["fee_rate_percent"] + ads_fee_rate) / 100)
-        breakeven = ((buy_price + shipping_cost + fee_breakdown["fixed_fee"]) / denom) if denom > 0 else 0
+        breakeven = ((buy_price + shipping_cost + fee_breakdown.get("fixed_fee", 0)) / denom) if denom > 0 else 0
+
+        fee_lines = []
+        for fee in fee_breakdown.get("fees", [])[:6]:
+            fee_lines.append(f"- {fee['name']}: ${fee['amount']:.2f}")
+        fee_block = "\n".join(fee_lines) if fee_lines else "Fees calculated from eBay fee rules."
 
         output_text = "\n".join([
             f"🧾 Item: {item_name or 'Unnamed'}",
@@ -6409,12 +6459,11 @@ def api_profit_calculator_calc():
             f"🔄 ROI: {roi:.2f}%",
             f"📊 Markup: {markup:.2f}%",
             f"📦 Net Sale: ${net_sale:.2f}",
-            f"💸 eBay Fees ({fee_breakdown['fee_rate_percent']:.2f}% on price+shipping): ${fee_breakdown['marketplace_fee']:.2f}",
-            f"🧾 Fixed Fee: ${fee_breakdown['fixed_fee']:.2f}",
+            f"💸 eBay Fees (estimated): ${fee_breakdown['marketplace_fee']:.2f}",
             f"📣 Ads Fee ({ads_fee_rate:.2f}%): ${fee_breakdown['ads_fee']:.2f}",
             f"🚚 Shipping Cost: ${shipping_cost:.2f}",
             f"🧮 Break-even Price: ${breakeven:.2f}",
-            f"📚 Fee Source: eBay fee rules (synced category tree)",
+            f"📚 Fee Breakdown:\n{fee_block}",
         ])
     else:
         return jsonify({"ok": False, "error": "Unsupported marketplace for API calc."}), 400
