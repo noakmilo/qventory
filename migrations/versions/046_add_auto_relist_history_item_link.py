@@ -1,6 +1,6 @@
 """add item link to auto relist history
 
-Revision ID: 046_add_auto_relist_history_item_link
+Revision ID: 046_auto_relist_item_link
 Revises: 045_add_support_ticket_archived
 Create Date: 2026-02-14 00:00:00.000000
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "046_add_auto_relist_history_item_link"
+revision = "046_auto_relist_item_link"
 down_revision = "045_add_support_ticket_archived"
 branch_labels = None
 depends_on = None
