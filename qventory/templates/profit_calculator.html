@@ -74,13 +74,11 @@
           <label for="hasStore">I have an eBay Store</label>
         </div>
 
-        <label for="ebayCategorySearch">eBay Category</label>
-        <div style="position:relative">
-          <input type="text" id="ebayCategorySearch" class="input" placeholder="Search categories (e.g. Laptops, Sneakers)" autocomplete="off">
-          <input type="hidden" id="ebayCategoryId">
-          <div id="ebayCategoryList" class="autocomplete-list"></div>
-        </div>
+        <label>eBay Category</label>
+        <div id="ebayCategoryTree" class="category-tree"></div>
+        <input type="hidden" id="ebayCategoryId">
         <div class="muted" id="ebayCategoryPath" style="margin-top:6px;"></div>
+        <div class="muted" id="ebayFeeDelta" style="margin-top:6px;"></div>
 
         <div class="checkbox-container">
           <input type="checkbox" id="topRated">
@@ -256,6 +254,55 @@
     font-size: var(--fs-xs);
   }
 
+  .category-tree {
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 0.5rem;
+    background: var(--muted);
+    max-height: 320px;
+    overflow: auto;
+  }
+
+  .category-node {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: var(--fs-sm);
+  }
+
+  .category-node:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .category-node.selected {
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+  }
+
+  .category-children {
+    margin-left: 16px;
+    display: none;
+  }
+
+  .category-children.open {
+    display: block;
+  }
+
+  .category-toggle {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--sub);
+    font-size: 12px;
+    cursor: pointer;
+  }
   label {
     display: block;
     margin-top: 1rem;

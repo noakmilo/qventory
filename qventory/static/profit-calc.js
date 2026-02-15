@@ -17,6 +17,9 @@ const ProfitCalc = (function() {
   // Autocomplete state
   let autocompleteTimeout = null;
   let currentItemData = null;
+  let lastFeeRate = null;
+  let categoryTreeData = [];
+  let categoryByParent = {};
 
   function initElements() {
     elements = {
@@ -34,10 +37,10 @@ const ProfitCalc = (function() {
       topRated: document.getElementById('topRated'),
       fixedFee: document.getElementById('fixedFee'),
       ebaySection: document.getElementById('ebay-section'),
-      ebayCategorySearch: document.getElementById('ebayCategorySearch'),
+      ebayCategoryTree: document.getElementById('ebayCategoryTree'),
       ebayCategoryId: document.getElementById('ebayCategoryId'),
-      ebayCategoryList: document.getElementById('ebayCategoryList'),
       ebayCategoryPath: document.getElementById('ebayCategoryPath'),
+      ebayFeeDelta: document.getElementById('ebayFeeDelta'),
 
       // Depop specific
       depopCategory: document.getElementById('depopCategory'),
@@ -65,6 +68,7 @@ const ProfitCalc = (function() {
 
     if (marketplace === 'ebay') {
       elements.fees.value = '0';
+      updateEbayFeePreview();
     } else {
       updateDepopFees();
     }
@@ -140,12 +144,14 @@ const ProfitCalc = (function() {
 
         elements.result.innerHTML = `
           <pre>${data.output_text}</pre>
+          <div class="muted" style="margin-top:8px;">Saved to history.</div>
           <button class="btn submitbtn" onclick="ProfitCalc.copyResult()">
             <i class="fas fa-copy"></i> Copy Note
           </button>
         `;
         elements.result.style.display = 'block';
         await renderHistory();
+        elements.history.style.display = 'block';
         return;
       } catch (error) {
         elements.result.innerHTML = `<p style="color:var(--err)">Calculation error: ${error.message}</p>`;
@@ -313,9 +319,6 @@ const ProfitCalc = (function() {
     elements.fixedFee.checked = data.fixedFee || false;
     elements.ebayCategoryId.value = data.ebayCategoryId || '';
     elements.ebayCategoryPath.textContent = data.ebayCategoryPath || '';
-    if (data.ebayCategoryPath) {
-      elements.ebayCategorySearch.value = data.ebayCategoryPath;
-    }
     elements.depopBoost.checked = data.depopBoost || false;
     elements.depopShipping.checked = data.depopShipping || false;
 
@@ -324,7 +327,7 @@ const ProfitCalc = (function() {
       elements.depopCategory.value = data.depopCategory;
     }
 
-    updateFees();
+    updateEbayFeePreview();
   }
 
   function applyUrlPrefill() {
@@ -447,73 +450,147 @@ const ProfitCalc = (function() {
     saveFormData();
   }
 
-  function setupCategorySearch() {
-    elements.ebayCategorySearch.addEventListener('input', function() {
-      const query = this.value.trim();
-      clearTimeout(autocompleteTimeout);
-      if (query.length < 2) {
-        hideCategoryAutocomplete();
+  async function loadCategories() {
+    try {
+      const response = await fetch('/api/ebay/categories?leaf_only=0');
+      const data = await response.json();
+      if (!data.ok) {
         return;
       }
-      autocompleteTimeout = setTimeout(() => {
-        fetchCategoryAutocomplete(query);
-      }, 300);
-    });
-
-    document.addEventListener('click', function(e) {
-      if (!elements.ebayCategorySearch.contains(e.target) && !elements.ebayCategoryList.contains(e.target)) {
-        hideCategoryAutocomplete();
-      }
-    });
-  }
-
-  async function fetchCategoryAutocomplete(query) {
-    try {
-      const response = await fetch(`/api/ebay/categories/search?q=${encodeURIComponent(query)}`);
-      const data = await response.json();
-      if (data.ok && data.categories && data.categories.length) {
-        showCategoryAutocomplete(data.categories);
-      } else {
-        hideCategoryAutocomplete();
-      }
+      categoryTreeData = data.categories || [];
+      categoryByParent = {};
+      categoryTreeData.forEach(cat => {
+        const key = cat.parent_id || '__root__';
+        if (!categoryByParent[key]) categoryByParent[key] = [];
+        categoryByParent[key].push(cat);
+      });
+      Object.values(categoryByParent).forEach(list => {
+        list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      });
+      renderCategoryTree();
     } catch (error) {
-      console.error('Category autocomplete error:', error);
-      hideCategoryAutocomplete();
+      console.error('Category load error:', error);
     }
   }
 
-  function showCategoryAutocomplete(categories) {
-    let html = '';
-    categories.forEach(cat => {
-      html += `
-        <div class="autocomplete-item" data-category='${JSON.stringify(cat)}'>
-          <strong>${cat.name}</strong>
-          <small>${cat.full_path}</small>
-        </div>
-      `;
+  function renderCategoryTree() {
+    if (!elements.ebayCategoryTree) return;
+    elements.ebayCategoryTree.innerHTML = '';
+    const roots = categoryByParent['__root__'] || [];
+    const tree = document.createElement('div');
+    roots.forEach(root => {
+      tree.appendChild(buildCategoryNode(root));
     });
-    elements.ebayCategoryList.innerHTML = html;
-    elements.ebayCategoryList.classList.add('show');
+    elements.ebayCategoryTree.appendChild(tree);
 
-    elements.ebayCategoryList.querySelectorAll('.autocomplete-item').forEach(el => {
-      el.addEventListener('click', function() {
-        const cat = JSON.parse(this.getAttribute('data-category'));
-        selectCategory(cat);
+    if (elements.ebayCategoryId.value) {
+      const selected = categoryTreeData.find(c => c.category_id === elements.ebayCategoryId.value);
+      if (selected) {
+        setSelectedCategory(selected);
+        expandPath(selected);
+      }
+    }
+  }
+
+  function buildCategoryNode(cat) {
+    const wrapper = document.createElement('div');
+    wrapper.style.marginBottom = '2px';
+
+    const node = document.createElement('div');
+    node.className = 'category-node';
+    node.dataset.categoryId = cat.category_id;
+
+    const children = categoryByParent[cat.category_id] || [];
+    const toggle = document.createElement('span');
+    toggle.className = 'category-toggle';
+    toggle.textContent = children.length ? '+' : '';
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const childContainer = wrapper.querySelector('.category-children');
+      if (!childContainer) return;
+      const isOpen = childContainer.classList.toggle('open');
+      toggle.textContent = isOpen ? '−' : '+';
+    });
+
+    const label = document.createElement('span');
+    label.textContent = cat.name || cat.full_path;
+
+    node.appendChild(toggle);
+    node.appendChild(label);
+    node.addEventListener('click', () => {
+      setSelectedCategory(cat);
+    });
+
+    wrapper.appendChild(node);
+
+    if (children.length) {
+      const childContainer = document.createElement('div');
+      childContainer.className = 'category-children';
+      children.forEach(child => {
+        childContainer.appendChild(buildCategoryNode(child));
       });
+      wrapper.appendChild(childContainer);
+    }
+
+    return wrapper;
+  }
+
+  function expandPath(cat) {
+    if (!cat || !cat.parent_id) return;
+    const parentNode = elements.ebayCategoryTree.querySelector(`[data-category-id="${cat.parent_id}"]`);
+    if (parentNode) {
+      const wrapper = parentNode.parentElement;
+      const childContainer = wrapper.querySelector('.category-children');
+      const toggle = wrapper.querySelector('.category-toggle');
+      if (childContainer && !childContainer.classList.contains('open')) {
+        childContainer.classList.add('open');
+        if (toggle) toggle.textContent = '−';
+      }
+      const parentCat = categoryTreeData.find(c => c.category_id === cat.parent_id);
+      if (parentCat) expandPath(parentCat);
+    }
+  }
+
+  async function updateEbayFeePreview() {
+    if (elements.marketplace.value !== 'ebay') return;
+    const params = new URLSearchParams({
+      category_id: elements.ebayCategoryId.value || '',
+      has_store: elements.hasStore.checked ? '1' : '0',
+      top_rated: elements.topRated.checked ? '1' : '0'
     });
+    try {
+      const response = await fetch(`/api/ebay/fees/estimate?${params.toString()}`);
+      const data = await response.json();
+      if (data.ok) {
+        const nextRate = Number(data.fee_rate_percent);
+        elements.fees.value = nextRate.toFixed(2);
+        if (elements.ebayFeeDelta) {
+          if (lastFeeRate !== null) {
+            const diff = (nextRate - lastFeeRate).toFixed(2);
+            const sign = diff > 0 ? '+' : '';
+            elements.ebayFeeDelta.textContent = `Fee change vs previous category: ${sign}${diff}%`;
+          } else {
+            elements.ebayFeeDelta.textContent = '';
+          }
+        }
+        lastFeeRate = nextRate;
+      }
+    } catch (error) {
+      console.error('Fee preview error:', error);
+    }
   }
 
-  function hideCategoryAutocomplete() {
-    elements.ebayCategoryList.classList.remove('show');
-    elements.ebayCategoryList.innerHTML = '';
-  }
-
-  function selectCategory(cat) {
+  function setSelectedCategory(cat) {
+    if (!cat) return;
     elements.ebayCategoryId.value = cat.category_id;
-    elements.ebayCategorySearch.value = cat.name;
     elements.ebayCategoryPath.textContent = cat.full_path;
-    hideCategoryAutocomplete();
+    updateEbayFeePreview();
     saveFormData();
+
+    const prevSelected = elements.ebayCategoryTree.querySelector('.category-node.selected');
+    if (prevSelected) prevSelected.classList.remove('selected');
+    const selectedNode = elements.ebayCategoryTree.querySelector(`[data-category-id="${cat.category_id}"]`);
+    if (selectedNode) selectedNode.classList.add('selected');
   }
 
   // Initialize when modal or page loads
@@ -525,12 +602,12 @@ const ProfitCalc = (function() {
     }
     renderHistory();
     setupAutocomplete();
-    setupCategorySearch();
+    loadCategories();
 
     // Event listeners
     elements.marketplace.addEventListener('change', switchMarketplace);
-    elements.hasStore.addEventListener('change', saveFormData);
-    elements.topRated.addEventListener('change', saveFormData);
+    elements.hasStore.addEventListener('change', () => { updateEbayFeePreview(); saveFormData(); });
+    elements.topRated.addEventListener('change', () => { updateEbayFeePreview(); saveFormData(); });
     elements.fixedFee.addEventListener('change', saveFormData);
     elements.depopBoost.addEventListener('change', () => { updateDepopFees(); saveFormData(); });
     elements.depopShipping.addEventListener('change', saveFormData);

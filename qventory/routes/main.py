@@ -6319,6 +6319,45 @@ def api_ebay_category_search():
     })
 
 
+@main_bp.route("/api/ebay/categories")
+@login_required
+def api_ebay_categories():
+    leaf_only = request.args.get("leaf_only", "1") == "1"
+
+    if EbayCategory.query.count() == 0:
+        try:
+            from ..helpers.ebay_taxonomy import sync_ebay_categories
+            sync_ebay_categories()
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Category sync failed: {e}"}), 500
+
+    q = EbayCategory.query
+    if leaf_only:
+        q = q.filter(EbayCategory.is_leaf.is_(True))
+
+    categories = q.order_by(EbayCategory.full_path.asc()).all()
+    return jsonify({"ok": True, "categories": [c.to_dict() for c in categories]})
+
+
+@main_bp.route("/api/ebay/fees/estimate")
+@login_required
+def api_ebay_fee_estimate():
+    category_id = request.args.get("category_id")
+    has_store = request.args.get("has_store", "0") == "1"
+    top_rated = request.args.get("top_rated", "0") == "1"
+
+    rule = None
+    if category_id:
+        rule = EbayFeeRule.query.filter_by(category_id=category_id).first()
+    if not rule:
+        rule = EbayFeeRule.query.filter_by(category_id=None).first()
+    if not rule:
+        return jsonify({"ok": False, "error": "Missing eBay fee rules"}), 400
+
+    rate = rule.resolve_rate(has_store=has_store, top_rated=top_rated)
+    return jsonify({"ok": True, "fee_rate_percent": rate})
+
+
 @main_bp.route("/api/profit-calculator/calc", methods=["POST"])
 @login_required
 def api_profit_calculator_calc():
