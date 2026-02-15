@@ -172,6 +172,46 @@
       </div>
     </div>
 
+    <div style="background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <h3 style="color:#a855f7;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-undo-alt"></i> Reactivate eBay Items
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Scan all eBay accounts and reactivate items that were marked inactive but are still active on eBay.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_reactivate_ebay_items') }}"
+              onsubmit="return confirm('Reactivate items still active on eBay for all accounts?');"
+              style="display:flex;align-items:center;gap:10px;">
+          <button type="submit" class="btn" style="background:#a855f7;color:#fff;white-space:nowrap;">
+            <i class="fas fa-bolt"></i> Run Task
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <div style="background:rgba(14,165,233,0.12);border:1px solid rgba(14,165,233,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <h3 style="color:#0ea5e9;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-sync"></i> Resync All Inventory
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Full resync of eBay inventories and backfill listing dates for all accounts.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_resync_all_inventory') }}"
+              onsubmit="return confirm('Run full inventory resync for all eBay accounts?');"
+              style="display:flex;align-items:center;gap:10px;">
+          <button type="submit" class="btn" style="background:#0ea5e9;color:#fff;white-space:nowrap;">
+            <i class="fas fa-bolt"></i> Run Task
+          </button>
+        </form>
+      </div>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->
