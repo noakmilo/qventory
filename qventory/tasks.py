@@ -3017,6 +3017,8 @@ def poll_user_listings(credential):
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
+            if relist_source:
+                new_item.previous_item_id = relist_source.id
 
             try:
                 db.session.add(new_item)

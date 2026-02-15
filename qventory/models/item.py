@@ -67,6 +67,7 @@ class Item(db.Model):
     ebay_sku = db.Column(db.String(100), nullable=True)  # Custom SKU from eBay
     synced_from_ebay = db.Column(db.Boolean, default=False)  # Imported from eBay
     last_ebay_sync = db.Column(db.DateTime, nullable=True)  # Last sync with eBay
+    previous_item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=True, index=True)
 
     # Sold tracking (soft delete)
     sold_at = db.Column(db.DateTime, nullable=True, index=True)  # When item was sold

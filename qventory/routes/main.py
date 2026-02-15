@@ -3415,15 +3415,34 @@ def item_detail(item_id):
     events.extend(cost_events)
 
     relist_events = []
+    chain_items = [it]
+    seen_item_ids = {it.id}
+    current = it
+    for _ in range(10):
+        if not current.previous_item_id:
+            break
+        prev_item = Item.query.filter_by(
+            user_id=current_user.id,
+            id=current.previous_item_id
+        ).first()
+        if not prev_item or prev_item.id in seen_item_ids:
+            break
+        chain_items.append(prev_item)
+        seen_item_ids.add(prev_item.id)
+        current = prev_item
+
     relist_filters = [AutoRelistHistory.user_id == current_user.id]
     relist_match = []
-    if it.id:
-        relist_match.append(AutoRelistHistory.item_id == it.id)
-    if it.sku:
-        relist_match.append(AutoRelistHistory.sku == it.sku)
-    if it.ebay_listing_id:
-        relist_match.append(AutoRelistHistory.old_listing_id == it.ebay_listing_id)
-        relist_match.append(AutoRelistHistory.new_listing_id == it.ebay_listing_id)
+    chain_skus = [ci.sku for ci in chain_items if ci.sku]
+    chain_listing_ids = [ci.ebay_listing_id for ci in chain_items if ci.ebay_listing_id]
+    if seen_item_ids:
+        relist_match.append(AutoRelistHistory.item_id.in_(list(seen_item_ids)))
+    if chain_skus:
+        relist_match.append(AutoRelistHistory.sku.in_(chain_skus))
+    if chain_listing_ids:
+        relist_match.append(AutoRelistHistory.old_listing_id.in_(chain_listing_ids))
+        relist_match.append(AutoRelistHistory.new_listing_id.in_(chain_listing_ids))
+
     if relist_match:
         relist_filters.append(or_(*relist_match))
         relist_history = AutoRelistHistory.query.filter(
