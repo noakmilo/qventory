@@ -123,7 +123,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
     <div>
       <h1 style="margin: 0 0 8px 0;">Polling Logs</h1>
-      <p style="color: var(--sub); margin: 0;">Resumen por batch ({{ interval_seconds }}s) de las últimas 24h</p>
+      <p style="color: var(--sub); margin: 0;">Batch summary ({{ interval_seconds }}s) from the last 24h</p>
     </div>
   </div>
 
@@ -146,22 +146,23 @@
       <div class="polling-value">{{ total_errors }}</div>
     </div>
     <div class="polling-card info">
-      <div class="polling-label">Items Nuevos</div>
+      <div class="polling-label">New Items</div>
       <div class="polling-value">{{ total_new }}</div>
     </div>
   </div>
 
   <div class="glass" style="padding: 20px; border-radius: var(--radius); overflow-x: auto;">
-    <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Batches recientes</h2>
+    <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Recent Batches</h2>
     <table class="polling-table">
       <thead>
         <tr>
-          <th>Ventana</th>
-          <th>Procesados</th>
+          <th>Window</th>
+          <th>Processed</th>
           <th>Success</th>
-          <th>Errores</th>
-          <th>Items Nuevos</th>
-          <th>Estado</th>
+          <th>Errors</th>
+          <th>New Items</th>
+          <th>Status</th>
+          <th>Error Details</th>
         </tr>
       </thead>
       <tbody>
@@ -185,12 +186,25 @@
                 <span class="status-pill ok">OK</span>
               {% endif %}
             </td>
+            <td>
+              {% if row.error_samples %}
+                <div class="text-danger">
+                  {% for err in row.error_samples %}
+                    <div style="margin-bottom: 6px; font-family: monospace; font-size: 11px;">
+                      {{ err }}
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <span style="color: var(--sub);">-</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         {% else %}
           <tr>
-            <td colspan="6" style="text-align: center; padding: 30px; color: var(--sub);">
-              No hay batches recientes.
+            <td colspan="7" style="text-align: center; padding: 30px; color: var(--sub);">
+              No recent batches.
             </td>
           </tr>
         {% endif %}

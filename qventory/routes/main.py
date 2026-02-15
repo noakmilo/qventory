@@ -5883,7 +5883,8 @@ def admin_polling_logs():
             'success': 0,
             'errors': 0,
             'new_listings': 0,
-            'rate_limited': False
+            'rate_limited': False,
+            'error_samples': []
         })
         entry['total'] += 1
         if log.status == 'success':
@@ -5894,6 +5895,8 @@ def admin_polling_logs():
         err = (log.error_message or '').lower()
         if 'rate limit' in err or 'exceeded usage limit' in err or 'call usage' in err or '429' in err:
             entry['rate_limited'] = True
+        if log.error_message and len(entry['error_samples']) < 3:
+            entry['error_samples'].append(log.error_message[:300])
 
     batch_rows = sorted(buckets.values(), key=lambda x: x['start'], reverse=True)[:30]
 

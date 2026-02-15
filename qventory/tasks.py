@@ -2688,6 +2688,8 @@ def poll_ebay_new_listings(self):
         from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.models.item import Item
         from datetime import datetime, timedelta
+        import math
+        import os
         import requests
 
         log_task("=== Polling eBay for new listings ===")
