@@ -1,0 +1,201 @@
+{% extends "base_admin.html" %}
+
+{% block title %}Admin - Polling Logs{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">Polling Logs</span>
+{% endblock %}
+
+{% block content %}
+<style>
+  .polling-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .polling-card {
+    background: var(--muted);
+    padding: 16px;
+    border-radius: var(--radius);
+    border-left: 3px solid var(--accent);
+  }
+
+  .polling-card.success {
+    border-left-color: #10b981;
+  }
+
+  .polling-card.error {
+    border-left-color: #ef4444;
+  }
+
+  .polling-card.info {
+    border-left-color: #3b82f6;
+  }
+
+  .polling-value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 8px 0 4px 0;
+  }
+
+  .polling-label {
+    font-size: var(--fs-sm);
+    color: var(--sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .polling-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-sm);
+  }
+
+  .polling-table th {
+    text-align: left;
+    padding: 12px;
+    background: var(--muted);
+    color: var(--sub);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .polling-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .polling-table tbody tr:hover {
+    background: var(--muted);
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .status-pill.ok {
+    background: #10b981;
+    color: white;
+  }
+
+  .status-pill.warn {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .status-pill.rate-limit {
+    background: #ef4444;
+    color: white;
+  }
+
+  .text-danger {
+    color: #ef4444;
+    font-weight: 700;
+  }
+
+  @media (max-width: 768px) {
+    .polling-table {
+      font-size: var(--fs-xs);
+    }
+    .polling-table th,
+    .polling-table td {
+      padding: 8px;
+    }
+  }
+</style>
+
+<div style="padding: 20px;">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+    <div>
+      <h1 style="margin: 0 0 8px 0;">Polling Logs</h1>
+      <p style="color: var(--sub); margin: 0;">Resumen por batch ({{ interval_seconds }}s) de las últimas 24h</p>
+    </div>
+  </div>
+
+  {% set total_batches = batch_rows|length %}
+  {% set total_success = batch_rows|sum(attribute='success') %}
+  {% set total_errors = batch_rows|sum(attribute='errors') %}
+  {% set total_new = batch_rows|sum(attribute='new_listings') %}
+
+  <div class="polling-summary">
+    <div class="polling-card info">
+      <div class="polling-label">Batches (24h)</div>
+      <div class="polling-value">{{ total_batches }}</div>
+    </div>
+    <div class="polling-card success">
+      <div class="polling-label">Success</div>
+      <div class="polling-value">{{ total_success }}</div>
+    </div>
+    <div class="polling-card error">
+      <div class="polling-label">Errors</div>
+      <div class="polling-value">{{ total_errors }}</div>
+    </div>
+    <div class="polling-card info">
+      <div class="polling-label">Items Nuevos</div>
+      <div class="polling-value">{{ total_new }}</div>
+    </div>
+  </div>
+
+  <div class="glass" style="padding: 20px; border-radius: var(--radius); overflow-x: auto;">
+    <h2 style="margin: 0 0 16px 0; font-size: var(--fs-lg);">Batches recientes</h2>
+    <table class="polling-table">
+      <thead>
+        <tr>
+          <th>Ventana</th>
+          <th>Procesados</th>
+          <th>Success</th>
+          <th>Errores</th>
+          <th>Items Nuevos</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if batch_rows %}
+          {% for row in batch_rows %}
+          <tr>
+            <td>
+              {{ row.start.strftime('%Y-%m-%d %H:%M:%S') }} →
+              {{ row.end.strftime('%H:%M:%S') }}
+            </td>
+            <td>{{ row.total }}</td>
+            <td>{{ row.success }}</td>
+            <td class="{{ 'text-danger' if row.errors > 0 else '' }}">{{ row.errors }}</td>
+            <td>{{ row.new_listings }}</td>
+            <td>
+              {% if row.rate_limited %}
+                <span class="status-pill rate-limit">RATE LIMIT</span>
+              {% elif row.errors > 0 %}
+                <span class="status-pill warn">WARN</span>
+              {% else %}
+                <span class="status-pill ok">OK</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 30px; color: var(--sub);">
+              No hay batches recientes.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

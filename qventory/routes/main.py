@@ -5843,6 +5843,67 @@ def admin_user_diagnostics(user_id):
     )
 
 
+@main_bp.route("/admin/polling-logs")
+@require_admin
+def admin_polling_logs():
+    """Admin polling logs summary (batch view)."""
+    from qventory.models.polling_log import PollingLog
+    from qventory.models.user import User
+    from datetime import datetime, timedelta
+    import os
+
+    interval_seconds = int(os.environ.get('POLL_INTERVAL_SECONDS', 300))
+    now = datetime.utcnow()
+    lookback = now - timedelta(hours=24)
+
+    recent_logs = db.session.query(
+        PollingLog,
+        User.username
+    ).join(
+        User, PollingLog.user_id == User.id
+    ).filter(
+        PollingLog.created_at >= lookback,
+        PollingLog.marketplace == 'ebay'
+    ).order_by(
+        PollingLog.created_at.desc()
+    ).limit(300).all()
+
+    def bucket_key(dt):
+        ts = int(dt.timestamp())
+        bucket = ts - (ts % interval_seconds)
+        return datetime.utcfromtimestamp(bucket)
+
+    buckets = {}
+    for log, username in recent_logs:
+        key = bucket_key(log.created_at)
+        entry = buckets.setdefault(key, {
+            'start': key,
+            'end': key + timedelta(seconds=interval_seconds),
+            'total': 0,
+            'success': 0,
+            'errors': 0,
+            'new_listings': 0,
+            'rate_limited': False
+        })
+        entry['total'] += 1
+        if log.status == 'success':
+            entry['success'] += 1
+        else:
+            entry['errors'] += 1
+        entry['new_listings'] += log.new_listings or 0
+        err = (log.error_message or '').lower()
+        if 'rate limit' in err or 'exceeded usage limit' in err or 'call usage' in err or '429' in err:
+            entry['rate_limited'] = True
+
+    batch_rows = sorted(buckets.values(), key=lambda x: x['start'], reverse=True)[:30]
+
+    return render_template(
+        "admin_polling_logs.html",
+        batch_rows=batch_rows,
+        interval_seconds=interval_seconds
+    )
+
+
 @main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
 @require_admin
 def admin_delete_user(user_id):

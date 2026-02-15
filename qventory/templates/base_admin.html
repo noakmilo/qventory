@@ -59,6 +59,10 @@
           <i class="fas fa-coins"></i>
           <span>AI Token Config</span>
         </a>
+        <a href="{{ url_for('main.admin_polling_logs') }}" class="admin-sidebar-item {% if 'admin_polling_logs' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-wave-square"></i>
+          <span>Polling Logs</span>
+        </a>
         <a href="{{ url_for('main.admin_ebay_api_usage') }}" class="admin-sidebar-item {% if 'admin_ebay_api_usage' in request.endpoint %}active{% endif %}">
           <i class="fas fa-signal"></i>
           <span>eBay API Usage</span>

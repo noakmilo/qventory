@@ -730,6 +730,8 @@ def import_ebay_sales(self, user_id, days_back=None):
         from qventory.helpers.ebay_inventory import fetch_ebay_sold_orders
         from dateutil import parser as date_parser
         from datetime import datetime, timedelta
+        import math
+        import os
 
         # Ensure days_back is properly typed (can arrive as string from Celery serialization)
         if days_back is not None:
@@ -2732,9 +2734,30 @@ def poll_ebay_new_listings(self):
             end_idx = min(start_idx + batch_size, len(all_creds))
             return all_creds[start_idx:end_idx]
 
-        # Batch users per execution to control API usage
-        batch_credentials = _get_poll_batch(active_credentials, batch_size=20, interval_seconds=300)
-        log_task(f"Processing polling batch of {len(batch_credentials)} users")
+        # Batch users per execution to control API usage (adaptive batch size)
+        active_count = len(active_credentials)
+        interval_seconds = int(os.environ.get('POLL_INTERVAL_SECONDS', 300))
+        target_minutes = int(os.environ.get('POLL_TARGET_COVERAGE_MINUTES', 10))
+        min_batch_size = int(os.environ.get('POLL_MIN_BATCH_SIZE', 5))
+        max_batch_size = int(os.environ.get('POLL_MAX_BATCH_SIZE', 100))
+
+        target_batches = max(1, math.ceil((target_minutes * 60) / max(1, interval_seconds)))
+        if active_count == 0:
+            batch_size = 0
+        else:
+            batch_size = math.ceil(active_count / target_batches)
+            batch_size = max(min_batch_size, batch_size)
+            batch_size = min(max_batch_size, batch_size)
+
+        batch_credentials = _get_poll_batch(
+            active_credentials,
+            batch_size=batch_size or 1,
+            interval_seconds=interval_seconds
+        )
+        log_task(
+            f"Processing polling batch of {len(batch_credentials)} users "
+            f"(active={active_count}, batch_size={batch_size}, target_minutes={target_minutes})"
+        )
 
         total_new = 0
         total_errors = 0
