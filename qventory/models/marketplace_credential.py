@@ -38,6 +38,8 @@ class MarketplaceCredential(db.Model):
     is_active = db.Column(db.Boolean, default=True, index=True)
     last_synced_at = db.Column(db.DateTime, nullable=True)
     last_poll_at = db.Column(db.DateTime, nullable=True)  # Last time we polled for new listings
+    poll_cooldown_until = db.Column(db.DateTime, nullable=True)  # Backoff after rate limit
+    poll_cooldown_reason = db.Column(db.String(255), nullable=True)
     sync_status = db.Column(db.String(50), nullable=True)  # success, error, pending
     error_message = db.Column(db.Text, nullable=True)
 

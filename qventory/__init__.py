@@ -105,7 +105,7 @@ def create_app():
         Used by polling system to determine if a user is "active" and should
         have their eBay inventory checked for new items.
 
-        Throttled to 5-minute updates to reduce DB writes.
+        Throttled to 2-minute updates to reduce DB writes.
         """
         from flask_login import current_user
         from datetime import datetime, timedelta
@@ -113,9 +113,9 @@ def create_app():
         if current_user.is_authenticated:
             now = datetime.utcnow()
 
-            # Throttle: only update if last_activity is None or older than 5 minutes
-            # This reduces DB writes from every request to ~12 per hour max
-            if not current_user.last_activity or (now - current_user.last_activity) > timedelta(minutes=5):
+            # Throttle: only update if last_activity is None or older than 2 minutes
+            # This reduces DB writes from every request to ~30 per hour max
+            if not current_user.last_activity or (now - current_user.last_activity) > timedelta(minutes=2):
                 try:
                     current_user.last_activity = now
                     db.session.commit()

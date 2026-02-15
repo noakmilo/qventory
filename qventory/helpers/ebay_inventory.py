@@ -381,6 +381,153 @@ def get_listing_time_details(user_id, listing_id):
         return {}
 
 
+def get_listing_details_trading_api(user_id, listing_id):
+    """
+    Fetch full listing details from Trading API GetItem for delta enrichment.
+
+    Returns a normalized item payload compatible with parse_ebay_inventory_item.
+    """
+    if not listing_id:
+        return {}
+
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        log_inv("Cannot fetch listing details: no access token")
+        return {}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+    if not app_id:
+        log_inv("Cannot fetch listing details: missing EBAY_CLIENT_ID")
+        return {}
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'GetItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'X-EBAY-API-IAF-TOKEN': access_token,
+        'Content-Type': 'text/xml'
+    }
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>{listing_id}</ItemID>
+  <DetailLevel>ReturnAll</DetailLevel>
+</GetItemRequest>'''
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        log_inv(f"GetItem (details) status for {listing_id}: {response.status_code}")
+        if response.status_code != 200:
+            log_inv(f"GetItem (details) error body: {response.text[:500]}")
+            return {}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+        if ack is not None and ack.text in ['Failure', 'PartialFailure']:
+            error = root.find('.//ebay:Errors/ebay:LongMessage', _XML_NS)
+            if error is not None:
+                log_inv(f"GetItem (details) error: {error.text}")
+            return {}
+
+        item_elem = root.find('ebay:Item', _XML_NS)
+        if item_elem is None:
+            log_inv("GetItem (details) response missing Item element")
+            return {}
+
+        title_elem = item_elem.find('ebay:Title', _XML_NS)
+        title = title_elem.text.strip() if title_elem is not None and title_elem.text else 'eBay Item'
+
+        desc_elem = item_elem.find('ebay:Description', _XML_NS)
+        description = desc_elem.text.strip() if desc_elem is not None and desc_elem.text else ''
+
+        # SKU (Custom Label). For variations, use first variation SKU.
+        sku_elem = item_elem.find('ebay:SKU', _XML_NS)
+        sku = sku_elem.text.strip() if sku_elem is not None and sku_elem.text else ''
+        variation_skus = []
+        if not sku:
+            var_sku_elems = item_elem.findall('.//ebay:Variations/ebay:Variation/ebay:SKU', _XML_NS)
+            for var_sku_elem in var_sku_elems:
+                if var_sku_elem is not None and var_sku_elem.text:
+                    variation_skus.append(var_sku_elem.text.strip())
+            if variation_skus:
+                sku = variation_skus[0]
+
+        # Price preference: BuyItNowPrice -> CurrentPrice -> StartPrice
+        price = None
+        for price_path in [
+            'ebay:BuyItNowPrice',
+            'ebay:SellingStatus/ebay:CurrentPrice',
+            'ebay:StartPrice'
+        ]:
+            price_elem = item_elem.find(price_path, _XML_NS)
+            if price_elem is not None and price_elem.text:
+                try:
+                    price = float(price_elem.text.strip())
+                    break
+                except (TypeError, ValueError):
+                    continue
+
+        # Quantity
+        quantity = 1
+        try:
+            quantity_elem = item_elem.find('ebay:Quantity', _XML_NS)
+            if quantity_elem is not None and quantity_elem.text:
+                quantity = int(quantity_elem.text.strip())
+        except (TypeError, ValueError):
+            quantity = 1
+
+        # Images
+        image_urls = []
+        picture_details = item_elem.find('ebay:PictureDetails', _XML_NS)
+        if picture_details is not None:
+            gallery_url = picture_details.find('ebay:GalleryURL', _XML_NS)
+            if gallery_url is not None and gallery_url.text:
+                image_urls.append(gallery_url.text.strip())
+            picture_urls = picture_details.findall('ebay:PictureURL', _XML_NS)
+            for pic in picture_urls:
+                if pic is not None and pic.text:
+                    image_urls.append(pic.text.strip())
+
+        # View URL
+        view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', _XML_NS)
+        view_url = view_url_elem.text.strip() if view_url_elem is not None and view_url_elem.text else f"https://www.ebay.com/itm/{listing_id}"
+
+        start_elem = item_elem.find('ebay:ListingDetails/ebay:StartTime', _XML_NS)
+        if start_elem is None:
+            start_elem = item_elem.find('ebay:StartTime', _XML_NS)
+        end_elem = item_elem.find('ebay:ListingDetails/ebay:EndTime', _XML_NS)
+        if end_elem is None:
+            end_elem = item_elem.find('ebay:EndTime', _XML_NS)
+        start_time = _parse_ebay_datetime(start_elem.text if start_elem is not None else None)
+        end_time = _parse_ebay_datetime(end_elem.text if end_elem is not None else None)
+
+        return {
+            'sku': sku,
+            'product': {
+                'title': title,
+                'description': description,
+                'imageUrls': image_urls
+            },
+            'availability': {
+                'shipToLocationAvailability': {
+                    'quantity': quantity
+                }
+            },
+            'condition': 'USED_EXCELLENT',
+            'ebay_listing_id': str(listing_id),
+            'item_price': price,
+            'ebay_url': view_url,
+            'listing_start_time': start_time,
+            'listing_end_time': end_time,
+            'source': 'trading_api',
+            'variation_skus': variation_skus
+        }
+    except Exception as exc:
+        log_inv(f"Exception calling GetItem (details) for {listing_id}: {exc}")
+        return {}
+
+
 def fetch_trading_order_fees(user_id, order_id):
     """
     Fetch FinalValueFee per order using Trading API GetOrders.
