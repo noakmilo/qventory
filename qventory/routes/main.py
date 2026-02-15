@@ -5671,6 +5671,7 @@ def admin_user_diagnostics(user_id):
     from qventory.models.failed_import import FailedImport
     from qventory.models.import_job import ImportJob
     from qventory.models.marketplace_credential import MarketplaceCredential
+    from qventory.models.polling_log import PollingLog
 
     user = User.query.get_or_404(user_id)
 
@@ -5690,6 +5691,11 @@ def admin_user_diagnostics(user_id):
     recent_jobs = ImportJob.query.filter_by(user_id=user_id).order_by(
         ImportJob.created_at.desc()
     ).limit(10).all()
+
+    # Get recent polling logs
+    recent_polls = PollingLog.query.filter_by(user_id=user_id, marketplace='ebay').order_by(
+        PollingLog.created_at.desc()
+    ).limit(20).all()
 
     # Get failed imports (unresolved)
     failed_imports = FailedImport.get_unresolved_for_user(user_id)
@@ -5716,7 +5722,8 @@ def admin_user_diagnostics(user_id):
         inactive_items=inactive_items,
         recent_jobs=recent_jobs,
         failed_imports=failed_imports,
-        error_summary=error_summary
+        error_summary=error_summary,
+        recent_polls=recent_polls
     )
 
 

@@ -4,6 +4,7 @@ Functions to fetch and sync inventory from eBay Sell API
 """
 import os
 import sys
+import time
 import requests
 from datetime import datetime
 from collections import OrderedDict
@@ -896,7 +897,14 @@ def get_ebay_orders(user_id, days_back=None, max_orders=5000, start_date=None, e
     return all_orders[:max_orders]
 
 
-def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=True):
+def get_active_listings_trading_api(
+    user_id,
+    max_items=1000,
+    collect_failures=True,
+    return_meta=False,
+    max_retries=3,
+    backoff_base=1.0
+):
     """
     Get active listings using Trading API (legacy but reliable)
     Uses GetMyeBaySelling call which works with all listing types
@@ -905,6 +913,9 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
         user_id: Qventory user ID
         max_items: Maximum items to fetch (supports pagination for 200+)
         collect_failures: If True, return tuple (items, failed_items). If False, return only items list.
+        return_meta: If True, include metadata about completeness and pagination.
+        max_retries: Max retries per page on rate limit or transient errors.
+        backoff_base: Base seconds for exponential backoff.
 
     Returns:
         If collect_failures=True: tuple (list of items, list of failed items dicts)
@@ -915,7 +926,22 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
     access_token = get_user_access_token(user_id)
     if not access_token:
         log_inv("No access token available")
-        return ([], []) if collect_failures else []
+        empty_meta = {
+            'expected_total': None,
+            'fetched': 0,
+            'failed': 0,
+            'pages_expected': None,
+            'pages_fetched': 0,
+            'is_complete': False,
+            'incomplete_reason': 'no_access_token'
+        }
+        if collect_failures:
+            if return_meta:
+                return [], [], empty_meta
+            return [], []
+        if return_meta:
+            return [], empty_meta
+        return []
 
     app_id = os.environ.get('EBAY_CLIENT_ID')
 
@@ -926,6 +952,29 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
     page_number = 1
     entries_per_page = 200  # Max allowed by eBay
     total_pages = 1  # Will be updated from first response
+    terminated_early = False
+    terminate_reason = None
+    meta = {
+        'expected_total': None,
+        'fetched': 0,
+        'failed': 0,
+        'pages_expected': None,
+        'pages_fetched': 0,
+        'is_complete': False,
+        'incomplete_reason': None
+    }
+
+    def _is_rate_limit_error(text: str) -> bool:
+        if not text:
+            return False
+        lowered = text.lower()
+        return (
+            "exceeded usage limit" in lowered
+            or "usage limit" in lowered
+            or "rate limit" in lowered
+            or "call usage" in lowered
+            or "throttle" in lowered
+        )
 
     # Paginate through all results
     while page_number <= total_pages and len(all_items) < max_items:
@@ -957,26 +1006,78 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
         }
 
         log_inv(f"Calling Trading API: {TRADING_API_URL}")
-        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
-        log_inv(f"Trading API response status: {response.status_code}")
+        response = None
+        root = None
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+            except Exception as exc:
+                if attempt < max_retries - 1:
+                    sleep_for = backoff_base * (2 ** attempt)
+                    log_inv(f"Trading API request failed (attempt {attempt + 1}/{max_retries}): {exc}. Retrying in {sleep_for:.1f}s")
+                    time.sleep(sleep_for)
+                    continue
+                terminated_early = True
+                terminate_reason = f"network_error: {exc}"
+                log_inv(f"Trading API request failed: {exc}")
+                break
 
-        if response.status_code != 200:
-            log_inv(f"Trading API error: {response.text[:500]}")
-            break
+            log_inv(f"Trading API response status: {response.status_code}")
 
-        # Parse XML response
-        try:
-            root = ET.fromstring(response.content)
+            if response.status_code != 200:
+                body = response.text or ""
+                if response.status_code == 429 or _is_rate_limit_error(body):
+                    if attempt < max_retries - 1:
+                        sleep_for = backoff_base * (2 ** attempt)
+                        log_inv(f"Trading API rate limit (attempt {attempt + 1}/{max_retries}). Retrying in {sleep_for:.1f}s")
+                        time.sleep(sleep_for)
+                        continue
+                terminated_early = True
+                terminate_reason = f"http_{response.status_code}"
+                log_inv(f"Trading API error: {body[:500]}")
+                break
+
+            try:
+                root = ET.fromstring(response.content)
+            except ET.ParseError as exc:
+                if attempt < max_retries - 1:
+                    sleep_for = backoff_base * (2 ** attempt)
+                    log_inv(f"Trading API XML parse error (attempt {attempt + 1}/{max_retries}): {exc}. Retrying in {sleep_for:.1f}s")
+                    time.sleep(sleep_for)
+                    continue
+                terminated_early = True
+                terminate_reason = "xml_parse_error"
+                log_inv(f"XML parsing error: {str(exc)}")
+                log_inv(f"Response content: {response.text[:500]}")
+                break
 
             # Check for errors
             ack = root.find('ebay:Ack', ns)
             if ack is not None and ack.text in ['Failure', 'PartialFailure']:
                 errors = root.findall('.//ebay:Errors', ns)
+                error_texts = []
                 for error in errors:
                     error_msg = error.find('ebay:LongMessage', ns)
                     if error_msg is not None:
+                        error_texts.append(error_msg.text)
                         log_inv(f"Trading API error: {error_msg.text}")
+
+                if any(_is_rate_limit_error(msg or "") for msg in error_texts):
+                    if attempt < max_retries - 1:
+                        sleep_for = backoff_base * (2 ** attempt)
+                        log_inv(f"Trading API rate limit (attempt {attempt + 1}/{max_retries}). Retrying in {sleep_for:.1f}s")
+                        time.sleep(sleep_for)
+                        continue
+
+                terminated_early = True
+                terminate_reason = "api_failure"
                 break
+
+            # Successful parse
+            break
+
+        if terminated_early or root is None:
+            break
 
             # Get pagination info from response
             pagination_result = root.find('.//ebay:ActiveList/ebay:PaginationResult', ns)
@@ -989,6 +1090,8 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
                 if total_entries_elem is not None:
                     total_entries = int(total_entries_elem.text)
                     log_inv(f"Total listings available: {total_entries} across {total_pages} page(s)")
+                    meta['expected_total'] = total_entries
+                    meta['pages_expected'] = total_pages
 
             # Extract active listings
             item_array = root.find('.//ebay:ActiveList/ebay:ItemArray', ns)
@@ -1121,15 +1224,14 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
 
             log_inv(f"✓ Parsed {items_in_page} items from page {page_number}")
 
-        except ET.ParseError as e:
-            log_inv(f"XML parsing error: {str(e)}")
-            log_inv(f"Response content: {response.text[:500]}")
-            break
         except Exception as e:
             log_inv(f"Error processing Trading API response: {str(e)}")
+            terminated_early = True
+            terminate_reason = "processing_error"
             break
 
         # Move to next page
+        meta['pages_fetched'] = page_number
         page_number += 1
 
     # Final summary
@@ -1138,6 +1240,10 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
     log_inv(f"  eBay reported: {total_entries if 'total_entries' in locals() else 'Unknown'} total active listings")
     log_inv(f"  Successfully fetched: {len(all_items)} items")
     log_inv(f"  Failed to parse: {len(failed_items)} items")
+    meta['fetched'] = len(all_items)
+    meta['failed'] = len(failed_items)
+    if meta.get('pages_expected') is None:
+        meta['pages_expected'] = total_pages if 'total_pages' in locals() else None
 
     if 'total_entries' in locals():
         expected_total = total_entries
@@ -1149,6 +1255,9 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
             log_inv(f"  Possible causes:")
             log_inv(f"    - eBay API returned incomplete data")
             log_inv(f"    - Items don't meet API filter criteria")
+            meta['incomplete_reason'] = "missing_items"
+        else:
+            meta['is_complete'] = True
 
         if len(failed_items) > 0:
             log_inv(f"  ⚠️  {len(failed_items)} items failed to parse and will be stored for retry")
@@ -1162,9 +1271,18 @@ def get_active_listings_trading_api(user_id, max_items=1000, collect_failures=Tr
         log_inv("Trading API returned unique listings (no duplicates detected)")
     all_items = deduped_items
 
+    if terminated_early and not meta.get('incomplete_reason'):
+        meta['incomplete_reason'] = terminate_reason or "terminated_early"
+    if meta.get('expected_total') is None:
+        meta['is_complete'] = False
+
     if collect_failures:
+        if return_meta:
+            return all_items[:max_items], failed_items, meta
         return all_items[:max_items], failed_items
     else:
+        if return_meta:
+            return all_items[:max_items], meta
         return all_items[:max_items]
 
 
@@ -1853,14 +1971,17 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
         page_number += 1
 
     trading_success = False
+    trading_complete = False
     try:
-        trading_items = get_active_listings_trading_api(
+        trading_items, trading_meta = get_active_listings_trading_api(
             user_id,
             max_items=max_items,
-            collect_failures=False
+            collect_failures=False,
+            return_meta=True
         )
         if trading_items:
             trading_success = True
+            trading_complete = bool(trading_meta.get('is_complete'))
             sources.append('trading_api')
             trading_offers = [_normalize_trading_item_to_offer(item) for item in trading_items]
             offers.extend(trading_offers)
@@ -1884,7 +2005,7 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
         'offers': deduped,
         'total': total_from_api or len(deduped),
         'sources': sources,
-        'can_mark_inactive': trading_success
+        'can_mark_inactive': trading_success and trading_complete
     }
 
 

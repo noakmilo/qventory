@@ -22,6 +22,7 @@ from .tax_report import TaxReport, TaxReportExport
 from .ebay_finance import EbayPayout, EbayFinanceTransaction
 from .help_article import HelpArticle
 from .pickup import PickupAppointment, PickupMessage
+from .polling_log import PollingLog
 
 __all__ = [
     'User',
@@ -52,5 +53,6 @@ __all__ = [
     'EbayFinanceTransaction',
     'HelpArticle',
     'PickupAppointment',
-    'PickupMessage'
+    'PickupMessage',
+    'PollingLog'
 ]

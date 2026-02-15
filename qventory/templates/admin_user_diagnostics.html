@@ -112,6 +112,76 @@
     </div>
     {% endif %}
 
+    <!-- Polling History -->
+    <div style="margin-bottom:var(--space-5);">
+      <h2 style="margin-bottom:var(--space-3);">
+        <i class="fas fa-satellite-dish"></i> Polling History (eBay)
+      </h2>
+      {% if recent_polls %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Status</th>
+              <th>Window</th>
+              <th>New</th>
+              <th>Errors</th>
+              <th>Started</th>
+              <th>Ended</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for poll in recent_polls %}
+            <tr>
+              <td><code>{{ poll.id }}</code></td>
+              <td>
+                {% if poll.status == 'success' %}
+                  <span class="tag" style="background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.3);color:#4ade80;">
+                    <i class="fas fa-check-circle"></i> {{ poll.status }}
+                  </span>
+                {% elif poll.status == 'error' or poll.status == 'failed' %}
+                  <span class="tag" style="background:rgba(239,68,68,0.15);border-color:rgba(239,68,68,0.3);color:#ef4444;">
+                    <i class="fas fa-times-circle"></i> {{ poll.status }}
+                  </span>
+                {% else %}
+                  <span class="tag">{{ poll.status }}</span>
+                {% endif %}
+              </td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ poll.window_start.strftime('%Y-%m-%d %H:%M:%S') if poll.window_start else '—' }}
+                →
+                {{ poll.window_end.strftime('%Y-%m-%d %H:%M:%S') if poll.window_end else '—' }}
+              </td>
+              <td style="text-align:center;color:#4ade80;">{{ poll.new_listings or 0 }}</td>
+              <td style="text-align:center;color:#ef4444;">{{ poll.errors_count or 0 }}</td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ poll.started_at.strftime('%Y-%m-%d %H:%M:%S') if poll.started_at else '—' }}
+              </td>
+              <td style="font-size:var(--fs-xs);white-space:nowrap;">
+                {{ poll.ended_at.strftime('%Y-%m-%d %H:%M:%S') if poll.ended_at else '—' }}
+              </td>
+            </tr>
+            {% if poll.error_message %}
+            <tr>
+              <td></td>
+              <td colspan="6" style="font-size:var(--fs-xs);color:#fca5a5;">
+                {{ poll.error_message[:250] }}{% if poll.error_message|length > 250 %}...{% endif %}
+              </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
+        <i class="fas fa-satellite" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
+        <p>No polling history found</p>
+      </div>
+      {% endif %}
+    </div>
+
     <!-- Recent Import Jobs -->
     <div style="margin-bottom:var(--space-5);">
       <h2 style="margin-bottom:var(--space-3);">
