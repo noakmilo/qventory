@@ -2980,6 +2980,9 @@ def poll_user_listings(credential):
         items = root.findall('.//ebay:ItemArray/ebay:Item', ns)
         if items:
             log_task(f"    GetSellerEvents returned {len(items)} item(s)")
+
+        newly_created_items = []
+
         for item_elem in items:
             item_id_elem = item_elem.find('ebay:ItemID', ns)
             title_elem = item_elem.find('ebay:Title', ns)
@@ -3003,10 +3006,14 @@ def poll_user_listings(credential):
 
             title_text = title_elem.text.strip() if title_elem is not None and title_elem.text else 'eBay Item'
 
+            # Extract price: SellingStatus/CurrentPrice > BuyItNowPrice > StartPrice
             price = None
-            bin_price_elem = item_elem.find('ebay:BuyItNowPrice', ns)
-            start_price_elem = item_elem.find('ebay:StartPrice', ns)
-            for price_elem in (bin_price_elem, start_price_elem):
+            for xpath in (
+                'ebay:SellingStatus/ebay:CurrentPrice',
+                'ebay:BuyItNowPrice',
+                'ebay:StartPrice',
+            ):
+                price_elem = item_elem.find(xpath, ns)
                 if price_elem is not None and price_elem.text:
                     try:
                         price = float(price_elem.text)
@@ -3020,6 +3027,24 @@ def poll_user_listings(credential):
             view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', ns)
             view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{listing_id}'
 
+            # Parse location code from eBay Custom SKU
+            location_code = None
+            location_A = location_B = location_S = location_C = None
+            if ebay_sku:
+                from qventory.helpers import is_valid_location_code, parse_location_code
+                if is_valid_location_code(ebay_sku):
+                    location_code = ebay_sku
+                    loc = parse_location_code(ebay_sku)
+                    location_A = loc.get('A')
+                    location_B = loc.get('B')
+                    location_S = loc.get('S')
+                    location_C = loc.get('C')
+
+            # Check for relist source (transfer cost/supplier/location)
+            relist_source = Item.query.filter_by(user_id=user_id).filter(
+                Item.notes.like(f'%Relist pending: {listing_id}%')
+            ).order_by(Item.updated_at.desc()).first()
+
             new_item = Item(
                 user_id=user_id,
                 title=title_text[:500] if title_text else 'eBay Item',
@@ -3029,16 +3054,96 @@ def poll_user_listings(credential):
                 listing_link=view_url,
                 ebay_url=view_url,
                 item_price=price,
+                location_code=location_code,
+                A=location_A,
+                B=location_B,
+                S=location_S,
+                C=location_C,
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
 
+            if relist_source:
+                new_item.previous_item_id = relist_source.id
+                new_item.item_cost = relist_source.item_cost
+                new_item.supplier = relist_source.supplier
+                new_item.A = relist_source.A or location_A
+                new_item.B = relist_source.B or location_B
+                new_item.S = relist_source.S or location_S
+                new_item.C = relist_source.C or location_C
+                new_item.location_code = relist_source.location_code or location_code
+                relist_source.is_active = False
+                timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                relist_source.notes = (relist_source.notes or '') + f"\n[{timestamp}] Relist transfer to {listing_id} completed"
+                try:
+                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                    remove_featured_items_for_user(user_id, [relist_source.id])
+                except Exception:
+                    pass
+                log_task(f"    ✓ Relist transfer from item {relist_source.id} to {listing_id}")
+
             db.session.add(new_item)
+            newly_created_items.append((new_item, listing_id))
             new_listings += 1
             last_title = title_text
             if remaining_quota is not None:
                 remaining_quota -= 1
+
+        # Commit new items first so they have IDs
+        if newly_created_items:
+            db.session.commit()
+
+        # Enrich newly imported items with images via Trading API GetItem
+        # (GetSellerEvents doesn't return images)
+        for new_item, listing_id in newly_created_items:
+            try:
+                img_xml = f'''<?xml version="1.0" encoding="utf-8"?>
+<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <ItemID>{listing_id}</ItemID>
+  <OutputSelector>PictureDetails.PictureURL</OutputSelector>
+  <OutputSelector>PictureDetails.GalleryURL</OutputSelector>
+</GetItemRequest>'''
+                img_headers = {
+                    'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+                    'X-EBAY-API-DEV-NAME': ebay_dev_id,
+                    'X-EBAY-API-APP-NAME': ebay_app_id,
+                    'X-EBAY-API-CERT-NAME': ebay_cert_id,
+                    'X-EBAY-API-CALL-NAME': 'GetItem',
+                    'X-EBAY-API-SITEID': '0',
+                    'X-EBAY-API-IAF-TOKEN': access_token,
+                    'Content-Type': 'text/xml'
+                }
+                img_resp = requests.post(TRADING_API_URL, data=img_xml, headers=img_headers, timeout=10)
+                if img_resp.status_code == 200:
+                    img_root = ET.fromstring(img_resp.text)
+                    img_ack = img_root.find('ebay:Ack', ns)
+                    if img_ack is not None and img_ack.text in ('Success', 'Warning'):
+                        # Try PictureURL first (full size), then GalleryURL (thumbnail)
+                        pic_url_elem = img_root.find('.//ebay:PictureDetails/ebay:PictureURL', ns)
+                        gallery_elem = img_root.find('.//ebay:PictureDetails/ebay:GalleryURL', ns)
+                        ebay_image_url = None
+                        if pic_url_elem is not None and pic_url_elem.text:
+                            ebay_image_url = pic_url_elem.text
+                        elif gallery_elem is not None and gallery_elem.text:
+                            ebay_image_url = gallery_elem.text
+
+                        if ebay_image_url:
+                            from qventory.helpers.image_processor import download_and_upload_image
+                            thumb = download_and_upload_image(
+                                ebay_image_url,
+                                target_size_kb=2,
+                                max_dimension=400,
+                                public_id=listing_id
+                            )
+                            if thumb:
+                                new_item.item_thumb = thumb
+                                log_task(f"    ✓ Image uploaded for {listing_id}")
+                            else:
+                                new_item.item_thumb = ebay_image_url
+                db.session.commit()
+            except Exception as img_err:
+                log_task(f"    ⚠ Image fetch failed for {listing_id}: {img_err}")
 
         if new_listings > 0:
             db.session.commit()
