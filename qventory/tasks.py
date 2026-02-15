@@ -2924,6 +2924,7 @@ def poll_user_listings(credential):
     from datetime import datetime, timedelta
     from qventory.models.item import Item
     from qventory.models.polling_log import PollingLog
+    from qventory.models.system_setting import SystemSetting
     from qventory.helpers import generate_sku
     from qventory.helpers.ebay_inventory import TRADING_API_URL, get_listing_details_trading_api, parse_ebay_inventory_item
     from qventory.extensions import db
