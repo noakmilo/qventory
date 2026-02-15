@@ -2986,6 +2986,11 @@ def _ebay_base():
         "browse": "https://api.ebay.com/buy/browse/v1",
     }
 
+def _ebay_analytics_base():
+    if EBAY_ENV == "sandbox":
+        return "https://api.sandbox.ebay.com/developer/analytics/v1_beta"
+    return "https://api.ebay.com/developer/analytics/v1_beta"
+
 _EBAY_TOKEN = {"value": None, "exp": 0}
 
 def _get_ebay_app_token() -> str:
@@ -3005,6 +3010,91 @@ def _get_ebay_app_token() -> str:
     _EBAY_TOKEN["value"] = j["access_token"]
     _EBAY_TOKEN["exp"] = now + int(j.get("expires_in", 7200))
     return _EBAY_TOKEN["value"]
+
+
+def _normalize_rate_limits(payload):
+    if not payload:
+        return []
+    if isinstance(payload, dict):
+        if "rateLimits" in payload and isinstance(payload["rateLimits"], list):
+            return payload["rateLimits"]
+        if "rateLimit" in payload and isinstance(payload["rateLimit"], dict):
+            return [payload["rateLimit"]]
+        if "limits" in payload and isinstance(payload["limits"], list):
+            return payload["limits"]
+    return []
+
+
+def _compute_usage_stats(limit_entry):
+    limit = limit_entry.get("limit")
+    remaining = limit_entry.get("remaining")
+    used = None
+    pct = None
+    if isinstance(limit, int) and isinstance(remaining, int):
+        used = max(limit - remaining, 0)
+        pct = round((used / limit) * 100, 1) if limit > 0 else None
+    return used, pct
+
+
+@main_bp.route("/admin/ebay-api-usage")
+@require_admin
+def admin_ebay_api_usage():
+    """Admin view: eBay API usage (app-level + user-level)."""
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    creds = MarketplaceCredential.query.filter_by(marketplace="ebay", is_active=True).all()
+    selected_user_id = request.args.get("user_id", type=int)
+    selected_cred = None
+    if selected_user_id:
+        selected_cred = next((c for c in creds if c.user_id == selected_user_id), None)
+    if not selected_cred and creds:
+        selected_cred = creds[0]
+
+    app_limits = []
+    user_limits = []
+    app_error = None
+    user_error = None
+
+    analytics_base = _ebay_analytics_base()
+
+    # App-level usage
+    try:
+        app_token = _get_ebay_app_token()
+        headers = {"Authorization": f"Bearer {app_token}"}
+        r = requests.get(f"{analytics_base}/rate_limit/", headers=headers, timeout=15)
+        if r.status_code != 200:
+            app_error = f"HTTP {r.status_code}: {r.text[:200]}"
+        else:
+            app_limits = _normalize_rate_limits(r.json())
+    except Exception as exc:
+        app_error = str(exc)
+
+    # User-level usage (selected user)
+    if selected_cred:
+        try:
+            user_token = selected_cred.get_access_token()
+            if not user_token:
+                user_error = "No access token for selected user"
+            else:
+                headers = {"Authorization": f"Bearer {user_token}"}
+                r = requests.get(f"{analytics_base}/user_rate_limit/", headers=headers, timeout=15)
+                if r.status_code != 200:
+                    user_error = f"HTTP {r.status_code}: {r.text[:200]}"
+                else:
+                    user_limits = _normalize_rate_limits(r.json())
+        except Exception as exc:
+            user_error = str(exc)
+
+    return render_template(
+        "admin_ebay_api_usage.html",
+        creds=creds,
+        selected_user_id=selected_cred.user_id if selected_cred else None,
+        app_limits=app_limits,
+        user_limits=user_limits,
+        app_error=app_error,
+        user_error=user_error,
+        compute_usage=_compute_usage_stats
+    )
 
 
 # ---------------------- Utilidades URL eBay ----------------------
