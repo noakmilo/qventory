@@ -17,7 +17,6 @@ const ProfitCalc = (function() {
   // Autocomplete state
   let autocompleteTimeout = null;
   let currentItemData = null;
-  let lastFeeRate = null;
   let categoryTreeData = [];
   let categoryByParent = {};
 
@@ -37,10 +36,10 @@ const ProfitCalc = (function() {
       topRated: document.getElementById('topRated'),
       fixedFee: document.getElementById('fixedFee'),
       ebaySection: document.getElementById('ebay-section'),
+      ebayCategorySearchInput: document.getElementById('ebayCategorySearchInput'),
       ebayCategoryTree: document.getElementById('ebayCategoryTree'),
       ebayCategoryId: document.getElementById('ebayCategoryId'),
       ebayCategoryPath: document.getElementById('ebayCategoryPath'),
-      ebayFeeDelta: document.getElementById('ebayFeeDelta'),
 
       // Depop specific
       depopCategory: document.getElementById('depopCategory'),
@@ -473,13 +472,32 @@ const ProfitCalc = (function() {
     }
   }
 
-  function renderCategoryTree() {
+  function renderCategoryTree(filterTerm) {
     if (!elements.ebayCategoryTree) return;
     elements.ebayCategoryTree.innerHTML = '';
     const roots = categoryByParent['__root__'] || [];
     const tree = document.createElement('div');
+    let allowedSet = null;
+    if (filterTerm) {
+      const term = filterTerm.toLowerCase();
+      allowedSet = new Set();
+      categoryTreeData.forEach(c => {
+        const name = (c.name || '').toLowerCase();
+        const path = (c.full_path || '').toLowerCase();
+        if (name.includes(term) || path.includes(term)) {
+          allowedSet.add(c.category_id);
+          let parentId = c.parent_id;
+          while (parentId) {
+            allowedSet.add(parentId);
+            const parent = categoryTreeData.find(x => x.category_id === parentId);
+            parentId = parent ? parent.parent_id : null;
+          }
+        }
+      });
+    }
     roots.forEach(root => {
-      tree.appendChild(buildCategoryNode(root));
+      const node = buildCategoryNode(root, filterTerm, allowedSet);
+      if (node) tree.appendChild(node);
     });
     elements.ebayCategoryTree.appendChild(tree);
 
@@ -492,7 +510,11 @@ const ProfitCalc = (function() {
     }
   }
 
-  function buildCategoryNode(cat) {
+  function buildCategoryNode(cat, filterTerm, allowedSet) {
+    if (allowedSet && !allowedSet.has(cat.category_id)) {
+      return null;
+    }
+
     const wrapper = document.createElement('div');
     wrapper.style.marginBottom = '2px';
 
@@ -527,8 +549,13 @@ const ProfitCalc = (function() {
       const childContainer = document.createElement('div');
       childContainer.className = 'category-children';
       children.forEach(child => {
-        childContainer.appendChild(buildCategoryNode(child));
+        const childNode = buildCategoryNode(child, filterTerm, allowedSet);
+        if (childNode) childContainer.appendChild(childNode);
       });
+      if (filterTerm && childContainer.childNodes.length > 0) {
+        childContainer.classList.add('open');
+        toggle.textContent = '−';
+      }
       wrapper.appendChild(childContainer);
     }
 
@@ -564,16 +591,6 @@ const ProfitCalc = (function() {
       if (data.ok) {
         const nextRate = Number(data.fee_rate_percent);
         elements.fees.value = nextRate.toFixed(2);
-        if (elements.ebayFeeDelta) {
-          if (lastFeeRate !== null) {
-            const diff = (nextRate - lastFeeRate).toFixed(2);
-            const sign = diff > 0 ? '+' : '';
-            elements.ebayFeeDelta.textContent = `Fee change vs previous category: ${sign}${diff}%`;
-          } else {
-            elements.ebayFeeDelta.textContent = '';
-          }
-        }
-        lastFeeRate = nextRate;
       }
     } catch (error) {
       console.error('Fee preview error:', error);
@@ -603,6 +620,12 @@ const ProfitCalc = (function() {
     renderHistory();
     setupAutocomplete();
     loadCategories();
+    if (elements.ebayCategorySearchInput) {
+      elements.ebayCategorySearchInput.addEventListener('input', () => {
+        const term = elements.ebayCategorySearchInput.value.trim();
+        renderCategoryTree(term);
+      });
+    }
 
     // Event listeners
     elements.marketplace.addEventListener('change', switchMarketplace);

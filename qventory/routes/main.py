@@ -6486,6 +6486,19 @@ def admin_sync_ebay_categories():
     return jsonify({"ok": True, "result": result})
 
 
+@main_bp.route("/admin/ebay/fees/import", methods=["POST"])
+@require_admin
+def admin_import_ebay_fees():
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "Missing CSV file"}), 400
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"ok": False, "error": "Empty filename"}), 400
+    from ..helpers.ebay_fee_import import import_ebay_fee_rules_csv
+    result = import_ebay_fee_rules_csv(file)
+    return jsonify({"ok": True, "result": result})
+
+
 @main_bp.route("/api/autocomplete-items")
 @login_required
 def api_autocomplete_items():
