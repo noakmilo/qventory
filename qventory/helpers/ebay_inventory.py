@@ -1079,6 +1079,7 @@ def get_active_listings_trading_api(
         if terminated_early or root is None:
             break
 
+        try:
             # Get pagination info from response
             pagination_result = root.find('.//ebay:ActiveList/ebay:PaginationResult', ns)
             if pagination_result is not None:
