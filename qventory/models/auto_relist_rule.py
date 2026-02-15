@@ -452,7 +452,7 @@ class AutoRelistHistory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     rule_id = db.Column(db.Integer, db.ForeignKey("auto_relist_rules.id", ondelete='CASCADE'),
-                       nullable=False, index=True)
+                       nullable=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=True, index=True)
     sku = db.Column(db.String(100), index=True)

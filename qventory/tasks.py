@@ -84,6 +84,31 @@ def relist_item_sell_similar(self, user_id, item_id, title=None, price=None):
 
         log_task(f"  ✓ Relist queued for polling transfer: new_listing_id={new_listing_id}")
 
+        # Record relist history for manual relist
+        try:
+            from qventory.models.auto_relist_rule import AutoRelistHistory
+            history = AutoRelistHistory(
+                rule_id=None,
+                user_id=user_id,
+                item_id=item.id,
+                sku=item.sku,
+                mode="manual",
+                started_at=datetime.utcnow(),
+                status="success",
+                old_listing_id=listing_id,
+                new_listing_id=new_listing_id,
+                old_price=item.item_price,
+                new_price=price if price is not None else item.item_price,
+                old_title=item.title,
+                new_title=title if title else item.title,
+                changes_applied=changes or None
+            )
+            history.mark_completed()
+            db.session.add(history)
+            db.session.commit()
+        except Exception as e:
+            log_task(f"  ⚠ Failed to write relist history: {e}")
+
         return {
             'success': True,
             'new_listing_id': new_listing_id,

@@ -60,8 +60,8 @@
       <input type="number" id="resalePrice" class="input" placeholder="e.g. 59.99" step="0.01">
 
       <!-- Marketplace Fees (always visible) -->
-      <label for="fees" id="feesLabel">Marketplace Fees (%)</label>
-      <input type="number" id="fees" class="input" value="15" readonly>
+      <label for="fees" id="feesLabel">Estimated Fee Rate (%)</label>
+      <input type="number" id="fees" class="input" value="0" readonly>
 
       <!-- Fixed Ads Fee -->
       <label for="fixedAdsFee">Fixed Ads Fee (%)</label>
@@ -74,8 +74,13 @@
           <label for="hasStore">I have an eBay Store</label>
         </div>
 
-        <label for="ebayCategory">eBay Category</label>
-        <select id="ebayCategory" class="input"></select>
+        <label for="ebayCategorySearch">eBay Category</label>
+        <div style="position:relative">
+          <input type="text" id="ebayCategorySearch" class="input" placeholder="Search categories (e.g. Laptops, Sneakers)" autocomplete="off">
+          <input type="hidden" id="ebayCategoryId">
+          <div id="ebayCategoryList" class="autocomplete-list"></div>
+        </div>
+        <div class="muted" id="ebayCategoryPath" style="margin-top:6px;"></div>
 
         <div class="checkbox-container">
           <input type="checkbox" id="topRated">

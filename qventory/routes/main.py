@@ -60,6 +60,9 @@ from ..models.item_cost_history import ItemCostHistory
 from ..models.expense import Expense
 from ..models.receipt_item import ReceiptItem
 from ..models.auto_relist_rule import AutoRelistHistory
+from ..models.ebay_category import EbayCategory
+from ..models.profit_calculator_report import ProfitCalculatorReport
+from ..models.ebay_fee_rule import EbayFeeRule
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 
@@ -6280,6 +6283,168 @@ def profit_calculator():
     """Standalone profit calculator page"""
     embed = request.args.get("embed") == "1"
     return render_template("profit_calculator.html", embed=embed)
+
+
+@main_bp.route("/api/ebay/categories/search")
+@login_required
+def api_ebay_category_search():
+    q = (request.args.get("q") or "").strip()
+    if not q or len(q) < 2:
+        return jsonify({"ok": True, "categories": []})
+
+    # Lazy sync if empty (best-effort)
+    if EbayCategory.query.count() == 0:
+        try:
+            from ..helpers.ebay_taxonomy import sync_ebay_categories
+            sync_ebay_categories()
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Category sync failed: {e}"}), 500
+
+    like = f"%{q}%"
+    categories = (
+        EbayCategory.query.filter(
+            or_(
+                EbayCategory.name.ilike(like),
+                EbayCategory.full_path.ilike(like)
+            )
+        )
+        .order_by(EbayCategory.is_leaf.desc(), EbayCategory.full_path.asc())
+        .limit(20)
+        .all()
+    )
+
+    return jsonify({
+        "ok": True,
+        "categories": [c.to_dict() for c in categories],
+    })
+
+
+@main_bp.route("/api/profit-calculator/calc", methods=["POST"])
+@login_required
+def api_profit_calculator_calc():
+    payload = request.get_json(silent=True) or {}
+    marketplace = (payload.get("marketplace") or "ebay").strip().lower()
+
+    item_name = (payload.get("item_name") or "").strip()
+    buy_price = float(payload.get("buy_price") or 0)
+    resale_price = float(payload.get("resale_price") or 0)
+    shipping_cost = float(payload.get("shipping_cost") or 0)
+    ads_fee_rate = float(payload.get("ads_fee_rate") or 0)
+
+    if buy_price <= 0 or resale_price <= 0:
+        return jsonify({"ok": False, "error": "Invalid price inputs."}), 400
+
+    fee_breakdown = {}
+    category_id = payload.get("category_id")
+    category_path = payload.get("category_path")
+
+    if marketplace == "ebay":
+        from ..helpers.ebay_fees import estimate_ebay_fees
+        has_store = bool(payload.get("has_store"))
+        top_rated = bool(payload.get("top_rated"))
+        include_fixed_fee = bool(payload.get("include_fixed_fee"))
+
+        fee_breakdown = estimate_ebay_fees(
+            category_id=category_id,
+            resale_price=resale_price,
+            shipping_cost=shipping_cost,
+            has_store=has_store,
+            top_rated=top_rated,
+            include_fixed_fee=include_fixed_fee,
+            ads_fee_rate=ads_fee_rate,
+        )
+
+        total_fees = fee_breakdown["total_fees"]
+        net_sale = resale_price - total_fees - shipping_cost
+        profit = net_sale - buy_price
+        roi = (profit / buy_price * 100) if buy_price else 0
+        markup = ((resale_price - buy_price) / buy_price * 100) if buy_price else 0
+        denom = 1 - ((fee_breakdown["fee_rate_percent"] + ads_fee_rate) / 100)
+        breakeven = ((buy_price + shipping_cost + fee_breakdown["fixed_fee"]) / denom) if denom > 0 else 0
+
+        output_text = "\n".join([
+            f"🧾 Item: {item_name or 'Unnamed'}",
+            f"🏪 Marketplace: eBay",
+            f"📁 Category: {category_path or 'Unselected'}",
+            f"💰 Profit: ${profit:.2f}",
+            f"🔄 ROI: {roi:.2f}%",
+            f"📊 Markup: {markup:.2f}%",
+            f"📦 Net Sale: ${net_sale:.2f}",
+            f"💸 eBay Fees ({fee_breakdown['fee_rate_percent']:.2f}% on price+shipping): ${fee_breakdown['marketplace_fee']:.2f}",
+            f"🧾 Fixed Fee: ${fee_breakdown['fixed_fee']:.2f}",
+            f"📣 Ads Fee ({ads_fee_rate:.2f}%): ${fee_breakdown['ads_fee']:.2f}",
+            f"🚚 Shipping Cost: ${shipping_cost:.2f}",
+            f"🧮 Break-even Price: ${breakeven:.2f}",
+            f"📚 Fee Source: eBay fee rules (synced category tree)",
+        ])
+    else:
+        return jsonify({"ok": False, "error": "Unsupported marketplace for API calc."}), 400
+
+    report = ProfitCalculatorReport(
+        user_id=current_user.id,
+        marketplace=marketplace,
+        item_name=item_name,
+        category_id=category_id,
+        category_path=category_path,
+        buy_price=buy_price,
+        resale_price=resale_price,
+        shipping_cost=shipping_cost,
+        has_store=bool(payload.get("has_store")),
+        top_rated=bool(payload.get("top_rated")),
+        include_fixed_fee=bool(payload.get("include_fixed_fee")),
+        ads_fee_rate=ads_fee_rate,
+        fee_breakdown=fee_breakdown,
+        total_fees=total_fees,
+        net_sale=net_sale,
+        profit=profit,
+        roi=roi,
+        markup=markup,
+        breakeven=breakeven,
+        output_text=output_text,
+    )
+    db.session.add(report)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "report": report.to_dict(),
+        "output_text": output_text,
+        "fee_breakdown": fee_breakdown,
+    })
+
+
+@main_bp.route("/api/profit-calculator/reports")
+@login_required
+def api_profit_calculator_reports():
+    reports = (
+        ProfitCalculatorReport.query.filter_by(user_id=current_user.id)
+        .order_by(ProfitCalculatorReport.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    return jsonify({"ok": True, "reports": [r.to_dict() for r in reports]})
+
+
+@main_bp.route("/api/profit-calculator/reports/<int:report_id>", methods=["DELETE"])
+@login_required
+def api_profit_calculator_delete_report(report_id):
+    report = ProfitCalculatorReport.query.filter_by(
+        id=report_id,
+        user_id=current_user.id
+    ).first()
+    if not report:
+        return jsonify({"ok": False, "error": "Report not found"}), 404
+    db.session.delete(report)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@main_bp.route("/admin/ebay/categories/sync", methods=["POST"])
+@require_admin
+def admin_sync_ebay_categories():
+    from ..helpers.ebay_taxonomy import sync_ebay_categories
+    result = sync_ebay_categories()
+    return jsonify({"ok": True, "result": result})
 
 
 @main_bp.route("/api/autocomplete-items")
