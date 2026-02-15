@@ -27,14 +27,38 @@
     <hr class="divider">
 
     <div style="margin-bottom:var(--space-4);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-      <a href="{{ url_for('main.admin_ebay_api_usage', view='import') }}" class="btn" style="background:{% if view == 'import' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
+      <a href="{{ url_for('main.admin_ebay_api_usage', view='import', api=api_filter) }}" class="btn" style="background:{% if view == 'import' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
         <i class="fas fa-filter"></i> Import Endpoints
       </a>
-      <a href="{{ url_for('main.admin_ebay_api_usage', view='all') }}" class="btn" style="background:{% if view == 'all' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
+      <a href="{{ url_for('main.admin_ebay_api_usage', view='all', api=api_filter) }}" class="btn" style="background:{% if view == 'all' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
         <i class="fas fa-list"></i> All Endpoints
       </a>
-      <a href="{{ url_for('main.admin_ebay_api_usage', view=view) }}" class="btn" style="background:#10b981;color:#fff;">
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api=api_filter) }}" class="btn" style="background:#10b981;color:#fff;">
         <i class="fas fa-sync-alt"></i> Refresh
+      </a>
+    </div>
+
+    <div style="margin-bottom:var(--space-4);display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='all') }}" class="btn" style="background:{% if api_filter == 'all' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        All APIs
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='trading') }}" class="btn" style="background:{% if api_filter == 'trading' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Trading
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='inventory') }}" class="btn" style="background:{% if api_filter == 'inventory' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Inventory
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='fulfillment') }}" class="btn" style="background:{% if api_filter == 'fulfillment' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Fulfillment
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='finances') }}" class="btn" style="background:{% if api_filter == 'finances' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Finances
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='sell') }}" class="btn" style="background:{% if api_filter == 'sell' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Sell
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view, api='buy') }}" class="btn" style="background:{% if api_filter == 'buy' %}#111827{% else %}#374151{% endif %};color:#fff;">
+        Buy
       </a>
     </div>
 

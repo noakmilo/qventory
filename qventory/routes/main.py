@@ -3065,6 +3065,7 @@ def admin_ebay_api_usage():
     app_error = None
     analytics_base = _ebay_analytics_base()
     view = (request.args.get("view") or "import").lower()
+    api_filter = (request.args.get("api") or "all").lower()
     import_filters = {
         "TradingAPI:GetSellerEvents",
         "TradingAPI:GetMyeBaySelling",
@@ -3092,13 +3093,33 @@ def admin_ebay_api_usage():
             return f"{row.get('api_context')}:{row.get('api_name')}"
         app_rows = [row for row in app_rows if _key(row) in import_filters]
 
+    if api_filter != "all":
+        def _api_match(row):
+            ctx = (row.get("api_context") or "").lower()
+            name = (row.get("api_name") or "").lower()
+            if api_filter == "trading":
+                return ctx == "tradingapi" or name == "tradingapi"
+            if api_filter == "finances":
+                return "finances" in name or "payout" in name
+            if api_filter == "inventory":
+                return "inventory" in name
+            if api_filter == "fulfillment":
+                return "fulfillment" in name
+            if api_filter == "sell":
+                return ctx == "sell" or name.startswith("sell.")
+            if api_filter == "buy":
+                return ctx == "buy" or name.startswith("buy.")
+            return True
+        app_rows = [row for row in app_rows if _api_match(row)]
+
     return render_template(
         "admin_ebay_api_usage.html",
         app_limits=app_limits,
         app_rows=app_rows,
         app_error=app_error,
         compute_usage=_compute_usage_stats,
-        view=view
+        view=view,
+        api_filter=api_filter
     )
 
 
