@@ -17,3 +17,12 @@ class SystemSetting(db.Model):
         if setting and setting.value_int is not None:
             return setting.value_int
         return default
+
+    @staticmethod
+    def set_int(key, value):
+        setting = SystemSetting.query.filter_by(key=key).first()
+        if not setting:
+            setting = SystemSetting(key=key)
+            db.session.add(setting)
+        setting.value_int = value
+        db.session.commit()
