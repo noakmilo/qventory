@@ -3258,8 +3258,20 @@ def sync_ebay_active_inventory_auto(self):
                     if offer.get('ebay_listing_id')
                 }
 
+                # Safety check: if the snapshot has significantly fewer items than
+                # what we have active in the DB, the API likely returned incomplete
+                # data even though it reported success. Do NOT mass-inactivate.
+                active_ebay_items_in_db = sum(1 for i in items_to_sync if i.is_active)
+                snapshot_count = len(offers_by_listing)
+                if can_mark_inactive and active_ebay_items_in_db > 0 and snapshot_count > 0:
+                    coverage_ratio = snapshot_count / active_ebay_items_in_db
+                    if coverage_ratio < 0.85:
+                        log_task(f"    ⚠ Safety override: snapshot has {snapshot_count} items but DB has {active_ebay_items_in_db} active "
+                                 f"({coverage_ratio:.0%} coverage). Skipping inactivation to prevent false positives.")
+                        can_mark_inactive = False
+
                 if not can_mark_inactive:
-                    log_task("    Incomplete data (no Trading API); items not found will remain active")
+                    log_task("    Incomplete data; items not found will remain active")
                 
                 updated_count = 0
                 deleted_count = 0
