@@ -694,14 +694,19 @@ def get_active_listings(user_id, limit=200, offset=0):
     Returns:
         dict with 'offers' list and 'total' count
     """
-    log_inv(f"Getting active listings (offers) for user {user_id} (limit={limit}, offset={offset})")
+    offers_enabled = os.environ.get('EBAY_OFFERS_API_ENABLED', '0') == '1'
+    if not offers_enabled:
+        raise Exception("Offers API disabled (EBAY_OFFERS_API_ENABLED=0)")
+    if offers_enabled:
+        log_inv(f"Getting active listings (offers) for user {user_id} (limit={limit}, offset={offset})")
 
     access_token = get_user_access_token(user_id)
     if not access_token:
         raise Exception("No valid eBay access token available")
 
     url = f"{EBAY_API_BASE}/sell/inventory/v1/offer"
-    log_inv(f"Offers API URL: {url}")
+    if offers_enabled:
+        log_inv(f"Offers API URL: {url}")
 
     headers = {
         'Authorization': f'Bearer {access_token}',
@@ -718,24 +723,29 @@ def get_active_listings(user_id, limit=200, offset=0):
         # eBay will return all offers for the authenticated user
     }
 
-    log_inv(f"Making request to eBay Offers API...")
+    if offers_enabled:
+        log_inv(f"Making request to eBay Offers API...")
     response = requests.get(url, headers=headers, params=params, timeout=30)
-    log_inv(f"Offers API response status: {response.status_code}")
+    if offers_enabled:
+        log_inv(f"Offers API response status: {response.status_code}")
 
     if response.status_code != 200:
-        log_inv(f"ERROR response body: {response.text[:500]}")
+        if offers_enabled:
+            log_inv(f"ERROR response body: {response.text[:500]}")
 
     response.raise_for_status()
 
     data = response.json()
-    log_inv(f"Offers API response data keys: {list(data.keys())}")
-    log_inv(f"Number of offers: {len(data.get('offers', []))}")
-    log_inv(f"Total available: {data.get('total', 0)}")
+    if offers_enabled:
+        log_inv(f"Offers API response data keys: {list(data.keys())}")
+        log_inv(f"Number of offers: {len(data.get('offers', []))}")
+        log_inv(f"Total available: {data.get('total', 0)}")
 
     # Log first offer details for debugging
     if data.get('offers'):
         first_offer = data['offers'][0]
-        log_inv(f"First offer sample: {list(first_offer.keys())}")
+        if offers_enabled:
+            log_inv(f"First offer sample: {list(first_offer.keys())}")
 
     return {
         'offers': data.get('offers', []),
@@ -873,7 +883,7 @@ def get_all_inventory(user_id, max_items=1000):
         offset += limit
 
     # If Inventory API is partial or empty, enrich with Offers/Trading to avoid missing legacy listings
-    try_offers = len(all_items) < max_items
+    try_offers = len(all_items) < max_items and os.environ.get('EBAY_OFFERS_API_ENABLED', '0') == '1'
 
     if try_offers:
         try:
@@ -2005,6 +2015,16 @@ def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
             'error': str (optional)
         }
     """
+    if os.environ.get('EBAY_OFFERS_API_ENABLED', '0') != '1':
+        return {
+            'success': False,
+            'error': 'Offers API disabled',
+            'offers': [],
+            'total': 0,
+            'limit': limit,
+            'offset': offset
+        }
+
     try:
         listings = get_active_listings(user_id, limit=limit, offset=offset)
         raw_offers = listings.get('offers', []) or []
