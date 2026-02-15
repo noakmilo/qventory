@@ -454,6 +454,8 @@ class AutoRelistHistory(db.Model):
     rule_id = db.Column(db.Integer, db.ForeignKey("auto_relist_rules.id", ondelete='CASCADE'),
                        nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    item_id = db.Column(db.Integer, db.ForeignKey("items.id"), nullable=True, index=True)
+    sku = db.Column(db.String(100), index=True)
 
     # Execution timing
     started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -472,6 +474,8 @@ class AutoRelistHistory(db.Model):
     # Pricing changes (for tracking)
     old_price = db.Column(db.Float)
     new_price = db.Column(db.Float)
+    old_title = db.Column(db.String(500))
+    new_title = db.Column(db.String(500))
 
     # Error tracking
     error_message = db.Column(db.Text)
@@ -514,6 +518,8 @@ class AutoRelistHistory(db.Model):
             'new_listing_id': self.new_listing_id,
             'old_price': self.old_price,
             'new_price': self.new_price,
+            'old_title': self.old_title,
+            'new_title': self.new_title,
             'error_message': self.error_message,
             'error_code': self.error_code,
             'skip_reason': self.skip_reason,

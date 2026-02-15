@@ -3364,6 +3364,13 @@ def item_detail(item_id):
             "detail": it.supplier
         })
 
+    if it.location_code:
+        events.append({
+            "timestamp": it.updated_at or it.created_at,
+            "title": "Location assigned",
+            "detail": it.location_code
+        })
+
     cost_events = []
     history_entries = ItemCostHistory.query.filter_by(
         user_id=current_user.id,
@@ -3408,16 +3415,30 @@ def item_detail(item_id):
     events.extend(cost_events)
 
     relist_events = []
+    relist_filters = [AutoRelistHistory.user_id == current_user.id]
+    relist_match = []
+    if it.id:
+        relist_match.append(AutoRelistHistory.item_id == it.id)
+    if it.sku:
+        relist_match.append(AutoRelistHistory.sku == it.sku)
     if it.ebay_listing_id:
+        relist_match.append(AutoRelistHistory.old_listing_id == it.ebay_listing_id)
+        relist_match.append(AutoRelistHistory.new_listing_id == it.ebay_listing_id)
+    if relist_match:
+        relist_filters.append(or_(*relist_match))
         relist_history = AutoRelistHistory.query.filter(
-            AutoRelistHistory.user_id == current_user.id,
-            (AutoRelistHistory.old_listing_id == it.ebay_listing_id) |
-            (AutoRelistHistory.new_listing_id == it.ebay_listing_id)
+            *relist_filters
         ).order_by(AutoRelistHistory.started_at.asc()).all()
         for rh in relist_history:
             detail = f"Status: {rh.status}"
             if rh.old_price is not None or rh.new_price is not None:
-                detail += f" • Price: {rh.old_price} → {rh.new_price}"
+                old_price = f"{rh.old_price:.2f}" if rh.old_price is not None else "—"
+                new_price = f"{rh.new_price:.2f}" if rh.new_price is not None else "—"
+                detail += f" • Price: {old_price} → {new_price}"
+            if rh.old_title or rh.new_title:
+                old_title = rh.old_title or "—"
+                new_title = rh.new_title or "—"
+                detail += f" • Title: {old_title} → {new_title}"
             relist_events.append({
                 "timestamp": rh.started_at,
                 "title": f"Relisted ({rh.mode or 'manual'})",

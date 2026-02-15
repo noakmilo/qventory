@@ -1528,6 +1528,22 @@ def auto_relist_offers(self):
                     started_at=datetime.utcnow(),
                     status='pending'
                 )
+                history.sku = rule.sku
+                history.old_title = rule.item_title
+                try:
+                    from qventory.models.item import Item
+                    item_match = None
+                    if rule.sku:
+                        item_match = Item.query.filter_by(user_id=rule.user_id, sku=rule.sku).first()
+                    if not item_match and rule.listing_id:
+                        item_match = Item.query.filter_by(
+                            user_id=rule.user_id,
+                            ebay_listing_id=rule.listing_id
+                        ).first()
+                    if item_match:
+                        history.item_id = item_match.id
+                except Exception as match_err:
+                    log_task(f"  ⚠ Unable to link relist history to item: {match_err}")
                 db.session.add(history)
                 db.session.commit()
 
@@ -1634,11 +1650,13 @@ def auto_relist_offers(self):
                     db.session.commit()
                     log_task(f"  DEBUG: Committed pending_changes to database")
 
-                if apply_changes and rule.mode == 'manual':
+                if apply_changes and rule.pending_changes:
                     history.changes_applied = rule.pending_changes.copy()
                     # Capture new price if changed
                     if 'price' in rule.pending_changes:
                         history.new_price = rule.pending_changes['price']
+                    if 'title' in rule.pending_changes:
+                        history.new_title = rule.pending_changes['title']
 
                 # Execute relist
                 log_task(f"  DEBUG: About to call execute_relist with apply_changes={apply_changes}")
