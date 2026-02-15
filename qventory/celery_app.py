@@ -111,6 +111,13 @@ celery.conf.beat_schedule = {
             'expires': 60 * 60 * 2,
         }
     },
+    'sync-ebay-category-fees-monthly': {
+        'task': 'qventory.tasks.sync_ebay_category_fee_catalog',
+        'schedule': crontab(day_of_month='1', hour=4, minute=0),
+        'options': {
+            'expires': 60 * 60 * 6,
+        }
+    },
 }
 
 

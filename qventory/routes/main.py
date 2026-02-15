@@ -6282,6 +6282,21 @@ def privacy_policy():
 def profit_calculator():
     """Standalone profit calculator page"""
     embed = request.args.get("embed") == "1"
+    try:
+        from qventory.models.system_setting import SystemSetting
+        from qventory.tasks import sync_ebay_category_fee_catalog
+
+        started = SystemSetting.query.filter_by(key='ebay_category_fee_sync_started').first()
+        if not started:
+            started = SystemSetting(
+                key='ebay_category_fee_sync_started',
+                value_int=int(datetime.utcnow().timestamp())
+            )
+            db.session.add(started)
+            db.session.commit()
+            sync_ebay_category_fee_catalog.delay(user_id=current_user.id)
+    except Exception:
+        db.session.rollback()
     return render_template("profit_calculator.html", embed=embed)
 
 
@@ -6353,6 +6368,19 @@ def api_ebay_fee_estimate():
     except ValueError:
         return jsonify({"ok": False, "error": "Invalid price inputs"}), 400
 
+    rule = None
+    if category_id:
+        rule = EbayFeeRule.query.filter_by(category_id=category_id).first()
+    if not rule:
+        rule = EbayFeeRule.query.filter_by(category_id=None).first()
+    if rule:
+        rate = rule.resolve_rate(has_store=has_store, top_rated=top_rated)
+        response = {"ok": True, "fee_rate_percent": rate}
+        if price_val > 0:
+            fee_base = price_val + shipping_val
+            response["total_fees"] = round(fee_base * (rate / 100), 2)
+        return jsonify(response)
+
     from ..helpers.ebay_fee_live import get_live_fee_estimate
     live = get_live_fee_estimate(
         user_id=current_user.id,
@@ -6370,16 +6398,7 @@ def api_ebay_fee_estimate():
             "fees": live["fees"]
         })
 
-    rule = None
-    if category_id:
-        rule = EbayFeeRule.query.filter_by(category_id=category_id).first()
-    if not rule:
-        rule = EbayFeeRule.query.filter_by(category_id=None).first()
-    if not rule:
-        return jsonify({"ok": False, "error": live.get("error") or "Missing eBay fee rules"}), 400
-
-    rate = rule.resolve_rate(has_store=has_store, top_rated=top_rated)
-    return jsonify({"ok": True, "fee_rate_percent": rate})
+    return jsonify({"ok": False, "error": live.get("error") or "Missing eBay fee rules"}), 400
 
 
 @main_bp.route("/api/profit-calculator/calc", methods=["POST"])

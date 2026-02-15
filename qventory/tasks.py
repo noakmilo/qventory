@@ -3,6 +3,7 @@ Celery Background Tasks for Qventory
 """
 import hashlib
 import sys
+import time
 from datetime import datetime, timedelta
 from sqlalchemy import func, or_
 from qventory.celery_app import celery
@@ -5473,4 +5474,160 @@ def resync_all_inventories_backfill_dates(self):
             'accounts_processed': len(summary),
             'total_listing_dates': total_listing_dates,
             'results': summary
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_category_fee_catalog')
+def sync_ebay_category_fee_catalog(self, user_id=None, marketplace_id="EBAY_US", force=False):
+    """
+    Master task: sync eBay category tree and enqueue fee sync chunks.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.system_setting import SystemSetting
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.ebay_category import EbayCategory
+        from qventory.helpers.ebay_taxonomy import sync_ebay_categories
+
+        now = datetime.utcnow()
+        last_setting = SystemSetting.query.filter_by(key='ebay_category_fee_last_sync').first()
+        if last_setting and last_setting.value_int and not force:
+            if (now.timestamp() - last_setting.value_int) < (30 * 24 * 3600):
+                return {"success": True, "skipped": "recent_sync"}
+
+        if not user_id:
+            cred = MarketplaceCredential.query.filter_by(
+                marketplace='ebay',
+                is_active=True
+            ).order_by(MarketplaceCredential.updated_at.desc()).first()
+            if cred:
+                user_id = cred.user_id
+
+        if not user_id:
+            return {"success": False, "error": "No active eBay credential available for fee sync"}
+
+        sync_result = sync_ebay_categories(marketplace_id=marketplace_id)
+
+        total_leaf = EbayCategory.query.filter(EbayCategory.is_leaf.is_(True)).count()
+        if total_leaf == 0:
+            return {"success": False, "error": "No eBay categories found after sync"}
+
+        chunk_size = 200
+        queued = 0
+        for offset in range(0, total_leaf, chunk_size):
+            sync_ebay_category_fee_catalog_chunk.delay(
+                user_id=user_id,
+                offset=offset,
+                limit=chunk_size,
+                marketplace_id=marketplace_id
+            )
+            queued += 1
+
+        if not last_setting:
+            last_setting = SystemSetting(key='ebay_category_fee_last_sync')
+            db.session.add(last_setting)
+        last_setting.value_int = int(now.timestamp())
+        db.session.commit()
+
+        return {
+            "success": True,
+            "categories_synced": sync_result.get("total"),
+            "leaf_categories": total_leaf,
+            "chunks_queued": queued
+        }
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_category_fee_catalog_chunk')
+def sync_ebay_category_fee_catalog_chunk(self, user_id, offset, limit, marketplace_id="EBAY_US"):
+    """
+    Chunk task: fetch live fee estimates for a slice of leaf categories and store in EbayFeeRule.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.ebay_category import EbayCategory
+        from qventory.models.ebay_fee_rule import EbayFeeRule
+        from qventory.helpers.ebay_fee_live import get_live_fee_estimate
+        from qventory.models.system_setting import SystemSetting
+
+        base_price = float(SystemSetting.get_int('ebay_fee_sync_base_price', 100) or 100)
+        base_shipping = float(SystemSetting.get_int('ebay_fee_sync_base_shipping', 10) or 10)
+
+        categories = (
+            EbayCategory.query.filter(EbayCategory.is_leaf.is_(True))
+            .order_by(EbayCategory.category_id.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        updated = 0
+        created = 0
+        errors = 0
+
+        for idx, cat in enumerate(categories, start=1):
+            try:
+                live = get_live_fee_estimate(
+                    user_id=user_id,
+                    category_id=cat.category_id,
+                    price=base_price,
+                    shipping_cost=base_shipping,
+                    has_store=False,
+                    top_rated=False
+                )
+                if not live.get("success"):
+                    errors += 1
+                    continue
+
+                rate = float(live.get("fee_rate_percent") or 0)
+                if rate <= 0:
+                    errors += 1
+                    continue
+
+                fixed_fee = 0.30
+                for fee in live.get("fees") or []:
+                    name = (fee.get("name") or "").lower()
+                    if "fixed" in name and fee.get("amount") is not None:
+                        try:
+                            fixed_fee = float(fee.get("amount"))
+                        except (TypeError, ValueError):
+                            fixed_fee = 0.30
+                        break
+
+                rule = EbayFeeRule.query.filter_by(category_id=cat.category_id).first()
+                if rule:
+                    rule.standard_rate = rate
+                    rule.fixed_fee = fixed_fee
+                    rule.updated_at = datetime.utcnow()
+                    updated += 1
+                else:
+                    rule = EbayFeeRule(
+                        category_id=cat.category_id,
+                        standard_rate=rate,
+                        store_rate=None,
+                        top_rated_discount=10.0,
+                        fixed_fee=fixed_fee
+                    )
+                    db.session.add(rule)
+                    created += 1
+
+                if idx % 25 == 0:
+                    db.session.commit()
+
+                time.sleep(0.5)
+            except Exception:
+                db.session.rollback()
+                errors += 1
+
+        db.session.commit()
+
+        return {
+            "success": True,
+            "offset": offset,
+            "limit": limit,
+            "processed": len(categories),
+            "created": created,
+            "updated": updated,
+            "errors": errors
         }

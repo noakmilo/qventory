@@ -602,10 +602,6 @@ const ProfitCalc = (function() {
     if (elements.marketplace.value !== 'ebay') return;
     const priceVal = parseFloat(elements.resalePrice.value) || 0;
     const shippingVal = parseFloat(elements.shipping.value) || 0;
-    if (!priceVal) {
-      elements.fees.value = '0';
-      return;
-    }
     const params = new URLSearchParams({
       category_id: elements.ebayCategoryId.value || '',
       has_store: elements.hasStore.checked ? '1' : '0',
@@ -619,9 +615,12 @@ const ProfitCalc = (function() {
       if (data.ok) {
         const nextRate = Number(data.fee_rate_percent);
         elements.fees.value = nextRate.toFixed(2);
+      } else {
+        elements.fees.value = '0';
       }
     } catch (error) {
       console.error('Fee preview error:', error);
+      elements.fees.value = '0';
     }
   }
 
