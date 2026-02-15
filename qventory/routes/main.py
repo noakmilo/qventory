@@ -3015,84 +3015,75 @@ def _get_ebay_app_token() -> str:
 def _normalize_rate_limits(payload):
     if not payload:
         return []
-    if isinstance(payload, dict):
-        if "rateLimits" in payload and isinstance(payload["rateLimits"], list):
-            return payload["rateLimits"]
-        if "rateLimit" in payload and isinstance(payload["rateLimit"], dict):
-            return [payload["rateLimit"]]
-        if "limits" in payload and isinstance(payload["limits"], list):
-            return payload["limits"]
+    if isinstance(payload, dict) and isinstance(payload.get("rateLimits"), list):
+        return payload["rateLimits"]
     return []
+
+
+def _flatten_rate_limits(rate_limits):
+    rows = []
+    for rl in rate_limits:
+        api_context = rl.get("apiContext")
+        api_name = rl.get("apiName")
+        api_version = rl.get("apiVersion")
+        resources = rl.get("resources") or []
+        for resource in resources:
+            resource_name = resource.get("name")
+            rates = resource.get("rates") or []
+            for rate in rates:
+                rows.append({
+                    "api_context": api_context,
+                    "api_name": api_name,
+                    "api_version": api_version,
+                    "resource_name": resource_name,
+                    "count": rate.get("count"),
+                    "limit": rate.get("limit"),
+                    "remaining": rate.get("remaining"),
+                    "reset": rate.get("reset"),
+                    "time_window": rate.get("timeWindow"),
+                })
+    return rows
 
 
 def _compute_usage_stats(limit_entry):
     limit = limit_entry.get("limit")
     remaining = limit_entry.get("remaining")
-    used = None
-    pct = None
-    if isinstance(limit, int) and isinstance(remaining, int):
+    count = limit_entry.get("count")
+    used = count if isinstance(count, int) else None
+    if used is None and isinstance(limit, int) and isinstance(remaining, int):
         used = max(limit - remaining, 0)
-        pct = round((used / limit) * 100, 1) if limit > 0 else None
+    pct = round((used / limit) * 100, 1) if isinstance(limit, int) and limit > 0 and isinstance(used, int) else None
     return used, pct
 
 
 @main_bp.route("/admin/ebay-api-usage")
 @require_admin
 def admin_ebay_api_usage():
-    """Admin view: eBay API usage (app-level + user-level)."""
-    from qventory.models.marketplace_credential import MarketplaceCredential
-
-    creds = MarketplaceCredential.query.filter_by(marketplace="ebay", is_active=True).all()
-    selected_user_id = request.args.get("user_id", type=int)
-    selected_cred = None
-    if selected_user_id:
-        selected_cred = next((c for c in creds if c.user_id == selected_user_id), None)
-    if not selected_cred and creds:
-        selected_cred = creds[0]
-
+    """Admin view: eBay API usage (global app-level only)."""
     app_limits = []
-    user_limits = []
+    app_rows = []
     app_error = None
-    user_error = None
-
     analytics_base = _ebay_analytics_base()
 
-    # App-level usage
     try:
         app_token = _get_ebay_app_token()
         headers = {"Authorization": f"Bearer {app_token}"}
         r = requests.get(f"{analytics_base}/rate_limit/", headers=headers, timeout=15)
-        if r.status_code != 200:
+        if r.status_code == 204:
+            app_limits = []
+        elif r.status_code != 200:
             app_error = f"HTTP {r.status_code}: {r.text[:200]}"
         else:
             app_limits = _normalize_rate_limits(r.json())
+            app_rows = _flatten_rate_limits(app_limits)
     except Exception as exc:
         app_error = str(exc)
 
-    # User-level usage (selected user)
-    if selected_cred:
-        try:
-            user_token = selected_cred.get_access_token()
-            if not user_token:
-                user_error = "No access token for selected user"
-            else:
-                headers = {"Authorization": f"Bearer {user_token}"}
-                r = requests.get(f"{analytics_base}/user_rate_limit/", headers=headers, timeout=15)
-                if r.status_code != 200:
-                    user_error = f"HTTP {r.status_code}: {r.text[:200]}"
-                else:
-                    user_limits = _normalize_rate_limits(r.json())
-        except Exception as exc:
-            user_error = str(exc)
-
     return render_template(
         "admin_ebay_api_usage.html",
-        creds=creds,
-        selected_user_id=selected_cred.user_id if selected_cred else None,
         app_limits=app_limits,
-        user_limits=user_limits,
+        app_rows=app_rows,
         app_error=app_error,
-        user_error=user_error,
         compute_usage=_compute_usage_stats
     )
 

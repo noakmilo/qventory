@@ -27,19 +27,9 @@
     <hr class="divider">
 
     <div style="margin-bottom:var(--space-4);">
-      <form method="GET" action="{{ url_for('main.admin_ebay_api_usage') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <label for="user_id" style="color:var(--sub);font-size:var(--fs-sm);">User-level usage for:</label>
-        <select name="user_id" id="user_id" style="min-width:220px;padding:8px 10px;border-radius:6px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);">
-          {% for cred in creds %}
-            <option value="{{ cred.user_id }}" {% if cred.user_id == selected_user_id %}selected{% endif %}>
-              User {{ cred.user_id }}{% if cred.ebay_user_id %} – {{ cred.ebay_user_id }}{% endif %}
-            </option>
-          {% endfor %}
-        </select>
-        <button type="submit" class="btn" style="background:#3b82f6;color:#fff;">
-          <i class="fas fa-sync-alt"></i> Refresh
-        </button>
-      </form>
+      <a href="{{ url_for('main.admin_ebay_api_usage') }}" class="btn" style="background:#3b82f6;color:#fff;">
+        <i class="fas fa-sync-alt"></i> Refresh
+      </a>
     </div>
 
     <div style="margin-bottom:var(--space-5);">
@@ -50,13 +40,14 @@
         <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-3);color:#ef4444;">
           {{ app_error }}
         </div>
-      {% elif app_limits %}
+      {% elif app_rows %}
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>API Context</th>
                 <th>API Name</th>
+                <th>Resource</th>
                 <th>Limit</th>
                 <th>Remaining</th>
                 <th>Used</th>
@@ -65,11 +56,12 @@
               </tr>
             </thead>
             <tbody>
-              {% for rl in app_limits %}
+              {% for rl in app_rows %}
                 {% set used, pct = compute_usage(rl) %}
                 <tr>
-                  <td>{{ rl.apiContext or rl.api_context or '—' }}</td>
-                  <td>{{ rl.apiName or rl.api_name or '—' }}</td>
+                  <td>{{ rl.api_context or '—' }}</td>
+                  <td>{{ rl.api_name or '—' }}</td>
+                  <td>{{ rl.resource_name or '—' }}</td>
                   <td style="text-align:center;">{{ rl.limit or '—' }}</td>
                   <td style="text-align:center;">{{ rl.remaining or '—' }}</td>
                   <td style="text-align:center;">{{ used if used is not none else '—' }}</td>
@@ -81,7 +73,7 @@
                       {{ pct if pct is not none else '—' }}%
                     </div>
                   </td>
-                  <td>{{ rl.timeWindow or rl.time_window or '—' }}</td>
+                  <td>{{ rl.time_window or '—' }}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -90,60 +82,7 @@
       {% else %}
         <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
           <i class="fas fa-inbox" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
-          <p>No app-level usage data</p>
-        </div>
-      {% endif %}
-    </div>
-
-    <div style="margin-bottom:var(--space-5);">
-      <h2 style="margin-bottom:var(--space-3);">
-        <i class="fas fa-user"></i> User-Level Usage
-      </h2>
-      {% if user_error %}
-        <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:var(--space-3);color:#ef4444;">
-          {{ user_error }}
-        </div>
-      {% elif user_limits %}
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>API Context</th>
-                <th>API Name</th>
-                <th>Limit</th>
-                <th>Remaining</th>
-                <th>Used</th>
-                <th>Usage</th>
-                <th>Window</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for rl in user_limits %}
-                {% set used, pct = compute_usage(rl) %}
-                <tr>
-                  <td>{{ rl.apiContext or rl.api_context or '—' }}</td>
-                  <td>{{ rl.apiName or rl.api_name or '—' }}</td>
-                  <td style="text-align:center;">{{ rl.limit or '—' }}</td>
-                  <td style="text-align:center;">{{ rl.remaining or '—' }}</td>
-                  <td style="text-align:center;">{{ used if used is not none else '—' }}</td>
-                  <td style="min-width:220px;">
-                    <div class="usage-bar">
-                      <div class="usage-fill" style="width:{{ pct if pct is not none else 0 }}%;"></div>
-                    </div>
-                    <div style="font-size:var(--fs-xs);color:var(--sub);">
-                      {{ pct if pct is not none else '—' }}%
-                    </div>
-                  </td>
-                  <td>{{ rl.timeWindow or rl.time_window or '—' }}</td>
-                </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
-          <i class="fas fa-inbox" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
-          <p>No user-level usage data</p>
+          <p>No app-level usage data (eBay returned empty response).</p>
         </div>
       {% endif %}
     </div>
