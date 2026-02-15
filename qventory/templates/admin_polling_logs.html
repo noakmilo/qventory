@@ -125,6 +125,11 @@
       <h1 style="margin: 0 0 8px 0;">Polling Logs</h1>
       <p style="color: var(--sub); margin: 0;">Batch summary ({{ interval_seconds }}s) from the last 24h</p>
     </div>
+    {% if cooldown_until %}
+    <div class="status-pill rate-limit" style="padding: 6px 12px;">
+      Polling paused until {{ cooldown_until.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+    </div>
+    {% endif %}
   </div>
 
   {% set total_batches = batch_rows|length %}

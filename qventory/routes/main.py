@@ -5849,6 +5849,7 @@ def admin_polling_logs():
     """Admin polling logs summary (batch view)."""
     from qventory.models.polling_log import PollingLog
     from qventory.models.user import User
+    from qventory.models.system_setting import SystemSetting
     from datetime import datetime, timedelta
     import os
 
@@ -5899,11 +5900,19 @@ def admin_polling_logs():
             entry['error_samples'].append(log.error_message[:300])
 
     batch_rows = sorted(buckets.values(), key=lambda x: x['start'], reverse=True)[:30]
+    cooldown_until_ts = SystemSetting.get_int('ebay_polling_cooldown_until')
+    cooldown_until = None
+    if cooldown_until_ts:
+        try:
+            cooldown_until = datetime.utcfromtimestamp(cooldown_until_ts)
+        except Exception:
+            cooldown_until = None
 
     return render_template(
         "admin_polling_logs.html",
         batch_rows=batch_rows,
-        interval_seconds=interval_seconds
+        interval_seconds=interval_seconds,
+        cooldown_until=cooldown_until
     )
 
 
