@@ -55,6 +55,11 @@ from ..helpers.inventory_queries import (
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
 )
+from ..models.sale import Sale
+from ..models.item_cost_history import ItemCostHistory
+from ..models.expense import Expense
+from ..models.receipt_item import ReceiptItem
+from ..models.auto_relist_rule import AutoRelistHistory
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 
@@ -3336,6 +3341,122 @@ def edit_item(item_id):
         # Redirect back to the page user was on (active, sold, etc.)
         return redirect(request.referrer or url_for("main.dashboard"))
     return render_template("edit_item.html", item=it, settings=s, cloudinary_enabled=cloudinary_enabled)
+
+
+@main_bp.route("/item/<int:item_id>")
+@login_required
+def item_detail(item_id):
+    it = Item.query.filter_by(id=item_id, user_id=current_user.id).first_or_404()
+
+    events = []
+    if it.created_at:
+        origin = "Imported from eBay" if it.synced_from_ebay else "Created in Qventory"
+        events.append({
+            "timestamp": it.created_at,
+            "title": "Item added",
+            "detail": origin
+        })
+
+    if it.supplier:
+        events.append({
+            "timestamp": it.updated_at or it.created_at,
+            "title": "Supplier assigned",
+            "detail": it.supplier
+        })
+
+    cost_events = []
+    history_entries = ItemCostHistory.query.filter_by(
+        user_id=current_user.id,
+        item_id=it.id
+    ).order_by(ItemCostHistory.created_at.asc()).all()
+    for entry in history_entries:
+        cost_events.append({
+            "timestamp": entry.created_at,
+            "title": "Cost updated",
+            "detail": f"{entry.source.capitalize()} update: {entry.previous_cost} → {entry.new_cost}"
+        })
+
+    expense_entries = Expense.query.filter_by(
+        user_id=current_user.id,
+        item_id=it.id,
+        item_cost_applied=True
+    ).order_by(Expense.item_cost_applied_at.asc()).all()
+    for exp in expense_entries:
+        cost_events.append({
+            "timestamp": exp.item_cost_applied_at or exp.updated_at or exp.created_at,
+            "title": "Expense applied to cost",
+            "detail": f"{exp.description} (${exp.item_cost_applied_amount or exp.amount})"
+        })
+
+    receipt_entries = ReceiptItem.query.filter_by(
+        inventory_item_id=it.id
+    ).order_by(ReceiptItem.associated_at.asc()).all()
+    for ri in receipt_entries:
+        cost_events.append({
+            "timestamp": ri.associated_at or ri.updated_at or ri.created_at,
+            "title": "Receipt item linked",
+            "detail": f"{ri.final_description} (${ri.final_total_price or ri.final_unit_price or '—'})"
+        })
+
+    if not cost_events and it.item_cost is not None:
+        cost_events.append({
+            "timestamp": it.updated_at or it.created_at,
+            "title": "Cost set",
+            "detail": f"${it.item_cost:.2f}"
+        })
+
+    events.extend(cost_events)
+
+    relist_events = []
+    if it.ebay_listing_id:
+        relist_history = AutoRelistHistory.query.filter(
+            AutoRelistHistory.user_id == current_user.id,
+            (AutoRelistHistory.old_listing_id == it.ebay_listing_id) |
+            (AutoRelistHistory.new_listing_id == it.ebay_listing_id)
+        ).order_by(AutoRelistHistory.started_at.asc()).all()
+        for rh in relist_history:
+            detail = f"Status: {rh.status}"
+            if rh.old_price is not None or rh.new_price is not None:
+                detail += f" • Price: {rh.old_price} → {rh.new_price}"
+            relist_events.append({
+                "timestamp": rh.started_at,
+                "title": f"Relisted ({rh.mode or 'manual'})",
+                "detail": detail
+            })
+    events.extend(relist_events)
+
+    sales = Sale.query.filter_by(
+        user_id=current_user.id,
+        item_id=it.id
+    ).order_by(Sale.sold_at.asc()).all()
+    for sale in sales:
+        if sale.sold_at:
+            events.append({
+                "timestamp": sale.sold_at,
+                "title": "Sold",
+                "detail": f"{sale.marketplace or 'Marketplace'} • ${sale.sold_price or 0:.2f}"
+            })
+        if sale.shipped_at:
+            events.append({
+                "timestamp": sale.shipped_at,
+                "title": "Shipped",
+                "detail": sale.marketplace_order_id or "Order shipped"
+            })
+        if sale.delivered_at:
+            events.append({
+                "timestamp": sale.delivered_at,
+                "title": "Delivered",
+                "detail": sale.marketplace_order_id or "Order delivered"
+            })
+
+    events = [e for e in events if e.get("timestamp")]
+    events.sort(key=lambda e: e["timestamp"])
+
+    return render_template(
+        "item_detail.html",
+        item=it,
+        events=events
+    )
 
 
 @main_bp.route("/item/<int:item_id>/delete", methods=["POST"])

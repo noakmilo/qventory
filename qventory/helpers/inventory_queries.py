@@ -166,6 +166,7 @@ SOLD_ITEMS_SQL = """
 SELECT
     s.id,
     s.user_id,
+    s.item_id,
     s.item_title AS title,
     s.item_sku AS sku,
     COALESCE(i.item_thumb, NULL) AS item_thumb,

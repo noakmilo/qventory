@@ -1,0 +1,89 @@
+{% extends "base_new.html" %}
+{% block title %}{{ item.title }} – Item Details{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin:0;">{{ item.title }}</h2>
+      <div class="muted" style="margin-top:6px;">
+        SKU: {{ item.sku }} · {{ 'Active' if item.is_active else 'Sold/Inactive' }}
+      </div>
+    </div>
+    <a class="btn" href="{{ url_for('main.inventory_active') }}"><i class="fas fa-arrow-left"></i> Back to Inventory</a>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <h3 style="margin-top:0;">Item Map</h3>
+  {% if events %}
+  <div class="timeline">
+    {% for event in events %}
+    <div class="timeline-row">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-title">{{ event.title }}</div>
+        <div class="timeline-detail">{{ event.detail }}</div>
+        <div class="timeline-time">{{ event.timestamp.strftime('%Y-%m-%d %I:%M %p') }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <div class="muted">No timeline events yet.</div>
+  {% endif %}
+</div>
+
+<style>
+  .timeline {
+    display:grid;
+    gap:16px;
+    position:relative;
+  }
+  .timeline-row {
+    display:grid;
+    grid-template-columns:18px 1fr;
+    gap:12px;
+    position:relative;
+  }
+  .timeline-row:before {
+    content:"";
+    position:absolute;
+    left:8px;
+    top:16px;
+    bottom:-16px;
+    width:2px;
+    background:var(--border);
+  }
+  .timeline-row:last-child:before {
+    display:none;
+  }
+  .timeline-dot {
+    width:10px;
+    height:10px;
+    background:var(--accent);
+    border-radius:50%;
+    margin-top:4px;
+    box-shadow:0 0 0 3px rgba(138,180,255,0.2);
+  }
+  .timeline-content {
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:rgba(255,255,255,0.03);
+  }
+  .timeline-title {
+    font-weight:600;
+  }
+  .timeline-detail {
+    color:var(--sub);
+    font-size:var(--fs-sm);
+    margin-top:4px;
+  }
+  .timeline-time {
+    font-size:12px;
+    color:var(--sub);
+    margin-top:6px;
+  }
+</style>
+{% endblock %}

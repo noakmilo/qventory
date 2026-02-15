@@ -24,7 +24,21 @@
       <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
     {% endif %}
   </td>
-  <td data-col="title"><span style="font-size:var(--fs-sm);">{{ it.title }}</span></td>
+  <td data-col="title">
+    {% if view_type == 'sold' %}
+      {% if it.item_id %}
+        <a href="{{ url_for('main.item_detail', item_id=it.item_id) }}" style="font-size:var(--fs-sm);color:var(--text);text-decoration:none;">
+          {{ it.title }}
+        </a>
+      {% else %}
+        <span style="font-size:var(--fs-sm);">{{ it.title }}</span>
+      {% endif %}
+    {% else %}
+      <a href="{{ url_for('main.item_detail', item_id=it.id) }}" style="font-size:var(--fs-sm);color:var(--text);text-decoration:none;">
+        {{ it.title }}
+      </a>
+    {% endif %}
+  </td>
   {% if view_type != 'sold' %}
   <td data-col="sku"><span class="tag itsku">{{ it.sku }}</span></td>
   {% endif %}
