@@ -2580,10 +2580,11 @@ def fetch_ebay_sold_orders(user_id, days_back=None, fulfillment_statuses=None, m
     """
     from datetime import datetime, timedelta
 
-    # Convert days_back to int if it's a string (can happen from form data)
+    # Convert days_back to float if it's a string (can happen from form data)
+    # NOTE: Must use float, not int — fractional days (e.g. 0.083 = 2 hours) are valid
     if days_back is not None:
         try:
-            days_back = int(days_back)
+            days_back = float(days_back)
         except (TypeError, ValueError):
             days_back = None
 

@@ -2820,6 +2820,9 @@ def refresh_ebay_token(credential):
         if 'refresh_token' in token_data:
             credential.set_refresh_token(token_data['refresh_token'])
         credential.created_at = datetime.utcnow()  # Reset token age
+        # Also update token_expires_at so get_user_access_token() knows when to refresh
+        from datetime import timedelta
+        credential.token_expires_at = datetime.utcnow() + timedelta(seconds=token_data.get('expires_in', 7200))
         db.session.commit()
 
         return {'success': True}
@@ -2930,124 +2933,112 @@ def poll_user_listings(credential):
             return {'new_listings': 0, 'errors': ['Missing Trading API credentials']}
 
         ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
-        entries_per_page = 200
-        page_number = 1
-        total_pages = 1
         new_listings = 0
         last_title = None
         remaining_quota = items_remaining
         seen_listing_ids = set()
 
-        while page_number <= total_pages:
-            xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+        # GetSellerEvents does NOT support Pagination (max 2000 items with ReturnAll).
+        # For delta polling with small time windows this is sufficient.
+        xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
 <GetSellerEventsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <StartTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
   <StartTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
-  <Pagination>
-    <EntriesPerPage>{entries_per_page}</EntriesPerPage>
-    <PageNumber>{page_number}</PageNumber>
-  </Pagination>
   <DetailLevel>ReturnAll</DetailLevel>
 </GetSellerEventsRequest>'''
 
-            headers = {
-                'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-                'X-EBAY-API-DEV-NAME': ebay_dev_id,
-                'X-EBAY-API-APP-NAME': ebay_app_id,
-                'X-EBAY-API-CERT-NAME': ebay_cert_id,
-                'X-EBAY-API-CALL-NAME': 'GetSellerEvents',
-                'X-EBAY-API-SITEID': '0',
-                'X-EBAY-API-IAF-TOKEN': access_token,
-                'Content-Type': 'text/xml'
-            }
+        headers = {
+            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
+            'X-EBAY-API-DEV-NAME': ebay_dev_id,
+            'X-EBAY-API-APP-NAME': ebay_app_id,
+            'X-EBAY-API-CERT-NAME': ebay_cert_id,
+            'X-EBAY-API-CALL-NAME': 'GetSellerEvents',
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-IAF-TOKEN': access_token,
+            'Content-Type': 'text/xml'
+        }
 
-            response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
-            if response.status_code != 200:
-                log_task(f"    GetSellerEvents failed: HTTP {response.status_code}")
-                finalize_poll('error', errors=[f'HTTP {response.status_code}'])
-                return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
+        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
+        if response.status_code != 200:
+            log_task(f"    GetSellerEvents failed: HTTP {response.status_code}")
+            finalize_poll('error', errors=[f'HTTP {response.status_code}'])
+            return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
 
-            root = ET.fromstring(response.text)
-            ack = root.find('ebay:Ack', ns)
-            if ack is None or ack.text not in ['Success', 'Warning']:
-                errors = root.findall('.//ebay:Errors', ns)
-                error_msgs = [
-                    e.find('ebay:LongMessage', ns).text
-                    for e in errors
-                    if e.find('ebay:LongMessage', ns) is not None
-                ]
-                log_task(f"    GetSellerEvents error: {'; '.join(error_msgs)}")
-                finalize_poll('error', errors=error_msgs)
-                return {'new_listings': 0, 'errors': error_msgs}
+        root = ET.fromstring(response.text)
+        ack = root.find('ebay:Ack', ns)
+        if ack is None or ack.text not in ['Success', 'Warning']:
+            errors = root.findall('.//ebay:Errors', ns)
+            error_msgs = [
+                e.find('ebay:LongMessage', ns).text
+                for e in errors
+                if e.find('ebay:LongMessage', ns) is not None
+            ]
+            log_task(f"    GetSellerEvents error: {'; '.join(error_msgs)}")
+            finalize_poll('error', errors=error_msgs)
+            return {'new_listings': 0, 'errors': error_msgs}
 
-            pagination_result = root.find('.//ebay:PaginationResult', ns)
-            if pagination_result is not None:
-                total_pages_elem = pagination_result.find('ebay:TotalNumberOfPages', ns)
-                if total_pages_elem is not None and total_pages_elem.text:
-                    total_pages = int(total_pages_elem.text)
+        items = root.findall('.//ebay:ItemArray/ebay:Item', ns)
+        if items:
+            log_task(f"    GetSellerEvents returned {len(items)} item(s)")
+        for item_elem in items:
+            item_id_elem = item_elem.find('ebay:ItemID', ns)
+            title_elem = item_elem.find('ebay:Title', ns)
+            if item_id_elem is None or not item_id_elem.text:
+                continue
+            listing_id = item_id_elem.text.strip()
+            if listing_id in seen_listing_ids:
+                continue
+            seen_listing_ids.add(listing_id)
 
-            items = root.findall('.//ebay:ItemArray/ebay:Item', ns)
-            for item_elem in items:
-                item_id_elem = item_elem.find('ebay:ItemID', ns)
-                title_elem = item_elem.find('ebay:Title', ns)
-                if item_id_elem is None or not item_id_elem.text:
-                    continue
-                listing_id = item_id_elem.text.strip()
-                if listing_id in seen_listing_ids:
-                    continue
-                seen_listing_ids.add(listing_id)
+            existing = Item.query.filter_by(
+                user_id=user_id,
+                ebay_listing_id=listing_id
+            ).first()
+            if existing:
+                continue
 
-                existing = Item.query.filter_by(
-                    user_id=user_id,
-                    ebay_listing_id=listing_id
-                ).first()
-                if existing:
-                    continue
+            if remaining_quota is not None and remaining_quota <= 0:
+                log_task(f"    ✗ User reached plan limit while importing new listings")
+                break
 
-                if remaining_quota is not None and remaining_quota <= 0:
-                    log_task(f"    ✗ User reached plan limit while importing new listings")
-                    break
+            title_text = title_elem.text.strip() if title_elem is not None and title_elem.text else 'eBay Item'
 
-                title_text = title_elem.text.strip() if title_elem is not None and title_elem.text else 'eBay Item'
+            price = None
+            bin_price_elem = item_elem.find('ebay:BuyItNowPrice', ns)
+            start_price_elem = item_elem.find('ebay:StartPrice', ns)
+            for price_elem in (bin_price_elem, start_price_elem):
+                if price_elem is not None and price_elem.text:
+                    try:
+                        price = float(price_elem.text)
+                        break
+                    except (TypeError, ValueError):
+                        pass
 
-                price = None
-                bin_price_elem = item_elem.find('ebay:BuyItNowPrice', ns)
-                start_price_elem = item_elem.find('ebay:StartPrice', ns)
-                for price_elem in (bin_price_elem, start_price_elem):
-                    if price_elem is not None and price_elem.text:
-                        try:
-                            price = float(price_elem.text)
-                            break
-                        except (TypeError, ValueError):
-                            pass
+            sku_elem = item_elem.find('ebay:SKU', ns)
+            ebay_sku = sku_elem.text.strip() if sku_elem is not None and sku_elem.text else None
 
-                sku_elem = item_elem.find('ebay:SKU', ns)
-                ebay_sku = sku_elem.text.strip() if sku_elem is not None and sku_elem.text else None
+            view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', ns)
+            view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{listing_id}'
 
-                view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', ns)
-                view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{listing_id}'
+            new_item = Item(
+                user_id=user_id,
+                title=title_text[:500] if title_text else 'eBay Item',
+                sku=generate_sku(),
+                ebay_listing_id=listing_id,
+                ebay_sku=ebay_sku[:100] if ebay_sku else None,
+                listing_link=view_url,
+                ebay_url=view_url,
+                item_price=price,
+                synced_from_ebay=True,
+                last_ebay_sync=datetime.utcnow(),
+                notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
+            )
 
-                new_item = Item(
-                    user_id=user_id,
-                    title=title_text[:500] if title_text else 'eBay Item',
-                    sku=generate_sku(),
-                    ebay_listing_id=listing_id,
-                    ebay_sku=ebay_sku[:100] if ebay_sku else None,
-                    listing_link=view_url,
-                    ebay_url=view_url,
-                    item_price=price,
-                    synced_from_ebay=True,
-                    last_ebay_sync=datetime.utcnow(),
-                    notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
-                )
-
-                db.session.add(new_item)
-                new_listings += 1
-                last_title = title_text
-                if remaining_quota is not None:
-                    remaining_quota -= 1
-
-            page_number += 1
+            db.session.add(new_item)
+            new_listings += 1
+            last_title = title_text
+            if remaining_quota is not None:
+                remaining_quota -= 1
 
         if new_listings > 0:
             db.session.commit()
@@ -3425,11 +3416,6 @@ def sync_ebay_sold_orders_auto(self):
                                 item.sold_at = order.get('sold_at')
                                 item.sold_price = order.get('sold_price')
                                 log_task(f"      Marked item {item.sku} as sold (soft delete)")
-                                try:
-                                    from qventory.helpers.link_bio import remove_featured_items_for_user
-                                    remove_featured_items_for_user(user.id, [item.id])
-                                except Exception:
-                                    pass
                                 try:
                                     from qventory.helpers.link_bio import remove_featured_items_for_user
                                     remove_featured_items_for_user(user.id, [item.id])
