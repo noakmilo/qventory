@@ -3056,11 +3056,56 @@ def poll_user_listings(credential):
                 continue
             seen_listing_ids.add(listing_id)
 
+            listing_status_elem = item_elem.find('ebay:ListingStatus', ns)
+            listing_status = listing_status_elem.text.strip() if listing_status_elem is not None and listing_status_elem.text else None
+
             existing = Item.query.filter_by(
                 user_id=user_id,
                 ebay_listing_id=listing_id
             ).first()
             if existing:
+                # If the listing ended, mark inactive and note it
+                if listing_status and listing_status.lower() in ['ended', 'completed', 'closed']:
+                    if existing.is_active:
+                        existing.is_active = False
+                        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                        end_note = f"\n[{timestamp}] Listing ended on eBay (status: {listing_status})"
+                        existing.notes = (existing.notes or '') + end_note
+                        try:
+                            from qventory.helpers.link_bio import remove_featured_items_for_user
+                            remove_featured_items_for_user(user_id, [existing.id])
+                        except Exception:
+                            pass
+                        db.session.commit()
+                        log_task(f"    ⊗ Marked inactive (ended on eBay): {existing.sku} (eBay ID: {listing_id})")
+                    continue
+
+                # Existing listing updated/revised: refresh details and record history
+                enriched_existing = get_listing_details_trading_api(user_id, listing_id) or {}
+                if enriched_existing:
+                    parsed_existing = parse_ebay_inventory_item(enriched_existing, process_images=True)
+                    new_title = (parsed_existing.get('title') or '').strip()
+                    new_price = parsed_existing.get('item_price')
+                    new_thumb = parsed_existing.get('item_thumb')
+
+                    changes = []
+                    if new_title and new_title != (existing.title or '').strip():
+                        existing.title = new_title[:500]
+                        changes.append("title")
+                    if new_price is not None and existing.item_price != new_price:
+                        existing.item_price = new_price
+                        changes.append("price")
+                    if new_thumb and not existing.item_thumb:
+                        existing.item_thumb = new_thumb
+                        changes.append("image")
+
+                    if changes:
+                        existing.last_ebay_sync = datetime.utcnow()
+                        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                        change_note = f"\n[{timestamp}] Listing updated from eBay ({', '.join(changes)})"
+                        existing.notes = (existing.notes or '') + change_note
+                        db.session.commit()
+                        log_task(f"    ↻ Updated existing listing {listing_id}: {', '.join(changes)}")
                 continue
 
             if remaining_quota is not None and remaining_quota <= 0:
@@ -3173,6 +3218,7 @@ def poll_user_listings(credential):
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                 relist_note = f"\n[{timestamp}] Relist transfer to {listing_id} completed"
                 relist_source.notes = (relist_source.notes or '') + relist_note
+                new_item.notes = (new_item.notes or '') + f"\n[{timestamp}] Relisted from {relist_source.ebay_listing_id or relist_source.id}"
                 try:
                     from qventory.helpers.link_bio import remove_featured_items_for_user
                     remove_featured_items_for_user(user_id, [relist_source.id])
