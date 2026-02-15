@@ -26,8 +26,14 @@
 
     <hr class="divider">
 
-    <div style="margin-bottom:var(--space-4);">
-      <a href="{{ url_for('main.admin_ebay_api_usage') }}" class="btn" style="background:#3b82f6;color:#fff;">
+    <div style="margin-bottom:var(--space-4);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+      <a href="{{ url_for('main.admin_ebay_api_usage', view='import') }}" class="btn" style="background:{% if view == 'import' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
+        <i class="fas fa-filter"></i> Import Endpoints
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view='all') }}" class="btn" style="background:{% if view == 'all' %}#3b82f6{% else %}#374151{% endif %};color:#fff;">
+        <i class="fas fa-list"></i> All Endpoints
+      </a>
+      <a href="{{ url_for('main.admin_ebay_api_usage', view=view) }}" class="btn" style="background:#10b981;color:#fff;">
         <i class="fas fa-sync-alt"></i> Refresh
       </a>
     </div>
@@ -58,19 +64,24 @@
             <tbody>
               {% for rl in app_rows %}
                 {% set used, pct = compute_usage(rl) %}
+                {% set warn = pct is not none and pct >= 80 %}
                 <tr>
                   <td>{{ rl.api_context or '—' }}</td>
                   <td>{{ rl.api_name or '—' }}</td>
                   <td>{{ rl.resource_name or '—' }}</td>
                   <td style="text-align:center;">{{ rl.limit or '—' }}</td>
                   <td style="text-align:center;">{{ rl.remaining or '—' }}</td>
-                  <td style="text-align:center;">{{ used if used is not none else '—' }}</td>
+                  <td style="text-align:center;{% if warn %}color:#ef4444;font-weight:700;{% endif %}">{{ used if used is not none else '—' }}</td>
                   <td style="min-width:220px;">
                     <div class="usage-bar">
-                      <div class="usage-fill" style="width:{{ pct if pct is not none else 0 }}%;"></div>
+                      <div class="usage-fill" style="width:{{ pct if pct is not none else 0 }}%;{% if warn %}background:linear-gradient(90deg, rgba(239,68,68,0.9), rgba(245,158,11,0.9));{% endif %}"></div>
                     </div>
                     <div style="font-size:var(--fs-xs);color:var(--sub);">
-                      {{ pct if pct is not none else '—' }}%
+                      {% if pct is not none %}
+                        {{ pct }}%{% if warn %} • High{% endif %}
+                      {% else %}
+                        —
+                      {% endif %}
                     </div>
                   </td>
                   <td>{{ rl.time_window or '—' }}</td>

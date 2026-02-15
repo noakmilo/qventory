@@ -961,7 +961,8 @@ def get_active_listings_trading_api(
         'pages_expected': None,
         'pages_fetched': 0,
         'is_complete': False,
-        'incomplete_reason': None
+        'incomplete_reason': None,
+        'rate_limited': False
     }
 
     def _is_rate_limit_error(text: str) -> bool:
@@ -1027,6 +1028,7 @@ def get_active_listings_trading_api(
             if response.status_code != 200:
                 body = response.text or ""
                 if response.status_code == 429 or _is_rate_limit_error(body):
+                    meta['rate_limited'] = True
                     if attempt < max_retries - 1:
                         sleep_for = backoff_base * (2 ** attempt)
                         log_inv(f"Trading API rate limit (attempt {attempt + 1}/{max_retries}). Retrying in {sleep_for:.1f}s")
@@ -1063,6 +1065,7 @@ def get_active_listings_trading_api(
                         log_inv(f"Trading API error: {error_msg.text}")
 
                 if any(_is_rate_limit_error(msg or "") for msg in error_texts):
+                    meta['rate_limited'] = True
                     if attempt < max_retries - 1:
                         sleep_for = backoff_base * (2 ** attempt)
                         log_inv(f"Trading API rate limit (attempt {attempt + 1}/{max_retries}). Retrying in {sleep_for:.1f}s")
@@ -1973,6 +1976,8 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
 
     trading_success = False
     trading_complete = False
+    trading_rate_limited = False
+    trading_incomplete_reason = None
     try:
         trading_items, trading_meta = get_active_listings_trading_api(
             user_id,
@@ -1983,6 +1988,8 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
         if trading_items:
             trading_success = True
             trading_complete = bool(trading_meta.get('is_complete'))
+            trading_rate_limited = bool(trading_meta.get('rate_limited'))
+            trading_incomplete_reason = trading_meta.get('incomplete_reason')
             sources.append('trading_api')
             trading_offers = [_normalize_trading_item_to_offer(item) for item in trading_items]
             offers.extend(trading_offers)
@@ -2006,7 +2013,12 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
         'offers': deduped,
         'total': total_from_api or len(deduped),
         'sources': sources,
-        'can_mark_inactive': trading_success and trading_complete
+        'can_mark_inactive': (
+            trading_success
+            and trading_complete
+            and not trading_rate_limited
+            and not trading_incomplete_reason
+        )
     }
 
 

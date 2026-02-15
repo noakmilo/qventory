@@ -3064,6 +3064,14 @@ def admin_ebay_api_usage():
     app_rows = []
     app_error = None
     analytics_base = _ebay_analytics_base()
+    view = (request.args.get("view") or "import").lower()
+    import_filters = {
+        "TradingAPI:GetSellerEvents",
+        "TradingAPI:GetMyeBaySelling",
+        "sell.inventory:sell.inventory",
+        "sell.fulfillment:sell.fulfillment",
+        "payoutapi.sell.finances:payoutapi.sell.finances"
+    }
 
     try:
         app_token = _get_ebay_app_token()
@@ -3079,12 +3087,18 @@ def admin_ebay_api_usage():
     except Exception as exc:
         app_error = str(exc)
 
+    if view == "import":
+        def _key(row):
+            return f"{row.get('api_context')}:{row.get('api_name')}"
+        app_rows = [row for row in app_rows if _key(row) in import_filters]
+
     return render_template(
         "admin_ebay_api_usage.html",
         app_limits=app_limits,
         app_rows=app_rows,
         app_error=app_error,
-        compute_usage=_compute_usage_stats
+        compute_usage=_compute_usage_stats,
+        view=view
     )
 
 
