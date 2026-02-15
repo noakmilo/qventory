@@ -2745,17 +2745,18 @@ def should_poll_user(user, credential):
     """
     Determine if we should poll this user's eBay account
 
-    SCALABLE ADAPTIVE POLLING (optimized for 100+ users):
-    - VERY active (item in last hour): poll every 60s
-    - Active (activity < 6 hours): poll every 5 minutes
-    - Normal (activity < 24 hours): poll every 15 minutes
-    - Semi-active (activity < 7 days): poll every hour
-    - Inactive: poll every 6 hours
+    SCALABLE ADAPTIVE POLLING — budget: ~5,000 Trading API calls/day shared
+    across GetSellerEvents + GetMyeBaySelling + GetItem (images).
 
-    This reduces API load from ~200k/day to ~20k/day with 100 users.
+    Tiers (task runs every 5 minutes):
+    - VERY active (item in last hour): poll every 5 min  → 288 calls/day
+    - Active (activity < 6 hours): poll every 15 min     → 96 calls/day
+    - Normal (activity < 24 hours): poll every 30 min    → 48 calls/day
+    - Semi-active (activity < 7 days): poll every 2 hours → 12 calls/day
+    - Inactive: poll every 12 hours                       → 2 calls/day
 
-    IMPORTANT: Uses last_activity (any authenticated request) not last_login (explicit login).
-    This properly handles users with long-lived session cookies (30 days).
+    With 20 users: ~288*2 + 96*3 + 48*5 + 12*5 + 2*5 = ~1,474 calls/day
+    Leaves ~3,500 calls/day for inventory sync + GetItem + admin tasks.
 
     Args:
         user: User object
@@ -2774,28 +2775,27 @@ def should_poll_user(user, credential):
     if not last_poll:
         return True
 
-    # TIER 1: VERY ACTIVE - User created item in last hour → Poll every 60s
+    # TIER 1: VERY ACTIVE - User created item in last hour → Poll every 5 min
     very_recent_activity = Item.query.filter_by(user_id=user.id).filter(
         Item.created_at > (now - timedelta(hours=1))
     ).first()
     if very_recent_activity:
-        return True  # Poll every 60s (task frequency)
-
-    # TIER 2: ACTIVE - User activity < 6 hours → Poll every 5 minutes
-    # Uses last_activity (any request) not last_login (explicit login)
-    if user.last_activity and (now - user.last_activity) < timedelta(hours=6):
         return (now - last_poll) >= timedelta(minutes=5)
 
-    # TIER 3: NORMAL - User activity < 24 hours → Poll every 15 minutes
-    if user.last_activity and (now - user.last_activity) < timedelta(hours=24):
+    # TIER 2: ACTIVE - User activity < 6 hours → Poll every 15 minutes
+    if user.last_activity and (now - user.last_activity) < timedelta(hours=6):
         return (now - last_poll) >= timedelta(minutes=15)
 
-    # TIER 4: SEMI-ACTIVE - User activity < 7 days → Poll every hour
-    if user.last_activity and (now - user.last_activity) < timedelta(days=7):
-        return (now - last_poll) >= timedelta(hours=1)
+    # TIER 3: NORMAL - User activity < 24 hours → Poll every 30 minutes
+    if user.last_activity and (now - user.last_activity) < timedelta(hours=24):
+        return (now - last_poll) >= timedelta(minutes=30)
 
-    # TIER 5: INACTIVE - User activity > 7 days → Poll every 6 hours
-    return (now - last_poll) >= timedelta(hours=6)
+    # TIER 4: SEMI-ACTIVE - User activity < 7 days → Poll every 2 hours
+    if user.last_activity and (now - user.last_activity) < timedelta(days=7):
+        return (now - last_poll) >= timedelta(hours=2)
+
+    # TIER 5: INACTIVE - User activity > 7 days → Poll every 12 hours
+    return (now - last_poll) >= timedelta(hours=12)
 
 
 def refresh_ebay_token(credential):
@@ -2834,9 +2834,9 @@ def refresh_ebay_token(credential):
 
 def poll_user_listings(credential):
     """
-    Poll eBay GetSellerEvents for a single user (delta-only)
+    Poll eBay for ALL active listings and import missing ones
 
-    Fetches new listings since last poll and imports only missing ones.
+    Uses the same proven function as manual import (get_active_listings_trading_api)
 
     Args:
         credential: MarketplaceCredential object
@@ -2846,34 +2846,20 @@ def poll_user_listings(credential):
     """
     from datetime import datetime, timedelta
     from qventory.models.item import Item
-    from qventory.models.user import User
     from qventory.models.polling_log import PollingLog
     from qventory.helpers import generate_sku
-    from qventory.helpers.ebay_inventory import TRADING_API_URL
-    from qventory.extensions import db
-    import os
-    import requests
-    import xml.etree.ElementTree as ET
+    from qventory.helpers.ebay_inventory import get_active_listings, get_active_listings_trading_api
 
     user_id = credential.user_id
-
-    # Determine polling window early for logging
     now = datetime.utcnow()
-    last_poll = getattr(credential, 'last_poll_at', None)
-    if last_poll:
-        time_from = last_poll - timedelta(minutes=2)  # overlap to avoid misses
-    else:
-        time_from = now - timedelta(minutes=10)
-    if time_from < now - timedelta(hours=24):
-        time_from = now - timedelta(hours=24)
-    time_to = now
 
+    # Create polling log for observability
     poll_log = PollingLog(
         user_id=user_id,
         marketplace='ebay',
         started_at=now,
-        window_start=time_from,
-        window_end=time_to,
+        window_start=credential.last_poll_at or (now - timedelta(minutes=10)),
+        window_end=now,
         status='running'
     )
     db.session.add(poll_log)
@@ -2901,7 +2887,12 @@ def poll_user_listings(credential):
                 return {'new_listings': 0, 'errors': ['Token refresh failed']}
             log_task(f"    ✓ Token refreshed successfully")
 
+        # Update last poll time
+        credential.last_poll_at = datetime.utcnow()
+        db.session.commit()
+
         # Check user's plan limits
+        from qventory.models.user import User
         user = User.query.get(user_id)
         if not user:
             log_task(f"    ✗ User {user_id} not found")
@@ -2916,245 +2907,265 @@ def poll_user_listings(credential):
             finalize_poll('error', errors=['Plan limit reached'])
             return {'new_listings': 0, 'errors': ['Plan limit reached']}
 
-        access_token = credential.get_access_token()
-        if not access_token:
-            log_task(f"    ✗ No access token for user {user_id}")
-            finalize_poll('error', errors=['No access token'])
-            return {'new_listings': 0, 'errors': ['No access token']}
+        # Fetch active listings from eBay (Offers API first, Trading API fallback)
+        log_task(f"    Fetching active listings from eBay...")
+        ebay_items = []
+        failed_items = []
+        try:
+            offers = []
+            offset = 0
+            limit = 200
+            max_items = 1000
+            while len(offers) < max_items:
+                result = get_active_listings(user_id, limit=limit, offset=offset)
+                page_offers = result.get('offers', []) or []
+                if not page_offers:
+                    break
+                offers.extend(page_offers)
+                if len(page_offers) < limit:
+                    break
+                offset += limit
 
-        log_task(f"    Polling window: {time_from.isoformat()} -> {time_to.isoformat()}")
+            if offers:
+                log_task(f"    Offers API returned {len(offers)} offers")
+                for offer in offers[:max_items]:
+                    sku = offer.get('sku', '')
+                    listing_id = offer.get('listingId')
+                    pricing = offer.get('pricingSummary', {}) or {}
+                    price_value = pricing.get('price', {}).get('value', 0)
+                    available_quantity = offer.get('availableQuantity', 0)
+                    listing = offer.get('listing', {}) or {}
+                    ebay_items.append({
+                        'sku': sku,
+                        'product': {
+                            'title': listing.get('title', offer.get('merchantLocationKey', f'Listing {listing_id}')),
+                            'description': listing.get('description', ''),
+                            'imageUrls': listing.get('pictureUrls', [])
+                        },
+                        'availability': {
+                            'shipToLocationAvailability': {
+                                'quantity': available_quantity
+                            }
+                        },
+                        'condition': offer.get('listingPolicies', {}).get('condition', 'USED_EXCELLENT'),
+                        'ebay_listing_id': listing_id,
+                        'ebay_offer_id': offer.get('offerId'),
+                        'item_price': float(price_value) if price_value else 0,
+                        'ebay_url': f"https://www.ebay.com/itm/{listing_id}" if listing_id else None,
+                        'listing_status': offer.get('status', 'UNKNOWN'),
+                        'source': 'offers_api'
+                    })
+            else:
+                log_task("    Offers API returned 0 offers")
+        except Exception as offers_error:
+            log_task(f"    Offers API error: {offers_error}")
 
-        ebay_app_id = os.environ.get('EBAY_CLIENT_ID')
-        ebay_dev_id = os.environ.get('EBAY_DEV_ID')
-        ebay_cert_id = os.environ.get('EBAY_CERT_ID')
-        if not (ebay_app_id and ebay_dev_id and ebay_cert_id):
-            log_task("    ✗ Missing Trading API credentials (EBAY_CLIENT_ID/DEV_ID/CERT_ID)")
-            finalize_poll('error', errors=['Missing Trading API credentials'])
-            return {'new_listings': 0, 'errors': ['Missing Trading API credentials']}
+        if not ebay_items:
+            log_task("    Falling back to Trading API for active listings...")
+            ebay_items, failed_items = get_active_listings_trading_api(
+                user_id,
+                max_items=1000,
+                collect_failures=True
+            )
 
-        ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
+        log_task(f"    Found {len(ebay_items)} active listings on eBay")
+
+        if failed_items:
+            log_task(f"    Warning: {len(failed_items)} items failed to parse")
+
+        # Get existing listing IDs and items from database
+        existing_listing_ids = set()
+        existing_items_by_id = {}
+        existing_items = Item.query.filter_by(user_id=user_id).filter(
+            Item.ebay_listing_id.isnot(None)
+        ).all()
+        for item in existing_items:
+            if item.ebay_listing_id:
+                listing_id = str(item.ebay_listing_id)
+                existing_listing_ids.add(listing_id)
+                existing_items_by_id[listing_id] = item
+
+        log_task(f"    User has {len(existing_listing_ids)} existing eBay listings in database")
+
         new_listings = 0
-        last_title = None
-        remaining_quota = items_remaining
-        seen_listing_ids = set()
+        title_updates = 0
+        marked_inactive = 0
 
-        # GetSellerEvents does NOT support Pagination (max 2000 items with ReturnAll).
-        # For delta polling with small time windows this is sufficient.
-        xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
-<GetSellerEventsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <StartTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
-  <StartTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
-  <DetailLevel>ReturnAll</DetailLevel>
-</GetSellerEventsRequest>'''
-
-        headers = {
-            'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-            'X-EBAY-API-DEV-NAME': ebay_dev_id,
-            'X-EBAY-API-APP-NAME': ebay_app_id,
-            'X-EBAY-API-CERT-NAME': ebay_cert_id,
-            'X-EBAY-API-CALL-NAME': 'GetSellerEvents',
-            'X-EBAY-API-SITEID': '0',
-            'X-EBAY-API-IAF-TOKEN': access_token,
-            'Content-Type': 'text/xml'
-        }
-
-        response = requests.post(TRADING_API_URL, data=xml_request, headers=headers, timeout=30)
-        if response.status_code != 200:
-            log_task(f"    GetSellerEvents failed: HTTP {response.status_code}")
-            finalize_poll('error', errors=[f'HTTP {response.status_code}'])
-            return {'new_listings': 0, 'errors': [f'HTTP {response.status_code}']}
-
-        root = ET.fromstring(response.text)
-        ack = root.find('ebay:Ack', ns)
-        if ack is None or ack.text not in ['Success', 'Warning']:
-            errors = root.findall('.//ebay:Errors', ns)
-            error_msgs = [
-                e.find('ebay:LongMessage', ns).text
-                for e in errors
-                if e.find('ebay:LongMessage', ns) is not None
-            ]
-            log_task(f"    GetSellerEvents error: {'; '.join(error_msgs)}")
-            finalize_poll('error', errors=error_msgs)
-            return {'new_listings': 0, 'errors': error_msgs}
-
-        items = root.findall('.//ebay:ItemArray/ebay:Item', ns)
-        if items:
-            log_task(f"    GetSellerEvents returned {len(items)} item(s)")
-
-        newly_created_items = []
-
-        for item_elem in items:
-            item_id_elem = item_elem.find('ebay:ItemID', ns)
-            title_elem = item_elem.find('ebay:Title', ns)
-            if item_id_elem is None or not item_id_elem.text:
+        active_ebay_listing_ids = set()
+        for ebay_item in ebay_items:
+            item_id_raw = ebay_item.get('ebay_listing_id')
+            if not item_id_raw:
                 continue
-            listing_id = item_id_elem.text.strip()
-            if listing_id in seen_listing_ids:
-                continue
-            seen_listing_ids.add(listing_id)
+            item_id = str(item_id_raw)
+            active_ebay_listing_ids.add(item_id)
 
-            existing = Item.query.filter_by(
-                user_id=user_id,
-                ebay_listing_id=listing_id
-            ).first()
-            if existing:
+            # Skip if already in database
+            if item_id in existing_listing_ids:
+                existing_item = existing_items_by_id.get(item_id)
+                if existing_item:
+                    ebay_title = (
+                        (ebay_item.get('product') or {}).get('title')
+                        or ebay_item.get('title')
+                        or ebay_item.get('ebay_title')
+                    )
+                    if ebay_title:
+                        ebay_title = ebay_title.strip()
+                        current_title = (existing_item.title or '').strip()
+                        if ebay_title and ebay_title != current_title:
+                            existing_item.title = ebay_title[:500]
+                            existing_item.last_ebay_sync = datetime.utcnow()
+                            title_updates += 1
                 continue
 
-            if remaining_quota is not None and remaining_quota <= 0:
-                log_task(f"    ✗ User reached plan limit while importing new listings")
+            # Check plan limit BEFORE importing each item (recalculate fresh)
+            # This ensures limit is enforced in real-time, not just at start
+            current_items_remaining = user.items_remaining()
+            if current_items_remaining is not None and current_items_remaining <= 0:
+                log_task(f"    ✗ Plan limit reached ({user.get_plan_limits().max_items} total). Stopping import.")
+                # Send notification about plan limit reached
+                from qventory.models.notification import Notification
+                Notification.create_notification(
+                    user_id=user_id,
+                    type='warning',
+                    title='eBay import stopped - Plan limit reached',
+                    message=f'{new_listings} items imported. Upgrade to import more items from eBay.',
+                    link_url='/upgrade',
+                    link_text='Upgrade Plan',
+                    source='ebay_sync'
+                )
                 break
 
-            title_text = title_elem.text.strip() if title_elem is not None and title_elem.text else 'eBay Item'
+            # Process images (upload to Cloudinary) for new items
+            from qventory.helpers.ebay_inventory import parse_ebay_inventory_item
+            parsed_with_images = parse_ebay_inventory_item(ebay_item, process_images=True)
 
-            # Extract price: SellingStatus/CurrentPrice > BuyItNowPrice > StartPrice
-            price = None
-            for xpath in (
-                'ebay:SellingStatus/ebay:CurrentPrice',
-                'ebay:BuyItNowPrice',
-                'ebay:StartPrice',
-            ):
-                price_elem = item_elem.find(xpath, ns)
-                if price_elem is not None and price_elem.text:
-                    try:
-                        price = float(price_elem.text)
-                        break
-                    except (TypeError, ValueError):
-                        pass
+            # Extract data from parsed item (note: parse_ebay_inventory_item returns fields in root, not nested in 'product')
+            title = parsed_with_images.get('title', 'eBay Item')
+            ebay_custom_sku = parsed_with_images.get('ebay_sku')  # This is the location code (B1S1C1) from eBay
+            price = parsed_with_images.get('item_price')
+            listing_url = parsed_with_images.get('ebay_url', f'https://www.ebay.com/itm/{item_id}')
+            item_thumb = parsed_with_images.get('item_thumb')  # Cloudinary URL
+            location_code = parsed_with_images.get('location_code') or ebay_custom_sku
 
-            sku_elem = item_elem.find('ebay:SKU', ns)
-            ebay_sku = sku_elem.text.strip() if sku_elem is not None and sku_elem.text else None
-
-            view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', ns)
-            view_url = view_url_elem.text if view_url_elem is not None else f'https://www.ebay.com/itm/{listing_id}'
-
-            # Parse location code from eBay Custom SKU
-            location_code = None
-            location_A = location_B = location_S = location_C = None
-            if ebay_sku:
-                from qventory.helpers import is_valid_location_code, parse_location_code
-                if is_valid_location_code(ebay_sku):
-                    location_code = ebay_sku
-                    loc = parse_location_code(ebay_sku)
-                    location_A = loc.get('A')
-                    location_B = loc.get('B')
-                    location_S = loc.get('S')
-                    location_C = loc.get('C')
-
-            # Check for relist source (transfer cost/supplier/location)
             relist_source = Item.query.filter_by(user_id=user_id).filter(
-                Item.notes.like(f'%Relist pending: {listing_id}%')
+                Item.notes.like(f'%Relist pending: {item_id}%')
             ).order_by(Item.updated_at.desc()).first()
 
+            # IMPORTANT: sku field must be Qventory's unique SKU (20251029-A3B4)
+            # ebay_sku field stores eBay's custom SKU (B1S1C1) for location sync
             new_item = Item(
                 user_id=user_id,
-                title=title_text[:500] if title_text else 'eBay Item',
-                sku=generate_sku(),
-                ebay_listing_id=listing_id,
-                ebay_sku=ebay_sku[:100] if ebay_sku else None,
-                listing_link=view_url,
-                ebay_url=view_url,
-                item_price=price,
+                title=title[:500] if title else 'eBay Item',
+                sku=generate_sku(),  # Always generate unique Qventory SKU
+                ebay_listing_id=item_id,
+                ebay_sku=ebay_custom_sku[:100] if ebay_custom_sku else None,  # Store eBay's location code
                 location_code=location_code,
-                A=location_A,
-                B=location_B,
-                S=location_S,
-                C=location_C,
+                A=parsed_with_images.get('A'),
+                B=parsed_with_images.get('B'),
+                S=parsed_with_images.get('S'),
+                C=parsed_with_images.get('C'),
+                listing_link=listing_url,
+                ebay_url=listing_url,
+                item_price=price,
+                item_thumb=item_thumb,  # Cloudinary URL
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
-
             if relist_source:
                 new_item.previous_item_id = relist_source.id
+
+            try:
+                db.session.add(new_item)
+                db.session.commit()  # Commit immediately so items_remaining() reflects the new item
+            except Exception as e:
+                db.session.rollback()
+                if "uq_items_user_ebay_listing" in str(e):
+                    log_task(f"    Skipping duplicate listing {item_id} (already exists)")
+                    existing_listing_ids.add(item_id)
+                    continue
+                raise
+            new_listings += 1
+
+            log_task(f"    ✓ New listing: {title[:50]}")
+
+            if relist_source:
                 new_item.item_cost = relist_source.item_cost
                 new_item.supplier = relist_source.supplier
-                new_item.A = relist_source.A or location_A
-                new_item.B = relist_source.B or location_B
-                new_item.S = relist_source.S or location_S
-                new_item.C = relist_source.C or location_C
-                new_item.location_code = relist_source.location_code or location_code
+                new_item.A = relist_source.A
+                new_item.B = relist_source.B
+                new_item.S = relist_source.S
+                new_item.C = relist_source.C
+                new_item.location_code = relist_source.location_code
                 relist_source.is_active = False
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-                relist_source.notes = (relist_source.notes or '') + f"\n[{timestamp}] Relist transfer to {listing_id} completed"
+                relist_note = f"\n[{timestamp}] Relist transfer to {item_id} completed"
+                relist_source.notes = (relist_source.notes or '') + relist_note
                 try:
                     from qventory.helpers.link_bio import remove_featured_items_for_user
                     remove_featured_items_for_user(user_id, [relist_source.id])
                 except Exception:
                     pass
-                log_task(f"    ✓ Relist transfer from item {relist_source.id} to {listing_id}")
-
-            db.session.add(new_item)
-            newly_created_items.append((new_item, listing_id))
-            new_listings += 1
-            last_title = title_text
-            if remaining_quota is not None:
-                remaining_quota -= 1
-
-        # Commit new items first so they have IDs
-        if newly_created_items:
-            db.session.commit()
-
-        # Enrich newly imported items with images via Trading API GetItem
-        # (GetSellerEvents doesn't return images)
-        for new_item, listing_id in newly_created_items:
-            try:
-                img_xml = f'''<?xml version="1.0" encoding="utf-8"?>
-<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
-  <ItemID>{listing_id}</ItemID>
-  <OutputSelector>PictureDetails.PictureURL</OutputSelector>
-  <OutputSelector>PictureDetails.GalleryURL</OutputSelector>
-</GetItemRequest>'''
-                img_headers = {
-                    'X-EBAY-API-COMPATIBILITY-LEVEL': '1193',
-                    'X-EBAY-API-DEV-NAME': ebay_dev_id,
-                    'X-EBAY-API-APP-NAME': ebay_app_id,
-                    'X-EBAY-API-CERT-NAME': ebay_cert_id,
-                    'X-EBAY-API-CALL-NAME': 'GetItem',
-                    'X-EBAY-API-SITEID': '0',
-                    'X-EBAY-API-IAF-TOKEN': access_token,
-                    'Content-Type': 'text/xml'
-                }
-                img_resp = requests.post(TRADING_API_URL, data=img_xml, headers=img_headers, timeout=10)
-                if img_resp.status_code == 200:
-                    img_root = ET.fromstring(img_resp.text)
-                    img_ack = img_root.find('ebay:Ack', ns)
-                    if img_ack is not None and img_ack.text in ('Success', 'Warning'):
-                        # Try PictureURL first (full size), then GalleryURL (thumbnail)
-                        pic_url_elem = img_root.find('.//ebay:PictureDetails/ebay:PictureURL', ns)
-                        gallery_elem = img_root.find('.//ebay:PictureDetails/ebay:GalleryURL', ns)
-                        ebay_image_url = None
-                        if pic_url_elem is not None and pic_url_elem.text:
-                            ebay_image_url = pic_url_elem.text
-                        elif gallery_elem is not None and gallery_elem.text:
-                            ebay_image_url = gallery_elem.text
-
-                        if ebay_image_url:
-                            from qventory.helpers.image_processor import download_and_upload_image
-                            thumb = download_and_upload_image(
-                                ebay_image_url,
-                                target_size_kb=2,
-                                max_dimension=400,
-                                public_id=listing_id
-                            )
-                            if thumb:
-                                new_item.item_thumb = thumb
-                                log_task(f"    ✓ Image uploaded for {listing_id}")
-                            else:
-                                new_item.item_thumb = ebay_image_url
                 db.session.commit()
-            except Exception as img_err:
-                log_task(f"    ⚠ Image fetch failed for {listing_id}: {img_err}")
+                log_task(
+                    f"    ✓ Transferred cost/supplier/location from {relist_source.id} "
+                    f"to new listing {item_id} (supplier: {relist_source.supplier})"
+                )
+            else:
+                log_task(f"    ⚠ No relist source found for new listing {item_id}")
+
+        if title_updates > 0:
+            db.session.commit()
+            log_task(f"    ✓ Updated {title_updates} item title(s) from eBay")
+
+        # Mark items inactive when they are no longer active on eBay
+        active_db_items = Item.query.filter_by(
+            user_id=user_id,
+            is_active=True
+        ).filter(
+            Item.ebay_listing_id.isnot(None),
+            Item.ebay_listing_id != ''
+        ).all()
+
+        if not active_ebay_listing_ids and existing_listing_ids:
+            log_task("    ⚠ No active listings returned from eBay; skipping inactive marking")
+            active_db_items = []
+        else:
+            overlap_count = len(active_ebay_listing_ids.intersection(existing_listing_ids))
+            if existing_listing_ids and active_ebay_listing_ids and overlap_count == 0:
+                log_task(
+                    "    ⚠ No overlap between eBay listings and DB listings; "
+                    "skipping inactive marking to avoid mass deactivation"
+                )
+                active_db_items = []
+
+        for db_item in active_db_items:
+            if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
+                if db_item.notes and 'Relist pending:' in db_item.notes:
+                    log_task(f"    ↻ Skip inactive (pending relist): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
+                    continue
+                db_item.is_active = False
+                try:
+                    from qventory.helpers.link_bio import remove_featured_items_for_user
+                    remove_featured_items_for_user(user_id, [db_item.id])
+                except Exception:
+                    pass
+                marked_inactive += 1
+                log_task(f"    ⊗ Marked inactive (ended on eBay): {db_item.sku} (eBay ID: {db_item.ebay_listing_id})")
+
+        if marked_inactive > 0:
+            db.session.commit()
+            log_task(f"    ✓ Marked {marked_inactive} item(s) inactive (ended on eBay)")
 
         if new_listings > 0:
-            db.session.commit()
-
+            # Send notification to user
             from qventory.models.notification import Notification
             if new_listings == 1:
                 Notification.create_notification(
                     user_id=user_id,
                     type='success',
                     title='New eBay listing imported!',
-                    message=f'{(last_title or "New listing")[:50]} was automatically imported',
+                    message=f'{title[:50]} was automatically imported',
                     link_url='/inventory',
                     link_text='View Inventory',
                     source='ebay_sync'
@@ -3170,9 +3181,6 @@ def poll_user_listings(credential):
                     source='ebay_sync'
                 )
 
-        # Update last poll time only after successful fetch
-        credential.last_poll_at = time_to
-        db.session.commit()
         finalize_poll('success', new_count=new_listings, errors=[])
 
         try:
@@ -3183,9 +3191,11 @@ def poll_user_listings(credential):
 
         return {
             'new_listings': new_listings,
-            'errors': []
+            'errors': [],
+            'title_updates': title_updates,
+            'marked_inactive': marked_inactive
         }
-    
+
     except Exception as e:
         log_task(f"    ✗ Exception: {str(e)}")
         import traceback

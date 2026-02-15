@@ -54,11 +54,11 @@ celery.conf.beat_schedule = {
             'expires': 60 * 60,  # Expire after 1 hour if not picked up
         }
     },
-    'poll-ebay-listings-every-minute': {
+    'poll-ebay-listings': {
         'task': 'qventory.tasks.poll_ebay_new_listings',
-        'schedule': 60.0,  # Every 60 seconds (uses smart adaptive polling)
+        'schedule': 300.0,  # Every 5 minutes (adaptive polling filters further per user)
         'options': {
-            'expires': 55,  # Expire after 55 seconds if not picked up
+            'expires': 290,  # Expire before next execution
         }
     },
     # ==================== PHASE 1: AUTO-SYNC (SCALABLE) ====================
