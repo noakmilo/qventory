@@ -2724,7 +2724,7 @@ def poll_ebay_new_listings(self):
                 'errors': 0
             }
 
-        # Smart polling: Filter to only "active" users and not in cooldown
+        # Smart polling: Filter to only "active" users, not in cooldown, and with quota
         active_credentials = []
         user_map = {}
         now = datetime.utcnow()
@@ -2735,6 +2735,12 @@ def poll_ebay_new_listings(self):
             cooldown_until = getattr(cred, 'poll_cooldown_until', None)
             if cooldown_until and cooldown_until > now:
                 continue
+            # Skip users with no remaining quota (avoid wasting API calls)
+            try:
+                if user.items_remaining() is not None and user.items_remaining() <= 0:
+                    continue
+            except Exception:
+                pass
             active_credentials.append(cred)
             user_map[cred.user_id] = user.username or f"user_{cred.user_id}"
 
@@ -2746,12 +2752,11 @@ def poll_ebay_new_listings(self):
             total_batches = (len(all_creds) + batch_size - 1) // batch_size
             if total_batches <= 1:
                 return all_creds
-            now_local = datetime.utcnow()
-            # Rotate list each run to avoid repeatedly hitting the same users
-            offset = (now_local.minute * 60 + now_local.second) % len(all_creds)
-            rotated = all_creds[offset:] + all_creds[:offset]
-            bucket = int((now_local.minute * 60 + now_local.second) / interval_seconds)
-            batch_index = bucket % total_batches
+            # Persistent cursor to rotate batches even if interval is misconfigured
+            cursor = SystemSetting.get_int('ebay_polling_batch_cursor', 0) or 0
+            batch_index = cursor % total_batches
+            SystemSetting.set_int('ebay_polling_batch_cursor', cursor + 1)
+            rotated = all_creds
             start_idx = batch_index * batch_size
             end_idx = min(start_idx + batch_size, len(rotated))
             return rotated[start_idx:end_idx]
@@ -2980,6 +2985,10 @@ def poll_user_listings(credential):
             refresh_result = refresh_ebay_token(credential)
             if not refresh_result['success']:
                 log_task(f"    ✗ Token refresh failed: {refresh_result.get('error', 'Unknown error')}")
+                # Cooldown this credential for 24h to avoid repeated failures
+                credential.poll_cooldown_until = datetime.utcnow() + timedelta(hours=24)
+                credential.poll_cooldown_reason = 'token_refresh_failed'
+                db.session.commit()
                 finalize_poll('error', errors=['Token refresh failed'])
                 return {'new_listings': 0, 'errors': ['Token refresh failed']}
             log_task(f"    ✓ Token refreshed successfully")
