@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Inventory Management Software for eBay Resellers | Qventory{% endblock %}
+{% block title %}Inventory Management Software for eBay Sellers | Qventory{% endblock %}
 {% block extra_head %}
 <link rel="preload" as="image" href="{{ url_for('static', filename='pics/dashpreview.webp') }}" imagesrcset="{{ url_for('static', filename='pics/dashpreview.webp') }} 1x" imagesizes="(max-width: 1200px) 100vw, 1164px">
 {% endblock %}
@@ -11,19 +11,19 @@
 <link rel="canonical" href="{{ canonical }}/">
 
 <meta name="description" content="Qventory helps eBay sellers sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as their business scales.">
-<meta name="keywords" content="inventory management software for ebay resellers, ebay inventory management, ebay reseller software, ebay inventory tracking, ebay seller inventory tool">
+<meta name="keywords" content="inventory management software for ebay sellers, ebay inventory management, ebay seller software, ebay inventory tracking, ebay seller inventory tool">
 
 {# ===== Open Graph ===== #}
-<meta property="og:title" content="Inventory Management Software for eBay Resellers | Qventory">
-<meta property="og:description" content="Inventory Management Software for eBay Resellers. Sync listings, track sales, and manage fulfillment in one place.">
+<meta property="og:title" content="Inventory Management Software for eBay Sellers | Qventory">
+<meta property="og:description" content="Inventory Management Software for eBay Sellers. Sync listings, track sales, and manage fulfillment in one place.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== Twitter Card ===== #}
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Inventory Management Software for eBay Resellers | Qventory">
-<meta name="twitter:description" content="Inventory Management Software for eBay Resellers. Sync listings, track sales, and manage fulfillment in one place.">
+<meta name="twitter:title" content="Inventory Management Software for eBay Sellers | Qventory">
+<meta name="twitter:description" content="Inventory Management Software for eBay Sellers. Sync listings, track sales, and manage fulfillment in one place.">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== JSON-LD: SoftwareApplication ===== #}
@@ -34,9 +34,9 @@
   "name": "Qventory",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "Inventory Management Software for eBay Resellers. Sync listings, manage inventory, track sales, and fulfillment in one place.",
+  "description": "Inventory Management Software for eBay Sellers. Sync listings, manage inventory, track sales, and fulfillment in one place.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": "Inventory Management for eBay Resellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA"
+  "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA"
 }
 </script>
 
@@ -52,7 +52,7 @@
       </button>
     </div>
   </div>
-  <h1 style="font-size:34px; margin:0 0 10px;">Inventory Management Software for <span style="color:var(--accent)">eBay Resellers.</span></h1>
+  <h1 style="font-size:34px; margin:0 0 10px;">Inventory Management Software for <span style="color:var(--accent)">eBay Sellers.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
     Sync your <strong>eBay inventory</strong>, auto-relist for visibility, track <strong>sales & fulfillment</strong> in real-time,
     and optimize pricing with <strong>AI research</strong>. Built for eBay sellers who want to scale smart.
