@@ -2724,7 +2724,7 @@ def poll_ebay_new_listings(self):
                 'errors': 0
             }
 
-        # Smart polling: Filter to only "active" users, not in cooldown, and with quota
+        # Smart polling: Filter to only "active" users and not in cooldown
         active_credentials = []
         user_map = {}
         now = datetime.utcnow()
@@ -2735,12 +2735,6 @@ def poll_ebay_new_listings(self):
             cooldown_until = getattr(cred, 'poll_cooldown_until', None)
             if cooldown_until and cooldown_until > now:
                 continue
-            # Skip users with no remaining quota (avoid wasting API calls)
-            try:
-                if user.items_remaining() is not None and user.items_remaining() <= 0:
-                    continue
-            except Exception:
-                pass
             active_credentials.append(cred)
             user_map[cred.user_id] = user.username or f"user_{cred.user_id}"
 
@@ -3006,9 +3000,7 @@ def poll_user_listings(credential):
         log_task(f"    User plan: {user.role}, Items remaining: {items_remaining}")
 
         if items_remaining is not None and items_remaining <= 0:
-            log_task(f"    ✗ User has reached plan limit (0 items remaining)")
-            finalize_poll('error', errors=['Plan limit reached'])
-            return {'new_listings': 0, 'errors': ['Plan limit reached']}
+            log_task(f"    ⚠ User has reached plan limit (0 items remaining); will skip new imports but still sync changes")
 
         access_token = credential.get_access_token()
         if not access_token:
@@ -3029,7 +3021,7 @@ def poll_user_listings(credential):
         ns = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
         new_listings = 0
         last_title = None
-        remaining_quota = items_remaining
+        remaining_quota = items_remaining if items_remaining is not None else None
         seen_listing_ids = set()
 
         # GetSellerEvents does NOT support Pagination (max 2000 items with ReturnAll).
@@ -3038,6 +3030,10 @@ def poll_user_listings(credential):
 <GetSellerEventsRequest xmlns="urn:ebay:apis:eBLBaseComponents">
   <StartTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeFrom>
   <StartTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</StartTimeTo>
+  <EndTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</EndTimeFrom>
+  <EndTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</EndTimeTo>
+  <ModTimeFrom>{time_from.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</ModTimeFrom>
+  <ModTimeTo>{time_to.strftime('%Y-%m-%dT%H:%M:%S.000Z')}</ModTimeTo>
   <DetailLevel>ReturnAll</DetailLevel>
 </GetSellerEventsRequest>'''
 
@@ -3108,6 +3104,26 @@ def poll_user_listings(credential):
                 ebay_listing_id=listing_id
             ).first()
             if existing:
+                # If price is missing, backfill via Trading API even if no changes detected
+                if existing.item_price is None:
+                    enriched_missing_price = get_listing_details_trading_api(user_id, listing_id) or {}
+                    if enriched_missing_price:
+                        parsed_missing = parse_ebay_inventory_item(enriched_missing_price, process_images=True)
+                        backfill_price = parsed_missing.get('item_price')
+                        backfill_thumb = parsed_missing.get('item_thumb')
+                        backfill_title = (parsed_missing.get('title') or '').strip()
+                        if backfill_price is not None:
+                            existing.item_price = backfill_price
+                        if backfill_thumb and not existing.item_thumb:
+                            existing.item_thumb = backfill_thumb
+                        if backfill_title and backfill_title != (existing.title or '').strip():
+                            existing.title = backfill_title[:500]
+                        if backfill_price is not None or backfill_thumb or backfill_title:
+                            existing.last_ebay_sync = datetime.utcnow()
+                            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                            existing.notes = (existing.notes or '') + f"\n[{timestamp}] Price backfilled from eBay"
+                            db.session.commit()
+
                 # If the listing ended, mark inactive and note it
                 if listing_status and listing_status.lower() in ['ended', 'completed', 'closed']:
                     if existing.is_active:
