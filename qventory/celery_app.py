@@ -64,9 +64,9 @@ celery.conf.beat_schedule = {
     # ==================== PHASE 1: AUTO-SYNC (SCALABLE) ====================
     'sync-active-inventory-auto': {
         'task': 'qventory.tasks.sync_ebay_active_inventory_auto',
-        'schedule': crontab(hour=4, minute=0),  # Daily at 04:00 UTC
+        'schedule': crontab(hour='*/4', minute=0),  # Every 4 hours (6x/day, persistent cursor rotates batches)
         'options': {
-            'expires': 60 * 60 * 6,  # Expire after 6 hours
+            'expires': 60 * 60 * 3,  # Expire after 3 hours
         }
     },
     'sync-sold-orders-auto': {

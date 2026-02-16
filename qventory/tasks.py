@@ -3394,38 +3394,54 @@ def get_active_users_with_ebay(hours_since_login=24):
     return result
 
 
-def get_user_batch(all_users, batch_size=20):
+def get_user_batch(all_users, batch_size=20, cursor_key=None):
     """
-    Get current batch of users to process based on current time
-    
-    Rotates through users to distribute load evenly over time.
-    With 100 users and batch_size=20, each user is processed every 5 cycles.
-    
+    Get current batch of users to process.
+
+    When cursor_key is provided, uses a persistent cursor in SystemSetting
+    to rotate through batches reliably across executions (ideal for tasks
+    that don't run at predictable minute intervals, e.g. daily crontabs).
+
+    Without cursor_key, falls back to minute-based rotation (for frequent tasks).
+
     Args:
         all_users (list): List of all users to batch
         batch_size (int): Users per batch (default 20)
-    
+        cursor_key (str): SystemSetting key for persistent batch cursor (optional)
+
     Returns:
         list: Current batch of users
     """
     from datetime import datetime
-    
+
     if not all_users:
         return []
-    
-    # Use current minute to determine batch (rotates every execution)
-    # For 15-minute task: minute 0 → batch 0, minute 15 → batch 1, etc.
-    current_minute = datetime.utcnow().minute
-    total_batches = (len(all_users) + batch_size - 1) // batch_size  # Ceiling division
-    
+
+    total_batches = (len(all_users) + batch_size - 1) // batch_size
+
     if total_batches == 0:
         return all_users
-    
-    batch_index = (current_minute // 15) % total_batches  # Rotates through batches
-    
+
+    if cursor_key:
+        from qventory.models.system_setting import SystemSetting
+        setting = SystemSetting.query.filter_by(key=cursor_key).first()
+        batch_index = int(setting.value) % total_batches if setting else 0
+
+        # Advance cursor for the next execution
+        next_index = (batch_index + 1) % total_batches
+        if setting:
+            setting.value = str(next_index)
+        else:
+            db.session.add(SystemSetting(key=cursor_key, value=str(next_index)))
+        db.session.commit()
+    else:
+        # Fallback: minute-based rotation (for frequent tasks like every 15 min)
+        current_minute = datetime.utcnow().minute
+        batch_index = (current_minute // 15) % total_batches
+
     start_idx = batch_index * batch_size
     end_idx = min(start_idx + batch_size, len(all_users))
-    
+
     return all_users[start_idx:end_idx]
 
 
@@ -3439,8 +3455,8 @@ def sync_ebay_active_inventory_auto(self):
     Updates prices, statuses, and removes sold items automatically.
     Uses batching to handle 100+ users without exceeding eBay API limits.
     
-    Runs: Every 15 minutes
-    Batch: 20 users per execution (100 users = 5 batches = 75 min cycle)
+    Runs: Every 4 hours (6x/day)
+    Batch: 20 users per execution (persistent cursor rotates through all users)
     API Calls: ~20-40 per execution
     
     Returns:
@@ -3470,7 +3486,8 @@ def sync_ebay_active_inventory_auto(self):
         log_task(f"Found {len(all_active_users)} active users total")
         
         # Get current batch (20 users max to avoid API limits)
-        batch_users = get_user_batch(all_active_users, batch_size=20)
+        # Uses persistent cursor so each execution processes the next batch
+        batch_users = get_user_batch(all_active_users, batch_size=20, cursor_key='sync_inventory_batch_cursor')
         log_task(f"Processing batch of {len(batch_users)} users")
         
         total_updated = 0
@@ -3623,7 +3640,8 @@ def sync_ebay_sold_orders_auto(self):
         log_task(f"Found {len(all_active_users)} active users total")
 
         # Get current batch (20 users max)
-        batch_users = get_user_batch(all_active_users, batch_size=20)
+        # Uses persistent cursor so each execution processes the next batch
+        batch_users = get_user_batch(all_active_users, batch_size=20, cursor_key='sync_sold_orders_batch_cursor')
         log_task(f"Processing batch of {len(batch_users)} users")
 
         total_created = 0
