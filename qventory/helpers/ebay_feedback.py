@@ -49,7 +49,6 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
   </RequesterCredentials>
   <DetailLevel>ReturnAll</DetailLevel>
   <FeedbackType>FeedbackReceivedAsSeller</FeedbackType>
-  <IncludeResponseDetails>true</IncludeResponseDetails>
   <Pagination>
     <EntriesPerPage>{entries_per_page}</EntriesPerPage>
     <PageNumber>{page}</PageNumber>
@@ -85,18 +84,15 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
         for detail in details:
             feedback_id = _get_text(detail, "ebay:FeedbackID")
             comment_time = _parse_time(_get_text(detail, "ebay:CommentTime"))
-            response_time = _parse_time(_get_text(detail, "ebay:ResponseTime"))
-            response_text = _get_text(detail, "ebay:ResponseText")
-            response_type = _get_text(detail, "ebay:ResponseType")
-            response_details_elem = detail.find("ebay:ResponseDetails", _XML_NS)
-            has_response_details = response_details_elem is not None
 
-            if not response_text:
-                response_text = _get_text(detail, "ebay:ResponseDetails/ebay:ResponseText")
-            if not response_type:
-                response_type = _get_text(detail, "ebay:ResponseDetails/ebay:ResponseType")
-            if not response_time:
-                response_time = _parse_time(_get_text(detail, "ebay:ResponseDetails/ebay:ResponseTime"))
+            # eBay returns seller response in FeedbackResponse (not ResponseText)
+            feedback_response = _get_text(detail, "ebay:FeedbackResponse")
+            followup = _get_text(detail, "ebay:Followup")
+            response_replaced = _get_text(detail, "ebay:ResponseReplaced")
+
+            # Use FeedbackResponse as the response text; fall back to Followup
+            response_text = feedback_response or followup
+            responded = bool(feedback_response) or bool(followup)
 
             feedbacks.append({
                 "feedback_id": feedback_id,
@@ -110,10 +106,9 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
                 "order_line_item_id": _get_text(detail, "ebay:OrderLineItemID"),
                 "item_title": _get_text(detail, "ebay:ItemTitle"),
                 "response_text": response_text,
-                "response_type": response_type,
-                "response_time": response_time,
-                "has_response_details": has_response_details,
-                "responded": bool(response_text) or bool(response_time) or has_response_details,
+                "response_type": "Reply" if feedback_response else ("FollowUp" if followup else None),
+                "response_time": None,
+                "responded": responded,
             })
 
         total_pages = None
@@ -164,6 +159,8 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                 feedback_id=feedback["feedback_id"]
             ).first()
 
+            responded = feedback.get("responded", False)
+
             if existing:
                 existing.comment_type = feedback.get("comment_type")
                 existing.comment_text = feedback.get("comment_text")
@@ -174,16 +171,19 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                 existing.transaction_id = feedback.get("transaction_id")
                 existing.order_line_item_id = feedback.get("order_line_item_id")
                 existing.item_title = feedback.get("item_title")
-                existing.response_text = feedback.get("response_text")
-                existing.response_type = feedback.get("response_type")
-                existing.response_time = feedback.get("response_time")
-                existing.responded = (
-                    bool(feedback.get("response_text"))
-                    or bool(feedback.get("response_time"))
-                    or bool(feedback.get("has_response_details"))
-                )
-                if existing.responded and not existing.response_source:
+                # Only update response fields from eBay if not already responded via Qventory
+                if responded and existing.response_source != "qventory":
+                    existing.response_text = feedback.get("response_text")
+                    existing.response_type = feedback.get("response_type")
+                    existing.response_time = feedback.get("response_time")
+                    existing.responded = True
                     existing.response_source = "ebay"
+                elif not existing.responded:
+                    existing.responded = responded
+                    if responded:
+                        existing.response_text = feedback.get("response_text")
+                        existing.response_type = feedback.get("response_type")
+                        existing.response_source = "ebay"
                 updated += 1
             else:
                 db.session.add(EbayFeedback(
@@ -201,16 +201,8 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                     response_text=feedback.get("response_text"),
                     response_type=feedback.get("response_type"),
                     response_time=feedback.get("response_time"),
-                    responded=(
-                        bool(feedback.get("response_text"))
-                        or bool(feedback.get("response_time"))
-                        or bool(feedback.get("has_response_details"))
-                    ),
-                    response_source="ebay" if (
-                        feedback.get("response_text")
-                        or feedback.get("response_time")
-                        or feedback.get("has_response_details")
-                    ) else None
+                    responded=responded,
+                    response_source="ebay" if responded else None
                 ))
                 created += 1
             total += 1
