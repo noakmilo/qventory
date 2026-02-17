@@ -49,6 +49,7 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
   </RequesterCredentials>
   <DetailLevel>ReturnAll</DetailLevel>
   <FeedbackType>FeedbackReceivedAsSeller</FeedbackType>
+  <IncludeResponseDetails>true</IncludeResponseDetails>
   <Pagination>
     <EntriesPerPage>{entries_per_page}</EntriesPerPage>
     <PageNumber>{page}</PageNumber>
