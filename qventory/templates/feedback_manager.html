@@ -149,7 +149,7 @@
                   {% endif %}
                 </div>
               {% else %}
-                <form method="post" action="{{ url_for('main.feedback_respond') }}">
+                <form method="post" action="{{ url_for('main.feedback_respond') }}" class="feedback-respond-form" data-feedback-id="{{ fb.id }}">
                   <input type="hidden" name="feedback_id" value="{{ fb.id }}">
                   <div class="feedback-reply-box">
                     <textarea name="response_text" class="input feedback-reply-text" rows="2" placeholder="Write a reply..."></textarea>
@@ -307,6 +307,49 @@ document.querySelectorAll('.feedback-filter-header').forEach(btn => {
 
 document.querySelectorAll('.feedback-reply-text').forEach(textarea => {
   textarea.addEventListener('input', () => autoGrowTextarea(textarea));
+});
+
+document.querySelectorAll('.feedback-respond-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const textarea = form.querySelector('.feedback-reply-text');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const feedbackId = form.getAttribute('data-feedback-id');
+    const responseText = textarea ? textarea.value.trim() : '';
+    if (!feedbackId || !responseText) return;
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (textarea) textarea.classList.add('ai-loading');
+
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback_id: feedbackId, response_text: responseText })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        alert(data.error || 'Failed to send response.');
+      } else {
+        const responseBlock = document.createElement('div');
+        responseBlock.className = 'feedback-response';
+        responseBlock.innerHTML = `
+          <div style="font-size:12px;color:var(--sub);margin-bottom:6px;">Response</div>
+          <div class="cell-text">${data.response_text}</div>
+          <div style="font-size:11px;color:var(--sub);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span>Responded ${data.response_time || ''}</span>
+            <span style="padding:2px 6px;border-radius:10px;background:rgba(16,185,129,0.12);color:#34d399;">Answered in Qventory</span>
+          </div>
+        `;
+        form.replaceWith(responseBlock);
+      }
+    } catch (err) {
+      alert('Failed to send response.');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (textarea) textarea.classList.remove('ai-loading');
+    }
+  });
 });
 
 document.querySelectorAll('.feedback-ai-btn').forEach(btn => {

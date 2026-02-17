@@ -1883,11 +1883,18 @@ def feedback_sync():
 @main_bp.route("/feedback/respond", methods=["POST"])
 @login_required
 def feedback_respond():
-    feedback_id = (request.form.get("feedback_id") or "").strip()
-    response_text = (request.form.get("response_text") or "").strip()
+    if request.is_json:
+        payload = request.get_json() or {}
+        feedback_id = (payload.get("feedback_id") or "").strip()
+        response_text = (payload.get("response_text") or "").strip()
+    else:
+        feedback_id = (request.form.get("feedback_id") or "").strip()
+        response_text = (request.form.get("response_text") or "").strip()
     response_type = "Reply"
 
     if not feedback_id or not response_text:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Response text is required."}), 400
         flash("Response text is required.", "error")
         return redirect(url_for("main.feedback_manager"))
 
@@ -1897,10 +1904,14 @@ def feedback_respond():
     ).first()
 
     if not feedback:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "Feedback not found."}), 404
         flash("Feedback not found.", "error")
         return redirect(url_for("main.feedback_manager"))
 
     if feedback.responded:
+        if request.is_json:
+            return jsonify({"ok": False, "error": "This feedback already has a response."}), 400
         flash("This feedback already has a response.", "error")
         return redirect(url_for("main.feedback_manager"))
 
@@ -1914,8 +1925,17 @@ def feedback_respond():
         feedback.responded = True
         feedback.response_source = "qventory"
         db.session.commit()
+        if request.is_json:
+            return jsonify({
+                "ok": True,
+                "response_text": response_text,
+                "response_time": feedback.response_time.strftime('%b %d, %Y'),
+                "response_source": "qventory"
+            })
         flash("Response sent successfully.", "success")
     else:
+        if request.is_json:
+            return jsonify({"ok": False, "error": result.get("error", "Failed to send response.")}), 400
         flash(result.get("error", "Failed to send response."), "error")
 
     return redirect(url_for("main.feedback_manager"))
