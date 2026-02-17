@@ -17,6 +17,9 @@
       <div style="color:var(--sub);font-size:13px;">
         New feedback: <strong>{{ unread_count }}</strong>
       </div>
+      <div style="color:var(--sub);font-size:12px;">
+        Unresponded: <strong>{{ unresponded_count }}</strong>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
       <div style="font-size:12px;color:var(--sub);">
@@ -37,49 +40,55 @@
   </div>
 </div>
 
-<div class="card" style="margin-bottom:18px;">
-  <form method="get" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
-    <div>
-      <label>Date from</label>
-      <input type="date" name="date_from" class="input" value="{{ date_from or '' }}">
-    </div>
-    <div>
-      <label>Date to</label>
-      <input type="date" name="date_to" class="input" value="{{ date_to or '' }}">
-    </div>
-    <div>
-      <label>Status</label>
-      <select name="responded" class="input">
-        <option value="all" {% if responded_filter == 'all' %}selected{% endif %}>All</option>
-        <option value="responded" {% if responded_filter == 'responded' %}selected{% endif %}>Responded</option>
-        <option value="unresponded" {% if responded_filter == 'unresponded' %}selected{% endif %}>Unresponded</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button type="submit" class="btn">Apply Filters</button>
-      <a href="{{ url_for('main.feedback_manager') }}" class="btn">Clear</a>
-    </div>
-  </form>
-</div>
+<form id="feedbackFilterForm" method="get"></form>
 
 <div class="card">
-  <div class="table-wrap">
-    <table>
+  <div class="table-wrap feedback-table-wrap">
+    <table class="feedback-table">
       <thead>
         <tr>
-          <th>Date</th>
-          <th>Type</th>
-          <th>From</th>
-          <th>Item</th>
-          <th>Comment</th>
-          <th>Response</th>
+          <th class="col-date">Date</th>
+          <th class="col-type">Type</th>
+          <th class="col-from">From</th>
+          <th class="col-item">Item</th>
+          <th class="col-comment">Comment</th>
+          <th class="col-response">Response</th>
+        </tr>
+        <tr class="filter-row">
+          <th class="col-date">
+            <input type="date" name="date_from" class="input" form="feedbackFilterForm" value="{{ date_from or '' }}" style="margin-bottom:6px;">
+            <input type="date" name="date_to" class="input" form="feedbackFilterForm" value="{{ date_to or '' }}">
+          </th>
+          <th class="col-type">
+            <input type="text" name="type" class="input" form="feedbackFilterForm" value="{{ type_q or '' }}" placeholder="Type">
+          </th>
+          <th class="col-from">
+            <input type="text" name="from" class="input" form="feedbackFilterForm" value="{{ from_q or '' }}" placeholder="From">
+          </th>
+          <th class="col-item">
+            <input type="text" name="item" class="input" form="feedbackFilterForm" value="{{ item_q or '' }}" placeholder="Item">
+          </th>
+          <th class="col-comment">
+            <input type="text" name="comment" class="input" form="feedbackFilterForm" value="{{ comment_q or '' }}" placeholder="Comment">
+          </th>
+          <th class="col-response">
+            <select name="responded" class="input" form="feedbackFilterForm" style="margin-bottom:6px;">
+              <option value="all" {% if responded_filter == 'all' %}selected{% endif %}>All</option>
+              <option value="responded" {% if responded_filter == 'responded' %}selected{% endif %}>Responded</option>
+              <option value="unresponded" {% if responded_filter == 'unresponded' %}selected{% endif %}>Unresponded</option>
+            </select>
+            <div style="display:flex;gap:8px;">
+              <button type="submit" class="btn" form="feedbackFilterForm">Filter</button>
+              <a href="{{ url_for('main.feedback_manager') }}" class="btn">Clear</a>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
         {% if feedbacks and feedbacks|length > 0 %}
           {% for fb in feedbacks %}
           <tr>
-            <td>
+            <td class="col-date">
               {% if fb.comment_time %}
                 {{ fb.comment_time.strftime('%b %d, %Y %H:%M') }}
               {% else %}
@@ -89,9 +98,9 @@
                 <span style="margin-left:6px;padding:2px 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;">New</span>
               {% endif %}
             </td>
-            <td>{{ fb.comment_type or '—' }}</td>
-            <td>{{ fb.commenting_user or '—' }}</td>
-            <td>
+            <td class="col-type">{{ fb.comment_type or '—' }}</td>
+            <td class="col-from">{{ fb.commenting_user or '—' }}</td>
+            <td class="col-item">
               {% if fb.item_id %}
                 <a href="https://www.ebay.com/itm/{{ fb.item_id }}" target="_blank" rel="noopener">
                   {{ fb.item_title or ('Item ' ~ fb.item_id) }}
@@ -100,12 +109,14 @@
                 {{ fb.item_title or '—' }}
               {% endif %}
             </td>
-            <td style="max-width:320px;">
-              {{ fb.comment_text or '—' }}
+            <td class="col-comment">
+              <div class="cell-text">
+                {{ fb.comment_text or '—' }}
+              </div>
             </td>
-            <td style="min-width:240px;">
+            <td class="col-response">
               {% if fb.responded %}
-                <div style="font-size:13px;color:var(--sub);margin-bottom:6px;">
+                <div class="cell-text" style="font-size:13px;color:var(--sub);margin-bottom:6px;">
                   {{ fb.response_text }}
                 </div>
                 <div style="font-size:11px;color:var(--sub);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -148,17 +159,17 @@
 {% if show_pagination %}
 <div style="display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;">
   {% if prev_page %}
-    <a href="{{ url_for('main.feedback_manager', page=prev_page, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">Previous</a>
+    <a href="{{ url_for('main.feedback_manager', page=prev_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">Previous</a>
   {% endif %}
   {% for p in page_numbers %}
     {% if p == page %}
       <span class="btn" style="pointer-events:none;background:#2563eb;border-color:#2563eb;color:#fff;">{{ p }}</span>
     {% else %}
-      <a href="{{ url_for('main.feedback_manager', page=p, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">{{ p }}</a>
+      <a href="{{ url_for('main.feedback_manager', page=p, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">{{ p }}</a>
     {% endif %}
   {% endfor %}
   {% if next_page %}
-    <a href="{{ url_for('main.feedback_manager', page=next_page, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">Next</a>
+    <a href="{{ url_for('main.feedback_manager', page=next_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">Next</a>
   {% endif %}
 </div>
 {% endif %}
@@ -196,6 +207,46 @@
 @keyframes feedbackPulse {
   0% { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
+}
+
+.feedback-table-wrap {
+  overflow-x: auto;
+}
+.feedback-table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+}
+.feedback-table th,
+.feedback-table td {
+  vertical-align: top;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.feedback-table thead .filter-row th {
+  padding-top: 8px;
+}
+.feedback-table th.col-date, .feedback-table td.col-date { width: 140px; }
+.feedback-table th.col-type, .feedback-table td.col-type { width: 90px; }
+.feedback-table th.col-from, .feedback-table td.col-from { width: 140px; }
+.feedback-table th.col-item, .feedback-table td.col-item { width: 220px; }
+.feedback-table th.col-comment, .feedback-table td.col-comment { width: 240px; }
+.feedback-table th.col-response, .feedback-table td.col-response { width: 260px; }
+.feedback-table td.col-date,
+.feedback-table td.col-type,
+.feedback-table td.col-from,
+.feedback-table td.col-item {
+  white-space: nowrap;
+}
+.feedback-table .cell-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .feedback-table { min-width: 880px; }
+}
+@media (max-width: 720px) {
+  .feedback-table { min-width: 760px; }
 }
 </style>
 

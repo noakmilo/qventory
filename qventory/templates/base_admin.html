@@ -4,7 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
-  <title>{% block title %}Admin – Qventory{% endblock %}</title>
+  {% set raw_title %}{% block title %}{% endblock %}{% endset %}
+  {% set raw_title = (raw_title or '')|trim %}
+  {% if not raw_title %}
+    {% set raw_title = 'Admin' %}
+  {% endif %}
+  {% set norm_title = raw_title.replace('–', '-').replace('—', '-') %}
+  {% if 'Qventory' not in norm_title %}
+    {% set norm_title = norm_title ~ ' - Qventory' %}
+  {% endif %}
+  <title>{{ norm_title }}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/icon-32.png') }}">
   <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/icon-16.png') }}">

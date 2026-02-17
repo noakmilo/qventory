@@ -42,8 +42,20 @@
 
     <h2 style="margin:var(--space-4) 0 var(--space-3) 0;">Role Token Limits</h2>
 
+    {% set scenarios = configs|groupby('scenario') %}
+    {% for scenario_group in scenarios %}
+    <div style="margin:var(--space-4) 0 var(--space-2) 0;font-weight:600;">
+      {% if scenario_group.grouper == 'ai_research' %}
+        AI Research
+      {% elif scenario_group.grouper == 'feedback_manager' %}
+        Feedback Manager
+      {% else %}
+        {{ scenario_group.grouper|replace('_', ' ')|title }}
+      {% endif %}
+    </div>
+
     <div class="token-config-grid">
-      {% for config in configs %}
+      {% for config in scenario_group.list %}
       <div class="token-config-card">
         <div class="config-header">
           <div>
@@ -63,15 +75,15 @@
 
         <hr class="divider">
 
-        <form method="post" action="{{ url_for('main.admin_update_token_config', role=config.role) }}">
+        <form method="post" action="{{ url_for('main.admin_update_token_config', scenario=config.scenario, role=config.role) }}">
           <div style="margin-bottom:var(--space-3);">
-            <label for="tokens_{{ config.role }}" style="display:block;margin-bottom:var(--space-2);font-weight:600;font-size:var(--fs-sm);">
+            <label for="tokens_{{ config.scenario }}_{{ config.role }}" style="display:block;margin-bottom:var(--space-2);font-weight:600;font-size:var(--fs-sm);">
               Daily Token Limit
             </label>
             <input
               type="number"
               name="daily_tokens"
-              id="tokens_{{ config.role }}"
+              id="tokens_{{ config.scenario }}_{{ config.role }}"
               value="{{ config.daily_tokens }}"
               min="0"
               max="999999"
@@ -107,6 +119,7 @@
       </div>
       {% endfor %}
     </div>
+    {% endfor %}
 
     {% if not configs %}
     <div style="text-align:center;padding:var(--space-5);color:var(--sub);">

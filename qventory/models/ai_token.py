@@ -11,7 +11,8 @@ class AITokenConfig(db.Model):
     __tablename__ = 'ai_token_configs'
 
     id = db.Column(db.Integer, primary_key=True)
-    role = db.Column(db.String(20), unique=True, nullable=False)  # free, premium, pro, god
+    role = db.Column(db.String(20), nullable=False)  # free, premium, pro, god
+    scenario = db.Column(db.String(40), nullable=False, default='ai_research')
     daily_tokens = db.Column(db.Integer, nullable=False)
     display_name = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -22,20 +23,30 @@ class AITokenConfig(db.Model):
         return {
             'id': self.id,
             'role': self.role,
+            'scenario': self.scenario,
             'daily_tokens': self.daily_tokens,
             'display_name': self.display_name,
             'description': self.description
         }
 
     @staticmethod
-    def get_token_limit(role):
+    def get_token_limit(role, scenario='ai_research'):
         """Get daily token limit for a role"""
-        config = AITokenConfig.query.filter_by(role=role).first()
+        config = AITokenConfig.query.filter_by(role=role, scenario=scenario).first()
         if config:
             return config.daily_tokens
 
         # Defaults if not configured
-        defaults = {
+        defaults_ai_research = {
+            'free': 3,
+            'early_adopter': 10,
+            'premium': 5,
+            'plus': 15,
+            'pro': 10,
+            'god': 999999,
+            'enterprise': 999999
+        }
+        defaults_feedback = {
             'free': 3,
             'early_adopter': 3,
             'premium': 5,
@@ -44,30 +55,50 @@ class AITokenConfig(db.Model):
             'god': 999999,
             'enterprise': 999999
         }
+        defaults = defaults_ai_research if scenario == 'ai_research' else defaults_feedback
         return defaults.get(role, 0)
 
     @staticmethod
     def initialize_defaults():
         """Initialize default token configs"""
         defaults = [
-            {'role': 'free', 'daily_tokens': 3, 'display_name': 'Free',
+            # AI Research
+            {'role': 'free', 'scenario': 'ai_research', 'daily_tokens': 3, 'display_name': 'Free',
              'description': '3 AI Research reports per day'},
-            {'role': 'early_adopter', 'daily_tokens': 3, 'display_name': 'Early Adopter',
-             'description': '3 AI Research reports per day'},
-            {'role': 'premium', 'daily_tokens': 5, 'display_name': 'Premium',
-             'description': '5 AI Research reports per day'},
-            {'role': 'plus', 'daily_tokens': 10, 'display_name': 'Plus',
+            {'role': 'early_adopter', 'scenario': 'ai_research', 'daily_tokens': 10, 'display_name': 'Early Adopter',
              'description': '10 AI Research reports per day'},
-            {'role': 'pro', 'daily_tokens': 20, 'display_name': 'Pro',
-             'description': '20 AI Research reports per day'},
-            {'role': 'god', 'daily_tokens': 999999, 'display_name': 'God Mode',
+            {'role': 'premium', 'scenario': 'ai_research', 'daily_tokens': 5, 'display_name': 'Premium',
+             'description': '5 AI Research reports per day'},
+            {'role': 'plus', 'scenario': 'ai_research', 'daily_tokens': 15, 'display_name': 'Plus',
+             'description': '15 AI Research reports per day'},
+            {'role': 'pro', 'scenario': 'ai_research', 'daily_tokens': 10, 'display_name': 'Pro',
+             'description': '10 AI Research reports per day'},
+            {'role': 'god', 'scenario': 'ai_research', 'daily_tokens': 999999, 'display_name': 'God Mode',
              'description': 'Unlimited AI Research reports'},
-            {'role': 'enterprise', 'daily_tokens': 999999, 'display_name': 'Enterprise',
-             'description': 'Unlimited AI Research reports'}
+            {'role': 'enterprise', 'scenario': 'ai_research', 'daily_tokens': 999999, 'display_name': 'Enterprise',
+             'description': 'Unlimited AI Research reports'},
+            # Feedback Manager
+            {'role': 'free', 'scenario': 'feedback_manager', 'daily_tokens': 3, 'display_name': 'Free',
+             'description': '3 feedback AI replies per day'},
+            {'role': 'early_adopter', 'scenario': 'feedback_manager', 'daily_tokens': 3, 'display_name': 'Early Adopter',
+             'description': '3 feedback AI replies per day'},
+            {'role': 'premium', 'scenario': 'feedback_manager', 'daily_tokens': 5, 'display_name': 'Premium',
+             'description': '5 feedback AI replies per day'},
+            {'role': 'plus', 'scenario': 'feedback_manager', 'daily_tokens': 10, 'display_name': 'Plus',
+             'description': '10 feedback AI replies per day'},
+            {'role': 'pro', 'scenario': 'feedback_manager', 'daily_tokens': 20, 'display_name': 'Pro',
+             'description': '20 feedback AI replies per day'},
+            {'role': 'god', 'scenario': 'feedback_manager', 'daily_tokens': 999999, 'display_name': 'God Mode',
+             'description': 'Unlimited feedback AI replies'},
+            {'role': 'enterprise', 'scenario': 'feedback_manager', 'daily_tokens': 999999, 'display_name': 'Enterprise',
+             'description': 'Unlimited feedback AI replies'}
         ]
 
         for config_data in defaults:
-            existing = AITokenConfig.query.filter_by(role=config_data['role']).first()
+            existing = AITokenConfig.query.filter_by(
+                role=config_data['role'],
+                scenario=config_data.get('scenario', 'ai_research')
+            ).first()
             if not existing:
                 config = AITokenConfig(**config_data)
                 db.session.add(config)
@@ -82,6 +113,7 @@ class AITokenUsage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     date = db.Column(db.Date, nullable=False, index=True)
+    scenario = db.Column(db.String(40), nullable=False, default='ai_research', index=True)
     tokens_used = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -91,55 +123,60 @@ class AITokenUsage(db.Model):
 
     # Unique constraint: one record per user per day
     __table_args__ = (
-        db.UniqueConstraint('user_id', 'date', name='unique_user_date'),
+        db.UniqueConstraint('user_id', 'date', 'scenario', name='unique_user_date_scenario'),
     )
 
     @staticmethod
-    def get_today_usage(user_id):
+    def get_today_usage(user_id, scenario='ai_research'):
         """Get today's token usage for a user"""
         today = datetime.utcnow().date()
-        usage = AITokenUsage.query.filter_by(user_id=user_id, date=today).first()
+        usage = AITokenUsage.query.filter_by(
+            user_id=user_id,
+            date=today,
+            scenario=scenario
+        ).first()
 
         if not usage:
-            usage = AITokenUsage(user_id=user_id, date=today, tokens_used=0)
+            usage = AITokenUsage(user_id=user_id, date=today, scenario=scenario, tokens_used=0)
             db.session.add(usage)
             db.session.commit()
 
         return usage
 
     @staticmethod
-    def can_use_token(user):
+    def can_use_token(user, scenario='ai_research'):
         """Check if user has tokens available today"""
         # God mode has unlimited tokens
         if user.role == 'god':
             return True, 999999
 
-        today_usage = AITokenUsage.get_today_usage(user.id)
-        daily_limit = AITokenConfig.get_token_limit(user.role)
+        today_usage = AITokenUsage.get_today_usage(user.id, scenario=scenario)
+        daily_limit = AITokenConfig.get_token_limit(user.role, scenario=scenario)
         tokens_remaining = daily_limit - today_usage.tokens_used
 
         return tokens_remaining > 0, tokens_remaining
 
     @staticmethod
-    def consume_token(user_id):
+    def consume_token(user_id, scenario='ai_research'):
         """Consume one token for a user"""
-        today_usage = AITokenUsage.get_today_usage(user_id)
+        today_usage = AITokenUsage.get_today_usage(user_id, scenario=scenario)
         today_usage.tokens_used += 1
         db.session.commit()
         return today_usage.tokens_used
 
     @staticmethod
-    def get_user_stats(user):
+    def get_user_stats(user, scenario='ai_research'):
         """Get token stats for a user"""
-        today_usage = AITokenUsage.get_today_usage(user.id)
-        daily_limit = AITokenConfig.get_token_limit(user.role)
+        today_usage = AITokenUsage.get_today_usage(user.id, scenario=scenario)
+        daily_limit = AITokenConfig.get_token_limit(user.role, scenario=scenario)
 
         return {
             'used_today': today_usage.tokens_used,
             'daily_limit': daily_limit,
             'remaining': max(0, daily_limit - today_usage.tokens_used),
             'role': user.role,
-            'unlimited': user.role == 'god'
+            'unlimited': user.role == 'god',
+            'scenario': scenario
         }
 
     @staticmethod

@@ -1445,6 +1445,21 @@ def dashboard():
         Item.created_at >= today_start_utc
     ).count()
 
+    feedback_unread_count = 0
+    feedback_unresponded_count = 0
+    try:
+        if s.feedback_manager_enabled:
+            from qventory.helpers.feedback_queries import count_unread_feedback, count_unresponded_feedback
+            feedback_unread_count = count_unread_feedback(
+                db.session, current_user.id, s.feedback_last_viewed_at
+            )
+            feedback_unresponded_count = count_unresponded_feedback(
+                db.session, current_user.id
+            )
+    except Exception:
+        feedback_unread_count = 0
+        feedback_unresponded_count = 0
+
     return render_template(
         "dashboard_home.html",
         settings=s,
@@ -1460,7 +1475,9 @@ def dashboard():
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}",
         today_listings_count=today_listings_count,
         recommended_article=recommended_article,
-        slow_movers_count=slow_movers_count
+        slow_movers_count=slow_movers_count,
+        feedback_unread_count=feedback_unread_count,
+        feedback_unresponded_count=feedback_unresponded_count
     )
 
 
@@ -1739,7 +1756,7 @@ def feedback_manager():
         flash("Enable Feedback Manager in Settings to use this view.", "error")
         return redirect(url_for("main.settings_feedback_manager"))
 
-    from qventory.helpers.feedback_queries import count_unread_feedback
+    from qventory.helpers.feedback_queries import count_unread_feedback, count_unresponded_feedback
 
     page = int(request.args.get("page", 1))
     page = max(1, page)
@@ -1748,6 +1765,10 @@ def feedback_manager():
     date_from_raw = (request.args.get("date_from") or "").strip()
     date_to_raw = (request.args.get("date_to") or "").strip()
     responded_filter = (request.args.get("responded") or "all").strip().lower()
+    type_q = (request.args.get("type") or "").strip()
+    from_q = (request.args.get("from") or "").strip()
+    item_q = (request.args.get("item") or "").strip()
+    comment_q = (request.args.get("comment") or "").strip()
 
     date_from = None
     date_to = None
@@ -1779,6 +1800,19 @@ def feedback_manager():
         query = query.filter(EbayFeedback.responded.is_(True))
     elif responded_filter == "unresponded":
         query = query.filter(EbayFeedback.responded.is_(False))
+    if type_q:
+        query = query.filter(EbayFeedback.comment_type.ilike(f"%{type_q}%"))
+    if from_q:
+        query = query.filter(EbayFeedback.commenting_user.ilike(f"%{from_q}%"))
+    if item_q:
+        query = query.filter(
+            or_(
+                EbayFeedback.item_title.ilike(f"%{item_q}%"),
+                EbayFeedback.item_id.ilike(f"%{item_q}%")
+            )
+        )
+    if comment_q:
+        query = query.filter(EbayFeedback.comment_text.ilike(f"%{comment_q}%"))
 
     query = query.order_by(
         EbayFeedback.comment_time.desc().nullslast(),
@@ -1788,7 +1822,8 @@ def feedback_manager():
     feedbacks = query.offset(offset).limit(per_page).all()
 
     unread_count = count_unread_feedback(db.session, current_user.id, s.feedback_last_viewed_at)
-    token_stats = current_user.get_ai_token_stats()
+    unresponded_count = count_unresponded_feedback(db.session, current_user.id)
+    token_stats = current_user.get_ai_token_stats(scenario='feedback_manager')
 
     last_viewed = s.feedback_last_viewed_at
     for fb in feedbacks:
@@ -1809,6 +1844,7 @@ def feedback_manager():
         "feedback_manager.html",
         feedbacks=feedbacks,
         unread_count=unread_count,
+        unresponded_count=unresponded_count,
         token_stats=token_stats,
         show_pagination=show_pagination,
         prev_page=prev_page,
@@ -1818,7 +1854,11 @@ def feedback_manager():
         page_numbers=page_numbers,
         date_from=date_from_raw,
         date_to=date_to_raw,
-        responded_filter=responded_filter
+        responded_filter=responded_filter,
+        type_q=type_q,
+        from_q=from_q,
+        item_q=item_q,
+        comment_q=comment_q
     )
 
 
@@ -1832,8 +1872,8 @@ def feedback_sync():
 
     try:
         from qventory.tasks import sync_ebay_feedback_user
-        sync_ebay_feedback_user.delay(current_user.id, days_back=None, max_pages=20)
-        flash("Feedback full sync queued. Updates historical responses too.", "success")
+        sync_ebay_feedback_user.delay(current_user.id, days_back=1, max_pages=5)
+        flash("Feedback sync queued. New feedback will appear shortly.", "success")
     except Exception:
         flash("Could not start feedback sync. Try again later.", "error")
 
@@ -1900,8 +1940,8 @@ def feedback_ai_draft():
     if feedback.responded:
         return jsonify({"ok": False, "error": "Feedback already answered"}), 400
 
-    can_use, remaining = current_user.can_use_ai_research()
-    token_stats = current_user.get_ai_token_stats()
+    can_use, remaining = current_user.can_use_ai_tokens('feedback_manager')
+    token_stats = current_user.get_ai_token_stats(scenario='feedback_manager')
     if not can_use:
         return jsonify({
             "ok": False,
@@ -1944,8 +1984,8 @@ def feedback_ai_draft():
     except Exception as exc:
         return jsonify({"ok": False, "error": f"OpenAI error: {exc}"}), 500
 
-    current_user.consume_ai_token()
-    token_stats = current_user.get_ai_token_stats()
+    current_user.consume_ai_tokens('feedback_manager')
+    token_stats = current_user.get_ai_token_stats(scenario='feedback_manager')
 
     return jsonify({
         "ok": True,
@@ -5318,8 +5358,8 @@ def settings_feedback_manager():
         if action == "sync_now" and s.feedback_manager_enabled:
             try:
                 from qventory.tasks import sync_ebay_feedback_user
-                sync_ebay_feedback_user.delay(current_user.id, days_back=None, max_pages=20)
-                flash("Feedback full sync queued.", "ok")
+                sync_ebay_feedback_user.delay(current_user.id, days_back=1, max_pages=5)
+                flash("Feedback sync queued.", "ok")
             except Exception:
                 flash("Could not start feedback sync.", "error")
             return redirect(url_for("main.settings_feedback_manager"))
@@ -7180,14 +7220,17 @@ def admin_token_config():
     """Manage AI token configurations per role"""
     from qventory.models.ai_token import AITokenConfig
 
-    configs = AITokenConfig.query.order_by(AITokenConfig.daily_tokens.desc()).all()
+    configs = AITokenConfig.query.order_by(
+        AITokenConfig.scenario.asc(),
+        AITokenConfig.daily_tokens.desc()
+    ).all()
 
     return render_template("admin_token_config.html", configs=configs)
 
 
-@main_bp.route("/admin/tokens/config/<string:role>", methods=["POST"])
+@main_bp.route("/admin/tokens/config/<string:scenario>/<string:role>", methods=["POST"])
 @require_admin
-def admin_update_token_config(role):
+def admin_update_token_config(scenario, role):
     """Update token limit for a role"""
     from qventory.models.ai_token import AITokenConfig
 
@@ -7201,9 +7244,9 @@ def admin_update_token_config(role):
         flash("Invalid token limit. Must be a positive number.", "error")
         return redirect(url_for('main.admin_token_config'))
 
-    config = AITokenConfig.query.filter_by(role=role).first()
+    config = AITokenConfig.query.filter_by(role=role, scenario=scenario).first()
     if not config:
-        flash(f"Role '{role}' not found", "error")
+        flash(f"Role '{role}' not found for scenario '{scenario}'", "error")
         return redirect(url_for('main.admin_token_config'))
 
     old_limit = config.daily_tokens

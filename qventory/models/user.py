@@ -170,21 +170,29 @@ class User(UserMixin, db.Model):
 
     # ==================== AI TOKEN MANAGEMENT ====================
 
-    def get_ai_token_stats(self):
+    def get_ai_token_stats(self, scenario='ai_research'):
         """Get AI token usage statistics"""
         from .ai_token import AITokenUsage
-        return AITokenUsage.get_user_stats(self)
+        return AITokenUsage.get_user_stats(self, scenario=scenario)
 
     def can_use_ai_research(self):
         """Check if user has AI research tokens available"""
         from .ai_token import AITokenUsage
-        can_use, remaining = AITokenUsage.can_use_token(self)
+        can_use, remaining = AITokenUsage.can_use_token(self, scenario='ai_research')
         return can_use, remaining
 
     def consume_ai_token(self):
         """Consume one AI research token"""
         from .ai_token import AITokenUsage
-        return AITokenUsage.consume_token(self.id)
+        return AITokenUsage.consume_token(self.id, scenario='ai_research')
+
+    def can_use_ai_tokens(self, scenario):
+        from .ai_token import AITokenUsage
+        return AITokenUsage.can_use_token(self, scenario=scenario)
+
+    def consume_ai_tokens(self, scenario):
+        from .ai_token import AITokenUsage
+        return AITokenUsage.consume_token(self.id, scenario=scenario)
 
     @property
     def is_god_mode(self):

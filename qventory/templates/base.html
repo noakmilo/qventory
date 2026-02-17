@@ -5,7 +5,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="referrer" content="no-referrer">
-  <title>{% block title %}Qventory – Inventory QR{% endblock %}</title>
+  {% set raw_title %}{% block title %}{% endblock %}{% endset %}
+  {% set raw_title = (raw_title or '')|trim %}
+  {% if not raw_title %}
+    {% set raw_title = 'Qventory' %}
+  {% endif %}
+  {% set norm_title = raw_title.replace('–', '-').replace('—', '-') %}
+  {% if 'Qventory' not in norm_title %}
+    {% set norm_title = norm_title ~ ' - Qventory' %}
+  {% endif %}
+  <title>{{ norm_title }}</title>
   <meta name="description" content="{% block meta_description %}Qventory helps eBay sellers sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as their business scales.{% endblock %}">
   {% set social_image = url_for('static', filename='pics/preview_card.png', _external=True) %}
   <meta property="og:title" content="{% block og_title %}Qventory{% endblock %}">
