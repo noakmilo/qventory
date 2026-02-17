@@ -23,6 +23,7 @@ from .ebay_finance import EbayPayout, EbayFinanceTransaction
 from .help_article import HelpArticle
 from .pickup import PickupAppointment, PickupMessage
 from .polling_log import PollingLog
+from .retired_item import RetiredItem
 
 __all__ = [
     'User',
@@ -54,5 +55,6 @@ __all__ = [
     'HelpArticle',
     'PickupAppointment',
     'PickupMessage',
-    'PollingLog'
+    'PollingLog',
+    'RetiredItem'
 ]

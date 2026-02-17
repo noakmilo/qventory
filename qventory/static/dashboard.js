@@ -91,6 +91,52 @@ if (bulkActionApply) {
       openBulkLocationModal(itemIds);
     } else if (action === 'bulk_update') {
       openBulkEditModal(itemIds);
+    } else if (action === 'retire_items') {
+      if (!confirm(`Copy ${itemIds.length} item(s) to Retirements?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/items/bulk_retire', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_ids: itemIds })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk retire error:', error);
+        alert('Failed to add items to Retirements');
+      }
+    } else if (action === 'purge_retired') {
+      if (!confirm(`This will permanently end ${itemIds.length} listing(s) on eBay. This is irreversible. Continue?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/retired_items/bulk_purge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ retired_item_ids: itemIds })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk purge error:', error);
+        alert('Failed to purge retired items');
+      }
     } else if (action === 'deactivate_by_user') {
       if (!confirm(`Hide ${itemIds.length} item(s) from active inventory?`)) {
         return;
@@ -163,6 +209,7 @@ if (bulkActionApply) {
     }
   });
 }
+
 
 if (bulkEditOpenBtn) {
   bulkEditOpenBtn.addEventListener('click', () => {
@@ -673,6 +720,41 @@ function initializeItemEventListeners() {
     }
   });
 
+  // Retired items purge buttons
+  document.querySelectorAll('.retired-purge-btn').forEach(btn => {
+    if (!btn.dataset.initialized) {
+      btn.addEventListener('click', async () => {
+        const retiredId = parseInt(btn.dataset.retiredId, 10);
+        if (!Number.isFinite(retiredId)) {
+          alert('Invalid item');
+          return;
+        }
+        if (!confirm('This will permanently end the eBay listing. This is irreversible. Continue?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/retired_items/bulk_purge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retired_item_ids: [retiredId] })
+          });
+          const data = await response.json();
+          if (data.ok) {
+            alert(data.message);
+            location.reload();
+          } else {
+            alert('Error: ' + data.error);
+          }
+        } catch (error) {
+          console.error('Retired purge error:', error);
+          alert('Failed to purge item');
+        }
+      });
+      btn.dataset.initialized = 'true';
+    }
+  });
+
   setupInlineEditors();
   setupLocationButtons();
   setupActionButtons();
@@ -1096,8 +1178,9 @@ async function submitInlineForm(container, form, display) {
   const itemId = container.dataset.itemId;
   const field = container.dataset.field;
   const type = container.dataset.type || 'text';
+  const customEndpoint = container.dataset.endpoint;
 
-  if (!itemId || !field) {
+  if ((!itemId && !customEndpoint) || !field) {
     return;
   }
 
@@ -1136,7 +1219,19 @@ async function submitInlineForm(container, form, display) {
 
     let response, data;
 
-    if (isSoldView && isItemCostField) {
+    if (customEndpoint) {
+      response = await fetch(customEndpoint, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to update item');
+      }
+    } else if (isSoldView && isItemCostField) {
       // Update sale's item_cost via new endpoint
       response = await fetch(`/sale/${itemId}/update_cost`, {
         method: 'POST',
@@ -1178,6 +1273,8 @@ async function submitInlineForm(container, form, display) {
       }
     } else if (data.field === 'location') {
       updateLocationDisplay(container, data.location_code, data.A, data.B, data.S, data.C);
+    } else if (data.field === 'note') {
+      updateNoteDisplay(container, data.note);
     }
   } catch (error) {
     alert(error.message || 'Error updating item');
@@ -1338,6 +1435,34 @@ function updateLocationDisplay(container, locationCode, A, B, S, C) {
       newPlaceholder.textContent = 'No location';
       linkContainer.replaceWith(newPlaceholder);
       if (qrLink) qrLink.remove();
+    }
+  }
+}
+
+function updateNoteDisplay(container, noteValue) {
+  const display = container.querySelector('.inline-edit__display');
+  if (!display) return;
+
+  const valueSpan = display.querySelector('.inline-edit__value');
+  const placeholder = display.querySelector('.inline-edit__placeholder');
+  const trimmed = (noteValue || '').trim();
+
+  if (trimmed) {
+    if (valueSpan) {
+      valueSpan.textContent = trimmed;
+      valueSpan.style.display = '';
+    } else if (placeholder) {
+      const newValueSpan = document.createElement('span');
+      newValueSpan.className = 'inline-edit__value tag';
+      newValueSpan.textContent = trimmed;
+      placeholder.replaceWith(newValueSpan);
+    }
+  } else {
+    if (valueSpan) {
+      const newPlaceholder = document.createElement('span');
+      newPlaceholder.className = 'inline-edit__placeholder';
+      newPlaceholder.textContent = 'Add note';
+      valueSpan.replaceWith(newPlaceholder);
     }
   }
 }

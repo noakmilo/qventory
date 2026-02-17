@@ -5,6 +5,7 @@
 {% set has_cost = has_cost_value and it.item_cost > 0 %}
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set is_ebay_item = it.synced_from_ebay or it.ebay_listing_id %}
+{% set is_retired = view_type == 'retired' %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
@@ -34,9 +35,15 @@
         <span style="font-size:var(--fs-sm);">{{ it.title }}</span>
       {% endif %}
     {% else %}
-      <a href="{{ url_for('main.item_detail', item_id=it.id) }}" style="font-size:var(--fs-sm);color:var(--text);text-decoration:none;">
-        {{ it.title }}
-      </a>
+      {% if view_type == 'retired' and it.item_id %}
+        <a href="{{ url_for('main.item_detail', item_id=it.item_id) }}" style="font-size:var(--fs-sm);color:var(--text);text-decoration:none;">
+          {{ it.title }}
+        </a>
+      {% else %}
+        <a href="{{ url_for('main.item_detail', item_id=it.id) }}" style="font-size:var(--fs-sm);color:var(--text);text-decoration:none;">
+          {{ it.title }}
+        </a>
+      {% endif %}
     {% endif %}
   </td>
   {% if view_type != 'sold' %}
@@ -44,7 +51,7 @@
   {% endif %}
 
   <td data-col="supplier" class="mobile-hide">
-    {% if view_type == 'sold' %}
+    {% if view_type == 'sold' or view_type == 'retired' %}
       {# Read-only supplier for sold items #}
       {% if it.supplier %}
       <span class="tag">{{ it.supplier }}</span>
@@ -70,40 +77,48 @@
     {% endif %}
   </td>
   <td data-col="cost">
-    {# Cost is ALWAYS editable - even for sold items (for profit calculation) #}
-    <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
-      <div class="inline-edit__display" tabindex="0" role="button">
-        {% if it.item_cost is not none %}
-        <span class="inline-edit__value tag">
-          <i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}
-          {% set has_expense_cost = it.expense_cost_count is defined and it.expense_cost_count > 0 %}
-          {% if not has_expense_cost %}
-            {% set has_expense_cost = it.expenses is defined and it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+    {% if view_type == 'retired' %}
+      {% if it.item_cost is not none %}
+      <span class="tag"><i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}</span>
+      {% else %}
+      <span style="color:var(--sub);font-size:12px">—</span>
+      {% endif %}
+    {% else %}
+      {# Cost is ALWAYS editable - even for sold items (for profit calculation) #}
+      <div class="inline-edit" data-item-id="{{ it.id }}" data-field="item_cost" data-type="number">
+        <div class="inline-edit__display" tabindex="0" role="button">
+          {% if it.item_cost is not none %}
+          <span class="inline-edit__value tag">
+            <i class="fas fa-receipt"></i> ${{ '%.2f'|format(it.item_cost) }}
+            {% set has_expense_cost = it.expense_cost_count is defined and it.expense_cost_count > 0 %}
+            {% if not has_expense_cost %}
+              {% set has_expense_cost = it.expenses is defined and it.expenses and (it.expenses | selectattr('item_cost_applied') | list | length) > 0 %}
+            {% endif %}
+            {% set has_receipt_cost = it.receipt_items is defined and (
+                (it.receipt_items_count is defined and it.receipt_items_count > 0) or
+                (it.receipt_items.count is defined and it.receipt_items.count() > 0)
+            ) %}
+            {% set has_manual_cost = it.cost_history is defined and (
+                (it.cost_history_count is defined and it.cost_history_count > 0) or
+                (it.cost_history.count is defined and it.cost_history.count() > 0)
+            ) %}
+            {% if has_expense_cost or has_receipt_cost or has_manual_cost %}
+            <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history" data-inline-ignore
+                    style="margin-left:6px;border:none;background:none;color:var(--sub);cursor:pointer;">
+              <i class="fas fa-clock"></i>
+            </button>
+            {% endif %}
+          </span>
+          {% else %}
+          <span class="inline-edit__placeholder">Add cost</span>
           {% endif %}
-          {% set has_receipt_cost = it.receipt_items is defined and (
-              (it.receipt_items_count is defined and it.receipt_items_count > 0) or
-              (it.receipt_items.count is defined and it.receipt_items.count() > 0)
-          ) %}
-          {% set has_manual_cost = it.cost_history is defined and (
-              (it.cost_history_count is defined and it.cost_history_count > 0) or
-              (it.cost_history.count is defined and it.cost_history.count() > 0)
-          ) %}
-          {% if has_expense_cost or has_receipt_cost or has_manual_cost %}
-          <button type="button" class="cost-history-btn" data-item-id="{{ it.id }}" title="Cost history" data-inline-ignore
-                  style="margin-left:6px;border:none;background:none;color:var(--sub);cursor:pointer;">
-            <i class="fas fa-clock"></i>
-          </button>
-          {% endif %}
-        </span>
-        {% else %}
-        <span class="inline-edit__placeholder">Add cost</span>
-        {% endif %}
+        </div>
+        <form class="inline-edit__form inline-edit__form--compact" hidden>
+          <input type="number" name="value" step="0.01" min="0" value="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}" placeholder="0.00" inputmode="decimal">
+          <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
+        </form>
       </div>
-      <form class="inline-edit__form inline-edit__form--compact" hidden>
-        <input type="number" name="value" step="0.01" min="0" value="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}" placeholder="0.00" inputmode="decimal">
-        <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
-      </form>
-    </div>
+    {% endif %}
   </td>
   <td data-col="{{ 'sold_price' if view_type == 'sold' else 'price' }}">
     {% if view_type == 'sold' %}
@@ -130,6 +145,36 @@
   </td>
   <td data-col="sold_at">{{ it.sold_at.strftime('%Y-%m-%d') if it.sold_at else '—' }}</td>
   {% else %}
+  {% if view_type == 'retired' %}
+  <td data-col="status">
+    {% set status = (it.status or 'pending') %}
+    {% if status == 'purged' %}
+      <span class="tag" style="background:#064e3b;color:#a7f3d0;border-color:#065f46">Purged</span>
+    {% elif status == 'failed' %}
+      <span class="tag" style="background:#7f1d1d;color:#fecaca;border-color:#991b1b">Failed</span>
+    {% else %}
+      <span class="tag" style="background:#1f2937;color:#e5e7eb;border-color:#374151">Pending</span>
+    {% endif %}
+    {% if it.last_error %}
+      <div style="margin-top:4px;font-size:11px;color:#fca5a5;max-width:220px;word-break:break-word;">{{ it.last_error }}</div>
+    {% endif %}
+  </td>
+  <td data-col="note">
+    <div class="inline-edit" data-item-id="{{ it.id }}" data-field="note" data-type="text" data-endpoint="{{ url_for('main.update_retired_item_note', retired_id=it.id) }}">
+      <div class="inline-edit__display" tabindex="0" role="button">
+        {% if it.note %}
+        <span class="inline-edit__value tag">{{ it.note }}</span>
+        {% else %}
+        <span class="inline-edit__placeholder">Add note</span>
+        {% endif %}
+      </div>
+      <form class="inline-edit__form inline-edit__form--compact" hidden>
+        <textarea name="value" rows="2" placeholder="Add note">{{ it.note or '' }}</textarea>
+        <button type="submit" class="inline-edit__save" title="Save"><i class="fas fa-check"></i></button>
+      </form>
+    </div>
+  </td>
+  {% else %}
   <td data-col="roi" class="mobile-hide roi-cell">
     {% if roi_infinite %}
       <span class="tag roi-value">ROI ∞</span>
@@ -140,10 +185,11 @@
     {% endif %}
   </td>
   {% endif %}
+  {% endif %}
 
   <!-- Location con QR -->
   <td data-col="location">
-    {% if view_type == 'sold' %}
+    {% if view_type == 'sold' or view_type == 'retired' %}
       {# Read-only location for sold items #}
       {% if it.location_code %}
       <span class="tag" style="display:inline-flex;align-items:center;gap:6px">
@@ -209,6 +255,11 @@
   {% if view_type != 'sold' %}
   <td data-col="actions">
     {% if current_user.is_authenticated %}
+      {% if view_type == 'retired' %}
+      <button class="btn retired-purge-btn" type="button" data-retired-id="{{ it.id }}" style="padding:6px 10px">
+        <i class="fas fa-trash-alt"></i> Purge on eBay
+      </button>
+      {% else %}
       {# Active items: Dropdown menu with all actions #}
       <div class="item-actions-dropdown" style="position:relative;display:inline-block">
         <button class="btn settingsbtn" type="button" onclick="toggleItemActionsMenu(this)" title="Actions" style="padding:6px 10px">
@@ -288,6 +339,7 @@
             {% endif %}
           </div>
         </div>
+      {% endif %}
     {% else %}
       <span class="tag">Login to edit</span>
     {% endif %}

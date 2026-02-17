@@ -218,6 +218,45 @@ FROM sales AS s
 WHERE {where_clause};
 """
 
+RETIRED_ITEMS_SQL = """
+SELECT
+    r.id,
+    r.user_id,
+    r.item_id,
+    r.title,
+    r.sku,
+    r.item_thumb,
+    r.item_price,
+    r.item_cost,
+    r.supplier,
+    r.location_code,
+    r.ebay_url,
+    r.ebay_listing_id,
+    r.status,
+    r.note,
+    r.last_error,
+    r.created_at,
+    r.updated_at,
+    r.purged_at,
+    NULL::text AS web_url,
+    NULL::text AS amazon_url,
+    NULL::text AS mercari_url,
+    NULL::text AS vinted_url,
+    NULL::text AS poshmark_url,
+    NULL::text AS depop_url,
+    FALSE AS synced_from_ebay
+FROM retired_items AS r
+WHERE {where_clause}
+ORDER BY {order_by}
+LIMIT :limit OFFSET :offset;
+"""
+
+RETIRED_COUNT_SQL = """
+SELECT COUNT(*)
+FROM retired_items AS r
+WHERE {where_clause};
+"""
+
 ENDED_ITEMS_SQL = """
 SELECT
     i.id,
@@ -531,6 +570,53 @@ def fetch_sold_items(
 
     query_sql = SOLD_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
     count_sql = SOLD_COUNT_SQL.format(where_clause=where_clause)
+
+    query_params = dict(params)
+    query_params.update({"limit": limit, "offset": offset})
+
+    items = _rows_to_objects(session.execute(text(query_sql), query_params))
+    total = session.execute(text(count_sql), params).scalar_one()
+    return items, total
+
+
+def fetch_retired_items(
+    session: Session,
+    *,
+    user_id: int,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[SimpleNamespace], int]:
+    clauses = ["r.user_id = :user_id"]
+    params: Dict[str, object] = {"user_id": user_id}
+
+    if search:
+        clauses.append(
+            "(r.title ILIKE :search OR r.sku ILIKE :search OR r.supplier ILIKE :search)"
+        )
+        params["search"] = f"%{search}%"
+
+    where_clause = " AND ".join(clauses)
+
+    order_map = {
+        "title": "r.title",
+        "sku": "r.sku",
+        "supplier": "r.supplier",
+        "cost": "r.item_cost",
+        "price": "r.item_price",
+        "location": "r.location_code",
+        "status": "r.status",
+        "created_at": "r.created_at",
+        "updated_at": "r.updated_at",
+    }
+    direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+    order_col = order_map.get((sort_by or "").lower(), "r.created_at")
+    order_by = f"{order_col} {direction} NULLS LAST, r.id DESC"
+
+    query_sql = RETIRED_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
+    count_sql = RETIRED_COUNT_SQL.format(where_clause=where_clause)
 
     query_params = dict(params)
     query_params.update({"limit": limit, "offset": offset})

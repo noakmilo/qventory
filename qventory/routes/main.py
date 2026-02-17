@@ -45,12 +45,14 @@ from ..helpers import (
     get_or_create_settings, generate_sku, compose_location_code,
     parse_location_code, parse_values, human_from_code, qr_label_image
 )
+from ..helpers.ebay_relist import end_item_trading_api
 from . import main_bp
 from ..helpers.inventory_queries import (
     fetch_active_items,
     fetch_inactive_by_user_items,
     fetch_sold_items,
     fetch_ended_items,
+    fetch_retired_items,
     fetch_fulfillment_orders,
     detect_thumbnail_mismatches,
     detect_sale_title_mismatches,
@@ -63,6 +65,7 @@ from ..models.auto_relist_rule import AutoRelistHistory
 from ..models.ebay_category import EbayCategory
 from ..models.profit_calculator_report import ProfitCalculatorReport
 from ..models.ebay_fee_rule import EbayFeeRule
+from ..models.retired_item import RetiredItem
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 
@@ -1739,6 +1742,70 @@ def inventory_sold():
         sort_dir=sort_dir,
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
+        show_upgrade_banner=False,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
+    )
+
+
+@main_bp.route("/inventory/retired")
+@login_required
+def inventory_retired():
+    """Show items copied into Retirements"""
+    s = get_or_create_settings(current_user)
+
+    page, per_page, offset = _get_pagination_params()
+    filters = _get_inventory_filter_params()
+    # Retired items do not support location/platform filters from items table
+    for key in ("A", "B", "S", "C", "platform", "missing_data"):
+        filters.pop(key, None)
+    sort_by, sort_dir = _get_inventory_sort_params()
+
+    items, total_items = fetch_retired_items(
+        db.session,
+        user_id=current_user.id,
+        limit=per_page,
+        offset=offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        **filters,
+    )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        items, total_items = fetch_retired_items(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            **filters,
+        )
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
+
+    options = {
+        "A": [],
+        "B": [],
+        "S": [],
+        "C": [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        pagination=pagination,
+        view_type="retired",
+        page_title="Retirements",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        items_remaining=None,
+        plan_max_items=None,
         show_upgrade_banner=False,
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
@@ -3893,6 +3960,199 @@ def bulk_reactivate_by_user():
         print(f"[BULK_REACTIVATE_BY_USER] Error: {str(e)}", file=sys.stderr)
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+@main_bp.route("/items/bulk_retire", methods=["POST"])
+@login_required
+def bulk_retire_items():
+    """
+    Copy items into Retirements (does not remove from active inventory).
+    Expects JSON: {"item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or "item_ids" not in data:
+            return jsonify({"ok": False, "error": "Missing item_ids"}), 400
+
+        item_ids = data["item_ids"]
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        try:
+            item_ids = [int(x) for x in item_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+
+        if not items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        created = 0
+        skipped = 0
+        now = datetime.utcnow()
+
+        for item in items:
+            existing = RetiredItem.query.filter(
+                RetiredItem.user_id == current_user.id,
+                or_(
+                    RetiredItem.item_id == item.id,
+                    (RetiredItem.ebay_listing_id.isnot(None) & (RetiredItem.ebay_listing_id == item.ebay_listing_id)),
+                ),
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+            retired = RetiredItem(
+                user_id=current_user.id,
+                item_id=item.id,
+                title=item.title,
+                sku=item.sku,
+                ebay_listing_id=item.ebay_listing_id,
+                ebay_url=item.ebay_url,
+                item_thumb=item.item_thumb,
+                item_price=item.item_price,
+                item_cost=item.item_cost,
+                supplier=item.supplier,
+                location_code=item.location_code,
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+            db.session.add(retired)
+            created += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "created": created,
+            "skipped": skipped,
+            "message": f"Added {created} item(s) to Retirements (skipped {skipped})"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_RETIRE_ITEMS] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/retired_items/bulk_purge", methods=["POST"])
+@login_required
+def bulk_purge_retired_items():
+    """
+    Purge retired items on eBay (EndItem) and mark as purged.
+    Expects JSON: {"retired_item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or "retired_item_ids" not in data:
+            return jsonify({"ok": False, "error": "Missing retired_item_ids"}), 400
+
+        retired_ids = data["retired_item_ids"]
+        if not isinstance(retired_ids, list):
+            return jsonify({"ok": False, "error": "retired_item_ids must be an array"}), 400
+
+        try:
+            retired_ids = [int(x) for x in retired_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid retired item ID format"}), 400
+
+        if len(retired_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        retired_items = RetiredItem.query.filter(
+            RetiredItem.id.in_(retired_ids),
+            RetiredItem.user_id == current_user.id
+        ).all()
+
+        if not retired_items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        purged = 0
+        failed = 0
+        skipped = 0
+        now = datetime.utcnow()
+
+        for retired in retired_items:
+            if retired.status == "purged":
+                skipped += 1
+                continue
+
+            if not retired.ebay_listing_id:
+                retired.status = "failed"
+                retired.last_error = "missing_ebay_listing_id"
+                retired.updated_at = now
+                failed += 1
+                continue
+
+            result = end_item_trading_api(current_user.id, retired.ebay_listing_id)
+            if result.get("success"):
+                retired.status = "purged"
+                retired.purged_at = now
+                retired.last_error = None
+                retired.updated_at = now
+                purged += 1
+            else:
+                retired.status = "failed"
+                retired.last_error = result.get("error") or "end_item_failed"
+                retired.updated_at = now
+                failed += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "purged": purged,
+            "failed": failed,
+            "skipped": skipped,
+            "message": f"Purged {purged} item(s) on eBay, {failed} failed, {skipped} skipped"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_PURGE_RETIRED] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/retired_items/<int:retired_id>/note", methods=["PATCH"])
+@login_required
+def update_retired_item_note(retired_id: int):
+    """
+    Update note for a retired item.
+    Expects JSON: {"value": "..."}
+    """
+    try:
+        data = request.get_json() or {}
+        note_value = (data.get("value") or "").strip()
+
+        retired = RetiredItem.query.filter(
+            RetiredItem.id == retired_id,
+            RetiredItem.user_id == current_user.id
+        ).first()
+        if not retired:
+            return jsonify({"ok": False, "error": "Retired item not found"}), 404
+
+        retired.note = note_value if note_value else None
+        retired.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "field": "note",
+            "note": retired.note or ""
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[RETIRED_NOTE_UPDATE] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @main_bp.route("/item/sync_to_ebay", methods=["POST"])
 @login_required
