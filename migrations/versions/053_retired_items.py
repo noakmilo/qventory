@@ -17,33 +17,45 @@ depends_on = None
 
 
 def upgrade():
-    op.create_table(
-        "retired_items",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("item_id", sa.Integer(), sa.ForeignKey("items.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("title", sa.String(), nullable=False),
-        sa.Column("sku", sa.String(), nullable=True),
-        sa.Column("ebay_listing_id", sa.String(length=100), nullable=True),
-        sa.Column("ebay_url", sa.String(), nullable=True),
-        sa.Column("item_thumb", sa.String(), nullable=True),
-        sa.Column("item_price", sa.Float(), nullable=True),
-        sa.Column("item_cost", sa.Float(), nullable=True),
-        sa.Column("supplier", sa.String(), nullable=True),
-        sa.Column("location_code", sa.String(), nullable=True),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
-        sa.Column("note", sa.Text(), nullable=True),
-        sa.Column("last_error", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.Column("purged_at", sa.DateTime(), nullable=True),
-    )
-    op.create_index("ix_retired_items_user_id", "retired_items", ["user_id"])
-    op.create_index("ix_retired_items_item_id", "retired_items", ["item_id"])
-    op.create_index("ix_retired_items_status", "retired_items", ["status"])
-    op.create_index("ix_retired_items_ebay_listing_id", "retired_items", ["ebay_listing_id"])
-    op.create_index("ix_retired_items_supplier", "retired_items", ["supplier"])
-    op.create_index("ix_retired_items_location_code", "retired_items", ["location_code"])
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+
+    if "retired_items" not in tables:
+        op.create_table(
+            "retired_items",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=False),
+            sa.Column("item_id", sa.Integer(), sa.ForeignKey("items.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("title", sa.String(), nullable=False),
+            sa.Column("sku", sa.String(), nullable=True),
+            sa.Column("ebay_listing_id", sa.String(length=100), nullable=True),
+            sa.Column("ebay_url", sa.String(), nullable=True),
+            sa.Column("item_thumb", sa.String(), nullable=True),
+            sa.Column("item_price", sa.Float(), nullable=True),
+            sa.Column("item_cost", sa.Float(), nullable=True),
+            sa.Column("supplier", sa.String(), nullable=True),
+            sa.Column("location_code", sa.String(), nullable=True),
+            sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
+            sa.Column("note", sa.Text(), nullable=True),
+            sa.Column("last_error", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("updated_at", sa.DateTime(), nullable=False),
+            sa.Column("purged_at", sa.DateTime(), nullable=True),
+        )
+
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("retired_items")} if "retired_items" in tables else set()
+    indexes = [
+        ("ix_retired_items_user_id", ["user_id"]),
+        ("ix_retired_items_item_id", ["item_id"]),
+        ("ix_retired_items_status", ["status"]),
+        ("ix_retired_items_ebay_listing_id", ["ebay_listing_id"]),
+        ("ix_retired_items_supplier", ["supplier"]),
+        ("ix_retired_items_location_code", ["location_code"]),
+    ]
+    for name, cols in indexes:
+        if name not in existing_indexes:
+            op.create_index(name, "retired_items", cols)
 
 
 def downgrade():
