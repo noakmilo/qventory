@@ -98,8 +98,13 @@
                 <div style="font-size:13px;color:var(--sub);margin-bottom:6px;">
                   {{ fb.response_text }}
                 </div>
-                <div style="font-size:11px;color:var(--sub);">
-                  Responded {{ fb.response_time.strftime('%b %d, %Y') if fb.response_time else '' }}
+                <div style="font-size:11px;color:var(--sub);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <span>Responded {{ fb.response_time.strftime('%b %d, %Y') if fb.response_time else '' }}</span>
+                  {% if fb.response_source == 'ebay' %}
+                    <span style="padding:2px 6px;border-radius:10px;background:rgba(59,130,246,0.12);color:#60a5fa;">Answered on eBay</span>
+                  {% elif fb.response_source == 'qventory' %}
+                    <span style="padding:2px 6px;border-radius:10px;background:rgba(16,185,129,0.12);color:#34d399;">Answered in Qventory</span>
+                  {% endif %}
                 </div>
               {% else %}
                 <form method="post" action="{{ url_for('main.feedback_respond') }}">

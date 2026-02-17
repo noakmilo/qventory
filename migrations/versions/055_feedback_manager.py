@@ -20,6 +20,10 @@ def _table_exists(bind, name):
     inspector = sa.inspect(bind)
     return name in inspector.get_table_names()
 
+def _column_exists(bind, table_name, column_name):
+    inspector = sa.inspect(bind)
+    cols = [col["name"] for col in inspector.get_columns(table_name)]
+    return column_name in cols
 
 def upgrade():
     bind = op.get_bind()
@@ -43,11 +47,14 @@ def upgrade():
             sa.Column("response_type", sa.String(length=20)),
             sa.Column("response_time", sa.DateTime()),
             sa.Column("responded", sa.Boolean(), default=False),
+            sa.Column("response_source", sa.String(length=20)),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
             sa.UniqueConstraint("user_id", "feedback_id", name="uq_ebay_feedback_user_feedback"),
         )
         op.create_index("idx_ebay_feedback_user_time", "ebay_feedback", ["user_id", "comment_time"])
+    elif not _column_exists(bind, "ebay_feedback", "response_source"):
+        op.add_column("ebay_feedback", sa.Column("response_source", sa.String(length=20)))
 
     op.add_column("settings", sa.Column("feedback_manager_enabled", sa.Boolean(), nullable=True))
     op.add_column("settings", sa.Column("feedback_last_viewed_at", sa.DateTime(), nullable=True))

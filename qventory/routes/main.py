@@ -1870,6 +1870,7 @@ def feedback_respond():
         feedback.response_type = response_type
         feedback.response_time = datetime.utcnow()
         feedback.responded = True
+        feedback.response_source = "qventory"
         db.session.commit()
         flash("Response sent successfully.", "success")
     else:

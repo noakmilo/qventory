@@ -173,7 +173,9 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                 existing.response_text = feedback.get("response_text")
                 existing.response_type = feedback.get("response_type")
                 existing.response_time = feedback.get("response_time")
-                existing.responded = bool(feedback.get("response_text"))
+                existing.responded = bool(feedback.get("response_text")) or bool(feedback.get("response_time"))
+                if existing.responded and not existing.response_source:
+                    existing.response_source = "ebay"
                 updated += 1
             else:
                 db.session.add(EbayFeedback(
@@ -191,7 +193,8 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                     response_text=feedback.get("response_text"),
                     response_type=feedback.get("response_type"),
                     response_time=feedback.get("response_time"),
-                    responded=bool(feedback.get("response_text"))
+                    responded=bool(feedback.get("response_text")) or bool(feedback.get("response_time")),
+                    response_source="ebay" if (feedback.get("response_text") or feedback.get("response_time")) else None
                 ))
                 created += 1
             total += 1

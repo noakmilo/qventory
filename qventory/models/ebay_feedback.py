@@ -22,6 +22,7 @@ class EbayFeedback(db.Model):
     response_type = db.Column(db.String(20))
     response_time = db.Column(db.DateTime)
     responded = db.Column(db.Boolean, default=False)
+    response_source = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
