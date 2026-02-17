@@ -137,6 +137,29 @@ if (bulkActionApply) {
         console.error('Bulk purge error:', error);
         alert('Failed to purge retired items');
       }
+    } else if (action === 'delete_retired') {
+      if (!confirm(`Remove ${itemIds.length} item(s) from Retirements?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/retired_items/bulk_delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ retired_item_ids: itemIds })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk delete retired error:', error);
+        alert('Failed to remove items');
+      }
     } else if (action === 'deactivate_by_user') {
       if (!confirm(`Hide ${itemIds.length} item(s) from active inventory?`)) {
         return;
@@ -749,6 +772,41 @@ function initializeItemEventListeners() {
         } catch (error) {
           console.error('Retired purge error:', error);
           alert('Failed to purge item');
+        }
+      });
+      btn.dataset.initialized = 'true';
+    }
+  });
+
+  // Retired items delete buttons
+  document.querySelectorAll('.retired-delete-btn').forEach(btn => {
+    if (!btn.dataset.initialized) {
+      btn.addEventListener('click', async () => {
+        const retiredId = parseInt(btn.dataset.retiredId, 10);
+        if (!Number.isFinite(retiredId)) {
+          alert('Invalid item');
+          return;
+        }
+        if (!confirm('Remove this item from Retirements?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/retired_items/bulk_delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retired_item_ids: [retiredId] })
+          });
+          const data = await response.json();
+          if (data.ok) {
+            alert(data.message || 'Removed');
+            location.reload();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to remove'));
+          }
+        } catch (error) {
+          console.error('Retired delete error:', error);
+          alert('Failed to remove item');
         }
       });
       btn.dataset.initialized = 'true';

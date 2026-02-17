@@ -4257,6 +4257,57 @@ def bulk_purge_retired_items():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@main_bp.route("/retired_items/bulk_delete", methods=["POST"])
+@login_required
+def bulk_delete_retired_items():
+    """
+    Remove items from Retirements (does not affect active inventory).
+    Expects JSON: {"retired_item_ids": [1, 2, 3, ...]}
+    """
+    try:
+        data = request.get_json()
+        if not data or "retired_item_ids" not in data:
+            return jsonify({"ok": False, "error": "Missing retired_item_ids"}), 400
+
+        retired_ids = data["retired_item_ids"]
+        if not isinstance(retired_ids, list):
+            return jsonify({"ok": False, "error": "retired_item_ids must be an array"}), 400
+
+        try:
+            retired_ids = [int(x) for x in retired_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid retired item ID format"}), 400
+
+        if len(retired_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        retired_items = RetiredItem.query.filter(
+            RetiredItem.id.in_(retired_ids),
+            RetiredItem.user_id == current_user.id
+        ).all()
+
+        if not retired_items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        deleted_count = 0
+        for retired in retired_items:
+            db.session.delete(retired)
+            deleted_count += 1
+
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "deleted": deleted_count,
+            "message": f"Removed {deleted_count} item(s) from Retirements"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_DELETE_RETIRED] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @main_bp.route("/retired_items/<int:retired_id>/note", methods=["PATCH"])
 @login_required
 def update_retired_item_note(retired_id: int):
