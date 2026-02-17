@@ -334,12 +334,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         except Exception as fallback_err:
                             log_task(f"  ⚠ Trading API SKU fallback failed: {fallback_err}")
 
-                    # First try: Match by eBay Listing ID (ONLY active items to prevent duplicates)
+                    # First try: Match by eBay Listing ID (active OR inactive to prevent duplicates)
                     if ebay_listing_id:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
-                            ebay_listing_id=ebay_listing_id,
-                            is_active=True  # Only match active items to prevent duplicates
+                            ebay_listing_id=ebay_listing_id
                         ).first()
                         if existing_item:
                             match_method = "ebay_listing_id"
@@ -367,12 +366,10 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             match_method = "relisted_item"
 
                     # Third try: Match by exact title (ONLY if no listing_id, least reliable fallback)
-                    # This prevents false matches when items have the same title but different listing IDs
                     if not existing_item and ebay_title and not ebay_listing_id:
                         existing_item = Item.query.filter_by(
                             user_id=user_id,
-                            title=ebay_title,
-                            is_active=True  # Only match active items to prevent duplicates
+                            title=ebay_title
                         ).first()
                         if existing_item:
                             match_method = "title"
@@ -3575,12 +3572,37 @@ def sync_ebay_active_inventory_auto(self):
                                 deleted_count += 1
                 
                 db.session.commit()
-                
-                log_task(f"    ✓ {updated_count} updated, {deleted_count} marked inactive")
-                total_updated += updated_count
+
+                # Backfill prices for active items still missing a price (max 5 per user to limit API calls)
+                priceless_items = [
+                    i for i in items_to_sync
+                    if i.is_active and i.item_price is None and i.ebay_listing_id
+                ]
+                backfilled = 0
+                if priceless_items:
+                    from qventory.helpers.ebay_inventory import get_listing_details_trading_api, parse_ebay_inventory_item
+                    for priceless in priceless_items[:5]:
+                        try:
+                            enriched = get_listing_details_trading_api(user.id, priceless.ebay_listing_id) or {}
+                            if enriched:
+                                parsed = parse_ebay_inventory_item(enriched, process_images=False)
+                                if parsed.get('item_price') is not None:
+                                    priceless.item_price = parsed['item_price']
+                                    backfilled += 1
+                                if parsed.get('item_thumb') and not priceless.item_thumb:
+                                    priceless.item_thumb = parsed['item_thumb']
+                                if parsed.get('title') and not priceless.title:
+                                    priceless.title = parsed['title'][:500]
+                        except Exception:
+                            pass
+                    if backfilled:
+                        db.session.commit()
+
+                log_task(f"    ✓ {updated_count} updated, {deleted_count} marked inactive, {backfilled} prices backfilled")
+                total_updated += updated_count + backfilled
                 total_deleted += deleted_count
                 users_processed += 1
-                
+
             except Exception as e:
                 log_task(f"    ✗ Error syncing user {user.id}: {str(e)}")
                 db.session.rollback()
