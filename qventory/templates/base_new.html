@@ -93,7 +93,7 @@
           <span>Sold</span>
         </a>
         <a href="{{ url_for('main.inventory_retired') }}" class="sidebar-item {% if 'inventory_retired' in request.endpoint %}active{% endif %}" title="Retirements">
-          <i class="fas fa-box-archive"></i>
+          <i class="fas fa-trash-restore-alt"></i>
           <span>Retirements</span>
         </a>
         {# COMMENTED OUT - Not critical, moved to soft delete approach #}
