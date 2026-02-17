@@ -1960,9 +1960,12 @@ def feedback_ai_draft():
         return jsonify({"ok": False, "error": "OpenAI API key not configured."}), 500
 
     prompt = (
-        "You are a professional eBay seller responding to customer feedback. "
-        "Write a short, polite reply (1-3 sentences). "
-        "Do not include emojis. Use a friendly, professional tone."
+        "You are an eBay seller replying to feedback. "
+        "Match the reply length to the feedback length (very short feedback = 1 sentence; "
+        "longer feedback = 2-3 sentences). "
+        "Do not include greetings like 'Dear', no signatures, no closing lines, and no placeholders "
+        "such as [Your Name]. "
+        "Do not include emojis. Keep it friendly and concise."
     )
 
     user_context = f"Feedback from {feedback.commenting_user or 'buyer'}: {feedback.comment_text or ''}"
@@ -1978,7 +1981,7 @@ def feedback_ai_draft():
                 {"role": "user", "content": user_context}
             ],
             temperature=0.4,
-            max_tokens=150
+            max_tokens=90
         )
         draft = response.choices[0].message.content.strip()
     except Exception as exc:

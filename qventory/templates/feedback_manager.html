@@ -251,6 +251,16 @@
 </style>
 
 <script>
+function autoGrowTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = 'auto';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+document.querySelectorAll('.feedback-reply-text').forEach(textarea => {
+  textarea.addEventListener('input', () => autoGrowTextarea(textarea));
+});
+
 document.querySelectorAll('.feedback-ai-btn').forEach(btn => {
   btn.addEventListener('click', async () => {
     const feedbackId = btn.getAttribute('data-feedback-id');
@@ -275,6 +285,7 @@ document.querySelectorAll('.feedback-ai-btn').forEach(btn => {
         }
       } else {
         textarea.value = data.draft || '';
+        autoGrowTextarea(textarea);
         const remainingEl = document.getElementById('feedbackTokensRemaining');
         if (remainingEl && data.token_stats && data.token_stats.remaining !== undefined) {
           remainingEl.textContent = data.token_stats.remaining;
