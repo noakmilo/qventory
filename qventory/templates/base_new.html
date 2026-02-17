@@ -139,7 +139,7 @@
           <span>Analytics</span>
         </a>
         <a href="{{ url_for('expenses.expenses_page') }}" class="sidebar-item {% if 'expenses' in request.endpoint %}active{% endif %}" title="Expenses">
-          <i class="fas fa-receipt"></i>
+          <i class="fas fa-dollar-sign"></i>
           <span>Expenses</span>
         </a>
         <a href="{{ url_for('tax_reports.index') }}" class="sidebar-item {% if 'tax_reports' in request.endpoint %}active{% endif %}" title="Tax Reports">
@@ -177,7 +177,7 @@
           <span>AI Research</span>
         </a>
         <a href="{{ url_for('receipts.list_receipts') }}" class="sidebar-item {% if 'receipts' in request.endpoint %}active{% endif %}" title="Receipt Scanner">
-          <i class="fas fa-file-invoice"></i>
+          <i class="fas fa-receipt"></i>
           <span>Receipt Scanner</span>
         </a>
         <a href="{{ url_for('main.qr_batch') }}" class="sidebar-item {% if 'qr_batch' in request.endpoint %}active{% endif %}" title="QR Batch">
