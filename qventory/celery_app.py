@@ -78,14 +78,14 @@ celery.conf.beat_schedule = {
     },
     'sync-sold-orders-deep': {
         'task': 'qventory.tasks.sync_ebay_sold_orders_deep',
-        'schedule': crontab(hour=3, minute=30),  # Every day at 3:30 AM UTC (catch older sales)
+        'schedule': crontab(hour=13, minute=0),  # Daily at 13:00 UTC (outside quiet window 6-12 UTC)
         'options': {
-            'expires': 3600,  # Expire after 1 hour if not picked up
+            'expires': 3600,
         }
     },
     'sync-fulfillment-tracking-am': {
         'task': 'qventory.tasks.sync_ebay_fulfillment_tracking_global',
-        'schedule': crontab(hour=8, minute=0),
+        'schedule': crontab(hour=14, minute=0),  # Moved from 8 UTC (inside quiet window) to 14 UTC
         'options': {
             'expires': 60 * 60 * 3,
         }
@@ -99,7 +99,7 @@ celery.conf.beat_schedule = {
     },
     'sync-ebay-finances-daily': {
         'task': 'qventory.tasks.sync_ebay_finances_global',
-        'schedule': crontab(hour=5, minute=0),
+        'schedule': crontab(hour=15, minute=0),  # Moved from 5 UTC (inside quiet window) to 15 UTC
         'options': {
             'expires': 60 * 60 * 3,
         }
@@ -113,7 +113,7 @@ celery.conf.beat_schedule = {
     },
     'sync-ebay-category-fees-monthly': {
         'task': 'qventory.tasks.sync_ebay_category_fee_catalog',
-        'schedule': crontab(day_of_month='1', hour=4, minute=0),
+        'schedule': crontab(day_of_month='1', hour=13, minute=30),  # Moved from 4 UTC to 13:30 UTC
         'options': {
             'expires': 60 * 60 * 6,
         }

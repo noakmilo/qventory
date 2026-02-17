@@ -15,6 +15,16 @@ def log_task(msg):
     print(f"[CELERY_TASK] {msg}", file=sys.stderr, flush=True)
 
 
+def _is_ebay_quiet_window():
+    """Return True if current UTC hour is inside the eBay quiet window (6-12 UTC).
+
+    During this window all eBay API tasks are paused to conserve API quota.
+    This corresponds to ~1-7 AM Eastern / 10 PM-4 AM Pacific — the lowest
+    eBay seller activity across the continental US.
+    """
+    return 6 <= datetime.utcnow().hour < 12
+
+
 def _parse_ebay_datetime(value):
     if not value:
         return None
@@ -1488,6 +1498,9 @@ def auto_relist_offers(self):
     Returns:
         dict with execution results
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
 
     with app.app_context():
@@ -2678,6 +2691,9 @@ def poll_ebay_new_listings(self):
     Returns:
         dict: Summary of polling results
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'users_checked': 0, 'new_listings': 0, 'errors': 0, 'skipped': 'quiet_window'}
+
     app = create_app()
 
     with app.app_context():
@@ -3325,6 +3341,13 @@ def poll_user_listings(credential):
         except Exception as analytics_err:
             log_task(f"    ⚠ Analytics refresh queue failed: {analytics_err}")
 
+        # Trigger full inventory reconciliation (throttled to once per 4h per user)
+        try:
+            reconcile_user_inventory.apply_async(args=[user_id], priority=9)
+            log_task("    ↻ Inventory reconciliation queued")
+        except Exception as reconcile_err:
+            log_task(f"    ⚠ Reconciliation queue failed: {reconcile_err}")
+
         return {
             'new_listings': new_listings,
             'errors': []
@@ -3336,6 +3359,137 @@ def poll_user_listings(credential):
         log_task(f"    Traceback: {traceback.format_exc()}")
         finalize_poll('error', errors=[str(e)])
         return {'new_listings': 0, 'errors': [str(e)]}
+
+
+@celery.task(bind=True, name='qventory.tasks.reconcile_user_inventory')
+def reconcile_user_inventory(self, user_id):
+    """
+    Full inventory reconciliation for a single user.
+
+    Compares all active eBay items in Qventory against a live snapshot from
+    eBay.  Items present in the snapshot get their price updated; items NOT
+    in the snapshot are marked inactive.  Also backfills prices for items
+    with price = 0 or NULL (max 10 per run).
+
+    Throttle: runs at most once per 4 hours per user (via SystemSetting).
+    Triggered automatically after poll_user_listings detects activity.
+    """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
+    app = create_app()
+
+    with app.app_context():
+        from datetime import datetime, timedelta
+        from qventory.models.item import Item
+        from qventory.models.system_setting import SystemSetting
+        from qventory.models.user import User
+        from qventory.helpers.ebay_inventory import (
+            fetch_active_listings_snapshot,
+            get_listing_details_trading_api,
+            parse_ebay_inventory_item
+        )
+
+        throttle_key = f'reconcile_user_{user_id}_last_run'
+        last_run_ts = SystemSetting.get_int(throttle_key)
+        if last_run_ts:
+            elapsed = datetime.utcnow() - datetime.utcfromtimestamp(last_run_ts)
+            if elapsed < timedelta(hours=4):
+                log_task(f"[RECONCILE] User {user_id}: skipped (last run {elapsed.total_seconds()/3600:.1f}h ago)")
+                return {'success': True, 'skipped': True, 'reason': 'throttled'}
+
+        user = User.query.get(user_id)
+        if not user:
+            return {'success': False, 'error': 'user_not_found'}
+
+        log_task(f"[RECONCILE] User {user_id} ({user.username}): starting full inventory reconciliation")
+
+        items_to_sync = Item.query.filter(
+            Item.user_id == user_id,
+            Item.ebay_listing_id.isnot(None)
+        ).all()
+
+        if not items_to_sync:
+            log_task(f"[RECONCILE] User {user_id}: no eBay items to reconcile")
+            SystemSetting.set_int(throttle_key, int(datetime.utcnow().timestamp()))
+            return {'success': True, 'items': 0}
+
+        snapshot = fetch_active_listings_snapshot(user_id)
+        if not snapshot['success']:
+            log_task(f"[RECONCILE] User {user_id}: snapshot failed — {snapshot.get('error')}")
+            return {'success': False, 'error': snapshot.get('error')}
+
+        offers = snapshot.get('offers', [])
+        can_mark_inactive = snapshot.get('can_mark_inactive', False)
+        sources = ', '.join(snapshot.get('sources', [])) or 'unknown'
+        log_task(f"[RECONCILE] User {user_id}: snapshot has {len(offers)} offers (sources: {sources}, can_mark_inactive={can_mark_inactive})")
+
+        offers_by_listing = {
+            o.get('ebay_listing_id'): o for o in offers if o.get('ebay_listing_id')
+        }
+
+        # Safety: if snapshot covers < 85% of active DB items, don't inactivate
+        active_in_db = sum(1 for i in items_to_sync if i.is_active)
+        if can_mark_inactive and active_in_db > 0 and len(offers_by_listing) > 0:
+            coverage = len(offers_by_listing) / active_in_db
+            if coverage < 0.85:
+                log_task(f"[RECONCILE] User {user_id}: safety override — snapshot {len(offers_by_listing)} vs DB {active_in_db} ({coverage:.0%})")
+                can_mark_inactive = False
+
+        updated = 0
+        inactivated = 0
+
+        for item in items_to_sync:
+            offer = offers_by_listing.get(item.ebay_listing_id)
+            if offer:
+                # Reactivate if was inactive
+                if not item.is_active:
+                    item.is_active = True
+                    updated += 1
+                # Update price from snapshot
+                if offer.get('item_price') and offer['item_price'] != item.item_price:
+                    item.item_price = offer['item_price']
+                    updated += 1
+            else:
+                if can_mark_inactive and item.is_active:
+                    item.is_active = False
+                    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                    item.notes = (item.notes or '') + f"\n[{timestamp}] Marked inactive by reconciliation (not in eBay snapshot)"
+                    try:
+                        from qventory.helpers.link_bio import remove_featured_items_for_user
+                        remove_featured_items_for_user(user_id, [item.id])
+                    except Exception:
+                        pass
+                    inactivated += 1
+
+        # Backfill prices for active items with price 0 or NULL (max 10)
+        priceless = [i for i in items_to_sync if i.is_active and not i.item_price and i.ebay_listing_id]
+        backfilled = 0
+        for item in priceless[:10]:
+            try:
+                enriched = get_listing_details_trading_api(user_id, item.ebay_listing_id) or {}
+                if enriched:
+                    parsed = parse_ebay_inventory_item(enriched, process_images=False)
+                    if parsed.get('item_price'):
+                        item.item_price = parsed['item_price']
+                        item.last_ebay_sync = datetime.utcnow()
+                        backfilled += 1
+            except Exception:
+                pass
+
+        db.session.commit()
+        SystemSetting.set_int(throttle_key, int(datetime.utcnow().timestamp()))
+
+        log_task(f"[RECONCILE] User {user_id}: done — {updated} updated, {inactivated} inactivated, {backfilled} prices backfilled")
+
+        return {
+            'success': True,
+            'updated': updated,
+            'inactivated': inactivated,
+            'backfilled': backfilled,
+            'snapshot_offers': len(offers_by_listing),
+            'db_items': len(items_to_sync)
+        }
 
 
 # ==================== AUTO-SYNC HELPERS (PHASE 1 - SCALABLE) ====================
@@ -3450,17 +3604,20 @@ def get_user_batch(all_users, batch_size=20, cursor_key=None):
 def sync_ebay_active_inventory_auto(self):
     """
     Auto-sync active inventory for recently active users
-    
+
     Updates prices, statuses, and removes sold items automatically.
     Uses batching to handle 100+ users without exceeding eBay API limits.
-    
+
     Runs: Every 4 hours (6x/day)
     Batch: 20 users per execution (persistent cursor rotates through all users)
     API Calls: ~20-40 per execution
-    
+
     Returns:
         dict: Summary of sync operations
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
     
     with app.app_context():
@@ -3639,6 +3796,9 @@ def sync_ebay_sold_orders_auto(self):
     Returns:
         dict: Summary of sync operations
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
 
     with app.app_context():
@@ -3819,6 +3979,9 @@ def sync_ebay_sold_orders_deep(self):
     Returns:
         dict: Summary of sync operations
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
 
     with app.app_context():
@@ -4018,6 +4181,9 @@ def sync_ebay_fulfillment_tracking_global(self):
     Refresh fulfillment tracking for all active eBay accounts.
     Runs on a schedule to keep delivered statuses updated.
     """
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
 
     with app.app_context():
@@ -4547,6 +4713,9 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
 
 @celery.task(bind=True, name='qventory.tasks.sync_ebay_finances_global')
 def sync_ebay_finances_global(self):
+    if _is_ebay_quiet_window():
+        return {'success': True, 'skipped': True, 'reason': 'quiet_window'}
+
     app = create_app()
     with app.app_context():
         from qventory.models.marketplace_credential import MarketplaceCredential
