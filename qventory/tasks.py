@@ -5699,7 +5699,17 @@ def backfill_recent_item_prices(self, hours=48):
     Args:
         hours: Look-back window (default 48).
     """
-    app = create_app()
+    import logging
+    logger = logging.getLogger('qventory.tasks')
+    logger.warning("[BACKFILL_PRICES] Task received — starting backfill_recent_item_prices (hours=%s)", hours)
+    log_task(f"[BACKFILL_PRICES] Task entry point reached, hours={hours}")
+
+    try:
+        app = create_app()
+    except Exception as exc:
+        logger.error("[BACKFILL_PRICES] create_app() failed: %s", exc)
+        log_task(f"[BACKFILL_PRICES] create_app() FAILED: {exc}")
+        raise
 
     with app.app_context():
         from datetime import datetime, timedelta
@@ -5708,7 +5718,7 @@ def backfill_recent_item_prices(self, hours=48):
         from qventory.helpers.ebay_inventory import get_listing_details_trading_api, parse_ebay_inventory_item
 
         cutoff = datetime.utcnow() - timedelta(hours=hours)
-        log_task(f"=== ADMIN: Backfill prices for items created after {cutoff.isoformat()} ===")
+        log_task(f"[BACKFILL_PRICES] === Backfill prices for items created after {cutoff.isoformat()} ===")
 
         items = Item.query.filter(
             Item.created_at >= cutoff,
@@ -5717,19 +5727,31 @@ def backfill_recent_item_prices(self, hours=48):
             Item.is_active == True
         ).all()
 
-        log_task(f"Found {len(items)} active items without price")
+        log_task(f"[BACKFILL_PRICES] Found {len(items)} active items without price")
+
+        if not items:
+            log_task("[BACKFILL_PRICES] Nothing to backfill — exiting")
+            return {
+                'success': True,
+                'total_items': 0,
+                'backfilled': 0,
+                'errors': 0,
+                'hours': hours
+            }
 
         backfilled = 0
         errors = 0
 
         for idx, item in enumerate(items, start=1):
-            # Verify the user still has valid eBay credentials
+            log_task(f"[BACKFILL_PRICES] [{idx}/{len(items)}] Item {item.id} listing={item.ebay_listing_id} user={item.user_id}")
+
             cred = MarketplaceCredential.query.filter_by(
                 user_id=item.user_id,
                 marketplace='ebay',
                 is_active=True
             ).first()
             if not cred:
+                log_task(f"[BACKFILL_PRICES]   Skipped — no active eBay credential for user {item.user_id}")
                 continue
 
             try:
@@ -5738,6 +5760,7 @@ def backfill_recent_item_prices(self, hours=48):
                     parsed = parse_ebay_inventory_item(enriched, process_images=False)
                     changed = False
                     if parsed.get('item_price') is not None:
+                        log_task(f"[BACKFILL_PRICES]   Price: {parsed['item_price']}")
                         item.item_price = parsed['item_price']
                         changed = True
                     if parsed.get('item_thumb') and not item.item_thumb:
@@ -5749,16 +5772,19 @@ def backfill_recent_item_prices(self, hours=48):
                     if changed:
                         item.last_ebay_sync = datetime.utcnow()
                         backfilled += 1
+                        log_task(f"[BACKFILL_PRICES]   ✓ Backfilled")
+                    else:
+                        log_task(f"[BACKFILL_PRICES]   No new data from GetItem")
                 else:
+                    log_task(f"[BACKFILL_PRICES]   ✗ GetItem returned empty")
                     errors += 1
             except Exception as exc:
-                log_task(f"  ✗ Error on item {item.id} (listing {item.ebay_listing_id}): {exc}")
+                log_task(f"[BACKFILL_PRICES]   ✗ Error: {exc}")
                 errors += 1
 
-            # Commit in batches of 20
             if idx % 20 == 0:
                 db.session.commit()
-                log_task(f"  Progress: {idx}/{len(items)} processed, {backfilled} backfilled")
+                log_task(f"[BACKFILL_PRICES] Committed batch — {idx}/{len(items)} processed, {backfilled} backfilled")
 
             if hasattr(self, 'request') and self.request.id:
                 self.update_state(
@@ -5767,7 +5793,7 @@ def backfill_recent_item_prices(self, hours=48):
                 )
 
         db.session.commit()
-        log_task(f"=== Backfill complete: {backfilled} prices filled, {errors} errors, {len(items)} total ===")
+        log_task(f"[BACKFILL_PRICES] === Complete: {backfilled} prices filled, {errors} errors, {len(items)} total ===")
 
         return {
             'success': True,
