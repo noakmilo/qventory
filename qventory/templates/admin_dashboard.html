@@ -212,6 +212,29 @@
       </div>
     </div>
 
+    <!-- Backfill Recent Prices -->
+    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin-top:var(--space-3);">
+      <div style="flex:1;min-width:220px;">
+        <div style="display:flex;align-items:center;gap:var(--space-3);">
+          <div>
+            <h3 style="color:#f59e0b;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+              <i class="fas fa-dollar-sign"></i> Backfill Recent Prices
+            </h3>
+            <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+              Fetch prices via Trading API for items imported in the last 48 hours that are still missing a price.
+            </p>
+          </div>
+        </div>
+      </div>
+      <form method="POST" action="{{ url_for('main.admin_backfill_recent_prices') }}"
+            onsubmit="return confirm('Backfill prices for recent items without price?');"
+            style="display:flex;align-items:center;gap:10px;">
+        <button type="submit" class="btn" style="background:#f59e0b;color:#fff;white-space:nowrap;">
+          <i class="fas fa-bolt"></i> Run Task
+        </button>
+      </form>
+    </div>
+
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
     <!-- Search Bar -->

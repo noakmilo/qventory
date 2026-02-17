@@ -5690,6 +5690,94 @@ def resync_all_inventories_backfill_dates(self):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.backfill_recent_item_prices')
+def backfill_recent_item_prices(self, hours=48):
+    """
+    Admin task: backfill prices for items imported in the last N hours that
+    are still missing a price.  Uses Trading API GetItem per listing.
+
+    Args:
+        hours: Look-back window (default 48).
+    """
+    app = create_app()
+
+    with app.app_context():
+        from datetime import datetime, timedelta
+        from qventory.models.item import Item
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.helpers.ebay_inventory import get_listing_details_trading_api, parse_ebay_inventory_item
+
+        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        log_task(f"=== ADMIN: Backfill prices for items created after {cutoff.isoformat()} ===")
+
+        items = Item.query.filter(
+            Item.created_at >= cutoff,
+            Item.item_price.is_(None),
+            Item.ebay_listing_id.isnot(None),
+            Item.is_active == True
+        ).all()
+
+        log_task(f"Found {len(items)} active items without price")
+
+        backfilled = 0
+        errors = 0
+
+        for idx, item in enumerate(items, start=1):
+            # Verify the user still has valid eBay credentials
+            cred = MarketplaceCredential.query.filter_by(
+                user_id=item.user_id,
+                marketplace='ebay',
+                is_active=True
+            ).first()
+            if not cred:
+                continue
+
+            try:
+                enriched = get_listing_details_trading_api(item.user_id, item.ebay_listing_id) or {}
+                if enriched:
+                    parsed = parse_ebay_inventory_item(enriched, process_images=False)
+                    changed = False
+                    if parsed.get('item_price') is not None:
+                        item.item_price = parsed['item_price']
+                        changed = True
+                    if parsed.get('item_thumb') and not item.item_thumb:
+                        item.item_thumb = parsed['item_thumb']
+                        changed = True
+                    if parsed.get('title') and not item.title:
+                        item.title = parsed['title'][:500]
+                        changed = True
+                    if changed:
+                        item.last_ebay_sync = datetime.utcnow()
+                        backfilled += 1
+                else:
+                    errors += 1
+            except Exception as exc:
+                log_task(f"  ✗ Error on item {item.id} (listing {item.ebay_listing_id}): {exc}")
+                errors += 1
+
+            # Commit in batches of 20
+            if idx % 20 == 0:
+                db.session.commit()
+                log_task(f"  Progress: {idx}/{len(items)} processed, {backfilled} backfilled")
+
+            if hasattr(self, 'request') and self.request.id:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={'current': idx, 'total': len(items), 'backfilled': backfilled}
+                )
+
+        db.session.commit()
+        log_task(f"=== Backfill complete: {backfilled} prices filled, {errors} errors, {len(items)} total ===")
+
+        return {
+            'success': True,
+            'total_items': len(items),
+            'backfilled': backfilled,
+            'errors': errors,
+            'hours': hours
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.sync_ebay_category_fee_catalog')
 def sync_ebay_category_fee_catalog(self, user_id=None, marketplace_id="EBAY_US", force=False):
     """
