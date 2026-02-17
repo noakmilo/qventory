@@ -1963,8 +1963,8 @@ def feedback_ai_draft():
         "You are an eBay seller replying to feedback. "
         "Match the reply length to the feedback length (very short feedback = 1 sentence; "
         "longer feedback = 2-3 sentences). "
-        "Do not include greetings like 'Dear', no signatures, no closing lines, and no placeholders "
-        "such as [Your Name]. "
+        "Greetings like 'Dear {name}' are allowed. "
+        "Do not include signatures, closing lines, or placeholders such as [Your Name]. "
         "Do not include emojis. Keep it friendly and concise."
     )
 
