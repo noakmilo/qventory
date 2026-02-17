@@ -87,6 +87,8 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
             response_time = _parse_time(_get_text(detail, "ebay:ResponseTime"))
             response_text = _get_text(detail, "ebay:ResponseText")
             response_type = _get_text(detail, "ebay:ResponseType")
+            response_details_elem = detail.find("ebay:ResponseDetails", _XML_NS)
+            has_response_details = response_details_elem is not None
 
             if not response_text:
                 response_text = _get_text(detail, "ebay:ResponseDetails/ebay:ResponseText")
@@ -109,7 +111,8 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
                 "response_text": response_text,
                 "response_type": response_type,
                 "response_time": response_time,
-                "responded": bool(response_text) or bool(response_time),
+                "has_response_details": has_response_details,
+                "responded": bool(response_text) or bool(response_time) or has_response_details,
             })
 
         total_pages = None
@@ -173,7 +176,11 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                 existing.response_text = feedback.get("response_text")
                 existing.response_type = feedback.get("response_type")
                 existing.response_time = feedback.get("response_time")
-                existing.responded = bool(feedback.get("response_text")) or bool(feedback.get("response_time"))
+                existing.responded = (
+                    bool(feedback.get("response_text"))
+                    or bool(feedback.get("response_time"))
+                    or bool(feedback.get("has_response_details"))
+                )
                 if existing.responded and not existing.response_source:
                     existing.response_source = "ebay"
                 updated += 1
@@ -193,8 +200,16 @@ def sync_ebay_feedback_for_user(user_id, days_back=1, max_pages=10, entries_per_
                     response_text=feedback.get("response_text"),
                     response_type=feedback.get("response_type"),
                     response_time=feedback.get("response_time"),
-                    responded=bool(feedback.get("response_text")) or bool(feedback.get("response_time")),
-                    response_source="ebay" if (feedback.get("response_text") or feedback.get("response_time")) else None
+                    responded=(
+                        bool(feedback.get("response_text"))
+                        or bool(feedback.get("response_time"))
+                        or bool(feedback.get("has_response_details"))
+                    ),
+                    response_source="ebay" if (
+                        feedback.get("response_text")
+                        or feedback.get("response_time")
+                        or feedback.get("has_response_details")
+                    ) else None
                 ))
                 created += 1
             total += 1

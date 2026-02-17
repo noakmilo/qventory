@@ -110,7 +110,9 @@
                 <form method="post" action="{{ url_for('main.feedback_respond') }}">
                   <input type="hidden" name="feedback_id" value="{{ fb.id }}">
                   <textarea name="response_text" class="input" rows="2" placeholder="Write a reply..."></textarea>
-                  <button type="submit" class="btn" style="margin-top:6px;">Send</button>
+                  <div style="margin-top:8px;">
+                    <button type="submit" class="btn">Send</button>
+                  </div>
                 </form>
               {% endif %}
             </td>
