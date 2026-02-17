@@ -42,46 +42,67 @@
 
 <form id="feedbackFilterForm" method="get"></form>
 
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div>
+      <div style="font-weight:600;">Advanced filters</div>
+      <div style="font-size:12px;color:var(--sub);">Click column headers to jump to filters.</div>
+    </div>
+    <button id="toggleFeedbackFilters" type="button" class="btn">Hide filters</button>
+  </div>
+  <div id="feedbackFiltersPanel" style="margin-top:12px;">
+    <div style="display:grid;grid-template-columns:repeat(6, minmax(140px, 1fr));gap:10px;">
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Date from</label>
+        <input type="date" name="date_from" class="input" form="feedbackFilterForm" value="{{ date_from or '' }}" data-filter-input="date_from">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Date to</label>
+        <input type="date" name="date_to" class="input" form="feedbackFilterForm" value="{{ date_to or '' }}" data-filter-input="date_to">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Type</label>
+        <input type="text" name="type" class="input" form="feedbackFilterForm" value="{{ type_q or '' }}" placeholder="Type" data-filter-input="type">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">From</label>
+        <input type="text" name="from" class="input" form="feedbackFilterForm" value="{{ from_q or '' }}" placeholder="From" data-filter-input="from">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Item</label>
+        <input type="text" name="item" class="input" form="feedbackFilterForm" value="{{ item_q or '' }}" placeholder="Item" data-filter-input="item">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Comment</label>
+        <input type="text" name="comment" class="input" form="feedbackFilterForm" value="{{ comment_q or '' }}" placeholder="Comment" data-filter-input="comment">
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--sub);">Response</label>
+        <select name="responded" class="input" form="feedbackFilterForm" data-filter-input="responded">
+          <option value="all" {% if responded_filter == 'all' %}selected{% endif %}>All</option>
+          <option value="responded" {% if responded_filter == 'responded' %}selected{% endif %}>Responded</option>
+          <option value="unresponded" {% if responded_filter == 'unresponded' %}selected{% endif %}>Unresponded</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+      <button type="submit" class="btn" form="feedbackFilterForm">Filter</button>
+      <a href="{{ url_for('main.feedback_manager') }}" class="btn">Clear</a>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <div class="table-wrap feedback-table-wrap">
     <table class="feedback-table">
       <thead>
         <tr>
-          <th class="col-date">Date</th>
-          <th class="col-type">Type</th>
-          <th class="col-from">From</th>
-          <th class="col-item">Item</th>
-          <th class="col-comment">Comment</th>
-          <th class="col-response">Response</th>
-        </tr>
-        <tr class="filter-row">
-          <th class="col-date">
-            <input type="date" name="date_from" class="input" form="feedbackFilterForm" value="{{ date_from or '' }}" style="margin-bottom:6px;">
-            <input type="date" name="date_to" class="input" form="feedbackFilterForm" value="{{ date_to or '' }}">
-          </th>
-          <th class="col-type">
-            <input type="text" name="type" class="input" form="feedbackFilterForm" value="{{ type_q or '' }}" placeholder="Type">
-          </th>
-          <th class="col-from">
-            <input type="text" name="from" class="input" form="feedbackFilterForm" value="{{ from_q or '' }}" placeholder="From">
-          </th>
-          <th class="col-item">
-            <input type="text" name="item" class="input" form="feedbackFilterForm" value="{{ item_q or '' }}" placeholder="Item">
-          </th>
-          <th class="col-comment">
-            <input type="text" name="comment" class="input" form="feedbackFilterForm" value="{{ comment_q or '' }}" placeholder="Comment">
-          </th>
-          <th class="col-response">
-            <select name="responded" class="input" form="feedbackFilterForm" style="margin-bottom:6px;">
-              <option value="all" {% if responded_filter == 'all' %}selected{% endif %}>All</option>
-              <option value="responded" {% if responded_filter == 'responded' %}selected{% endif %}>Responded</option>
-              <option value="unresponded" {% if responded_filter == 'unresponded' %}selected{% endif %}>Unresponded</option>
-            </select>
-            <div style="display:flex;gap:8px;">
-              <button type="submit" class="btn" form="feedbackFilterForm">Filter</button>
-              <a href="{{ url_for('main.feedback_manager') }}" class="btn">Clear</a>
-            </div>
-          </th>
+          <th class="col-date"><button type="button" class="th-btn feedback-filter-header" data-filter-key="date_from">Date</button></th>
+          <th class="col-type"><button type="button" class="th-btn feedback-filter-header" data-filter-key="type">Type</button></th>
+          <th class="col-from"><button type="button" class="th-btn feedback-filter-header" data-filter-key="from">From</button></th>
+          <th class="col-item"><button type="button" class="th-btn feedback-filter-header" data-filter-key="item">Item</button></th>
+          <th class="col-comment"><button type="button" class="th-btn feedback-filter-header" data-filter-key="comment">Comment</button></th>
+          <th class="col-response"><button type="button" class="th-btn feedback-filter-header" data-filter-key="responded">Response</button></th>
         </tr>
       </thead>
       <tbody>
@@ -223,8 +244,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.feedback-table thead .filter-row th {
-  padding-top: 8px;
+.th-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
 }
 .feedback-table th.col-date, .feedback-table td.col-date { width: 140px; }
 .feedback-table th.col-type, .feedback-table td.col-type { width: 90px; }
@@ -256,6 +282,28 @@ function autoGrowTextarea(textarea) {
   textarea.style.height = 'auto';
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
+
+const filtersPanel = document.getElementById('feedbackFiltersPanel');
+const filtersToggle = document.getElementById('toggleFeedbackFilters');
+if (filtersToggle && filtersPanel) {
+  filtersToggle.addEventListener('click', () => {
+    const isHidden = filtersPanel.style.display === 'none';
+    filtersPanel.style.display = isHidden ? 'block' : 'none';
+    filtersToggle.textContent = isHidden ? 'Hide filters' : 'Show filters';
+  });
+}
+
+document.querySelectorAll('.feedback-filter-header').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (filtersPanel) {
+      filtersPanel.style.display = 'block';
+      if (filtersToggle) filtersToggle.textContent = 'Hide filters';
+    }
+    const key = btn.getAttribute('data-filter-key');
+    const target = document.querySelector(`[data-filter-input="${key}"]`);
+    if (target) target.focus();
+  });
+});
 
 document.querySelectorAll('.feedback-reply-text').forEach(textarea => {
   textarea.addEventListener('input', () => autoGrowTextarea(textarea));
