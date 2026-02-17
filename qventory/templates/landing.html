@@ -2,6 +2,9 @@
 {% block title %}Inventory Management Software for eBay Sellers | Qventory{% endblock %}
 {% block extra_head %}
 <link rel="preload" as="image" href="{{ url_for('static', filename='pics/dashpreview.webp') }}" imagesrcset="{{ url_for('static', filename='pics/dashpreview.webp') }} 1x" imagesizes="(max-width: 1200px) 100vw, 1164px">
+<!-- TrustBox script -->
+<script type="text/javascript" src="//widget.trustpilot.com/bootstrap/v5/tp.widget.bootstrap.min.js" async></script>
+<!-- End TrustBox script -->
 {% endblock %}
 
 {% block content %}
@@ -36,7 +39,7 @@
   "operatingSystem": "Web",
   "description": "Inventory Management Software for eBay Sellers. Sync listings, manage inventory, track sales, and fulfillment in one place.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA"
+  "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA, Slow Movers, Retirements"
 }
 </script>
 
@@ -73,6 +76,8 @@
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; color:var(--sub); font-size:13px;">
     <span class="tag">eBay Sync</span>
     <span class="tag">Auto-Relist</span>
+    <span class="tag">Slow Movers</span>
+    <span class="tag">Retirements</span>
     <span class="tag">AI Market Research</span>
     <span class="tag">Sales Analytics</span>
     <span class="tag">Expenses</span>
@@ -89,6 +94,12 @@
     <span class="tag">Mobile PWA</span>
     <span class="tag">Help Center</span>
   </div>
+
+  <!-- TrustBox widget - Review Collector -->
+  <div class="trustpilot-widget" data-locale="en-US" data-template-id="56278e9abfbbba0bdcd568bc" data-businessunit-id="699417a3c479215d80d9033d" data-style-height="52px" data-style-width="100%" data-token="bcadd812-c7e5-4b15-be5d-fe90ca83a137">
+    <a href="https://www.trustpilot.com/review/qventory.com" target="_blank" rel="noopener">Trustpilot</a>
+  </div>
+  <!-- End TrustBox widget -->
 </section>
 
 {# ===== DASH PREVIEW ===== #}
@@ -198,6 +209,8 @@
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li><strong>eBay Sync:</strong> Import inventory, sales & analytics from eBay automatically</li>
       <li><strong>Auto-Relist:</strong> Schedule automatic or manual relisting to boost visibility</li>
+      <li><strong>Slow Movers:</strong> Identify listings that haven’t sold after X days</li>
+      <li><strong>Retirements:</strong> Move items you no longer sell into a recycle-bin view</li>
       <li><strong>Track sales:</strong> Real-time sales analytics with profit margins & fees</li>
       <li><strong>Fulfillment:</strong> Track shipping, delivery & order status in one place</li>
       <li><strong>Price smarter:</strong> AI-powered market research for competitive pricing</li>
@@ -277,6 +290,16 @@
       <h3 style="margin:0 0 6px;">🔁 Auto-Relist</h3>
       <p class="tag">Boost visibility</p>
       <p>Schedule automatic relisting every N days or manually relist with price/title changes. Safety rules prevent relisting during active orders.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">⏳ Slow Movers</h3>
+      <p class="tag">Relist stuck inventory</p>
+      <p>See listings that haven’t sold after your chosen window and relist them fast with title/price updates.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;">♻️ Retirements</h3>
+      <p class="tag">Recycle-bin view</p>
+      <p>Move items you no longer want to sell into Retirements and purge them from eBay when you’re ready.</p>
     </div>
     <div>
       <h3 style="margin:0 0 6px;">📊 Sales Analytics</h3>
