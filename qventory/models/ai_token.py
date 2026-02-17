@@ -61,6 +61,12 @@ class AITokenConfig(db.Model):
     @staticmethod
     def initialize_defaults():
         """Initialize default token configs"""
+        from sqlalchemy import inspect
+        try:
+            has_scenario = "scenario" in [c["name"] for c in inspect(db.engine).get_columns("ai_token_configs")]
+        except Exception:
+            has_scenario = False
+
         defaults = [
             # AI Research
             {'role': 'free', 'scenario': 'ai_research', 'daily_tokens': 3, 'display_name': 'Free',
@@ -95,12 +101,21 @@ class AITokenConfig(db.Model):
         ]
 
         for config_data in defaults:
-            existing = AITokenConfig.query.filter_by(
-                role=config_data['role'],
-                scenario=config_data.get('scenario', 'ai_research')
-            ).first()
+            if has_scenario:
+                existing = AITokenConfig.query.filter_by(
+                    role=config_data['role'],
+                    scenario=config_data.get('scenario', 'ai_research')
+                ).first()
+            else:
+                if config_data.get('scenario') != 'ai_research':
+                    continue
+                existing = AITokenConfig.query.filter_by(
+                    role=config_data['role']
+                ).first()
             if not existing:
                 config = AITokenConfig(**config_data)
+                if not has_scenario:
+                    config.scenario = 'ai_research'
                 db.session.add(config)
 
         db.session.commit()
