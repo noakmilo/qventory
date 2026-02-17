@@ -1788,6 +1788,7 @@ def feedback_manager():
     feedbacks = query.offset(offset).limit(per_page).all()
 
     unread_count = count_unread_feedback(db.session, current_user.id, s.feedback_last_viewed_at)
+    token_stats = current_user.get_ai_token_stats()
 
     last_viewed = s.feedback_last_viewed_at
     for fb in feedbacks:
@@ -1808,6 +1809,7 @@ def feedback_manager():
         "feedback_manager.html",
         feedbacks=feedbacks,
         unread_count=unread_count,
+        token_stats=token_stats,
         show_pagination=show_pagination,
         prev_page=prev_page,
         next_page=next_page,
@@ -1877,6 +1879,79 @@ def feedback_respond():
         flash(result.get("error", "Failed to send response."), "error")
 
     return redirect(url_for("main.feedback_manager"))
+
+
+@main_bp.route("/feedback/ai-draft", methods=["POST"])
+@login_required
+def feedback_ai_draft():
+    data = request.get_json() or {}
+    feedback_id = data.get("feedback_id")
+    if not feedback_id:
+        return jsonify({"ok": False, "error": "Missing feedback_id"}), 400
+
+    feedback = EbayFeedback.query.filter_by(
+        id=feedback_id,
+        user_id=current_user.id
+    ).first()
+
+    if not feedback:
+        return jsonify({"ok": False, "error": "Feedback not found"}), 404
+
+    if feedback.responded:
+        return jsonify({"ok": False, "error": "Feedback already answered"}), 400
+
+    can_use, remaining = current_user.can_use_ai_research()
+    token_stats = current_user.get_ai_token_stats()
+    if not can_use:
+        return jsonify({
+            "ok": False,
+            "error": "No AI tokens remaining.",
+            "error_type": "no_tokens",
+            "token_stats": token_stats
+        }), 403
+
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"OpenAI library not available: {exc}"}), 500
+
+    openai_api_key = os.environ.get("OPENAI_API_KEY")
+    if not openai_api_key:
+        return jsonify({"ok": False, "error": "OpenAI API key not configured."}), 500
+
+    prompt = (
+        "You are a professional eBay seller responding to customer feedback. "
+        "Write a short, polite reply (1-3 sentences). "
+        "Do not include emojis. Use a friendly, professional tone."
+    )
+
+    user_context = f"Feedback from {feedback.commenting_user or 'buyer'}: {feedback.comment_text or ''}"
+    if feedback.item_title:
+        user_context += f"\nItem: {feedback.item_title}"
+
+    try:
+        client = OpenAI(api_key=openai_api_key)
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_context}
+            ],
+            temperature=0.4,
+            max_tokens=150
+        )
+        draft = response.choices[0].message.content.strip()
+    except Exception as exc:
+        return jsonify({"ok": False, "error": f"OpenAI error: {exc}"}), 500
+
+    current_user.consume_ai_token()
+    token_stats = current_user.get_ai_token_stats()
+
+    return jsonify({
+        "ok": True,
+        "draft": draft,
+        "token_stats": token_stats
+    })
 
 
 @main_bp.route("/inventory/inactive")

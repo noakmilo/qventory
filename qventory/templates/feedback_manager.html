@@ -18,11 +18,21 @@
         New feedback: <strong>{{ unread_count }}</strong>
       </div>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <form method="post" action="{{ url_for('main.feedback_sync') }}">
-        <button type="submit" class="btn"><i class="fas fa-rotate"></i> Sync Now</button>
-      </form>
-      <a href="{{ url_for('main.settings_feedback_manager') }}" class="btn">Settings</a>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <div style="font-size:12px;color:var(--sub);">
+        AI tokens remaining:
+        {% if token_stats.unlimited %}
+          <strong>∞</strong>
+        {% else %}
+          <strong id="feedbackTokensRemaining">{{ token_stats.remaining }}</strong> / {{ token_stats.daily_limit }}
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <form method="post" action="{{ url_for('main.feedback_sync') }}">
+          <button type="submit" class="btn"><i class="fas fa-rotate"></i> Sync Now</button>
+        </form>
+        <a href="{{ url_for('main.settings_feedback_manager') }}" class="btn">Settings</a>
+      </div>
     </div>
   </div>
 </div>
@@ -109,9 +119,14 @@
               {% else %}
                 <form method="post" action="{{ url_for('main.feedback_respond') }}">
                   <input type="hidden" name="feedback_id" value="{{ fb.id }}">
-                  <textarea name="response_text" class="input" rows="2" placeholder="Write a reply..."></textarea>
-                  <div style="margin-top:8px;">
-                    <button type="submit" class="btn">Send</button>
+                  <div class="feedback-reply-box">
+                    <textarea name="response_text" class="input feedback-reply-text" rows="2" placeholder="Write a reply..."></textarea>
+                    <button type="button" class="feedback-ai-btn" title="Draft with AI" data-feedback-id="{{ fb.id }}">
+                      <i class="fas fa-wand-magic"></i>
+                    </button>
+                  </div>
+                  <div style="margin-top:8px;display:flex;justify-content:flex-end;">
+                    <button type="submit" class="btn"><i class="fas fa-paper-plane"></i> Send</button>
                   </div>
                 </form>
               {% endif %}
@@ -147,4 +162,76 @@
   {% endif %}
 </div>
 {% endif %}
+
+<style>
+.feedback-reply-box {
+  position: relative;
+}
+.feedback-ai-btn {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  height: 32px;
+  width: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.12);
+  color: #60a5fa;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.feedback-reply-text {
+  padding-right: 52px;
+}
+.feedback-reply-text.ai-loading {
+  background: linear-gradient(90deg, rgba(59,130,246,0.08), rgba(59,130,246,0.24), rgba(59,130,246,0.08));
+  background-size: 200% 100%;
+  animation: feedbackPulse 1.2s ease-in-out infinite;
+}
+@keyframes feedbackPulse {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+</style>
+
+<script>
+document.querySelectorAll('.feedback-ai-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const feedbackId = btn.getAttribute('data-feedback-id');
+    const textarea = btn.closest('form').querySelector('.feedback-reply-text');
+    if (!feedbackId || !textarea) return;
+
+    textarea.classList.add('ai-loading');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/feedback/ai-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedback_id: feedbackId })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        if (data.error_type === 'no_tokens') {
+          alert(`No AI tokens remaining. You have ${data.token_stats.used_today}/${data.token_stats.daily_limit} used today.`);
+        } else {
+          alert(data.error || 'Failed to generate reply.');
+        }
+      } else {
+        textarea.value = data.draft || '';
+        const remainingEl = document.getElementById('feedbackTokensRemaining');
+        if (remainingEl && data.token_stats && data.token_stats.remaining !== undefined) {
+          remainingEl.textContent = data.token_stats.remaining;
+        }
+      }
+    } catch (err) {
+      alert('Failed to generate reply.');
+    } finally {
+      textarea.classList.remove('ai-loading');
+      btn.disabled = false;
+    }
+  });
+});
+</script>
 {% endblock %}

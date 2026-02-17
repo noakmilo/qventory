@@ -37,10 +37,10 @@ class AITokenConfig(db.Model):
         # Defaults if not configured
         defaults = {
             'free': 3,
-            'early_adopter': 10,
+            'early_adopter': 3,
             'premium': 5,
-            'plus': 15,
-            'pro': 10,
+            'plus': 10,
+            'pro': 20,
             'god': 999999,
             'enterprise': 999999
         }
@@ -52,14 +52,14 @@ class AITokenConfig(db.Model):
         defaults = [
             {'role': 'free', 'daily_tokens': 3, 'display_name': 'Free',
              'description': '3 AI Research reports per day'},
-            {'role': 'early_adopter', 'daily_tokens': 10, 'display_name': 'Early Adopter',
-             'description': '10 AI Research reports per day'},
+            {'role': 'early_adopter', 'daily_tokens': 3, 'display_name': 'Early Adopter',
+             'description': '3 AI Research reports per day'},
             {'role': 'premium', 'daily_tokens': 5, 'display_name': 'Premium',
              'description': '5 AI Research reports per day'},
-            {'role': 'plus', 'daily_tokens': 15, 'display_name': 'Plus',
-             'description': '15 AI Research reports per day'},
-            {'role': 'pro', 'daily_tokens': 10, 'display_name': 'Pro',
+            {'role': 'plus', 'daily_tokens': 10, 'display_name': 'Plus',
              'description': '10 AI Research reports per day'},
+            {'role': 'pro', 'daily_tokens': 20, 'display_name': 'Pro',
+             'description': '20 AI Research reports per day'},
             {'role': 'god', 'daily_tokens': 999999, 'display_name': 'God Mode',
              'description': 'Unlimited AI Research reports'},
             {'role': 'enterprise', 'daily_tokens': 999999, 'display_name': 'Enterprise',
