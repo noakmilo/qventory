@@ -755,6 +755,40 @@ function initializeItemEventListeners() {
     }
   });
 
+  // Send single item to Retirements
+  document.querySelectorAll('.retire-btn').forEach(btn => {
+    if (!btn.dataset.initialized) {
+      btn.addEventListener('click', async () => {
+        const itemId = parseInt(btn.dataset.itemId, 10);
+        if (!Number.isFinite(itemId)) {
+          alert('Invalid item');
+          return;
+        }
+        if (!confirm('Copy this item to Retirements?')) {
+          return;
+        }
+        try {
+          const response = await fetch('/items/bulk_retire', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_ids: [itemId] })
+          });
+          const data = await response.json();
+          if (data.ok) {
+            alert(data.message || 'Added to Retirements');
+            location.reload();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to add to Retirements'));
+          }
+        } catch (error) {
+          console.error('Retirements error:', error);
+          alert('Failed to add to Retirements');
+        }
+      });
+      btn.dataset.initialized = 'true';
+    }
+  });
+
   setupInlineEditors();
   setupLocationButtons();
   setupActionButtons();

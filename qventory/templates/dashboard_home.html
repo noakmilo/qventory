@@ -226,7 +226,7 @@
   {% endif %}
 
   <!-- Pending Tasks Section (Only show if there are tasks) -->
-  {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 %}
+  {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 or slow_movers_count > 0 %}
   <section class="dashboard-section pending-tasks-section">
     <div class="section-header">
       <h2 class="section-title">
@@ -304,6 +304,21 @@
         </div>
         <a href="{{ url_for('main.inventory_active') }}?missing_supplier=1" class="task-card__action btn btn-secondary">
           <i class="fas fa-edit"></i> Add Suppliers
+        </a>
+      </div>
+      {% endif %}
+
+      {% if slow_movers_count > 0 %}
+      <div class="task-card task-card--warning">
+        <div class="task-card__icon">
+          <i class="fas fa-turtle"></i>
+        </div>
+        <div class="task-card__content">
+          <h3 class="task-card__title">{{ slow_movers_count }} slow movers ready</h3>
+          <p class="task-card__description">Relist items that haven’t sold after your rule window</p>
+        </div>
+        <a href="{{ url_for('main.inventory_slow_movers') }}" class="task-card__action btn btn-primary">
+          <i class="fas fa-sync"></i> Review
         </a>
       </div>
       {% endif %}

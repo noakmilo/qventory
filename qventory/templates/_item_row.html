@@ -296,6 +296,13 @@
               <span>Update & Relist</span>
             </button>
             {% endif %}
+            <button class="item-action-option retire-btn"
+                    data-item-id="{{ it.id }}"
+                    type="button"
+                    style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;border:none;background:transparent;color:var(--text);font-size:14px;cursor:pointer;text-align:left;transition:background 0.15s">
+              <i class="fas fa-trash-restore-alt" style="width:16px;color:#ef4444;font-size:15px"></i>
+              <span>Send to Retirements</span>
+            </button>
             {# Sync eBay (kept for later) #}
             {#
             {% if it.ebay_listing_id %}

@@ -1334,6 +1334,7 @@ def dashboard():
         fetch_recent_fulfillment,
         fetch_pending_tasks
     )
+    from qventory.helpers.inventory_queries import count_slow_movers
 
     s = get_or_create_settings(current_user)
 
@@ -1399,6 +1400,37 @@ def dashboard():
     setattr(pending_tasks, "plan_max_items", plan_max_items)
     setattr(pending_tasks, "upgrade_threshold", upgrade_threshold)
 
+    # Slow Movers pending task
+    slow_movers_count = 0
+    try:
+        if s.slow_movers_enabled:
+            days = int(s.slow_movers_days or 30)
+            days = max(1, min(days, 3650))
+            mode = (s.slow_movers_start_mode or "item_added").strip().lower()
+            today = date.today()
+            threshold_date = None
+            start_ready = True
+            if mode == "item_added":
+                threshold_date = today - timedelta(days=days)
+            elif mode in {"rule_created", "scheduled"}:
+                start_date = s.slow_movers_start_date or today
+                ready_date = start_date + timedelta(days=days)
+                if today < ready_date:
+                    start_ready = False
+            else:
+                mode = "item_added"
+                threshold_date = today - timedelta(days=days)
+
+            slow_movers_count = count_slow_movers(
+                db.session,
+                user_id=current_user.id,
+                start_mode=mode,
+                threshold_date=threshold_date,
+                start_ready=start_ready,
+            )
+    except Exception:
+        slow_movers_count = 0
+
     # Calculate today's listings for motivational message
     from datetime import datetime
     from qventory.models.item import Item
@@ -1426,7 +1458,8 @@ def dashboard():
         upgrade_task_dismiss_key=f"upgrade_task_dismissed_{current_user.id}",
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}",
         today_listings_count=today_listings_count,
-        recommended_article=recommended_article
+        recommended_article=recommended_article,
+        slow_movers_count=slow_movers_count
     )
 
 
@@ -4923,6 +4956,15 @@ def settings_theme():
 def settings_slow_movers():
     s = get_or_create_settings(current_user)
     if request.method == "POST":
+        if request.form.get("action") == "reset":
+            s.slow_movers_enabled = False
+            s.slow_movers_days = 30
+            s.slow_movers_start_mode = "item_added"
+            s.slow_movers_start_date = None
+            db.session.commit()
+            flash("Slow Movers rule removed.", "ok")
+            return redirect(url_for("main.settings_slow_movers"))
+
         enabled = request.form.get("slow_movers_enabled") == "on"
         days_raw = (request.form.get("slow_movers_days") or "").strip()
         mode = (request.form.get("slow_movers_start_mode") or "item_added").strip().lower()
@@ -4962,7 +5004,24 @@ def settings_slow_movers():
         flash("Slow Movers settings saved.", "ok")
         return redirect(url_for("main.settings_slow_movers"))
 
-    return render_template("settings_slow_movers.html", settings=s)
+    days = int(s.slow_movers_days or 30)
+    days = max(1, min(days, 3650))
+    mode = (s.slow_movers_start_mode or "item_added").strip().lower()
+    start_date = s.slow_movers_start_date
+    next_ready = None
+    if s.slow_movers_enabled:
+        if mode == "rule_created":
+            start_date = start_date or date.today()
+            next_ready = start_date + timedelta(days=days)
+        elif mode == "scheduled":
+            if start_date:
+                next_ready = start_date + timedelta(days=days)
+
+    return render_template(
+        "settings_slow_movers.html",
+        settings=s,
+        next_ready=next_ready
+    )
 
 
 @main_bp.route("/settings/subscription", methods=["GET"])
