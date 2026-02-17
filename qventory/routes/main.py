@@ -14,7 +14,7 @@ import time
 import requests
 from urllib.parse import urlparse, parse_qs
 import csv
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import hashlib
 import stripe
 import uuid
@@ -52,6 +52,7 @@ from ..helpers.inventory_queries import (
     fetch_inactive_by_user_items,
     fetch_sold_items,
     fetch_ended_items,
+    fetch_slow_movers,
     fetch_retired_items,
     fetch_fulfillment_orders,
     detect_thumbnail_mismatches,
@@ -1590,6 +1591,108 @@ def inventory_active():
         items_remaining=items_remaining,
         plan_max_items=plan_max_items,
         show_upgrade_banner=show_upgrade_banner,
+        upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
+    )
+
+
+@main_bp.route("/inventory/slow-movers")
+@login_required
+def inventory_slow_movers():
+    """Show active items that have not sold after X days"""
+    s = get_or_create_settings(current_user)
+    if not getattr(s, "slow_movers_enabled", False):
+        flash("Enable Slow Movers in Settings to use this view.", "error")
+        return redirect(url_for("main.settings_slow_movers"))
+
+    page, per_page, offset = _get_pagination_params()
+    filters = _get_inventory_filter_params()
+    sort_by, sort_dir = _get_inventory_sort_params()
+
+    days = int(s.slow_movers_days or 30)
+    days = max(1, min(days, 3650))
+    start_mode = (s.slow_movers_start_mode or "item_added").strip().lower()
+
+    today = date.today()
+    threshold_date = None
+    start_ready = True
+
+    if start_mode == "item_added":
+        threshold_date = today - timedelta(days=days)
+    elif start_mode in {"rule_created", "scheduled"}:
+        start_date = s.slow_movers_start_date or today
+        ready_date = start_date + timedelta(days=days)
+        if today < ready_date:
+            start_ready = False
+    else:
+        start_mode = "item_added"
+        threshold_date = today - timedelta(days=days)
+
+    if not start_ready:
+        items, total_items = [], 0
+    else:
+        items, total_items = fetch_slow_movers(
+            db.session,
+            user_id=current_user.id,
+            limit=per_page,
+            offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            start_mode=start_mode,
+            days=days,
+            threshold_date=threshold_date,
+            **filters,
+        )
+
+    if total_items and offset >= total_items and page > 1:
+        total_pages = max(1, math.ceil(total_items / per_page))
+        page = total_pages
+        offset = (page - 1) * per_page
+        if start_ready:
+            items, total_items = fetch_slow_movers(
+                db.session,
+                user_id=current_user.id,
+                limit=per_page,
+                offset=offset,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+                start_mode=start_mode,
+                days=days,
+                threshold_date=threshold_date,
+                **filters,
+            )
+        else:
+            items, total_items = [], 0
+
+    pagination = _build_pagination_metadata(total_items, page, per_page)
+
+    def distinct(col):
+        return [
+            r[0] for r in db.session.query(col)
+            .filter(col.isnot(None), Item.user_id == current_user.id)
+            .distinct().order_by(col.asc()).all()
+        ]
+
+    options = {
+        "A": distinct(Item.A) if s.enable_A else [],
+        "B": distinct(Item.B) if s.enable_B else [],
+        "S": distinct(Item.S) if s.enable_S else [],
+        "C": distinct(Item.C) if s.enable_C else [],
+    }
+
+    return render_template(
+        "inventory_list.html",
+        items=items,
+        settings=s,
+        options=options,
+        total_items=total_items,
+        pagination=pagination,
+        view_type="slow_movers",
+        page_title="Slow Movers",
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        items_remaining=None,
+        plan_max_items=None,
+        show_upgrade_banner=False,
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
 
@@ -4440,10 +4543,16 @@ def relist_item_from_inventory():
             priority=1
         )
 
+        warning = None
+        if "price" in changes and item.item_cost is not None:
+            if changes["price"] < float(item.item_cost):
+                warning = "Warning: new price is below cost."
+
         return jsonify({
             "ok": True,
             "task_id": task.id,
-            "message": "Relist queued"
+            "message": "Relist queued",
+            "warning": warning
         })
 
     except Exception as e:
@@ -4807,6 +4916,53 @@ def settings_theme():
         return redirect(url_for("main.settings_theme"))
 
     return render_template("settings_theme.html", settings=s)
+
+
+@main_bp.route("/settings/slow-movers", methods=["GET", "POST"])
+@login_required
+def settings_slow_movers():
+    s = get_or_create_settings(current_user)
+    if request.method == "POST":
+        enabled = request.form.get("slow_movers_enabled") == "on"
+        days_raw = (request.form.get("slow_movers_days") or "").strip()
+        mode = (request.form.get("slow_movers_start_mode") or "item_added").strip().lower()
+        start_date_raw = (request.form.get("slow_movers_start_date") or "").strip()
+
+        try:
+            days = int(days_raw) if days_raw else 30
+        except ValueError:
+            days = 30
+        days = max(1, min(days, 3650))
+
+        if mode not in {"item_added", "rule_created", "scheduled"}:
+            mode = "item_added"
+
+        start_date = None
+        if mode == "scheduled":
+            if start_date_raw:
+                try:
+                    start_date = datetime.strptime(start_date_raw, "%Y-%m-%d").date()
+                except ValueError:
+                    start_date = None
+            if enabled and not start_date:
+                flash("Please choose a valid scheduled start date.", "error")
+                return redirect(url_for("main.settings_slow_movers"))
+        elif mode == "rule_created":
+            if s.slow_movers_start_date and s.slow_movers_start_mode == "rule_created" and s.slow_movers_enabled:
+                start_date = s.slow_movers_start_date
+            else:
+                start_date = date.today()
+
+        s.slow_movers_enabled = enabled
+        s.slow_movers_days = days
+        s.slow_movers_start_mode = mode
+        s.slow_movers_start_date = start_date
+
+        db.session.commit()
+        flash("Slow Movers settings saved.", "ok")
+        return redirect(url_for("main.settings_slow_movers"))
+
+    return render_template("settings_slow_movers.html", settings=s)
 
 
 @main_bp.route("/settings/subscription", methods=["GET"])

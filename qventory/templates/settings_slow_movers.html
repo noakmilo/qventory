@@ -1,0 +1,58 @@
+{% extends "base_new.html" %}
+{% block title %}Slow Movers – Settings{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Slow Movers</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:760px;margin:auto;">
+  <h2><i class="fas fa-snail" style="color:#f59e0b"></i> Slow Movers</h2>
+  <p style="color:var(--sub);margin-top:6px;">
+    Get a dedicated view for listings that haven’t sold after a defined number of days.
+  </p>
+
+  <form method="post" style="margin-top:18px;">
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input type="checkbox" name="slow_movers_enabled" {% if settings.slow_movers_enabled %}checked{% endif %}>
+      <span>Enable Slow Movers</span>
+    </label>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <label>Days without a sale</label>
+        <input type="number" name="slow_movers_days" min="1" max="3650" value="{{ settings.slow_movers_days or 30 }}" class="input" placeholder="30">
+      </div>
+      <div>
+        <label>Start counting from</label>
+        <select name="slow_movers_start_mode" class="input">
+          <option value="item_added" {% if settings.slow_movers_start_mode == 'item_added' %}selected{% endif %}>Item added (eBay listing date)</option>
+          <option value="rule_created" {% if settings.slow_movers_start_mode == 'rule_created' %}selected{% endif %}>Rule creation date</option>
+          <option value="scheduled" {% if settings.slow_movers_start_mode == 'scheduled' %}selected{% endif %}>Scheduled date</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <label>Scheduled start date (only if scheduled)</label>
+      <input type="date" name="slow_movers_start_date" value="{{ settings.slow_movers_start_date.strftime('%Y-%m-%d') if settings.slow_movers_start_date else '' }}" class="input">
+      <div style="font-size:12px;color:var(--sub);margin-top:6px;">
+        For rule creation mode, this date is set automatically when you enable the rule.
+      </div>
+    </div>
+
+    <div style="margin-top:18px;display:flex;gap:10px;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-save"></i> Save
+      </button>
+      <a class="btn" href="{{ url_for('main.settings') }}">Back to Settings</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

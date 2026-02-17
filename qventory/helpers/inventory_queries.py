@@ -626,6 +626,103 @@ def fetch_retired_items(
     return items, total
 
 
+def fetch_slow_movers(
+    session: Session,
+    *,
+    user_id: int,
+    days: int,
+    start_mode: str,
+    threshold_date: Optional[str] = None,
+    search: Optional[str] = None,
+    A: Optional[str] = None,
+    B: Optional[str] = None,
+    S: Optional[str] = None,
+    C: Optional[str] = None,
+    platform: Optional[str] = None,
+    missing_data: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_dir: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> Tuple[List[SimpleNamespace], int]:
+    where_clause, params = _build_item_filters(
+        user_id,
+        search=search,
+        A=A,
+        B=B,
+        S=S,
+        C=C,
+        platform=platform,
+        missing_data=missing_data,
+    )
+    where_clause = (
+        f"{where_clause} AND i.is_active IS TRUE AND COALESCE(i.inactive_by_user, FALSE) = FALSE"
+    )
+    where_clause += (
+        " AND NOT EXISTS (SELECT 1 FROM sales AS s WHERE s.item_id = i.id "
+        "AND s.user_id = i.user_id AND s.status IN ('paid','shipped','completed'))"
+    )
+
+    if start_mode == "item_added" and threshold_date:
+        where_clause += " AND COALESCE(i.listing_date, i.created_at::date) <= :threshold_date"
+        params["threshold_date"] = threshold_date
+
+    order_map = {
+        "title": "n.title",
+        "sku": "n.sku",
+        "supplier": "n.supplier",
+        "cost": "n.item_cost",
+        "price": "n.item_price",
+        "location": "n.location_code",
+        "listed_at": "n.sort_ts",
+        "updated_at": "n.updated_at",
+    }
+    direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
+    order_col = order_map.get((sort_by or "").lower(), "n.sort_ts")
+    order_by = f"{order_col} {direction} NULLS LAST, n.id DESC"
+
+    query_sql = ACTIVE_ITEMS_SQL.format(where_clause=where_clause, order_by=order_by)
+    count_sql = ACTIVE_COUNT_SQL.format(where_clause=where_clause)
+
+    query_params = dict(params)
+    query_params.update({"limit": limit, "offset": offset})
+
+    items = _rows_to_objects(session.execute(text(query_sql), query_params))
+    total = session.execute(text(count_sql), params).scalar_one()
+    return items, total
+
+
+def count_slow_movers(
+    session: Session,
+    *,
+    user_id: int,
+    start_mode: str,
+    threshold_date: Optional[str] = None,
+    start_ready: bool = True,
+) -> int:
+    if not start_ready:
+        return 0
+
+    where_clause, params = _build_item_filters(user_id)
+    where_clause = (
+        f"{where_clause} AND i.is_active IS TRUE AND COALESCE(i.inactive_by_user, FALSE) = FALSE"
+    )
+    where_clause += (
+        " AND NOT EXISTS (SELECT 1 FROM sales AS s WHERE s.item_id = i.id "
+        "AND s.user_id = i.user_id AND s.status IN ('paid','shipped','completed'))"
+    )
+    if start_mode == "item_added" and threshold_date:
+        where_clause += " AND COALESCE(i.listing_date, i.created_at::date) <= :threshold_date"
+        params["threshold_date"] = threshold_date
+
+    count_sql = f"""
+SELECT COUNT(*)
+FROM items AS i
+WHERE {where_clause};
+"""
+    return session.execute(text(count_sql), params).scalar_one()
+
+
 def fetch_ended_items(
     session: Session,
     *,

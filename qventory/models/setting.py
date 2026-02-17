@@ -33,6 +33,11 @@ class Setting(db.Model):
     pickup_contact_phone = db.Column(db.String(50), nullable=True)
     pickup_instructions = db.Column(db.Text, nullable=True)
 
+    slow_movers_enabled = db.Column(db.Boolean, default=False)
+    slow_movers_days = db.Column(db.Integer, default=30)
+    slow_movers_start_mode = db.Column(db.String(20), default="item_added")  # item_added, rule_created, scheduled
+    slow_movers_start_date = db.Column(db.Date, nullable=True)
+
     def enabled_levels(self):
         levels = []
         if self.enable_A: levels.append("A")

@@ -60,6 +60,15 @@ def get_or_create_settings(user):
     if s.pickup_slot_minutes is None:
         s.pickup_slot_minutes = 15
         dirty = True
+    if s.slow_movers_enabled is None:
+        s.slow_movers_enabled = False
+        dirty = True
+    if s.slow_movers_days is None:
+        s.slow_movers_days = 30
+        dirty = True
+    if not (s.slow_movers_start_mode or "").strip():
+        s.slow_movers_start_mode = "item_added"
+        dirty = True
     if dirty:
         db.session.commit()
     return s

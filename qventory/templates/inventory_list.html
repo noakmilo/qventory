@@ -142,7 +142,7 @@
         {% endif %}
 
         {# Missing Data Filter (only for Active inventory) #}
-        {% if view_type == 'active' %}
+        {% if view_type == 'active' or view_type == 'slow_movers' %}
         <div>
           <label>Missing Data</label>
           <select name="missing_data">
@@ -172,7 +172,7 @@
         <div id="bulkActionsContainer" style="display:none;margin-right:10px">
           <select id="bulkActionSelect" class="input" style="display:inline-block;width:auto;padding:0.5rem;margin-right:5px">
             <option value="">Bulk Actions</option>
-            {% if view_type == 'active' %}
+            {% if view_type == 'active' or view_type == 'slow_movers' %}
             <option value="bulk_update">Batch Update Fields</option>
             <option value="deactivate_by_user">Deactivate (Hide from Active)</option>
             <option value="retire_items">Move to Retirements (Copy)</option>
@@ -196,7 +196,7 @@
           </button>
           <span id="bulkSelectedCount" style="margin-left:10px;color:var(--sub);font-size:var(--fs-sm)"></span>
         </div>
-        {% if view_type == 'active' %}
+        {% if view_type == 'active' or view_type == 'slow_movers' %}
         <button id="bulkEditOpenBtn" class="btn" style="display:none;margin-right:10px">
           <i class="fas fa-layer-group"></i> Bulk Edit
         </button>
@@ -456,6 +456,8 @@
             Add items to your inventory to get started
           {% elif view_type == 'sold' %}
             No items have been sold yet
+          {% elif view_type == 'slow_movers' %}
+            No slow movers yet
           {% elif view_type == 'retired' %}
             No items in Retirements yet
           {% elif view_type == 'ended' %}
@@ -565,6 +567,14 @@
         <div>
           <label style="display:block;margin-bottom:6px;color:var(--text);">Price</label>
           <input class="input" type="number" id="relistPrice" step="0.01" min="0" placeholder="0.00">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+            <button type="button" class="btn" id="relistPriceMinus5" style="padding:6px 10px;font-size:12px;">-5%</button>
+            <button type="button" class="btn" id="relistPriceMinus10" style="padding:6px 10px;font-size:12px;">-10%</button>
+            <button type="button" class="btn" id="relistPriceMinus15" style="padding:6px 10px;font-size:12px;">-15%</button>
+          </div>
+          <div id="relistMarginWarning" style="display:none;margin-top:8px;font-size:12px;color:#fca5a5;">
+            New price is below cost. This may reduce your margin.
+          </div>
         </div>
         <button type="submit" class="btn submitbtn relist-cta" id="relistSubmit">
           Relist Now
@@ -2071,10 +2081,13 @@ function openRelistModal(payload) {
   const titleInput = document.getElementById('relistTitle');
   const priceInput = document.getElementById('relistPrice');
   const itemIdInput = document.getElementById('relistItemId');
+  const warning = document.getElementById('relistMarginWarning');
   if (!modal || !titleInput || !priceInput || !itemIdInput) return;
   itemIdInput.value = payload.itemId || '';
   titleInput.value = payload.title || '';
   priceInput.value = payload.price || '';
+  modal.dataset.itemCost = payload.cost || '';
+  if (warning) warning.style.display = 'none';
   modal.classList.remove('hidden');
   document.body.classList.add('modal-open');
 }
@@ -2118,6 +2131,32 @@ document.addEventListener('DOMContentLoaded', function() {
   const relistPrice = document.getElementById('relistPrice');
   const relistItemId = document.getElementById('relistItemId');
   const relistSubmit = document.getElementById('relistSubmit');
+  const relistWarning = document.getElementById('relistMarginWarning');
+  const relistModalEl = document.getElementById('relistModal');
+  const relistMinus5 = document.getElementById('relistPriceMinus5');
+  const relistMinus10 = document.getElementById('relistPriceMinus10');
+  const relistMinus15 = document.getElementById('relistPriceMinus15');
+
+  function updateRelistMarginWarning() {
+    if (!relistWarning || !relistPrice || !relistModalEl) return;
+    const costRaw = relistModalEl.dataset.itemCost || '';
+    const priceVal = parseFloat(relistPrice.value);
+    const costVal = parseFloat(costRaw);
+    if (isFinite(priceVal) && isFinite(costVal) && priceVal < costVal) {
+      relistWarning.style.display = 'block';
+    } else {
+      relistWarning.style.display = 'none';
+    }
+  }
+
+  function applyDiscount(percent) {
+    if (!relistPrice) return;
+    const current = parseFloat(relistPrice.value);
+    if (!isFinite(current)) return;
+    const newPrice = current * (1 - percent / 100);
+    relistPrice.value = newPrice.toFixed(2);
+    updateRelistMarginWarning();
+  }
 
   document.addEventListener('click', function(e) {
     const btn = e.target.closest('.relist-btn');
@@ -2125,11 +2164,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const itemId = btn.getAttribute('data-item-id');
       const title = btn.getAttribute('data-item-title') || '';
       const price = btn.getAttribute('data-item-price') || '';
+      const cost = btn.getAttribute('data-item-cost') || '';
       if (itemId) {
-        openRelistModal({ itemId, title, price });
+        openRelistModal({ itemId, title, price, cost });
+        updateRelistMarginWarning();
       }
     }
   });
+
+  relistPrice?.addEventListener('input', updateRelistMarginWarning);
+  relistMinus5?.addEventListener('click', () => applyDiscount(5));
+  relistMinus10?.addEventListener('click', () => applyDiscount(10));
+  relistMinus15?.addEventListener('click', () => applyDiscount(15));
 
   relistForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -2156,7 +2202,11 @@ document.addEventListener('DOMContentLoaded', function() {
         throw new Error(data.error || 'Relist failed');
       }
       closeRelistModal();
-      showRelistToast('Relist completed successfully.');
+      if (data.warning) {
+        showRelistToast(data.warning);
+      } else {
+        showRelistToast('Relist completed successfully.');
+      }
     } catch (error) {
       showRelistToast(error.message || 'Relist failed.');
     } finally {

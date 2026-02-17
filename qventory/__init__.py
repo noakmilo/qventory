@@ -173,6 +173,46 @@ def create_app():
             "impersonated_user_id": impersonated_user_id,
         }
 
+    @app.context_processor
+    def inject_slow_movers_count():
+        from flask_login import current_user
+        from datetime import date, timedelta
+        from qventory.helpers.inventory_queries import count_slow_movers
+        from qventory.helpers.utils import get_or_create_settings
+
+        count = 0
+        try:
+            if current_user.is_authenticated:
+                s = current_user.settings or get_or_create_settings(current_user)
+                if s and s.slow_movers_enabled:
+                    days = int(s.slow_movers_days or 30)
+                    days = max(1, min(days, 3650))
+                    mode = (s.slow_movers_start_mode or "item_added").strip().lower()
+                    today = date.today()
+                    threshold_date = None
+                    start_ready = True
+                    if mode == "item_added":
+                        threshold_date = today - timedelta(days=days)
+                    elif mode in {"rule_created", "scheduled"}:
+                        start_date = s.slow_movers_start_date or today
+                        ready_date = start_date + timedelta(days=days)
+                        if today < ready_date:
+                            start_ready = False
+                    else:
+                        mode = "item_added"
+                        threshold_date = today - timedelta(days=days)
+                    count = count_slow_movers(
+                        db.session,
+                        user_id=current_user.id,
+                        start_mode=mode,
+                        threshold_date=threshold_date,
+                        start_ready=start_ready,
+                    )
+        except Exception:
+            count = 0
+
+        return {"slow_movers_count": count}
+
     @app.after_request
     def add_security_headers(response):
         # Basic security headers for SEO/security scanners

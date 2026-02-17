@@ -92,6 +92,15 @@
           <i class="fas fa-check-circle"></i>
           <span>Sold</span>
         </a>
+        {% if current_user.is_authenticated and current_user.settings and current_user.settings.slow_movers_enabled %}
+        <a href="{{ url_for('main.inventory_slow_movers') }}" class="sidebar-item {% if 'inventory_slow_movers' in request.endpoint %}active{% endif %}" title="Slow Movers">
+          <i class="fas fa-snail"></i>
+          <span>Slow Movers</span>
+          {% if slow_movers_count and slow_movers_count > 0 %}
+            <span class="sidebar-item-badge" style="background:#ef4444;color:#fff;">{{ slow_movers_count }}</span>
+          {% endif %}
+        </a>
+        {% endif %}
         <a href="{{ url_for('main.inventory_retired') }}" class="sidebar-item {% if 'inventory_retired' in request.endpoint %}active{% endif %}" title="Retirements">
           <i class="fas fa-trash-restore-alt"></i>
           <span>Retirements</span>
