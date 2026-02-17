@@ -1789,7 +1789,10 @@ def feedback_manager():
     query = query.filter(
         or_(
             EbayFeedback.comment_text.is_(None),
-            ~func.lower(EbayFeedback.comment_text).like("order delivered on time with no issues")
+            and_(
+                ~func.lower(EbayFeedback.comment_text).like("order delivered on time with no issues"),
+                ~func.lower(EbayFeedback.comment_text).like("this seller successfully completed an order.")
+            )
         )
     )
 
