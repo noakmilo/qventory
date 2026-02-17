@@ -1832,8 +1832,8 @@ def feedback_sync():
 
     try:
         from qventory.tasks import sync_ebay_feedback_user
-        sync_ebay_feedback_user.delay(current_user.id)
-        flash("Feedback sync queued. New feedback will appear shortly.", "success")
+        sync_ebay_feedback_user.delay(current_user.id, days_back=None, max_pages=20)
+        flash("Feedback full sync queued. Updates historical responses too.", "success")
     except Exception:
         flash("Could not start feedback sync. Try again later.", "error")
 
@@ -5318,8 +5318,8 @@ def settings_feedback_manager():
         if action == "sync_now" and s.feedback_manager_enabled:
             try:
                 from qventory.tasks import sync_ebay_feedback_user
-                sync_ebay_feedback_user.delay(current_user.id)
-                flash("Feedback sync queued.", "ok")
+                sync_ebay_feedback_user.delay(current_user.id, days_back=None, max_pages=20)
+                flash("Feedback full sync queued.", "ok")
             except Exception:
                 flash("Could not start feedback sync.", "error")
             return redirect(url_for("main.settings_feedback_manager"))
