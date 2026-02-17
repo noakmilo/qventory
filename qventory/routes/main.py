@@ -231,6 +231,31 @@ def stripe_webhook():
         if subscription:
             now = datetime.utcnow()
             old_plan = subscription.plan
+
+            # ── Trial cancellation: user cancelled during trial ──
+            # Handle BEFORE updating plan/role so we don't briefly
+            # commit the paid plan and leave it if something fails.
+            is_trial_cancel = (
+                cancel_at_period_end
+                and raw_status == "trialing"
+                and trial_end
+                and datetime.utcfromtimestamp(trial_end) > now
+            )
+            if is_trial_cancel:
+                try:
+                    stripe.Subscription.delete(subscription_id)
+                except Exception as exc:
+                    current_app.logger.exception("Stripe trial cancel failed: %s", exc)
+                deleted_count = _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+                db.session.commit()
+                current_app.logger.warning(
+                    "Trial cancelled immediately for user %s; removed %s items to meet Free plan limit.",
+                    subscription.user_id,
+                    deleted_count,
+                )
+                return Response("OK", status=200)
+
+            # ── Normal subscription update flow ──
             if plan_name:
                 subscription.plan = plan_name
             if period_end:
@@ -259,13 +284,7 @@ def stripe_webhook():
             if cancel_at_period_end and status in {"active", "suspended"}:
                 subscription.cancelled_at = now
             if status == "cancelled":
-                if raw_status == "trialing":
-                    _downgrade_to_free_and_enforce(subscription.user, subscription, now)
-                elif subscription.current_period_end and subscription.current_period_end > now:
-                    subscription.status = "active"
-                    subscription.cancelled_at = now
-                else:
-                    _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+                _downgrade_to_free_and_enforce(subscription.user, subscription, now)
             db.session.commit()
 
             if plan_name and old_plan != plan_name:
@@ -274,21 +293,6 @@ def stripe_webhook():
                     send_plan_upgrade_email(subscription.user.email, subscription.user.username, plan_name)
                 except Exception:
                     pass
-
-            if cancel_at_period_end and raw_status == "trialing" and trial_end:
-                now = datetime.utcnow()
-                if datetime.utcfromtimestamp(trial_end) > now:
-                    try:
-                        stripe.Subscription.delete(subscription_id)
-                    except Exception as exc:
-                        current_app.logger.exception("Stripe trial cancel failed: %s", exc)
-                    deleted_count = _downgrade_to_free_and_enforce(subscription.user, subscription, now)
-                    db.session.commit()
-                    current_app.logger.warning(
-                        "Trial cancelled immediately for user %s; removed %s items to meet Free plan limit.",
-                        subscription.user_id,
-                        deleted_count,
-                    )
 
     elif event_type == "customer.subscription.deleted":
         subscription_id = data_object.get("id")
