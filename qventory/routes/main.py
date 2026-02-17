@@ -630,11 +630,11 @@ def _start_stripe_checkout(plan_name, success_redirect, cancel_redirect):
     return redirect(checkout_session.url, code=303)
 
 
-def _enforce_free_plan_limit(user_id: int) -> int:
+def _enforce_free_plan_limit(user_id: int, plan: str = 'free') -> int:
     from qventory.models.subscription import PlanLimit
 
-    free_limits = PlanLimit.query.filter_by(plan='free').first()
-    if not free_limits or free_limits.max_items is None:
+    plan_limits = PlanLimit.query.filter_by(plan=plan).first()
+    if not plan_limits or plan_limits.max_items is None:
         return 0
 
     active_items = Item.query.filter(
@@ -642,7 +642,7 @@ def _enforce_free_plan_limit(user_id: int) -> int:
         Item.is_active.is_(True),
         Item.inactive_by_user.is_(False)
     ).count()
-    over_limit = active_items - free_limits.max_items
+    over_limit = active_items - plan_limits.max_items
     if over_limit <= 0:
         return 0
 
@@ -656,13 +656,13 @@ def _enforce_free_plan_limit(user_id: int) -> int:
         .limit(over_limit)
         .all()
     )
-    tag = "[FREE_PLAN_LIMIT_DEACTIVATED]"
+    tag = "[PLAN_LIMIT_DEACTIVATED]"
     for item in items_to_deactivate:
         item.is_active = False
         notes = item.notes or ""
         if tag not in notes:
             timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-            marker = f"\n[{timestamp}] {tag}"
+            marker = f"\n[{timestamp}] {tag} downgraded to {plan}"
             item.notes = (notes + marker).strip()
 
     return len(items_to_deactivate)
@@ -6099,8 +6099,18 @@ def admin_change_user_role(user_id):
 
     db.session.commit()
 
-    # If upgraded and user has eBay connected, auto-resume import
-    if is_upgrade:
+    is_downgrade = not is_upgrade and old_role != new_role and (
+        new_limits and new_limits.max_items is not None
+    )
+
+    if is_downgrade:
+        deleted_count = _enforce_free_plan_limit(user_id, plan=new_role)
+        if deleted_count:
+            db.session.commit()
+            flash(f"User '{user.username}' downgraded from '{old_role}' to '{new_role}'. {deleted_count} item(s) deactivated to meet plan limit.", "ok")
+        else:
+            flash(f"User '{user.username}' role changed from '{old_role}' to '{new_role}'", "ok")
+    elif is_upgrade:
         from qventory.models.marketplace_credential import MarketplaceCredential
         ebay_cred = MarketplaceCredential.query.filter_by(
             user_id=user_id,
@@ -6109,7 +6119,6 @@ def admin_change_user_role(user_id):
         ).first()
 
         if ebay_cred:
-            # Launch background import to fetch remaining eBay listings
             from qventory.tasks import import_ebay_inventory
             task = import_ebay_inventory.delay(user_id, import_mode='new_only', listing_status='ACTIVE')
             flash(f"User '{user.username}' upgraded from '{old_role}' to '{new_role}'. Auto-importing remaining eBay listings...", "ok")

@@ -2074,6 +2074,15 @@ tbody tr:hover td{
   font-size: 10px;
 }
 
+[data-theme="light"] .location-inline-button {
+  background: transparent;
+  border-color: rgba(100,116,139,0.35);
+}
+
+[data-theme="light"] .location-inline-button:hover {
+  background: rgba(96,165,250,0.10);
+}
+
 .location-modal {
   width: min(420px, 92vw);
   background: var(--card);

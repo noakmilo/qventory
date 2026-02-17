@@ -4535,6 +4535,57 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
     transactions = tx_query.all()
     has_finances = len(transactions) > 0
 
+    # On-demand fetch: if no finance transactions cached, pull from eBay Finance API
+    if not has_finances and sales:
+        try:
+            from qventory.helpers.ebay_finances import fetch_all_ebay_transactions
+            from qventory.models.ebay_finance import EbayFinanceTransaction as EFT
+            fetch_start = start_date or (datetime.utcnow() - timedelta(days=7))
+            fetch_end = datetime.utcnow()
+            result = fetch_all_ebay_transactions(user_id, fetch_start, fetch_end, limit=200, max_pages=5)
+            if result.get('success'):
+                fetched_txns = result.get('transactions', [])
+                for txn in fetched_txns:
+                    txn_id = txn.get('transactionId') or txn.get('adjustmentId')
+                    external_id = txn_id or _build_external_id(
+                        "txn",
+                        [txn.get('transactionDate'), (txn.get('transactionType') or '').upper(),
+                         float((txn.get('amount') or {}).get('value', 0) or 0),
+                         txn.get('orderId'), txn.get('referenceId')]
+                    )
+                    existing = EFT.query.filter_by(user_id=user_id, external_id=external_id).first()
+                    if not existing:
+                        ref_order_ids, ref_line_ids, ref_all_ids = extract_finance_reference_ids(txn)
+                        order_id = txn.get('orderId')
+                        reference_id = txn.get('referenceId')
+                        if not order_id and ref_order_ids:
+                            order_id = next(iter(ref_order_ids))
+                        if not reference_id and ref_all_ids:
+                            reference_id = next(iter(ref_all_ids))
+                        record = EFT(
+                            user_id=user_id,
+                            external_id=external_id,
+                            transaction_id=txn_id,
+                            transaction_date=_parse_ebay_datetime(txn.get('transactionDate') or txn.get('creationDate')),
+                            transaction_type=(txn.get('transactionType') or txn.get('type') or '').upper(),
+                            amount=float((txn.get('amount') or {}).get('value', 0) or 0),
+                            currency=(txn.get('amount') or {}).get('currency'),
+                            order_id=order_id,
+                            reference_id=reference_id,
+                            raw_json=txn
+                        )
+                        db.session.add(record)
+                db.session.commit()
+                # Re-query after fetching
+                tx_query = EFT.query.filter_by(user_id=user_id)
+                if start_date is not None:
+                    tx_query = tx_query.filter(EFT.transaction_date >= start_date)
+                transactions = tx_query.all()
+                has_finances = len(transactions) > 0
+                log_task(f"    [RECONCILE] On-demand finance fetch: {len(fetched_txns)} txns from API, {len(transactions)} in DB")
+        except Exception as exc:
+            log_task(f"    [RECONCILE] On-demand finance fetch failed: {exc}")
+
     totals_by_order = {}
     totals_by_line_item = {}
     trading_fee_cache = {}
