@@ -1769,6 +1769,8 @@ def feedback_manager():
     from_q = (request.args.get("from") or "").strip()
     item_q = (request.args.get("item") or "").strip()
     comment_q = (request.args.get("comment") or "").strip()
+    sort_by = (request.args.get("sort") or "").strip().lower()
+    sort_dir = (request.args.get("dir") or "").strip().lower()
 
     date_from = None
     date_to = None
@@ -1814,10 +1816,26 @@ def feedback_manager():
     if comment_q:
         query = query.filter(EbayFeedback.comment_text.ilike(f"%{comment_q}%"))
 
-    query = query.order_by(
-        EbayFeedback.comment_time.desc().nullslast(),
-        EbayFeedback.id.desc()
-    )
+    sort_map = {
+        "date": EbayFeedback.comment_time,
+        "type": EbayFeedback.comment_type,
+        "from": EbayFeedback.commenting_user,
+        "item": EbayFeedback.item_title,
+        "comment": EbayFeedback.comment_text,
+        "responded": EbayFeedback.responded
+    }
+    sort_col = sort_map.get(sort_by)
+    if sort_col is not None:
+        direction = "asc" if sort_dir == "asc" else "desc"
+        ordered = sort_col.asc() if direction == "asc" else sort_col.desc()
+        if sort_by in ("date", "item", "comment", "type", "from"):
+            ordered = ordered.nullslast()
+        query = query.order_by(ordered, EbayFeedback.id.desc())
+    else:
+        query = query.order_by(
+            EbayFeedback.comment_time.desc().nullslast(),
+            EbayFeedback.id.desc()
+        )
     total_items = query.count()
     feedbacks = query.offset(offset).limit(per_page).all()
 
@@ -1858,7 +1876,9 @@ def feedback_manager():
         type_q=type_q,
         from_q=from_q,
         item_q=item_q,
-        comment_q=comment_q
+        comment_q=comment_q,
+        sort_by=sort_by,
+        sort_dir=sort_dir
     )
 
 

@@ -41,6 +41,12 @@
 </div>
 
 <form id="feedbackFilterForm" method="get"></form>
+{% if sort_by %}
+  <input type="hidden" name="sort" value="{{ sort_by }}" form="feedbackFilterForm">
+{% endif %}
+{% if sort_dir %}
+  <input type="hidden" name="dir" value="{{ sort_dir }}" form="feedbackFilterForm">
+{% endif %}
 
 <div class="card" style="margin-bottom:12px;">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -97,12 +103,48 @@
     <table class="feedback-table">
       <thead>
         <tr>
-          <th class="col-date"><button type="button" class="th-btn feedback-filter-header" data-filter-key="date_from">Date</button></th>
-          <th class="col-type"><button type="button" class="th-btn feedback-filter-header" data-filter-key="type">Type</button></th>
-          <th class="col-from"><button type="button" class="th-btn feedback-filter-header" data-filter-key="from">From</button></th>
-          <th class="col-item"><button type="button" class="th-btn feedback-filter-header" data-filter-key="item">Item</button></th>
-          <th class="col-comment"><button type="button" class="th-btn feedback-filter-header" data-filter-key="comment">Comment</button></th>
-          <th class="col-response"><button type="button" class="th-btn feedback-filter-header" data-filter-key="responded">Response</button></th>
+          <th class="col-date">
+            <span class="col-header sort-header" data-sort-key="date" data-default-dir="desc">Date
+              {% if sort_by == 'date' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
+          <th class="col-type">
+            <span class="col-header sort-header" data-sort-key="type" data-default-dir="asc">Type
+              {% if sort_by == 'type' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
+          <th class="col-from">
+            <span class="col-header sort-header" data-sort-key="from" data-default-dir="asc">From
+              {% if sort_by == 'from' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
+          <th class="col-item">
+            <span class="col-header sort-header" data-sort-key="item" data-default-dir="asc">Item
+              {% if sort_by == 'item' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
+          <th class="col-comment">
+            <span class="col-header sort-header" data-sort-key="comment" data-default-dir="asc">Comment
+              {% if sort_by == 'comment' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
+          <th class="col-response">
+            <span class="col-header sort-header" data-sort-key="responded" data-default-dir="asc">Response
+              {% if sort_by == 'responded' %}
+                <span class="sort-indicator">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>
+              {% endif %}
+            </span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -180,17 +222,17 @@
 {% if show_pagination %}
 <div style="display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;">
   {% if prev_page %}
-    <a href="{{ url_for('main.feedback_manager', page=prev_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">Previous</a>
+    <a href="{{ url_for('main.feedback_manager', page=prev_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q, sort=sort_by, dir=sort_dir) }}" class="btn">Previous</a>
   {% endif %}
   {% for p in page_numbers %}
     {% if p == page %}
       <span class="btn" style="pointer-events:none;background:#2563eb;border-color:#2563eb;color:#fff;">{{ p }}</span>
     {% else %}
-      <a href="{{ url_for('main.feedback_manager', page=p, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">{{ p }}</a>
+      <a href="{{ url_for('main.feedback_manager', page=p, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q, sort=sort_by, dir=sort_dir) }}" class="btn">{{ p }}</a>
     {% endif %}
   {% endfor %}
   {% if next_page %}
-    <a href="{{ url_for('main.feedback_manager', page=next_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q) }}" class="btn">Next</a>
+    <a href="{{ url_for('main.feedback_manager', page=next_page, date_from=date_from, date_to=date_to, responded=responded_filter, type=type_q, from=from_q, item=item_q, comment=comment_q, sort=sort_by, dir=sort_dir) }}" class="btn">Next</a>
   {% endif %}
 </div>
 {% endif %}
@@ -292,18 +334,33 @@ if (filtersToggle && filtersPanel) {
     filtersToggle.textContent = isHidden ? 'Hide filters' : 'Show filters';
   });
 }
+// ==================== SORTING ====================
+(() => {
+  const headers = document.querySelectorAll('.sort-header');
+  if (!headers.length) return;
 
-document.querySelectorAll('.feedback-filter-header').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (filtersPanel) {
-      filtersPanel.style.display = 'block';
-      if (filtersToggle) filtersToggle.textContent = 'Hide filters';
-    }
-    const key = btn.getAttribute('data-filter-key');
-    const target = document.querySelector(`[data-filter-input="${key}"]`);
-    if (target) target.focus();
+  headers.forEach(header => {
+    header.addEventListener('click', () => {
+      const sortKey = header.getAttribute('data-sort-key');
+      if (!sortKey) return;
+
+      const url = new URL(window.location.href);
+      const currentSort = url.searchParams.get('sort');
+      const currentDir = url.searchParams.get('dir') || '';
+      const defaultDir = header.getAttribute('data-default-dir') || 'asc';
+
+      let nextDir = defaultDir;
+      if (currentSort === sortKey) {
+        nextDir = currentDir.toLowerCase() === 'asc' ? 'desc' : 'asc';
+      }
+
+      url.searchParams.set('sort', sortKey);
+      url.searchParams.set('dir', nextDir);
+      url.searchParams.set('page', '1');
+      window.location.href = url.toString();
+    });
   });
-});
+})();
 
 document.querySelectorAll('.feedback-reply-text').forEach(textarea => {
   textarea.addEventListener('input', () => autoGrowTextarea(textarea));
