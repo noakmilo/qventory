@@ -213,6 +213,27 @@ def create_app():
 
         return {"slow_movers_count": count}
 
+    @app.context_processor
+    def inject_feedback_unread_count():
+        from flask_login import current_user
+        from qventory.helpers.feedback_queries import count_unread_feedback
+        from qventory.helpers.utils import get_or_create_settings
+
+        count = 0
+        try:
+            if current_user.is_authenticated:
+                s = current_user.settings or get_or_create_settings(current_user)
+                if s and s.feedback_manager_enabled:
+                    count = count_unread_feedback(
+                        db.session,
+                        user_id=current_user.id,
+                        since_dt=s.feedback_last_viewed_at
+                    )
+        except Exception:
+            count = 0
+
+        return {"feedback_unread_count": count}
+
     @app.after_request
     def add_security_headers(response):
         # Basic security headers for SEO/security scanners

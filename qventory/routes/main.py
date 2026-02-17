@@ -67,6 +67,7 @@ from ..models.ebay_category import EbayCategory
 from ..models.profit_calculator_report import ProfitCalculatorReport
 from ..models.ebay_fee_rule import EbayFeeRule
 from ..models.retired_item import RetiredItem
+from ..models.ebay_feedback import EbayFeedback
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 
@@ -1728,6 +1729,110 @@ def inventory_slow_movers():
         show_upgrade_banner=False,
         upgrade_banner_dismiss_key=f"upgrade_banner_dismissed_{current_user.id}"
     )
+
+
+@main_bp.route("/feedback")
+@login_required
+def feedback_manager():
+    s = get_or_create_settings(current_user)
+    if not getattr(s, "feedback_manager_enabled", False):
+        flash("Enable Feedback Manager in Settings to use this view.", "error")
+        return redirect(url_for("main.settings_feedback_manager"))
+
+    from qventory.helpers.feedback_queries import count_unread_feedback
+
+    page = int(request.args.get("page", 1))
+    page = max(1, page)
+    per_page = 25
+    offset = (page - 1) * per_page
+
+    query = EbayFeedback.query.filter_by(user_id=current_user.id).order_by(
+        EbayFeedback.comment_time.desc().nullslast(),
+        EbayFeedback.id.desc()
+    )
+    total_items = query.count()
+    feedbacks = query.offset(offset).limit(per_page).all()
+
+    unread_count = count_unread_feedback(db.session, current_user.id, s.feedback_last_viewed_at)
+
+    last_viewed = s.feedback_last_viewed_at
+    for fb in feedbacks:
+        fb.is_unread = bool(last_viewed and fb.comment_time and fb.comment_time > last_viewed)
+
+    s.feedback_last_viewed_at = datetime.utcnow()
+    db.session.commit()
+
+    total_pages = max(1, math.ceil(total_items / per_page)) if total_items else 1
+    show_pagination = total_items > per_page
+    prev_page = page - 1 if page > 1 else None
+    next_page = page + 1 if page < total_pages else None
+
+    return render_template(
+        "feedback_manager.html",
+        feedbacks=feedbacks,
+        unread_count=unread_count,
+        show_pagination=show_pagination,
+        prev_page=prev_page,
+        next_page=next_page
+    )
+
+
+@main_bp.route("/feedback/sync", methods=["POST"])
+@login_required
+def feedback_sync():
+    s = get_or_create_settings(current_user)
+    if not getattr(s, "feedback_manager_enabled", False):
+        flash("Enable Feedback Manager in Settings first.", "error")
+        return redirect(url_for("main.settings_feedback_manager"))
+
+    try:
+        from qventory.tasks import sync_ebay_feedback_user
+        sync_ebay_feedback_user.delay(current_user.id)
+        flash("Feedback sync queued. New feedback will appear shortly.", "success")
+    except Exception:
+        flash("Could not start feedback sync. Try again later.", "error")
+
+    return redirect(url_for("main.feedback_manager"))
+
+
+@main_bp.route("/feedback/respond", methods=["POST"])
+@login_required
+def feedback_respond():
+    feedback_id = (request.form.get("feedback_id") or "").strip()
+    response_text = (request.form.get("response_text") or "").strip()
+    response_type = (request.form.get("response_type") or "Reply").strip() or "Reply"
+
+    if not feedback_id or not response_text:
+        flash("Response text is required.", "error")
+        return redirect(url_for("main.feedback_manager"))
+
+    feedback = EbayFeedback.query.filter_by(
+        id=feedback_id,
+        user_id=current_user.id
+    ).first()
+
+    if not feedback:
+        flash("Feedback not found.", "error")
+        return redirect(url_for("main.feedback_manager"))
+
+    if feedback.responded:
+        flash("This feedback already has a response.", "error")
+        return redirect(url_for("main.feedback_manager"))
+
+    from qventory.helpers.ebay_feedback import respond_to_feedback
+
+    result = respond_to_feedback(current_user.id, feedback, response_text, response_type=response_type)
+    if result.get("success"):
+        feedback.response_text = response_text
+        feedback.response_type = response_type
+        feedback.response_time = datetime.utcnow()
+        feedback.responded = True
+        db.session.commit()
+        flash("Response sent successfully.", "success")
+    else:
+        flash(result.get("error", "Failed to send response."), "error")
+
+    return redirect(url_for("main.feedback_manager"))
 
 
 @main_bp.route("/inventory/inactive")
@@ -5073,6 +5178,57 @@ def settings_slow_movers():
         settings=s,
         next_ready=next_ready
     )
+
+
+@main_bp.route("/settings/feedback-manager", methods=["GET", "POST"])
+@login_required
+def settings_feedback_manager():
+    s = get_or_create_settings(current_user)
+
+    if request.method == "POST":
+        action = request.form.get("action") or ""
+        enabled = request.form.get("feedback_manager_enabled") == "on"
+
+        if action == "disable":
+            s.feedback_manager_enabled = False
+            s.feedback_backfill_completed = False
+            db.session.commit()
+            flash("Feedback Manager disabled.", "ok")
+            return redirect(url_for("main.settings_feedback_manager"))
+
+        if action == "sync_now" and s.feedback_manager_enabled:
+            try:
+                from qventory.tasks import sync_ebay_feedback_user
+                sync_ebay_feedback_user.delay(current_user.id)
+                flash("Feedback sync queued.", "ok")
+            except Exception:
+                flash("Could not start feedback sync.", "error")
+            return redirect(url_for("main.settings_feedback_manager"))
+
+        if enabled and not s.feedback_manager_enabled:
+            s.feedback_manager_enabled = True
+            s.feedback_last_viewed_at = datetime.utcnow()
+            s.feedback_last_sync_at = None
+            s.feedback_backfill_completed = False
+            db.session.commit()
+            try:
+                from qventory.tasks import backfill_ebay_feedback_user
+                backfill_ebay_feedback_user.delay(current_user.id)
+            except Exception:
+                pass
+            flash("Feedback Manager enabled. Importing your historical feedback now.", "ok")
+            return redirect(url_for("main.settings_feedback_manager"))
+
+        if not enabled and s.feedback_manager_enabled:
+            s.feedback_manager_enabled = False
+            db.session.commit()
+            flash("Feedback Manager disabled.", "ok")
+            return redirect(url_for("main.settings_feedback_manager"))
+
+        flash("Feedback Manager settings saved.", "ok")
+        return redirect(url_for("main.settings_feedback_manager"))
+
+    return render_template("settings_feedback_manager.html", settings=s)
 
 
 @main_bp.route("/settings/subscription", methods=["GET"])

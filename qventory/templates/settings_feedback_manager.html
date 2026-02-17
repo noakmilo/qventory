@@ -1,0 +1,59 @@
+{% extends "base_new.html" %}
+{% block title %}Feedback Manager – Settings{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Feedback Manager</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:760px;margin:auto;">
+  <h2><i class="fas fa-comment-dots" style="color:#38bdf8"></i> Feedback Manager</h2>
+  <p style="color:var(--sub);margin-top:6px;">
+    Monitor new feedback and respond directly from Qventory. We’ll import your full history once, then check daily.
+  </p>
+
+  <form method="post" style="margin-top:18px;">
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input type="checkbox" name="feedback_manager_enabled" {% if settings.feedback_manager_enabled %}checked{% endif %}>
+      <span>Enable Feedback Manager</span>
+    </label>
+
+    {% if settings.feedback_manager_enabled %}
+    <div style="margin:12px 0;color:var(--sub);font-size:13px;">
+      {% if settings.feedback_backfill_completed %}
+        Historical import complete.
+      {% else %}
+        Historical import in progress. This can take a few minutes.
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if settings.feedback_last_sync_at %}
+    <div style="margin-top:10px;color:var(--sub);font-size:13px;">
+      Last sync: {{ settings.feedback_last_sync_at.strftime('%b %d, %Y %H:%M UTC') }}
+    </div>
+    {% endif %}
+
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-save"></i> Save
+      </button>
+      <a class="btn" href="{{ url_for('main.settings') }}">Back to Settings</a>
+      {% if settings.feedback_manager_enabled %}
+      <button type="submit" name="action" value="sync_now" class="btn">
+        <i class="fas fa-rotate"></i> Sync Now
+      </button>
+      <button type="submit" name="action" value="disable" class="btn" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#ef4444;" onclick="return confirm('Disable Feedback Manager?')">
+        <i class="fas fa-trash"></i> Disable
+      </button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

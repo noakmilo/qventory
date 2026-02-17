@@ -118,6 +118,13 @@ celery.conf.beat_schedule = {
             'expires': 60 * 60 * 6,
         }
     },
+    'sync-ebay-feedback-daily': {
+        'task': 'qventory.tasks.sync_ebay_feedback_global',
+        'schedule': crontab(hour=16, minute=0),
+        'options': {
+            'expires': 60 * 60 * 2,
+        }
+    },
 }
 
 

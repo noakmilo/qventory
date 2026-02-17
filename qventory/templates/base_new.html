@@ -137,6 +137,16 @@
         <span>Fulfillment</span>
       </a>
 
+      {% if current_user.is_authenticated and current_user.settings and current_user.settings.feedback_manager_enabled %}
+      <a href="{{ url_for('main.feedback_manager') }}" class="sidebar-item {% if 'feedback_manager' in request.endpoint %}active{% endif %}" title="Feedback Manager">
+        <i class="fas fa-comment-dots"></i>
+        <span>Feedback</span>
+        {% if feedback_unread_count and feedback_unread_count > 0 %}
+          <span class="sidebar-item-badge" style="background:#ef4444;color:#fff;">{{ feedback_unread_count }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+
       {% if current_user.is_authenticated and current_user.settings and current_user.settings.pickup_scheduler_enabled %}
       <a href="{{ url_for('main.pickup_upcoming') }}" class="sidebar-item {% if request.endpoint in ['main.pickup_upcoming', 'main.pickup_detail'] %}active{% endif %}" title="Upcoming Pickups">
         <i class="fas fa-calendar-check"></i>

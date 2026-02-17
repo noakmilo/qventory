@@ -4801,6 +4801,97 @@ def sync_ebay_finances_global(self):
         return {'success': True, 'users_processed': users_processed, 'errors': errors}
 
 
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_feedback_user')
+def sync_ebay_feedback_user(self, user_id, days_back=1, max_pages=5):
+    app = create_app()
+    with app.app_context():
+        from qventory.helpers.ebay_feedback import sync_ebay_feedback_for_user
+        from qventory.helpers.utils import get_or_create_settings
+
+        log_task(f"[FEEDBACK] Syncing feedback for user {user_id} (last {days_back} day(s))")
+        result = sync_ebay_feedback_for_user(user_id, days_back=days_back, max_pages=max_pages)
+        if result.get("success"):
+            s = get_or_create_settings(user_id)
+            s.feedback_last_sync_at = datetime.utcnow()
+            db.session.commit()
+            log_task(f"[FEEDBACK] ✓ {result.get('created', 0)} created, {result.get('updated', 0)} updated")
+        else:
+            log_task(f"[FEEDBACK] ✗ Sync failed: {result.get('error')}")
+        return result
+
+
+@celery.task(bind=True, name='qventory.tasks.backfill_ebay_feedback_user')
+def backfill_ebay_feedback_user(self, user_id, max_pages=50):
+    app = create_app()
+    with app.app_context():
+        from qventory.helpers.ebay_feedback import sync_ebay_feedback_for_user
+        from qventory.helpers.utils import get_or_create_settings
+
+        log_task(f"[FEEDBACK] Backfilling historical feedback for user {user_id}")
+        result = sync_ebay_feedback_for_user(user_id, days_back=None, max_pages=max_pages)
+        if result.get("success"):
+            s = get_or_create_settings(user_id)
+            s.feedback_last_sync_at = datetime.utcnow()
+            s.feedback_backfill_completed = True
+            db.session.commit()
+            log_task(f"[FEEDBACK] ✓ Backfill complete ({result.get('created', 0)} created)")
+        else:
+            log_task(f"[FEEDBACK] ✗ Backfill failed: {result.get('error')}")
+        return result
+
+
+@celery.task(bind=True, name='qventory.tasks.sync_ebay_feedback_global')
+def sync_ebay_feedback_global(self):
+    app = create_app()
+    with app.app_context():
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.models.setting import Setting
+        from qventory.models.user import User
+
+        log_task("=== Global eBay feedback sync (daily) ===")
+
+        enabled_settings = Setting.query.filter(Setting.feedback_manager_enabled.is_(True)).all()
+        if not enabled_settings:
+            log_task("No users with Feedback Manager enabled")
+            return {'success': True, 'users_processed': 0, 'errors': 0}
+
+        # Build user list and rotate batches to keep daily load stable
+        users = []
+        for s in enabled_settings:
+            user = User.query.get(s.user_id)
+            if not user:
+                continue
+            credential = MarketplaceCredential.query.filter_by(
+                user_id=s.user_id,
+                marketplace='ebay',
+                is_active=True
+            ).first()
+            if credential:
+                users.append((user, credential))
+
+        if not users:
+            log_task("No active eBay credentials found for Feedback Manager users")
+            return {'success': True, 'users_processed': 0, 'errors': 0}
+
+        batch_users = get_user_batch(users, batch_size=50, cursor_key='sync_feedback_batch_cursor')
+        log_task(f"Processing feedback batch of {len(batch_users)} users")
+
+        users_processed = 0
+        errors = 0
+        for user, _cred in batch_users:
+            try:
+                users_processed += 1
+                sync_ebay_feedback_user.run(user.id, days_back=1, max_pages=5)
+            except Exception as exc:
+                errors += 1
+                log_task(f"[FEEDBACK] Sync failed for user {user.id}: {exc}")
+
+        log_task(
+            f"=== Global feedback sync complete: {users_processed} users, {errors} errors ==="
+        )
+        return {'success': True, 'users_processed': users_processed, 'errors': errors}
+
+
 @celery.task(bind=True, name='qventory.tasks.recalculate_ebay_analytics_global')
 def recalculate_ebay_analytics_global(self):
     app = create_app()

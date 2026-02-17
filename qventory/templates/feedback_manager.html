@@ -1,0 +1,115 @@
+{% extends "base_new.html" %}
+{% block title %}Feedback Manager{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Feedback</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:18px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h2 style="margin-bottom:6px;"><i class="fas fa-comment-dots"></i> Feedback Manager</h2>
+      <div style="color:var(--sub);font-size:13px;">
+        New feedback: <strong>{{ unread_count }}</strong>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <form method="post" action="{{ url_for('main.feedback_sync') }}">
+        <button type="submit" class="btn"><i class="fas fa-rotate"></i> Sync Now</button>
+      </form>
+      <a href="{{ url_for('main.settings_feedback_manager') }}" class="btn">Settings</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>From</th>
+          <th>Item</th>
+          <th>Comment</th>
+          <th>Response</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if feedbacks and feedbacks|length > 0 %}
+          {% for fb in feedbacks %}
+          <tr>
+            <td>
+              {% if fb.comment_time %}
+                {{ fb.comment_time.strftime('%b %d, %Y %H:%M') }}
+              {% else %}
+                —
+              {% endif %}
+              {% if fb.is_unread %}
+                <span style="margin-left:6px;padding:2px 6px;border-radius:10px;background:#ef4444;color:#fff;font-size:11px;">New</span>
+              {% endif %}
+            </td>
+            <td>{{ fb.comment_type or '—' }}</td>
+            <td>{{ fb.commenting_user or '—' }}</td>
+            <td>
+              {% if fb.item_id %}
+                <a href="https://www.ebay.com/itm/{{ fb.item_id }}" target="_blank" rel="noopener">
+                  {{ fb.item_title or ('Item ' ~ fb.item_id) }}
+                </a>
+              {% else %}
+                {{ fb.item_title or '—' }}
+              {% endif %}
+            </td>
+            <td style="max-width:320px;">
+              {{ fb.comment_text or '—' }}
+            </td>
+            <td style="min-width:240px;">
+              {% if fb.responded %}
+                <div style="font-size:13px;color:var(--sub);margin-bottom:6px;">
+                  {{ fb.response_text }}
+                </div>
+                <div style="font-size:11px;color:var(--sub);">
+                  Responded {{ fb.response_time.strftime('%b %d, %Y') if fb.response_time else '' }}
+                </div>
+              {% else %}
+                <form method="post" action="{{ url_for('main.feedback_respond') }}">
+                  <input type="hidden" name="feedback_id" value="{{ fb.id }}">
+                  <select name="response_type" class="input" style="margin-bottom:6px;">
+                    <option value="Reply">Reply</option>
+                    <option value="FollowUp">Follow Up</option>
+                  </select>
+                  <textarea name="response_text" class="input" rows="2" placeholder="Write a reply..."></textarea>
+                  <button type="submit" class="btn" style="margin-top:6px;">Send</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="6" style="text-align:center;color:var(--sub);padding:20px;">
+              No feedback found yet.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if show_pagination %}
+<div style="display:flex;justify-content:center;gap:10px;margin-top:16px;">
+  {% if prev_page %}
+    <a href="{{ url_for('main.feedback_manager', page=prev_page) }}" class="btn">Previous</a>
+  {% endif %}
+  {% if next_page %}
+    <a href="{{ url_for('main.feedback_manager', page=next_page) }}" class="btn">Next</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

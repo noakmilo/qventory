@@ -69,6 +69,12 @@ def get_or_create_settings(user):
     if not (s.slow_movers_start_mode or "").strip():
         s.slow_movers_start_mode = "item_added"
         dirty = True
+    if s.feedback_manager_enabled is None:
+        s.feedback_manager_enabled = False
+        dirty = True
+    if s.feedback_backfill_completed is None:
+        s.feedback_backfill_completed = False
+        dirty = True
     if dirty:
         db.session.commit()
     return s

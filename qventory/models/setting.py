@@ -38,6 +38,11 @@ class Setting(db.Model):
     slow_movers_start_mode = db.Column(db.String(20), default="item_added")  # item_added, rule_created, scheduled
     slow_movers_start_date = db.Column(db.Date, nullable=True)
 
+    feedback_manager_enabled = db.Column(db.Boolean, default=False)
+    feedback_last_viewed_at = db.Column(db.DateTime, nullable=True)
+    feedback_last_sync_at = db.Column(db.DateTime, nullable=True)
+    feedback_backfill_completed = db.Column(db.Boolean, default=False)
+
     def enabled_levels(self):
         levels = []
         if self.enable_A: levels.append("A")

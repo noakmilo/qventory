@@ -20,6 +20,7 @@ from .receipt_usage import ReceiptUsage
 from .item_cost_history import ItemCostHistory
 from .tax_report import TaxReport, TaxReportExport
 from .ebay_finance import EbayPayout, EbayFinanceTransaction
+from .ebay_feedback import EbayFeedback
 from .help_article import HelpArticle
 from .pickup import PickupAppointment, PickupMessage
 from .polling_log import PollingLog
@@ -52,6 +53,7 @@ __all__ = [
     'TaxReportExport',
     'EbayPayout',
     'EbayFinanceTransaction',
+    'EbayFeedback',
     'HelpArticle',
     'PickupAppointment',
     'PickupMessage',
