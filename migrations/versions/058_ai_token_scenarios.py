@@ -76,7 +76,7 @@ def upgrade():
                 role=role,
                 tokens=tokens,
                 display_name=display_name,
-                desc=f\"{tokens} feedback AI replies per day\"
+                desc=f"{tokens} feedback AI replies per day"
             )
         )
 

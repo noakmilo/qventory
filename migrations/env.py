@@ -1,9 +1,13 @@
 import logging
+import os
 from logging.config import fileConfig
 
 from flask import current_app
 
 from alembic import context
+
+# Ensure app seeders don't break during migrations
+os.environ.setdefault("SKIP_AI_TOKEN_SEED", "1")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
