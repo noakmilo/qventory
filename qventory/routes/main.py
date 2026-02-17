@@ -3,7 +3,7 @@ from flask import (
     jsonify, send_from_directory, make_response, current_app, abort, session
 )
 from flask_login import login_required, current_user, login_user, logout_user
-from sqlalchemy import func, or_, case
+from sqlalchemy import func, or_, and_, case
 import math
 import io
 import re
