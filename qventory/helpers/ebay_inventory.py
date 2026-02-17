@@ -454,6 +454,7 @@ def get_listing_details_trading_api(user_id, listing_id):
                 sku = variation_skus[0]
 
         # Price preference: BuyItNowPrice -> CurrentPrice -> StartPrice
+        # Skip 0.0 values (e.g. auctions with no bids where CurrentPrice = 0)
         price = None
         for price_path in [
             'ebay:BuyItNowPrice',
@@ -463,8 +464,10 @@ def get_listing_details_trading_api(user_id, listing_id):
             price_elem = item_elem.find(price_path, _XML_NS)
             if price_elem is not None and price_elem.text:
                 try:
-                    price = float(price_elem.text.strip())
-                    break
+                    p = float(price_elem.text.strip())
+                    if p > 0:
+                        price = p
+                        break
                 except (TypeError, ValueError):
                     continue
 

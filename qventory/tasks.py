@@ -3179,8 +3179,10 @@ def poll_user_listings(credential):
                 for price_elem in (bin_price_elem, start_price_elem):
                     if price_elem is not None and price_elem.text:
                         try:
-                            price = float(price_elem.text)
-                            break
+                            p = float(price_elem.text)
+                            if p > 0:
+                                price = p
+                                break
                         except (TypeError, ValueError):
                             pass
 
@@ -5763,10 +5765,12 @@ def backfill_recent_item_prices(self, hours=48):
                 if enriched:
                     parsed = parse_ebay_inventory_item(enriched, process_images=False)
                     changed = False
-                    if parsed.get('item_price') is not None:
+                    if parsed.get('item_price'):
                         log_task(f"[BACKFILL_PRICES]   Price: {parsed['item_price']}")
                         item.item_price = parsed['item_price']
                         changed = True
+                    else:
+                        log_task(f"[BACKFILL_PRICES]   Price still 0 or None from eBay (auction without bids?)")
                     if parsed.get('item_thumb') and not item.item_thumb:
                         item.item_thumb = parsed['item_thumb']
                         changed = True
