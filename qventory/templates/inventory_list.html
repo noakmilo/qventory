@@ -893,7 +893,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='dashboard.js') }}?v=inactive-by-user"></script>
+<script src="{{ url_for('static', filename='dashboard.js') }}?v=retirements-1"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -1380,7 +1380,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function setupPolling() {
     // Use simple polling instead of SSE - more reliable, no database connection issues
-    console.log('[Polling] Starting inventory polling every 15 seconds...');
 
     async function checkForUpdates() {
       try {
@@ -1388,10 +1387,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!response.ok) throw new Error('Failed to fetch count');
 
         const data = await response.json();
-        console.log('[Polling] Current count:', data.count);
-
         if (data.count !== currentCount) {
-          console.log(`[Polling] Count changed: ${currentCount} → ${data.count}`);
           const diff = data.count - currentCount;
 
           // Only fetch and insert new items if count increased
@@ -1405,7 +1401,7 @@ document.addEventListener('DOMContentLoaded', function() {
           currentCount = data.count;
         }
       } catch (e) {
-        console.error('[Polling] Error:', e);
+        // silently ignore polling errors
       }
     }
 
@@ -1421,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', function() {
     setupPolling();
     return;
 
-    console.log('[SSE] Connecting to inventory stream...');
+    // SSE disabled
     eventSource = new EventSource('/api/inventory/stream');
 
     eventSource.onmessage = function(event) {
