@@ -324,9 +324,10 @@ def create_app():
         from qventory.helpers.seed_plans import seed_plan_limits
         seed_plan_limits()
 
-        # Initialize AI token configs
-        from qventory.models.ai_token import AITokenConfig
-        AITokenConfig.initialize_defaults()
+        # Initialize AI token configs (skip during migrations if schema is mid-change)
+        if os.environ.get("SKIP_AI_TOKEN_SEED", "0") != "1":
+            from qventory.models.ai_token import AITokenConfig
+            AITokenConfig.initialize_defaults()
 
         _maybe_seed_demo()  # ahora sí existe
 
