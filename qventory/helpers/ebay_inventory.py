@@ -2019,9 +2019,10 @@ def fetch_ebay_inventory_offers(user_id, limit=200, offset=0):
         }
     """
     if os.environ.get('EBAY_OFFERS_API_ENABLED', '0') != '1':
+        # Offers API disabled — signal caller to use Trading API directly
         return {
             'success': False,
-            'error': 'Offers API disabled',
+            'error': 'offers_api_disabled',
             'offers': [],
             'total': 0,
             'limit': limit,
@@ -2123,9 +2124,13 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
     page_number = 1
     sources = []
 
+    offers_api_available = True
     while True:
         result = fetch_ebay_inventory_offers(user_id, limit=limit, offset=offset)
         if not result['success']:
+            if result.get('error') == 'offers_api_disabled':
+                offers_api_available = False
+                break  # Skip Offers API, go straight to Trading API
             return result
 
         sources = sources or ['offers_api']
@@ -2165,6 +2170,16 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
             offers.extend(trading_offers)
     except Exception as exc:
         log_inv(f"Trading API augmentation failed: {exc}")
+        if not offers_api_available and not offers:
+            # Both APIs failed — nothing to work with
+            return {
+                'success': False,
+                'error': f'Offers API disabled, Trading API failed: {exc}',
+                'offers': [],
+                'total': 0,
+                'sources': [],
+                'can_mark_inactive': False
+            }
 
     deduped = []
     seen = set()
