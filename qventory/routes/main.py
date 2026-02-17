@@ -1843,7 +1843,7 @@ def feedback_sync():
 def feedback_respond():
     feedback_id = (request.form.get("feedback_id") or "").strip()
     response_text = (request.form.get("response_text") or "").strip()
-    response_type = (request.form.get("response_type") or "Reply").strip() or "Reply"
+    response_type = "Reply"
 
     if not feedback_id or not response_text:
         flash("Response text is required.", "error")

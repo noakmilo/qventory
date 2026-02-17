@@ -104,10 +104,6 @@
               {% else %}
                 <form method="post" action="{{ url_for('main.feedback_respond') }}">
                   <input type="hidden" name="feedback_id" value="{{ fb.id }}">
-                  <select name="response_type" class="input" style="margin-bottom:6px;">
-                    <option value="Reply">Reply</option>
-                    <option value="FollowUp">Follow Up</option>
-                  </select>
                   <textarea name="response_text" class="input" rows="2" placeholder="Write a reply..."></textarea>
                   <button type="submit" class="btn" style="margin-top:6px;">Send</button>
                 </form>

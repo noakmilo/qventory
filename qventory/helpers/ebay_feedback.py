@@ -220,6 +220,7 @@ def respond_to_feedback(user_id, feedback: EbayFeedback, response_text: str, res
     item_id_xml = f"<ItemID>{feedback.item_id}</ItemID>" if feedback.item_id else ""
     transaction_id_xml = f"<TransactionID>{feedback.transaction_id}</TransactionID>" if feedback.transaction_id else ""
     order_line_item_id_xml = f"<OrderLineItemID>{feedback.order_line_item_id}</OrderLineItemID>" if feedback.order_line_item_id else ""
+    target_user_xml = f"<TargetUserID>{feedback.commenting_user}</TargetUserID>" if feedback.commenting_user else ""
 
     xml_request = f"""<?xml version="1.0" encoding="utf-8"?>
 <RespondToFeedbackRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -227,6 +228,7 @@ def respond_to_feedback(user_id, feedback: EbayFeedback, response_text: str, res
     <eBayAuthToken>{access_token}</eBayAuthToken>
   </RequesterCredentials>
   <FeedbackID>{feedback.feedback_id}</FeedbackID>
+  {target_user_xml}
   {item_id_xml}
   {transaction_id_xml}
   {order_line_item_id_xml}
