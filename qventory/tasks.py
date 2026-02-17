@@ -3101,8 +3101,8 @@ def poll_user_listings(credential):
                 ebay_listing_id=listing_id
             ).first()
             if existing:
-                # If price is missing, backfill via Trading API even if no changes detected
-                if existing.item_price is None:
+                # If price is missing or zero, backfill via Trading API
+                if not existing.item_price:
                     enriched_missing_price = get_listing_details_trading_api(user_id, listing_id) or {}
                     if enriched_missing_price:
                         parsed_missing = parse_ebay_inventory_item(enriched_missing_price, process_images=True)
@@ -3576,7 +3576,7 @@ def sync_ebay_active_inventory_auto(self):
                 # Backfill prices for active items still missing a price (max 5 per user to limit API calls)
                 priceless_items = [
                     i for i in items_to_sync
-                    if i.is_active and i.item_price is None and i.ebay_listing_id
+                    if i.is_active and not i.item_price and i.ebay_listing_id
                 ]
                 backfilled = 0
                 if priceless_items:
@@ -5717,15 +5717,19 @@ def backfill_recent_item_prices(self, hours=48):
         from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.helpers.ebay_inventory import get_listing_details_trading_api, parse_ebay_inventory_item
 
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
-        log_task(f"[BACKFILL_PRICES] === Backfill prices for items created after {cutoff.isoformat()} ===")
-
-        items = Item.query.filter(
-            Item.created_at >= cutoff,
-            Item.item_price.is_(None),
+        filters = [
+            or_(Item.item_price.is_(None), Item.item_price == 0),
             Item.ebay_listing_id.isnot(None),
             Item.is_active == True
-        ).all()
+        ]
+        if hours > 0:
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            filters.append(Item.created_at >= cutoff)
+            log_task(f"[BACKFILL_PRICES] === Backfill prices for items created after {cutoff.isoformat()} ===")
+        else:
+            log_task("[BACKFILL_PRICES] === Backfill prices for ALL items without price ===")
+
+        items = Item.query.filter(*filters).all()
 
         log_task(f"[BACKFILL_PRICES] Found {len(items)} active items without price")
 

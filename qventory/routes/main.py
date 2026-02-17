@@ -6280,13 +6280,13 @@ def admin_backfill_shipping_costs():
 @main_bp.route("/admin/backfill-recent-prices", methods=["POST"])
 @require_admin
 def admin_backfill_recent_prices():
-    """Backfill prices for items imported in the last 48 hours that are missing a price."""
+    """Backfill prices for all active items missing a price."""
     from qventory.tasks import backfill_recent_item_prices
 
-    task = backfill_recent_item_prices.delay(hours=48)
+    task = backfill_recent_item_prices.delay(hours=0)
     flash(
         f"Price backfill task launched (Task ID: {task.id}). "
-        f"Items from the last 48 hours without a price will be enriched via Trading API.",
+        f"All active items without a price will be enriched via Trading API.",
         "ok"
     )
     return redirect(url_for('main.admin_dashboard'))
