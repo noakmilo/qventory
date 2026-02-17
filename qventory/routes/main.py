@@ -1745,8 +1745,42 @@ def feedback_manager():
     page = max(1, page)
     per_page = 25
     offset = (page - 1) * per_page
+    date_from_raw = (request.args.get("date_from") or "").strip()
+    date_to_raw = (request.args.get("date_to") or "").strip()
+    responded_filter = (request.args.get("responded") or "all").strip().lower()
 
-    query = EbayFeedback.query.filter_by(user_id=current_user.id).order_by(
+    date_from = None
+    date_to = None
+    try:
+        if date_from_raw:
+            date_from = datetime.strptime(date_from_raw, "%Y-%m-%d")
+        if date_to_raw:
+            date_to = datetime.strptime(date_to_raw, "%Y-%m-%d") + timedelta(days=1)
+    except ValueError:
+        date_from = None
+        date_to = None
+
+    query = EbayFeedback.query.filter_by(user_id=current_user.id)
+
+    # Hide eBay auto feedback
+    query = query.filter(
+        or_(
+            EbayFeedback.comment_text.is_(None),
+            ~func.lower(EbayFeedback.comment_text).like("order delivered on time with no issues")
+        )
+    )
+
+    if date_from:
+        query = query.filter(EbayFeedback.comment_time >= date_from)
+    if date_to:
+        query = query.filter(EbayFeedback.comment_time < date_to)
+
+    if responded_filter == "responded":
+        query = query.filter(EbayFeedback.responded.is_(True))
+    elif responded_filter == "unresponded":
+        query = query.filter(EbayFeedback.responded.is_(False))
+
+    query = query.order_by(
         EbayFeedback.comment_time.desc().nullslast(),
         EbayFeedback.id.desc()
     )
@@ -1766,6 +1800,9 @@ def feedback_manager():
     show_pagination = total_items > per_page
     prev_page = page - 1 if page > 1 else None
     next_page = page + 1 if page < total_pages else None
+    page_start = max(1, page - 3)
+    page_end = min(total_pages, page + 3)
+    page_numbers = list(range(page_start, page_end + 1))
 
     return render_template(
         "feedback_manager.html",
@@ -1773,7 +1810,13 @@ def feedback_manager():
         unread_count=unread_count,
         show_pagination=show_pagination,
         prev_page=prev_page,
-        next_page=next_page
+        next_page=next_page,
+        page=page,
+        total_pages=total_pages,
+        page_numbers=page_numbers,
+        date_from=date_from_raw,
+        date_to=date_to_raw,
+        responded_filter=responded_filter
     )
 
 

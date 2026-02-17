@@ -86,6 +86,14 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
             comment_time = _parse_time(_get_text(detail, "ebay:CommentTime"))
             response_time = _parse_time(_get_text(detail, "ebay:ResponseTime"))
             response_text = _get_text(detail, "ebay:ResponseText")
+            response_type = _get_text(detail, "ebay:ResponseType")
+
+            if not response_text:
+                response_text = _get_text(detail, "ebay:ResponseDetails/ebay:ResponseText")
+            if not response_type:
+                response_type = _get_text(detail, "ebay:ResponseDetails/ebay:ResponseType")
+            if not response_time:
+                response_time = _parse_time(_get_text(detail, "ebay:ResponseDetails/ebay:ResponseTime"))
 
             feedbacks.append({
                 "feedback_id": feedback_id,
@@ -99,9 +107,9 @@ def fetch_feedback_page(user_id, page=1, entries_per_page=200):
                 "order_line_item_id": _get_text(detail, "ebay:OrderLineItemID"),
                 "item_title": _get_text(detail, "ebay:ItemTitle"),
                 "response_text": response_text,
-                "response_type": _get_text(detail, "ebay:ResponseType"),
+                "response_type": response_type,
                 "response_time": response_time,
-                "responded": bool(response_text),
+                "responded": bool(response_text) or bool(response_time),
             })
 
         total_pages = None

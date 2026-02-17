@@ -27,6 +27,31 @@
   </div>
 </div>
 
+<div class="card" style="margin-bottom:18px;">
+  <form method="get" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:end;">
+    <div>
+      <label>Date from</label>
+      <input type="date" name="date_from" class="input" value="{{ date_from or '' }}">
+    </div>
+    <div>
+      <label>Date to</label>
+      <input type="date" name="date_to" class="input" value="{{ date_to or '' }}">
+    </div>
+    <div>
+      <label>Status</label>
+      <select name="responded" class="input">
+        <option value="all" {% if responded_filter == 'all' %}selected{% endif %}>All</option>
+        <option value="responded" {% if responded_filter == 'responded' %}selected{% endif %}>Responded</option>
+        <option value="unresponded" {% if responded_filter == 'unresponded' %}selected{% endif %}>Unresponded</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button type="submit" class="btn">Apply Filters</button>
+      <a href="{{ url_for('main.feedback_manager') }}" class="btn">Clear</a>
+    </div>
+  </form>
+</div>
+
 <div class="card">
   <div class="table-wrap">
     <table>
@@ -103,12 +128,19 @@
 </div>
 
 {% if show_pagination %}
-<div style="display:flex;justify-content:center;gap:10px;margin-top:16px;">
+<div style="display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;">
   {% if prev_page %}
-    <a href="{{ url_for('main.feedback_manager', page=prev_page) }}" class="btn">Previous</a>
+    <a href="{{ url_for('main.feedback_manager', page=prev_page, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">Previous</a>
   {% endif %}
+  {% for p in page_numbers %}
+    {% if p == page %}
+      <span class="btn" style="pointer-events:none;background:#2563eb;border-color:#2563eb;color:#fff;">{{ p }}</span>
+    {% else %}
+      <a href="{{ url_for('main.feedback_manager', page=p, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
   {% if next_page %}
-    <a href="{{ url_for('main.feedback_manager', page=next_page) }}" class="btn">Next</a>
+    <a href="{{ url_for('main.feedback_manager', page=next_page, date_from=date_from, date_to=date_to, responded=responded_filter) }}" class="btn">Next</a>
   {% endif %}
 </div>
 {% endif %}
