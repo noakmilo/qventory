@@ -102,6 +102,13 @@ class ReceiptItem(db.Model):
         """
         from qventory.models.item import Item
 
+        # Reverse cost from previously linked item
+        if self.inventory_item_id and self.final_unit_price:
+            old_item = Item.query.get(self.inventory_item_id)
+            if old_item:
+                old_item.item_cost = max(0, (old_item.item_cost or 0) - self.final_unit_price)
+                old_item.updated_at = datetime.utcnow()
+
         # Clear any existing association
         self.inventory_item_id = None
         self.expense_id = None
@@ -111,11 +118,11 @@ class ReceiptItem(db.Model):
         self.is_associated = True
         self.associated_at = datetime.utcnow()
 
-        # Optionally update item cost
+        # Optionally update item cost (add to existing cost, don't overwrite)
         if update_cost and self.final_unit_price:
             item = Item.query.get(item_id)
             if item:
-                item.item_cost = self.final_unit_price
+                item.item_cost = (item.item_cost or 0) + self.final_unit_price
                 item.updated_at = datetime.utcnow()
 
     def associate_with_expense(self, expense_id):
@@ -131,6 +138,14 @@ class ReceiptItem(db.Model):
 
     def clear_association(self):
         """Remove association with inventory/expense."""
+        # Reverse cost from linked item
+        if self.inventory_item_id and self.final_unit_price:
+            from qventory.models.item import Item
+            item = Item.query.get(self.inventory_item_id)
+            if item:
+                item.item_cost = max(0, (item.item_cost or 0) - self.final_unit_price)
+                item.updated_at = datetime.utcnow()
+
         self.inventory_item_id = None
         self.expense_id = None
         self.is_associated = False

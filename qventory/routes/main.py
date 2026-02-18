@@ -3640,6 +3640,80 @@ def admin_ebay_api_usage():
     )
 
 
+@main_bp.route("/admin/ref-links")
+@require_admin
+def admin_ref_links():
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, distinct
+    from qventory.models.referral import ReferralVisit
+
+    days_raw = request.args.get("days", "30")
+    try:
+        days = max(1, min(365, int(days_raw)))
+    except Exception:
+        days = 30
+
+    since = datetime.utcnow() - timedelta(days=days)
+
+    visits_total = (
+        db.session.query(
+            ReferralVisit.utm_source.label("source"),
+            func.count(ReferralVisit.id).label("visits"),
+            func.count(distinct(ReferralVisit.session_id)).label("unique_sessions")
+        )
+        .group_by(ReferralVisit.utm_source)
+        .order_by(func.count(ReferralVisit.id).desc())
+        .all()
+    )
+
+    visits_recent = (
+        db.session.query(
+            ReferralVisit.utm_source.label("source"),
+            func.count(ReferralVisit.id).label("visits"),
+            func.count(distinct(ReferralVisit.session_id)).label("unique_sessions")
+        )
+        .filter(ReferralVisit.created_at >= since)
+        .group_by(ReferralVisit.utm_source)
+        .order_by(func.count(ReferralVisit.id).desc())
+        .all()
+    )
+
+    signups_total = (
+        db.session.query(
+            User.ref_source.label("source"),
+            func.count(User.id).label("signups")
+        )
+        .filter(User.ref_source.isnot(None))
+        .group_by(User.ref_source)
+        .order_by(func.count(User.id).desc())
+        .all()
+    )
+
+    signups_recent = (
+        db.session.query(
+            User.ref_source.label("source"),
+            func.count(User.id).label("signups")
+        )
+        .filter(User.ref_source.isnot(None), User.created_at >= since)
+        .group_by(User.ref_source)
+        .order_by(func.count(User.id).desc())
+        .all()
+    )
+
+    visits_recent_map = {row.source: row for row in visits_recent}
+    signups_total_map = {row.source: row for row in signups_total}
+    signups_recent_map = {row.source: row for row in signups_recent}
+
+    return render_template(
+        "admin_ref_links.html",
+        days=days,
+        visits_total=visits_total,
+        visits_recent_map=visits_recent_map,
+        signups_total_map=signups_total_map,
+        signups_recent_map=signups_recent_map
+    )
+
+
 # ---------------------- Utilidades URL eBay ----------------------
 
 _EBAY_HOSTS = (

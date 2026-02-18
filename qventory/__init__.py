@@ -124,6 +124,58 @@ def create_app():
                     db.session.rollback()
                     print(f"[ACTIVITY_TRACKING] Error updating last_activity: {e}")
 
+    @app.before_request
+    def capture_referral_visit():
+        """
+        Capture UTM source visits for ref link analytics and signup attribution.
+        Stores UTM params in session and logs a referral visit row.
+        """
+        from datetime import datetime
+        from flask import request, session
+        import hashlib
+        import uuid
+        from qventory.models.referral import ReferralVisit
+
+        if request.method != "GET":
+            return
+        if request.path.startswith("/static"):
+            return
+
+        utm_source = (request.args.get("utm_source") or "").strip() or None
+        if not utm_source:
+            return
+
+        session.setdefault("ref_session_id", uuid.uuid4().hex)
+        session["ref_source"] = utm_source
+        session["ref_medium"] = (request.args.get("utm_medium") or "").strip() or None
+        session["ref_campaign"] = (request.args.get("utm_campaign") or "").strip() or None
+        session["ref_content"] = (request.args.get("utm_content") or "").strip() or None
+        session["ref_term"] = (request.args.get("utm_term") or "").strip() or None
+        session["ref_landing_path"] = request.path
+        session["ref_first_touch_at"] = datetime.utcnow().isoformat()
+
+        ip = request.headers.get("X-Forwarded-For", request.remote_addr) or ""
+        ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest() if ip else None
+        user_agent = (request.headers.get("User-Agent") or "")[:255]
+
+        try:
+            visit = ReferralVisit(
+                utm_source=utm_source,
+                utm_medium=session.get("ref_medium"),
+                utm_campaign=session.get("ref_campaign"),
+                utm_content=session.get("ref_content"),
+                utm_term=session.get("ref_term"),
+                landing_path=session.get("ref_landing_path"),
+                session_id=session.get("ref_session_id"),
+                ip_hash=ip_hash,
+                user_agent=user_agent
+            )
+            db.session.add(visit)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"[REF_TRACKING] Error recording referral visit: {e}")
+
     # Register template filters
     @app.context_processor
     def inject_theme_preference():

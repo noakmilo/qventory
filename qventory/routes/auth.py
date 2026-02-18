@@ -107,6 +107,19 @@ def register():
         user = User(email=email, username=username)
         user.set_password(password)
         user.email_verified = False  # User must verify email
+        # attach referral metadata if present
+        ref_source = session.get("ref_source")
+        if ref_source:
+            user.ref_source = ref_source
+            user.ref_medium = session.get("ref_medium")
+            user.ref_campaign = session.get("ref_campaign")
+            user.ref_content = session.get("ref_content")
+            user.ref_term = session.get("ref_term")
+            user.ref_landing_path = session.get("ref_landing_path")
+            try:
+                user.ref_first_touch_at = datetime.fromisoformat(session.get("ref_first_touch_at"))
+            except Exception:
+                user.ref_first_touch_at = datetime.utcnow()
         db.session.add(user)
         db.session.commit()
 

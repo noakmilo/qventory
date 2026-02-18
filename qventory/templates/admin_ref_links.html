@@ -1,0 +1,81 @@
+{% extends "base_admin.html" %}
+{% block title %}Ref Links - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="admin-breadcrumb">
+  <a href="{{ url_for('main.admin_dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Ref Links</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="width:98%;margin:0 auto;">
+  <div class="admin-header">
+    <div>
+      <h1>Ref Links</h1>
+      <p style="color:var(--sub);">Track UTM traffic and signups (e.g. utm_source=reddit)</p>
+    </div>
+    <div class="admin-actions">
+      <a href="{{ url_for('main.admin_ref_links', days=7) }}" class="btn">Last 7 days</a>
+      <a href="{{ url_for('main.admin_ref_links', days=30) }}" class="btn">Last 30 days</a>
+      <a href="{{ url_for('main.admin_ref_links', days=90) }}" class="btn">Last 90 days</a>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="admin-stats">
+    <div class="stat-card">
+      <div class="stat-value">{{ days }}</div>
+      <div class="stat-label">Days window</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">{{ visits_total|length }}</div>
+      <div class="stat-label">Sources tracked</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h3 style="margin-top:0;">Sources summary</h3>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>UTM Source</th>
+            <th>Visits (all)</th>
+            <th>Unique Sessions (all)</th>
+            <th>Visits (last {{ days }}d)</th>
+            <th>Unique Sessions (last {{ days }}d)</th>
+            <th>Signups (all)</th>
+            <th>Signups (last {{ days }}d)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if visits_total %}
+            {% for row in visits_total %}
+              {% set source = row.source or 'unknown' %}
+              {% set recent = visits_recent_map.get(source) %}
+              {% set sign_total = signups_total_map.get(source) %}
+              {% set sign_recent = signups_recent_map.get(source) %}
+              <tr>
+                <td>{{ source }}</td>
+                <td>{{ row.visits }}</td>
+                <td>{{ row.unique_sessions }}</td>
+                <td>{{ recent.visits if recent else 0 }}</td>
+                <td>{{ recent.unique_sessions if recent else 0 }}</td>
+                <td>{{ sign_total.signups if sign_total else 0 }}</td>
+                <td>{{ sign_recent.signups if sign_recent else 0 }}</td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" style="text-align:center;color:var(--sub);">No referral traffic logged yet.</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

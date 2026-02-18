@@ -16,6 +16,13 @@ class User(UserMixin, db.Model):
     last_activity = db.Column(db.DateTime, nullable=True)  # Last activity (any authenticated request)
     monthly_expense_budget = db.Column(db.Numeric(10, 2), nullable=True)  # Monthly budget for expenses
     has_used_trial = db.Column(db.Boolean, default=False, nullable=False)  # Stripe trial eligibility
+    ref_source = db.Column(db.String(64), nullable=True, index=True)
+    ref_medium = db.Column(db.String(64), nullable=True)
+    ref_campaign = db.Column(db.String(128), nullable=True)
+    ref_content = db.Column(db.String(128), nullable=True)
+    ref_term = db.Column(db.String(128), nullable=True)
+    ref_landing_path = db.Column(db.String(255), nullable=True)
+    ref_first_touch_at = db.Column(db.DateTime, nullable=True)
 
     # opcional: relaciones convenientes
     items = db.relationship("Item", backref="owner", lazy="dynamic", cascade="all, delete-orphan")

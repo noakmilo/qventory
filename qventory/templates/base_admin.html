@@ -68,6 +68,10 @@
           <i class="fas fa-coins"></i>
           <span>AI Token Config</span>
         </a>
+        <a href="{{ url_for('main.admin_ref_links') }}" class="admin-sidebar-item {% if 'admin_ref_links' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-link"></i>
+          <span>Ref Links</span>
+        </a>
         <a href="{{ url_for('main.admin_polling_logs') }}" class="admin-sidebar-item {% if 'admin_polling_logs' in request.endpoint %}active{% endif %}">
           <i class="fas fa-wave-square"></i>
           <span>Polling Logs</span>
