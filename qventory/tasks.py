@@ -288,6 +288,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             imported_count = 0
             updated_count = 0
             skipped_count = 0
+            needs_shipping_reconcile = False
             error_count = 0
 
             for idx, ebay_item in enumerate(ebay_items):
@@ -807,8 +808,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                     sold_price = sale_data.get('sold_price', 0)
                     shipping_cost = sale_data.get('shipping_cost', 0)
                     shipping_charged = sale_data.get('shipping_charged')
-                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
-                        shipping_cost = shipping_charged
+                    if shipping_cost in (None, 0):
+                        needs_shipping_reconcile = True
                     tax_collected = sale_data.get('tax_collected')
                     buyer_username = sale_data.get('buyer_username', '')
                     tracking_number = sale_data.get('tracking_number')
@@ -979,6 +980,14 @@ def import_ebay_sales(self, user_id, days_back=None):
             db.session.commit()
 
             log_task(f"✅ Sales import complete: {imported_count} new, {updated_count} updated, {skipped_count} skipped")
+
+            if needs_shipping_reconcile:
+                reconcile_user_finances.apply_async(
+                    args=[user_id],
+                    kwargs={'days_back': days_back or 30},
+                    countdown=30
+                )
+                log_task("↻ Finance reconciliation queued for missing shipping costs (30s delay)")
 
             return {
                 'success': True,
@@ -3853,19 +3862,12 @@ def sync_ebay_sold_orders_auto(self):
                 
                 created_count = 0
                 updated_count = 0
+                needs_shipping_reconcile = False
                 
                 for order in sold_orders:
-                    shipping_charged = order.get('shipping_charged')
                     shipping_cost = order.get('shipping_cost')
-                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
-                        shipping_cost = shipping_charged
-                        order['shipping_cost'] = shipping_cost
-                    shipping_charged = order.get('shipping_charged')
-                    shipping_cost = order.get('shipping_cost')
-                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
-                        # Fallback: use buyer-paid shipping when label cost is missing
-                        shipping_cost = shipping_charged
-                        order['shipping_cost'] = shipping_cost
+                    if shipping_cost in (None, 0):
+                        needs_shipping_reconcile = True
                     # Check if sale already exists
                     existing_sale = Sale.query.filter_by(
                         user_id=user.id,
@@ -3909,10 +3911,10 @@ def sync_ebay_sold_orders_auto(self):
                             existing_sale.payment_processing_fee = order['payment_processing_fee']
                         if order.get('tax_collected') is not None:
                             existing_sale.tax_collected = order['tax_collected']
-                        if shipping_cost is not None:
-                            existing_sale.shipping_cost = shipping_cost
-                        if shipping_charged is not None:
-                            existing_sale.shipping_charged = shipping_charged
+                        if order.get('shipping_cost') is not None:
+                            existing_sale.shipping_cost = order.get('shipping_cost')
+                        if order.get('shipping_charged') is not None:
+                            existing_sale.shipping_charged = order.get('shipping_charged')
 
                         # Update item_cost if we found it
                         if item_cost is not None and existing_sale.item_cost is None:
@@ -3946,8 +3948,8 @@ def sync_ebay_sold_orders_auto(self):
                 total_updated += updated_count
                 users_processed += 1
 
-                if created_count > 0 or updated_count > 0:
-                    # Delay finance reconciliation by 30s to let eBay Finance API populate
+                if created_count > 0 or updated_count > 0 or needs_shipping_reconcile:
+                    # Delay finance reconciliation by 30s to let eBay Finance API populate shipping costs
                     reconcile_user_finances.apply_async(
                         args=[user.id],
                         kwargs={'days_back': 3},
@@ -4053,8 +4055,12 @@ def sync_ebay_sold_orders_deep(self):
 
                 created_count = 0
                 updated_count = 0
+                needs_shipping_reconcile = False
 
                 for order in sold_orders:
+                    shipping_cost = order.get('shipping_cost')
+                    if shipping_cost in (None, 0):
+                        needs_shipping_reconcile = True
                     # Check if sale already exists
                     existing_sale = Sale.query.filter_by(
                         user_id=user.id,
@@ -4095,10 +4101,10 @@ def sync_ebay_sold_orders_deep(self):
                             existing_sale.other_fees = order.get('other_fees')
                         if order.get('tax_collected') is not None:
                             existing_sale.tax_collected = order.get('tax_collected')
-                        if shipping_cost is not None:
-                            existing_sale.shipping_cost = shipping_cost
-                        if shipping_charged is not None:
-                            existing_sale.shipping_charged = shipping_charged
+                        if order.get('shipping_cost') is not None:
+                            existing_sale.shipping_cost = order.get('shipping_cost')
+                        if order.get('shipping_charged') is not None:
+                            existing_sale.shipping_charged = order.get('shipping_charged')
                         if order.get('shipped_at'):
                             existing_sale.shipped_at = order.get('shipped_at')
                         if order.get('delivered_at'):
@@ -4155,17 +4161,25 @@ def sync_ebay_sold_orders_deep(self):
 
                 db.session.commit()
 
-                if created_count > 0 or updated_count > 0:
+                if created_count > 0 or updated_count > 0 or needs_shipping_reconcile:
                     log_task(f"    ✓ {created_count} created, {updated_count} updated")
                     users_with_sales += 1
                     try:
-                        reconcile_sales_from_finances(
-                            user_id=user.id,
-                            days_back=7,
-                            fetch_taxes=True,
-                            force_recalculate=True
-                        )
-                        log_task("    ↻ Reconciled sales (7 days)")
+                        if needs_shipping_reconcile:
+                            reconcile_user_finances.apply_async(
+                                args=[user.id],
+                                kwargs={'days_back': 7},
+                                countdown=30
+                            )
+                            log_task("    ↻ Finance reconciliation queued (30s delay)")
+                        else:
+                            reconcile_sales_from_finances(
+                                user_id=user.id,
+                                days_back=7,
+                                fetch_taxes=True,
+                                force_recalculate=True
+                            )
+                            log_task("    ↻ Reconciled sales (7 days)")
                     except Exception as reconcile_error:
                         log_task(f"    ⚠ Reconcile failed: {reconcile_error}")
 
@@ -4672,11 +4686,8 @@ def reconcile_sales_from_finances(*, user_id, days_back=None, fetch_taxes=False,
                 # Trading API fallback disabled to avoid rate limits.
                 pass
 
-            shipping_charged = sale.shipping_charged or 0
-            if (sale.shipping_cost or 0) == 0 and shipping_charged > 0:
-                # Fallback: use buyer-paid shipping as estimated label cost
-                sale.shipping_cost = shipping_charged
-                updated_this_sale = True
+            # No fallback to buyer-paid shipping for label cost
+            # Shipping cost should come from Finances API (shipping_label)
 
         if fetch_taxes and not skip_fulfillment_api and (sale.tax_collected is None or sale.tax_collected == 0) and sale.marketplace_order_id:
             parsed = parsed_order_cache.get(sale.marketplace_order_id)
