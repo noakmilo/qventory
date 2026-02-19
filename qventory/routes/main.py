@@ -369,7 +369,11 @@ def stripe_checkout():
         flash("Selected plan is not available for checkout.", "error")
         return redirect(url_for("main.upgrade"))
 
-    current_plan = current_user.get_subscription().plan
+    subscription = current_user.get_subscription()
+    if subscription and subscription.stripe_subscription_id:
+        return _redirect_to_stripe_portal(subscription, "main.upgrade")
+
+    current_plan = subscription.plan if subscription else None
     if plan_name == current_plan:
         flash("You are already on that plan.", "info")
         return redirect(url_for("main.upgrade"))
@@ -385,7 +389,11 @@ def stripe_checkout_start(plan_name):
         flash("Selected plan is not available for checkout.", "error")
         return redirect(url_for("main.pricing"))
 
-    current_plan = current_user.get_subscription().plan
+    subscription = current_user.get_subscription()
+    if subscription and subscription.stripe_subscription_id:
+        return _redirect_to_stripe_portal(subscription, "main.upgrade")
+
+    current_plan = subscription.plan if subscription else None
     if plan_name == current_plan:
         flash("You are already on that plan.", "info")
         return redirect(url_for("main.upgrade"))
@@ -460,33 +468,7 @@ def stripe_customer_portal():
         flash("No subscription found for this account.", "info")
         return redirect(url_for("main.settings"))
 
-    customer_id = subscription.stripe_customer_id
-    if not customer_id and subscription.stripe_subscription_id:
-        try:
-            stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
-            customer_id = stripe_sub.get("customer")
-            if customer_id:
-                subscription.stripe_customer_id = customer_id
-                subscription.updated_at = datetime.utcnow()
-                db.session.commit()
-        except Exception as exc:
-            current_app.logger.exception("Stripe subscription lookup failed: %s", exc)
-
-    if not customer_id:
-        flash("No Stripe customer found for this account yet.", "info")
-        return redirect(url_for("main.settings"))
-
-    try:
-        portal_session = stripe.billing_portal.Session.create(
-            customer=customer_id,
-            return_url=url_for("main.settings", _external=True)
-        )
-    except Exception as exc:
-        current_app.logger.exception("Stripe portal failed: %s", exc)
-        flash("Unable to open the billing portal right now.", "error")
-        return redirect(url_for("main.settings"))
-
-    return redirect(portal_session.url, code=303)
+    return _redirect_to_stripe_portal(subscription, "main.settings")
 
 
 def _plan_from_stripe_price(price_id: str | None) -> str | None:
@@ -509,6 +491,40 @@ def _stripe_price_for_plan(plan_name: str | None) -> str | None:
         "pro": STRIPE_PRICE_PRO,
     }
     return mapping.get(plan_name)
+
+
+def _redirect_to_stripe_portal(subscription: Subscription, return_endpoint: str):
+    if not subscription or not STRIPE_SECRET_KEY:
+        flash("Stripe is not configured yet.", "error")
+        return redirect(url_for(return_endpoint))
+
+    customer_id = subscription.stripe_customer_id
+    if not customer_id and subscription.stripe_subscription_id:
+        try:
+            stripe_sub = stripe.Subscription.retrieve(subscription.stripe_subscription_id)
+            customer_id = stripe_sub.get("customer")
+            if customer_id:
+                subscription.stripe_customer_id = customer_id
+                subscription.updated_at = datetime.utcnow()
+                db.session.commit()
+        except Exception as exc:
+            current_app.logger.exception("Stripe subscription lookup failed: %s", exc)
+
+    if not customer_id:
+        flash("No Stripe customer found for this account yet.", "info")
+        return redirect(url_for(return_endpoint))
+
+    try:
+        portal_session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=url_for(return_endpoint, _external=True)
+        )
+    except Exception as exc:
+        current_app.logger.exception("Stripe portal failed: %s", exc)
+        flash("Unable to open the billing portal right now.", "error")
+        return redirect(url_for(return_endpoint))
+
+    return redirect(portal_session.url, code=303)
 
 
 def _refresh_subscription_from_stripe(subscription: Subscription):
@@ -1523,6 +1539,7 @@ def upgrade():
         plans=plans,
         current_plan=current_plan_limits,
         current_user_plan=subscription.plan if subscription else None,
+        has_stripe_subscription=bool(subscription and subscription.stripe_subscription_id),
         items_remaining=items_remaining,
         token_configs=token_configs,
         trial_days=trial_days

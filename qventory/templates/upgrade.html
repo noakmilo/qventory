@@ -161,21 +161,39 @@
 
       <!-- Action Button -->
       <div style="text-align: center;">
-        {% if plan.plan == current_user_plan %}
-        <button class="btn" disabled style="width: 100%; opacity: 0.6; cursor: not-allowed;">
-          Current Plan
-        </button>
-        {% elif plan.plan == 'free' %}
-        <a href="mailto:support@qventory.com" class="btn" style="width: 100%; display: inline-block;">
-          Contact Support to Downgrade
-        </a>
+        {% if has_stripe_subscription %}
+          <form method="POST" action="{{ url_for('main.stripe_customer_portal') }}">
+            {% if plan.plan == current_user_plan %}
+            <button class="btn submitbtn" type="submit" style="width: 100%;">
+              Manage in Stripe
+            </button>
+            {% elif plan.plan == 'free' %}
+            <button class="btn" type="submit" style="width: 100%;">
+              Downgrade in Stripe
+            </button>
+            {% else %}
+            <button class="btn submitbtn" type="submit" style="width: 100%;">
+              Change Plan in Stripe
+            </button>
+            {% endif %}
+          </form>
         {% else %}
-        <form method="POST" action="{{ url_for('main.stripe_checkout') }}">
-          <input type="hidden" name="plan" value="{{ plan.plan }}">
-          <button class="btn submitbtn" type="submit" style="width: 100%;">
-            Upgrade Now
+          {% if plan.plan == current_user_plan %}
+          <button class="btn" disabled style="width: 100%; opacity: 0.6; cursor: not-allowed;">
+            Current Plan
           </button>
-        </form>
+          {% elif plan.plan == 'free' %}
+          <a href="mailto:support@qventory.com" class="btn" style="width: 100%; display: inline-block;">
+            Contact Support to Downgrade
+          </a>
+          {% else %}
+          <form method="POST" action="{{ url_for('main.stripe_checkout') }}">
+            <input type="hidden" name="plan" value="{{ plan.plan }}">
+            <button class="btn submitbtn" type="submit" style="width: 100%;">
+              Upgrade Now
+            </button>
+          </form>
+          {% endif %}
         {% endif %}
       </div>
     </div>
