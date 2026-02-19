@@ -807,6 +807,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                     sold_price = sale_data.get('sold_price', 0)
                     shipping_cost = sale_data.get('shipping_cost', 0)
                     shipping_charged = sale_data.get('shipping_charged')
+                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
+                        shipping_cost = shipping_charged
                     tax_collected = sale_data.get('tax_collected')
                     buyer_username = sale_data.get('buyer_username', '')
                     tracking_number = sale_data.get('tracking_number')
@@ -3853,6 +3855,17 @@ def sync_ebay_sold_orders_auto(self):
                 updated_count = 0
                 
                 for order in sold_orders:
+                    shipping_charged = order.get('shipping_charged')
+                    shipping_cost = order.get('shipping_cost')
+                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
+                        shipping_cost = shipping_charged
+                        order['shipping_cost'] = shipping_cost
+                    shipping_charged = order.get('shipping_charged')
+                    shipping_cost = order.get('shipping_cost')
+                    if (shipping_cost is None or shipping_cost == 0) and shipping_charged:
+                        # Fallback: use buyer-paid shipping when label cost is missing
+                        shipping_cost = shipping_charged
+                        order['shipping_cost'] = shipping_cost
                     # Check if sale already exists
                     existing_sale = Sale.query.filter_by(
                         user_id=user.id,
@@ -3896,8 +3909,10 @@ def sync_ebay_sold_orders_auto(self):
                             existing_sale.payment_processing_fee = order['payment_processing_fee']
                         if order.get('tax_collected') is not None:
                             existing_sale.tax_collected = order['tax_collected']
-                        if order.get('shipping_charged') is not None:
-                            existing_sale.shipping_charged = order['shipping_charged']
+                        if shipping_cost is not None:
+                            existing_sale.shipping_cost = shipping_cost
+                        if shipping_charged is not None:
+                            existing_sale.shipping_charged = shipping_charged
 
                         # Update item_cost if we found it
                         if item_cost is not None and existing_sale.item_cost is None:
@@ -4080,8 +4095,10 @@ def sync_ebay_sold_orders_deep(self):
                             existing_sale.other_fees = order.get('other_fees')
                         if order.get('tax_collected') is not None:
                             existing_sale.tax_collected = order.get('tax_collected')
-                        if order.get('shipping_charged') is not None:
-                            existing_sale.shipping_charged = order.get('shipping_charged')
+                        if shipping_cost is not None:
+                            existing_sale.shipping_cost = shipping_cost
+                        if shipping_charged is not None:
+                            existing_sale.shipping_charged = shipping_charged
                         if order.get('shipped_at'):
                             existing_sale.shipped_at = order.get('shipped_at')
                         if order.get('delivered_at'):
