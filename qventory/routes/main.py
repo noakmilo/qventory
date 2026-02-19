@@ -456,7 +456,7 @@ def stripe_cancel_subscription():
     return redirect(url_for("main.settings"))
 
 
-@main_bp.route("/stripe/customer-portal", methods=["POST"])
+@main_bp.route("/stripe/customer-portal", methods=["GET", "POST"])
 @login_required
 def stripe_customer_portal():
     if not STRIPE_SECRET_KEY:
