@@ -1597,9 +1597,9 @@ def inventory_active():
     pagination = _build_pagination_metadata(total_items, page, per_page)
 
     mismatches = detect_thumbnail_mismatches(db.session, user_id=current_user.id)
-    if mismatches:
+    if mismatches and current_app.config.get("DEBUG"):
         sample = mismatches[:3]
-        current_app.logger.warning(
+        current_app.logger.debug(
             "Thumbnail slug collisions detected for user %s: %s",
             current_user.id,
             sample,
