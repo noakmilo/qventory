@@ -75,6 +75,9 @@ def get_or_create_settings(user):
     if s.feedback_backfill_completed is None:
         s.feedback_backfill_completed = False
         dirty = True
+    if s.hidden_tasks_json is None:
+        s.hidden_tasks_json = "[]"
+        dirty = True
     if dirty:
         db.session.commit()
     return s

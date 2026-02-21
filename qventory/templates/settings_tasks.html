@@ -1,0 +1,39 @@
+{% extends "base_new.html" %}
+{% block title %}Pending Tasks – Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="breadcrumb">
+  <a href="{{ url_for('main.settings') }}">Settings</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">Pending Tasks</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:20px;">
+  <h2><i class="fas fa-list-check" style="color:#f59e0b"></i> Pending Tasks</h2>
+  <p style="color:var(--sub);margin-top:6px;">
+    Choose which task reminders appear on your dashboard. Hidden tasks can be re-enabled here anytime.
+  </p>
+
+  <form method="POST" style="margin-top:18px;display:flex;flex-direction:column;gap:12px;">
+    {% for task in task_defs %}
+    {% set is_hidden = task.id in hidden_task_ids %}
+    <label style="display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);">
+      <input type="checkbox" name="visible_tasks" value="{{ task.id }}" {% if not is_hidden %}checked{% endif %} style="margin-top:3px;">
+      <div>
+        <div style="font-weight:600;color:var(--text);">{{ task.title }}</div>
+        <div style="color:var(--sub);font-size:13px;margin-top:4px;line-height:1.5;">
+          {{ task.description }}
+        </div>
+      </div>
+    </label>
+    {% endfor %}
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:6px;">
+      <a href="{{ url_for('main.settings') }}" class="btn">Back</a>
+      <button type="submit" class="btn submitbtn">Save Changes</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

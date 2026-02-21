@@ -14,6 +14,7 @@ import time
 import requests
 from urllib.parse import urlparse, parse_qs
 import csv
+import json
 from datetime import datetime, date, timedelta
 import hashlib
 import stripe
@@ -70,6 +71,65 @@ from ..models.retired_item import RetiredItem
 from ..models.ebay_feedback import EbayFeedback
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
+
+PENDING_TASK_DEFS = [
+    {
+        "id": "upgrade_recommendation",
+        "title": "Upgrade plan reminder",
+        "description": "Shown when you are close to or at your plan limit.",
+    },
+    {
+        "id": "ebay_connected",
+        "title": "Connect eBay account",
+        "description": "Shown when no eBay account is connected.",
+    },
+    {
+        "id": "items_missing_cost",
+        "title": "Items missing cost",
+        "description": "Shown when items are missing cost data.",
+    },
+    {
+        "id": "items_missing_supplier",
+        "title": "Items missing supplier",
+        "description": "Shown when items are missing supplier data.",
+    },
+    {
+        "id": "slow_movers",
+        "title": "Slow movers ready",
+        "description": "Shown when slow movers are ready to relist.",
+    },
+    {
+        "id": "feedback_unread",
+        "title": "New feedback",
+        "description": "Shown when new feedback is waiting.",
+    },
+    {
+        "id": "feedback_unresponded",
+        "title": "Feedback awaiting reply",
+        "description": "Shown when feedback needs a response.",
+    },
+]
+
+
+def _load_hidden_tasks(settings: Setting) -> set[str]:
+    if not settings or not settings.hidden_tasks_json:
+        return set()
+    try:
+        data = json.loads(settings.hidden_tasks_json)
+    except Exception:
+        return set()
+    if not isinstance(data, list):
+        return set()
+    valid = {task["id"] for task in PENDING_TASK_DEFS}
+    return {item for item in data if isinstance(item, str) and item in valid}
+
+
+def _save_hidden_tasks(settings: Setting, hidden_tasks: set[str]) -> None:
+    if settings is None:
+        return
+    valid = {task["id"] for task in PENDING_TASK_DEFS}
+    sanitized = sorted(task for task in hidden_tasks if task in valid)
+    settings.hidden_tasks_json = json.dumps(sanitized)
 
 # ==================== Cloudinary ====================
 # pip install cloudinary
@@ -1476,6 +1536,22 @@ def dashboard():
         feedback_unread_count = 0
         feedback_unresponded_count = 0
 
+    hidden_task_ids = _load_hidden_tasks(s)
+    task_flags = {
+        "upgrade_recommendation": bool(pending_tasks.upgrade_recommendation),
+        "ebay_connected": pending_tasks.ebay_connected == 0,
+        "items_missing_cost": pending_tasks.items_missing_cost > 0,
+        "items_missing_supplier": pending_tasks.items_missing_supplier > 0,
+        "slow_movers": slow_movers_count > 0,
+        "feedback_unread": feedback_unread_count > 0,
+        "feedback_unresponded": feedback_unresponded_count > 0,
+    }
+    visible_task_flags = {
+        task_id: (flag and task_id not in hidden_task_ids)
+        for task_id, flag in task_flags.items()
+    }
+    show_pending_tasks = any(visible_task_flags.values())
+
     return render_template(
         "dashboard_home.html",
         settings=s,
@@ -1493,7 +1569,10 @@ def dashboard():
         recommended_article=recommended_article,
         slow_movers_count=slow_movers_count,
         feedback_unread_count=feedback_unread_count,
-        feedback_unresponded_count=feedback_unresponded_count
+        feedback_unresponded_count=feedback_unresponded_count,
+        hidden_task_ids=hidden_task_ids,
+        visible_task_flags=visible_task_flags,
+        show_pending_tasks=show_pending_tasks
     )
 
 
@@ -5123,6 +5202,47 @@ def settings():
                          ebay_username=ebay_username,
                          subscription=subscription,
                          plan_limits=plan_limits)
+
+
+@main_bp.route("/settings/tasks", methods=["GET", "POST"])
+@login_required
+def settings_tasks():
+    s = get_or_create_settings(current_user)
+    hidden_tasks = _load_hidden_tasks(s)
+    valid_ids = {task["id"] for task in PENDING_TASK_DEFS}
+
+    if request.method == "POST":
+        visible = set(request.form.getlist("visible_tasks"))
+        visible = visible & valid_ids
+        hidden_tasks = valid_ids - visible
+        _save_hidden_tasks(s, hidden_tasks)
+        db.session.commit()
+        flash("Pending tasks preferences saved.", "ok")
+        return redirect(url_for("main.settings_tasks"))
+
+    return render_template(
+        "settings_tasks.html",
+        settings=s,
+        task_defs=PENDING_TASK_DEFS,
+        hidden_task_ids=hidden_tasks,
+    )
+
+
+@main_bp.route("/settings/tasks/hide", methods=["POST"])
+@login_required
+def settings_tasks_hide():
+    s = get_or_create_settings(current_user)
+    payload = request.get_json(silent=True) or {}
+    task_id = (payload.get("task_id") or "").strip()
+    valid_ids = {task["id"] for task in PENDING_TASK_DEFS}
+    if task_id not in valid_ids:
+        return jsonify({"ok": False, "error": "invalid_task"}), 400
+
+    hidden_tasks = _load_hidden_tasks(s)
+    hidden_tasks.add(task_id)
+    _save_hidden_tasks(s, hidden_tasks)
+    db.session.commit()
+    return jsonify({"ok": True, "hidden_tasks": sorted(hidden_tasks)})
 
 
 @main_bp.route("/settings/suppliers", methods=["GET"])

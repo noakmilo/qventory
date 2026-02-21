@@ -226,7 +226,7 @@
   {% endif %}
 
   <!-- Pending Tasks Section (Only show if there are tasks) -->
-  {% if pending_tasks.upgrade_recommendation or pending_tasks.ebay_connected == 0 or pending_tasks.items_missing_cost > 0 or pending_tasks.items_missing_supplier > 0 or slow_movers_count > 0 or feedback_unread_count > 0 or feedback_unresponded_count > 0 %}
+  {% if show_pending_tasks %}
   <section class="dashboard-section pending-tasks-section">
     <div class="section-header">
       <h2 class="section-title">
@@ -236,9 +236,9 @@
     </div>
 
     <div class="task-cards">
-      {% if pending_tasks.upgrade_recommendation %}
-      <div class="task-card task-card--warning" id="upgradeTaskCard" data-dismiss-key="{{ upgrade_task_dismiss_key }}" style="position:relative;display:none;">
-        <button type="button" class="task-card__dismiss" data-dismiss-button aria-label="Dismiss upgrade reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
+      {% if visible_task_flags.upgrade_recommendation %}
+      <div class="task-card task-card--warning" data-task-id="upgrade_recommendation" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss upgrade reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-arrow-up"></i>
         </div>
@@ -261,8 +261,9 @@
       {% endif %}
 
       <!-- eBay Connection Task -->
-      {% if pending_tasks.ebay_connected == 0 %}
-      <div class="task-card task-card--warning">
+      {% if visible_task_flags.ebay_connected %}
+      <div class="task-card task-card--warning" data-task-id="ebay_connected" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss connect eBay reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fab fa-ebay"></i>
         </div>
@@ -277,8 +278,9 @@
       {% endif %}
 
       <!-- Missing Costs Task -->
-      {% if pending_tasks.items_missing_cost > 0 %}
-      <div class="task-card task-card--info">
+      {% if visible_task_flags.items_missing_cost %}
+      <div class="task-card task-card--info" data-task-id="items_missing_cost" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing cost reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-dollar-sign"></i>
         </div>
@@ -293,8 +295,9 @@
       {% endif %}
 
       <!-- Missing Supplier Task -->
-      {% if pending_tasks.items_missing_supplier > 0 %}
-      <div class="task-card task-card--info">
+      {% if visible_task_flags.items_missing_supplier %}
+      <div class="task-card task-card--info" data-task-id="items_missing_supplier" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing supplier reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-store"></i>
         </div>
@@ -308,8 +311,9 @@
       </div>
       {% endif %}
 
-      {% if slow_movers_count > 0 %}
-      <div class="task-card task-card--warning">
+      {% if visible_task_flags.slow_movers %}
+      <div class="task-card task-card--warning" data-task-id="slow_movers" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss slow movers reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-hourglass-half"></i>
         </div>
@@ -323,8 +327,9 @@
       </div>
       {% endif %}
 
-      {% if feedback_unread_count > 0 %}
-      <div class="task-card task-card--info">
+      {% if visible_task_flags.feedback_unread %}
+      <div class="task-card task-card--info" data-task-id="feedback_unread" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unread feedback reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-comment-dots"></i>
         </div>
@@ -338,8 +343,9 @@
       </div>
       {% endif %}
 
-      {% if feedback_unresponded_count > 0 %}
-      <div class="task-card task-card--warning">
+      {% if visible_task_flags.feedback_unresponded %}
+      <div class="task-card task-card--warning" data-task-id="feedback_unresponded" style="position:relative;">
+        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unresponded feedback reminder" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:4px;">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-reply"></i>
         </div>
@@ -631,34 +637,21 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const upgradeTaskCard = document.getElementById('upgradeTaskCard');
-  const storage = (() => {
-    try {
-      return window.localStorage;
-    } catch (_err) {
-      return null;
-    }
-  })();
-
-  if (upgradeTaskCard) {
-    const storageKey = upgradeTaskCard.dataset.dismissKey;
-    const closeBtn = upgradeTaskCard.querySelector('[data-dismiss-button]');
-
-    if (storageKey && storage && storage.getItem(storageKey) === 'dismissed') {
-      upgradeTaskCard.remove();
-    } else {
-      if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-          if (storageKey && storage) {
-            storage.setItem(storageKey, 'dismissed');
-          }
-          upgradeTaskCard.remove();
-          pruneEmptyTaskSection();
-        });
-      }
-      upgradeTaskCard.style.display = 'flex';
-    }
-  }
+  const dismissButtons = document.querySelectorAll('[data-task-dismiss]');
+  dismissButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.task-card');
+      const taskId = card?.dataset?.taskId;
+      if (!taskId) return;
+      fetch("{{ url_for('main.settings_tasks_hide') }}", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId })
+      }).catch(() => {});
+      card.remove();
+      pruneEmptyTaskSection();
+    });
+  });
 
   pruneEmptyTaskSection();
 

@@ -42,6 +42,7 @@ class Setting(db.Model):
     feedback_last_viewed_at = db.Column(db.DateTime, nullable=True)
     feedback_last_sync_at = db.Column(db.DateTime, nullable=True)
     feedback_backfill_completed = db.Column(db.Boolean, default=False)
+    hidden_tasks_json = db.Column(db.Text, nullable=True)
 
     def enabled_levels(self):
         levels = []
