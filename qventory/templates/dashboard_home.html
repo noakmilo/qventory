@@ -238,7 +238,6 @@
     <div class="task-cards">
       {% if visible_task_flags.upgrade_recommendation %}
       <div class="task-card task-card--warning" data-task-id="upgrade_recommendation">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss upgrade reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-arrow-up"></i>
         </div>
@@ -254,16 +253,20 @@
             {% endif %}
           </p>
         </div>
-        <a href="{{ url_for('main.upgrade') }}" class="task-card__action btn btn-primary">
-          <i class="fas fa-arrow-up"></i> Upgrade
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.upgrade') }}" class="task-card__action btn btn-primary">
+            <i class="fas fa-arrow-up"></i> Upgrade
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss upgrade reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       <!-- eBay Connection Task -->
       {% if visible_task_flags.ebay_connected %}
       <div class="task-card task-card--warning" data-task-id="ebay_connected">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss connect eBay reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fab fa-ebay"></i>
         </div>
@@ -271,16 +274,20 @@
           <h3 class="task-card__title">Connect eBay Account</h3>
           <p class="task-card__description">Import your inventory automatically</p>
         </div>
-        <a href="{{ url_for('main.settings') }}#ebay" class="task-card__action btn btn-primary">
-          <i class="fas fa-link"></i> Connect
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.settings') }}#ebay" class="task-card__action btn btn-primary">
+            <i class="fas fa-link"></i> Connect
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss connect eBay reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       <!-- Missing Costs Task -->
       {% if visible_task_flags.items_missing_cost %}
       <div class="task-card task-card--info" data-task-id="items_missing_cost">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing cost reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-dollar-sign"></i>
         </div>
@@ -288,16 +295,20 @@
           <h3 class="task-card__title">{{ pending_tasks.items_missing_cost }} items missing cost</h3>
           <p class="task-card__description">Add costs to calculate profit margins</p>
         </div>
-        <a href="{{ url_for('main.inventory_active') }}?missing_cost=1" class="task-card__action btn btn-secondary">
-          <i class="fas fa-edit"></i> Fix Costs
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.inventory_active') }}?missing_cost=1" class="task-card__action btn btn-secondary">
+            <i class="fas fa-edit"></i> Fix Costs
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing cost reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       <!-- Missing Supplier Task -->
       {% if visible_task_flags.items_missing_supplier %}
       <div class="task-card task-card--info" data-task-id="items_missing_supplier">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing supplier reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-store"></i>
         </div>
@@ -305,15 +316,19 @@
           <h3 class="task-card__title">{{ pending_tasks.items_missing_supplier }} items missing supplier</h3>
           <p class="task-card__description">Track your inventory sources</p>
         </div>
-        <a href="{{ url_for('main.inventory_active') }}?missing_supplier=1" class="task-card__action btn btn-secondary">
-          <i class="fas fa-edit"></i> Add Suppliers
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.inventory_active') }}?missing_supplier=1" class="task-card__action btn btn-secondary">
+            <i class="fas fa-edit"></i> Add Suppliers
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss missing supplier reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       {% if visible_task_flags.slow_movers %}
       <div class="task-card task-card--warning" data-task-id="slow_movers">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss slow movers reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-hourglass-half"></i>
         </div>
@@ -321,15 +336,19 @@
           <h3 class="task-card__title">{{ slow_movers_count }} slow movers ready</h3>
           <p class="task-card__description">Relist items that haven’t sold after your rule window</p>
         </div>
-        <a href="{{ url_for('main.inventory_slow_movers') }}" class="task-card__action btn btn-primary">
-          <i class="fas fa-sync"></i> Review
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.inventory_slow_movers') }}" class="task-card__action btn btn-primary">
+            <i class="fas fa-sync"></i> Review
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss slow movers reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       {% if visible_task_flags.feedback_unread %}
       <div class="task-card task-card--info" data-task-id="feedback_unread">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unread feedback reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-comment-dots"></i>
         </div>
@@ -337,15 +356,19 @@
           <h3 class="task-card__title">{{ feedback_unread_count }} new feedback</h3>
           <p class="task-card__description">Review new feedback from eBay</p>
         </div>
-        <a href="{{ url_for('main.feedback_manager') }}" class="task-card__action btn btn-secondary">
-          <i class="fas fa-eye"></i> View
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.feedback_manager') }}" class="task-card__action btn btn-secondary">
+            <i class="fas fa-eye"></i> View
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unread feedback reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
 
       {% if visible_task_flags.feedback_unresponded %}
       <div class="task-card task-card--warning" data-task-id="feedback_unresponded">
-        <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unresponded feedback reminder">&times;</button>
         <div class="task-card__icon">
           <i class="fas fa-reply"></i>
         </div>
@@ -353,9 +376,14 @@
           <h3 class="task-card__title">{{ feedback_unresponded_count }} feedback awaiting reply</h3>
           <p class="task-card__description">Respond to improve your seller reputation</p>
         </div>
-        <a href="{{ url_for('main.feedback_manager', responded='unresponded') }}" class="task-card__action btn btn-primary">
-          <i class="fas fa-paper-plane"></i> Reply
-        </a>
+        <div class="task-card__actions">
+          <a href="{{ url_for('main.feedback_manager', responded='unresponded') }}" class="task-card__action btn btn-primary">
+            <i class="fas fa-paper-plane"></i> Reply
+          </a>
+          <button type="button" class="task-card__dismiss" data-task-dismiss aria-label="Dismiss unresponded feedback reminder" title="Dismiss">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
       {% endif %}
     </div>

@@ -3624,8 +3624,6 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   border: 1px solid var(--glass-border);
   border-radius: 12px;
   padding: var(--space-3);
-  position: relative;
-  padding-right: calc(var(--space-3) + 32px);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -3670,22 +3668,38 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   margin: 0;
 }
 
+.task-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .task-card__dismiss {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   background: none;
-  border: none;
+  border: 1px solid transparent;
   color: var(--sub);
-  font-size: 18px;
+  font-size: 14px;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
+  border-radius: 8px;
   line-height: 1;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .task-card__action {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+.task-card__dismiss:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: var(--glass-border);
+  color: var(--text);
+}
+
+.task-card__dismiss i {
+  pointer-events: none;
 }
 
 /* Stats Grid */
