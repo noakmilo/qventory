@@ -7370,6 +7370,49 @@ def admin_enforce_free_plan_limits():
     return redirect(url_for("main.admin_dashboard"))
 
 
+@main_bp.route("/admin/manual-sales-import", methods=["POST"])
+@require_admin
+def admin_manual_sales_import():
+    """Manually trigger eBay sales import for a specific user."""
+    from qventory.tasks import import_ebay_sales
+
+    raw_user_id = (request.form.get("user_id") or "").strip()
+    raw_days_back = (request.form.get("days_back") or "").strip()
+
+    try:
+        user_id = int(raw_user_id)
+    except (TypeError, ValueError):
+        flash("Invalid user ID.", "error")
+        return redirect(url_for("main.admin_dashboard"))
+
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "error")
+        return redirect(url_for("main.admin_dashboard"))
+
+    days_back = None
+    if raw_days_back:
+        try:
+            days_back = int(raw_days_back)
+            if days_back <= 0:
+                days_back = None
+        except (TypeError, ValueError):
+            days_back = None
+
+    task = import_ebay_sales.delay(user_id, days_back=days_back)
+    if days_back:
+        flash(
+            f"Manual sales import started for {user.username} (last {days_back} days). Task ID: {task.id}.",
+            "ok"
+        )
+    else:
+        flash(
+            f"Manual sales import started for {user.username} (ALL TIME). Task ID: {task.id}.",
+            "ok"
+        )
+    return redirect(url_for("main.admin_dashboard"))
+
+
 @main_bp.route("/admin/sync-and-purge-items", methods=["POST"])
 @require_admin
 def admin_sync_and_purge_items():
