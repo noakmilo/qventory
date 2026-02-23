@@ -7343,6 +7343,33 @@ def admin_backfill_failed_payments():
     return redirect(url_for('main.admin_dashboard'))
 
 
+@main_bp.route("/admin/enforce-free-plan-limits", methods=["POST"])
+@require_admin
+def admin_enforce_free_plan_limits():
+    """Enforce free plan limits for users whose role + subscription are free."""
+    now = datetime.utcnow()
+    users = User.query.filter(User.role == "free").all()
+    deactivated_total = 0
+    enforced_users = 0
+
+    for user in users:
+        subscription = user.get_subscription()
+        if subscription.plan != "free":
+            continue
+        removed = _downgrade_to_free_and_enforce(user, subscription, now)
+        if removed:
+            deactivated_total += removed
+        enforced_users += 1
+
+    db.session.commit()
+    flash(
+        f"Free plan enforcement complete for {enforced_users} user(s). "
+        f"Deactivated {deactivated_total} item(s) to meet limits.",
+        "ok"
+    )
+    return redirect(url_for("main.admin_dashboard"))
+
+
 @main_bp.route("/admin/sync-and-purge-items", methods=["POST"])
 @require_admin
 def admin_sync_and_purge_items():
