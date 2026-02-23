@@ -296,6 +296,7 @@ def stripe_webhook():
         if subscription:
             now = datetime.utcnow()
             old_plan = subscription.plan
+            period_end_dt = datetime.utcfromtimestamp(period_end) if period_end else None
 
             # ── Trial cancellation: user cancelled during trial ──
             # Handle BEFORE updating plan/role so we don't briefly
@@ -320,11 +321,13 @@ def stripe_webhook():
                 )
                 return Response("OK", status=200)
 
+            effective_cancel = status == "cancelled" and (not period_end_dt or period_end_dt <= now)
+
             # ── Normal subscription update flow ──
             if plan_name:
                 subscription.plan = plan_name
             if period_end:
-                subscription.current_period_end = datetime.utcfromtimestamp(period_end)
+                subscription.current_period_end = period_end_dt
             if trial_end:
                 subscription.trial_ends_at = datetime.utcfromtimestamp(trial_end)
                 subscription.on_trial = raw_status == "trialing"
@@ -345,10 +348,13 @@ def stripe_webhook():
                         from qventory.tasks import import_ebay_inventory
                         import_ebay_inventory.delay(subscription.user_id, import_mode='new_only', listing_status='ACTIVE')
             if status:
-                subscription.status = status
+                if status == "cancelled" and not effective_cancel:
+                    subscription.status = "active"
+                else:
+                    subscription.status = status
             if cancel_at_period_end and status in {"active", "suspended"}:
                 subscription.cancelled_at = now
-            if status == "cancelled":
+            if effective_cancel:
                 _downgrade_to_free_and_enforce(subscription.user, subscription, now)
             db.session.commit()
 
@@ -607,6 +613,28 @@ def _refresh_subscription_from_stripe(subscription: Subscription):
     price_id = items[0].get("price", {}).get("id") if items else None
     plan_name = _plan_from_stripe_price(price_id)
 
+    # Trial cancellation: user cancelled during trial -> downgrade immediately
+    if (
+        raw_status == "trialing"
+        and cancel_at_period_end
+        and trial_end_ts
+        and datetime.utcfromtimestamp(trial_end_ts) > now
+    ):
+        _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+        db.session.commit()
+        return subscription
+
+    # Effective cancellation (period ended or cancelled immediately)
+    period_end_dt = datetime.utcfromtimestamp(period_end_ts) if period_end_ts else None
+    effective_cancel = (
+        raw_status in {"canceled", "incomplete_expired"}
+        and (not period_end_dt or period_end_dt <= now)
+    ) or (cancel_at_period_end and period_end_dt and period_end_dt <= now)
+    if effective_cancel:
+        _downgrade_to_free_and_enforce(subscription.user, subscription, now)
+        db.session.commit()
+        return subscription
+
     status = None
     if raw_status in {"active", "trialing"}:
         status = "active"
@@ -624,7 +652,7 @@ def _refresh_subscription_from_stripe(subscription: Subscription):
         dirty = True
 
     if period_end_ts:
-        new_end = datetime.utcfromtimestamp(period_end_ts)
+        new_end = period_end_dt
         if subscription.current_period_end != new_end:
             subscription.current_period_end = new_end
             dirty = True
@@ -644,14 +672,8 @@ def _refresh_subscription_from_stripe(subscription: Subscription):
         subscription.user.has_used_trial = True
         dirty = True
 
-    if status == "cancelled":
-        if subscription.current_period_end and subscription.current_period_end > now:
-            status = "active"
-        else:
-            subscription.on_trial = False
-            subscription.trial_ends_at = None
-            subscription.current_period_end = None
-            dirty = True
+    if status == "cancelled" and subscription.current_period_end and subscription.current_period_end > now:
+        status = "active"
 
     if status and subscription.status != status:
         subscription.status = status
@@ -6805,9 +6827,28 @@ def admin_help_center_upload_image():
 def admin_dashboard():
     """Admin dashboard - view all users and their inventory stats"""
     from qventory.models.system_setting import SystemSetting
+    from qventory.models.subscription import Subscription
+    from qventory.models.marketplace_credential import MarketplaceCredential
     # Get all users with item count
     users = User.query.all()
     user_stats = []
+    user_ids = [user.id for user in users]
+    subscriptions = (
+        Subscription.query.filter(Subscription.user_id.in_(user_ids)).all()
+        if user_ids
+        else []
+    )
+    subscription_map = {sub.user_id: sub for sub in subscriptions}
+    ebay_connected_ids = set()
+    if user_ids:
+        ebay_connected_ids = {
+            cred.user_id
+            for cred in MarketplaceCredential.query.filter(
+                MarketplaceCredential.user_id.in_(user_ids),
+                MarketplaceCredential.marketplace == "ebay",
+                MarketplaceCredential.is_active.is_(True),
+            ).all()
+        }
 
     for user in users:
         item_count = Item.query.filter(
@@ -6821,11 +6862,15 @@ def admin_dashboard():
             Item.inactive_by_user.is_(False),
             Item.item_cost.is_(None)
         ).count()
+        subscription = subscription_map.get(user.id)
+        subscription_plan = (subscription.plan if subscription else "free")
         user_stats.append({
             'user': user,
             'item_count': item_count,
             'missing_cost_count': missing_cost_count,
-            'has_inventory': item_count > 0
+            'has_inventory': item_count > 0,
+            'subscription_plan': subscription_plan,
+            'connected_store': user.id in ebay_connected_ids
         })
 
     # Sort by item count descending
