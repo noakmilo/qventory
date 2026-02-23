@@ -203,7 +203,7 @@
             <td><strong>{{ stat.user.username }}</strong></td>
             <td>{{ stat.user.email }}</td>
             <td>
-              <span class="tag" style="text-transform:capitalize;">
+              <span class="role-badge role-{{ stat.user.role }}">
                 {{ stat.user.role.replace('_', ' ') }}
               </span>
             </td>
