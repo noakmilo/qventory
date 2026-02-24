@@ -114,11 +114,9 @@
 
     {% if subscription.plan != 'free' and subscription.stripe_subscription_id %}
     <div style="margin-top:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
-      <form method="POST" action="{{ url_for('main.stripe_customer_portal') }}" style="display:inline;">
-        <button type="submit" class="btn">
-          <i class="fas fa-credit-card"></i> Update Payment Method
-        </button>
-      </form>
+      <a href="{{ url_for('main.stripe_customer_portal') }}" class="btn">
+        <i class="fas fa-credit-card"></i> Update Payment Method
+      </a>
       <form method="POST" action="{{ url_for('main.stripe_cancel_subscription') }}" style="display:inline;" id="cancel-subscription-form">
         <button type="button" class="btn" id="cancel-subscription-button" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#ef4444;">
           <i class="fas fa-ban"></i> Cancel Subscription
