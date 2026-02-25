@@ -7647,6 +7647,7 @@ def admin_plan_limits():
 def admin_update_plan_limits(plan):
     """Update limits for a specific plan"""
     from qventory.models.subscription import PlanLimit
+    from qventory.models.system_setting import SystemSetting
 
     plan_limit = PlanLimit.query.filter_by(plan=plan).first_or_404()
 
@@ -7698,6 +7699,12 @@ def admin_update_plan_limits(plan):
         plan_limit.support_level = request.form.get("support_level", "community")
 
         db.session.commit()
+
+        if plan == "god":
+            SystemSetting.set_int(
+                "feature_ebay_listing_create_enabled",
+                1 if plan_limit.can_create_listings else 0
+            )
 
         flash(f"Plan limits for '{plan}' updated successfully", "ok")
 

@@ -98,10 +98,15 @@ def create_app():
 
     @app.context_processor
     def inject_feature_flags():
+        from .models.system_setting import SystemSetting
+        setting_value = SystemSetting.get_int("feature_ebay_listing_create_enabled", None)
+        if setting_value is None:
+            setting_value = 1 if app.config.get("FEATURE_EBAY_LISTING_CREATE_ENABLED", False) else 0
         return {
             "feature_ebay_listing_create_enabled": app.config.get(
                 "FEATURE_EBAY_LISTING_CREATE_ENABLED", False
             )
+            or bool(setting_value)
         }
 
     # ==================== ACTIVITY TRACKING MIDDLEWARE ====================

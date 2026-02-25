@@ -5,7 +5,7 @@ from flask_login import login_required, current_user
 from ..extensions import db
 from ..models.ebay_listing_draft import EbayListingDraft
 from ..models.ebay_category import EbayCategory
-from ..routes.permissions import require_role, require_feature_flag
+from ..routes.permissions import require_plan_feature, require_feature_flag
 from ..helpers.ebay_specifics_cache import get_category_specifics
 from ..helpers.ebay_image_upload import create_ebay_upload_session
 from ..helpers.ebay_listing_publish import (
@@ -127,7 +127,7 @@ def _validate_draft(draft: EbayListingDraft):
 @ebay_list_bp.route("/ebay/list")
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def ebay_list_wizard():
     return render_template("ebay_list_wizard.html")
 
@@ -135,7 +135,7 @@ def ebay_list_wizard():
 @ebay_list_bp.route("/api/ebay/drafts", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def create_draft():
     payload = request.get_json(silent=True) or {}
     draft = EbayListingDraft(
@@ -155,7 +155,7 @@ def create_draft():
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>", methods=["GET"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def get_draft(draft_id):
     draft = _draft_or_404(draft_id)
     if not draft:
@@ -166,7 +166,7 @@ def get_draft(draft_id):
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>", methods=["PATCH"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def update_draft(draft_id):
     draft = _draft_or_404(draft_id)
     if not draft:
@@ -210,7 +210,7 @@ def update_draft(draft_id):
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/validate", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def validate_draft(draft_id):
     draft = _draft_or_404(draft_id)
     if not draft:
@@ -222,7 +222,7 @@ def validate_draft(draft_id):
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/publish", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def publish_draft(draft_id):
     if not _rate_limit(f"publish:{current_user.id}", limit=5, window_seconds=300):
         return jsonify({"ok": False, "error": "rate_limited"}), 429
@@ -313,7 +313,7 @@ def publish_draft(draft_id):
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/duplicate", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def duplicate_draft(draft_id):
     draft = _draft_or_404(draft_id)
     if not draft:
@@ -352,7 +352,7 @@ def duplicate_draft(draft_id):
 @ebay_list_bp.route("/api/ebay/images/upload-token", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def get_upload_token():
     if not _rate_limit(f"upload:{current_user.id}", limit=20, window_seconds=60):
         return jsonify({"ok": False, "error": "rate_limited"}), 429
@@ -383,7 +383,7 @@ def get_upload_token():
 @ebay_list_bp.route("/api/ebay/images/confirm", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def confirm_upload():
     payload = request.get_json(silent=True) or {}
     draft_id = payload.get("draft_id")
@@ -408,7 +408,7 @@ def confirm_upload():
 @ebay_list_bp.route("/api/ebay/categories/<category_id>/specifics", methods=["GET"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def get_category_specifics_api(category_id):
     cache = get_category_specifics(category_id)
     if not cache:
@@ -419,7 +419,7 @@ def get_category_specifics_api(category_id):
 @ebay_list_bp.route("/api/ebay/categories/<category_id>/specifics/refresh", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def refresh_category_specifics(category_id):
     cache = get_category_specifics(category_id, force_refresh=True)
     if not cache:
@@ -430,7 +430,7 @@ def refresh_category_specifics(category_id):
 @ebay_list_bp.route("/api/ebay/categories/<category_id>/path", methods=["GET"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
-@require_role("god")
+@require_plan_feature("create_listings")
 def get_category_path(category_id):
     category = EbayCategory.query.filter_by(category_id=category_id).first()
     if not category:
