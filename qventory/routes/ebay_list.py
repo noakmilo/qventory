@@ -13,6 +13,7 @@ from ..helpers.ebay_listing_publish import (
     create_offer,
     publish_offer,
 )
+from ..helpers.ebay_account import get_account_policies, get_merchant_locations
 from ..models.marketplace_credential import MarketplaceCredential
 
 
@@ -69,7 +70,7 @@ def _validate_draft(draft: EbayListingDraft):
     elif len(draft.title) > 80:
         errors["title"] = "Title must be 80 characters or fewer."
 
-    if not draft.description_text and not draft.description_html_sanitized:
+    if not draft.description_html_sanitized:
         errors["description"] = "Description is required."
 
     if not draft.category_id:
@@ -89,9 +90,6 @@ def _validate_draft(draft: EbayListingDraft):
 
     if not draft.currency:
         errors["currency"] = "Currency is required."
-
-    if not draft.location_postal_code:
-        errors["location_postal_code"] = "Postal code is required."
 
     if not draft.fulfillment_policy_id:
         errors["fulfillment_policy_id"] = "Fulfillment policy ID is required."
@@ -138,14 +136,23 @@ def ebay_list_wizard():
 @require_plan_feature("create_listings")
 def create_draft():
     payload = request.get_json(silent=True) or {}
+    locations_result = get_merchant_locations(current_user.id)
+    location_data = None
+    if locations_result.get("success"):
+        if locations_result.get("locations"):
+            location_data = locations_result["locations"][0]
     draft = EbayListingDraft(
         user_id=current_user.id,
         status="DRAFT",
         title=payload.get("title"),
         description_html=payload.get("description_html"),
         description_html_sanitized=_sanitize_html(payload.get("description_html")),
-        description_text=payload.get("description_text"),
         currency=payload.get("currency") or "USD",
+        merchant_location_key=(location_data or {}).get("merchantLocationKey"),
+        location_postal_code=((location_data or {}).get("location") or {}).get("address", {}).get("postalCode"),
+        location_city=((location_data or {}).get("location") or {}).get("address", {}).get("city"),
+        location_state=((location_data or {}).get("location") or {}).get("address", {}).get("stateOrProvince"),
+        location_country=((location_data or {}).get("location") or {}).get("address", {}).get("country"),
     )
     db.session.add(draft)
     db.session.commit()
@@ -174,9 +181,9 @@ def update_draft(draft_id):
 
     payload = request.get_json(silent=True) or {}
     allowed_fields = {
-        "title", "description_html", "description_text", "category_id",
+        "title", "description_html", "category_id",
         "item_specifics", "condition_id", "condition_label", "sku",
-        "quantity", "price", "currency", "location",
+        "quantity", "price", "currency",
         "images", "status", "merchant_location_key",
         "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
     }
@@ -189,12 +196,6 @@ def update_draft(draft_id):
             draft.description_html_sanitized = _sanitize_html(value)
         elif key == "item_specifics":
             draft.item_specifics_json = value
-        elif key == "location":
-            draft.location_postal_code = (value or {}).get("postal_code")
-            draft.location_city = (value or {}).get("city")
-            draft.location_state = (value or {}).get("state")
-            draft.location_country = (value or {}).get("country") or "US"
-            draft.merchant_location_key = (value or {}).get("merchant_location_key")
         elif key == "images":
             if isinstance(value, list) and len(value) <= 20:
                 draft.images_json = value
@@ -254,7 +255,7 @@ def publish_draft(draft_id):
         "condition": draft.condition_id,
         "product": {
             "title": draft.title,
-            "description": draft.description_html_sanitized or draft.description_text or "",
+            "description": draft.description_html_sanitized or "",
             "aspects": draft.item_specifics_json or {},
             "imageUrls": image_urls,
         },
@@ -437,3 +438,25 @@ def get_category_path(category_id):
         return jsonify({"ok": False, "error": "not_found"}), 404
     parts = category.full_path.split(" > ")
     return jsonify({"ok": True, "path": parts, "full_path": category.full_path})
+
+
+@ebay_list_bp.route("/api/ebay/account/policies", methods=["GET"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def get_account_policies_api():
+    result = get_account_policies(current_user.id)
+    if not result.get("success"):
+        return jsonify({"ok": False, "error": result.get("error")}), 400
+    return jsonify({"ok": True, "policies": result.get("policies")})
+
+
+@ebay_list_bp.route("/api/ebay/account/locations", methods=["GET"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def get_account_locations_api():
+    result = get_merchant_locations(current_user.id)
+    if not result.get("success"):
+        return jsonify({"ok": False, "error": result.get("error")}), 400
+    return jsonify({"ok": True, "locations": result.get("locations")})

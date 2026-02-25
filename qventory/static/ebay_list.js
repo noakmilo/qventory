@@ -3,32 +3,16 @@
   let draft = null;
   let specificsSchema = null;
   let saveTimer = null;
-  let currentImage = null;
   let images = [];
+  let selectedImageIndex = null;
+  let baseImageBitmap = null;
 
   const qs = (sel) => document.querySelector(sel);
-  const qsa = (sel) => Array.from(document.querySelectorAll(sel));
 
   const wizardStatus = qs('#wizardStatus');
-  const steps = qsa('.wizard-step');
-  const sections = qsa('.wizard-section');
 
   function setStatus(msg) {
     if (wizardStatus) wizardStatus.textContent = msg;
-  }
-
-  function setActiveStep(step) {
-    steps.forEach(btn => btn.classList.toggle('active', btn.dataset.step === step));
-    sections.forEach(sec => sec.classList.toggle('active', sec.id === `step-${step}`));
-  }
-
-  steps.forEach(btn => {
-    btn.addEventListener('click', () => setActiveStep(btn.dataset.step));
-  });
-
-  function debounceSave() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveDraft, 800);
   }
 
   function draftUrl(base, id) {
@@ -63,6 +47,11 @@
     setStatus(`Draft #${draft.id} loaded.`);
   }
 
+  function debounceSave() {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 800);
+  }
+
   function serializeDraftFromInputs() {
     return {
       title: qs('#titleInput').value.trim(),
@@ -71,19 +60,23 @@
       quantity: parseInt(qs('#quantityInput').value || '0', 10),
       price: parseFloat(qs('#priceInput').value || '0'),
       currency: qs('#currencyInput').value,
-      description_html: qs('#descriptionHtmlInput').value,
-      description_text: qs('#descriptionTextInput').value,
-      location: {
-        postal_code: qs('#postalInput').value.trim(),
-        city: qs('#cityInput').value.trim(),
-        state: qs('#stateInput').value.trim(),
-        country: qs('#countryInput').value.trim() || 'US',
-        merchant_location_key: qs('#merchantLocationKeyInput').value.trim()
-      },
-      fulfillment_policy_id: qs('#fulfillmentPolicyInput').value.trim(),
-      payment_policy_id: qs('#paymentPolicyInput').value.trim(),
-      return_policy_id: qs('#returnPolicyInput').value.trim()
+      description_html: getDescriptionHtml(),
+      fulfillment_policy_id: qs('#fulfillmentPolicySelect').value || null,
+      payment_policy_id: qs('#paymentPolicySelect').value || null,
+      return_policy_id: qs('#returnPolicySelect').value || null
     };
+  }
+
+  function setDescriptionHtml(html) {
+    qs('#descriptionHtmlInput').value = html || '';
+    qs('#visualEditor').innerHTML = html || '';
+  }
+
+  function getDescriptionHtml() {
+    if (qs('#descriptionHtmlInput').style.display === 'none') {
+      return qs('#visualEditor').innerHTML;
+    }
+    return qs('#descriptionHtmlInput').value;
   }
 
   async function saveDraft() {
@@ -111,10 +104,16 @@
   }
 
   function bindInputAutosave() {
-    qsa('#step-basic input, #step-basic textarea, #step-basic select').forEach(el => {
-      el.addEventListener('input', debounceSave);
-      el.addEventListener('change', debounceSave);
-    });
+    ['#titleInput', '#skuInput', '#conditionInput', '#quantityInput', '#priceInput', '#currencyInput']
+      .forEach(sel => {
+        const el = qs(sel);
+        el.addEventListener('input', debounceSave);
+        el.addEventListener('change', debounceSave);
+      });
+    qs('#visualEditor').addEventListener('input', debounceSave);
+    qs('#descriptionHtmlInput').addEventListener('input', debounceSave);
+    ['#fulfillmentPolicySelect', '#paymentPolicySelect', '#returnPolicySelect']
+      .forEach(sel => qs(sel).addEventListener('change', debounceSave));
   }
 
   function renderDraftToInputs() {
@@ -125,39 +124,129 @@
     qs('#quantityInput').value = draft.quantity || 1;
     qs('#priceInput').value = draft.price || '';
     qs('#currencyInput').value = draft.currency || 'USD';
-    qs('#descriptionHtmlInput').value = draft.description_html || '';
-    qs('#descriptionTextInput').value = draft.description_text || '';
-    const loc = draft.location || {};
-    qs('#postalInput').value = loc.postal_code || '';
-    qs('#cityInput').value = loc.city || '';
-    qs('#stateInput').value = loc.state || '';
-    qs('#countryInput').value = loc.country || 'US';
-    qs('#merchantLocationKeyInput').value = loc.merchant_location_key || '';
-    const policies = draft.policy_ids || {};
-    qs('#fulfillmentPolicyInput').value = policies.fulfillment || '';
-    qs('#paymentPolicyInput').value = policies.payment || '';
-    qs('#returnPolicyInput').value = policies.return || '';
+    setDescriptionHtml(draft.description_html || '');
+  }
+
+  function applyCommand(cmd) {
+    document.execCommand(cmd, false, null);
+  }
+
+  function setupEditorToggle() {
+    const visualBtn = qs('#visualModeBtn');
+    const htmlBtn = qs('#htmlModeBtn');
+    const visualEditor = qs('#visualEditor');
+    const htmlEditor = qs('#descriptionHtmlInput');
+
+    visualBtn.addEventListener('click', () => {
+      visualBtn.classList.add('active');
+      htmlBtn.classList.remove('active');
+      htmlEditor.style.display = 'none';
+      visualEditor.style.display = 'block';
+      visualEditor.innerHTML = htmlEditor.value;
+    });
+    htmlBtn.addEventListener('click', () => {
+      htmlBtn.classList.add('active');
+      visualBtn.classList.remove('active');
+      htmlEditor.style.display = 'block';
+      visualEditor.style.display = 'none';
+      htmlEditor.value = visualEditor.innerHTML;
+    });
+
+    document.querySelectorAll('.editor-toolbar [data-cmd]').forEach(btn => {
+      btn.addEventListener('click', () => applyCommand(btn.dataset.cmd));
+    });
+  }
+
+  async function loadPolicies() {
+    const res = await fetch(config.policiesUrl);
+    const data = await res.json();
+    if (!data.ok) {
+      setStatus('Failed to load policies.');
+      return;
+    }
+    const policies = data.policies || {};
+    populatePolicySelect('#fulfillmentPolicySelect', policies.fulfillment || []);
+    populatePolicySelect('#paymentPolicySelect', policies.payment || []);
+    populatePolicySelect('#returnPolicySelect', policies.return || []);
+  }
+
+  function populatePolicySelect(selector, policies) {
+    const select = qs(selector);
+    select.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'Select policy';
+    select.appendChild(empty);
+    policies.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id || p.policyId || '';
+      opt.textContent = `${p.name || p.description || p.id}`;
+      select.appendChild(opt);
+    });
+    if (draft && draft.policy_ids) {
+      const current = selector === '#fulfillmentPolicySelect' ? draft.policy_ids.fulfillment\n        : selector === '#paymentPolicySelect' ? draft.policy_ids.payment\n        : draft.policy_ids.return;\n      if (current) select.value = current;\n    }
+  }
+
+  async function loadLocations() {
+    const res = await fetch(config.locationsUrl);
+    const data = await res.json();
+    if (!data.ok) {
+      setStatus('No merchant locations found.');
+      return;
+    }
+    const location = (data.locations || [])[0];
+    if (location) {
+      setStatus(`Using location: ${location.merchantLocationKey}`);
+    }
+  }
+
+  async function loadCategoryTree() {
+    const res = await fetch(`${config.categoriesUrl}?leaf_only=0`);
+    const data = await res.json();
+    const categories = data.categories || [];
+    renderCategoryTree(categories);
+  }
+
+  function renderCategoryTree(categories) {
+    const tree = qs('#categoryTree');
+    tree.innerHTML = '';
+    categories.forEach(cat => {
+      const div = document.createElement('div');
+      div.className = `category-node ${cat.is_leaf ? 'leaf' : ''}`;
+      div.style.marginLeft = `${cat.level * 10}px`;
+      div.textContent = cat.full_path;
+      div.addEventListener('click', () => selectCategory(cat));
+      tree.appendChild(div);
+    });
   }
 
   async function searchCategories() {
     const query = qs('#categorySearchInput').value.trim();
     if (!query) return;
-    const url = `${config.categoriesUrl}?query=${encodeURIComponent(query)}&leaf_only=1&limit=20`;
+    const url = `${config.categoriesUrl}?query=${encodeURIComponent(query)}&leaf_only=0&limit=20`;
     const res = await fetch(url);
     const data = await res.json();
-    renderCategoryResults(data.categories || []);
+    renderAutocomplete(data.categories || []);
   }
 
-  function renderCategoryResults(categories) {
-    const container = qs('#categoryResults');
-    container.innerHTML = '';
+  function renderAutocomplete(categories) {
+    const box = qs('#categoryAutocomplete');
+    box.innerHTML = '';
+    if (!categories.length) {
+      box.style.display = 'none';
+      return;
+    }
     categories.forEach(cat => {
       const div = document.createElement('div');
-      div.className = 'category-item';
+      div.className = 'item';
       div.textContent = cat.full_path;
-      div.addEventListener('click', () => selectCategory(cat));
-      container.appendChild(div);
+      div.addEventListener('click', () => {
+        selectCategory(cat);
+        box.style.display = 'none';
+      });
+      box.appendChild(div);
     });
+    box.style.display = 'block';
   }
 
   async function selectCategory(cat) {
@@ -197,7 +286,6 @@
       label.textContent = `${spec.name}${requiredFlag ? ' *' : ''}`;
       const input = document.createElement('input');
       input.className = 'input';
-      input.setAttribute('data-spec-name', spec.name);
       input.value = (draft.item_specifics && draft.item_specifics[spec.name]) ? draft.item_specifics[spec.name][0] : '';
       input.addEventListener('input', () => {
         const val = input.value.trim();
@@ -223,19 +311,13 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async function loadImageToCanvas(file) {
-    const bitmap = await createImageBitmap(file);
-    const canvas = qs('#editorCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    ctx.drawImage(bitmap, 0, 0);
-    return {canvas, ctx, width: bitmap.width, height: bitmap.height};
+  async function loadImageBitmap(file) {
+    return createImageBitmap(file);
   }
 
-  function applyAdjustments(canvas, ctx, brightness, contrast, aspect) {
-    const width = canvas.width;
-    const height = canvas.height;
+  function applyAdjustments(source, brightness, contrast, aspect) {
+    const width = source.width;
+    const height = source.height;
     let sx = 0, sy = 0, sw = width, sh = height;
     if (aspect && aspect !== 'original') {
       const [aw, ah] = aspect.split(':').map(Number);
@@ -253,7 +335,7 @@
     tmp.width = sw;
     tmp.height = sh;
     const tctx = tmp.getContext('2d');
-    tctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    tctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
     const imgData = tctx.getImageData(0, 0, sw, sh);
     const data = imgData.data;
     const b = brightness / 100;
@@ -266,6 +348,19 @@
     }
     tctx.putImageData(imgData, 0, 0);
     return tmp;
+  }
+
+  function renderCanvasPreview() {
+    if (selectedImageIndex === null || !baseImageBitmap) return;
+    const aspect = qs('#aspectSelect').value;
+    const brightness = parseInt(qs('#brightnessRange').value, 10);
+    const contrast = parseInt(qs('#contrastRange').value, 10);
+    const previewCanvas = qs('#editorCanvas');
+    const processed = applyAdjustments(baseImageBitmap, brightness, contrast, aspect);
+    previewCanvas.width = processed.width;
+    previewCanvas.height = processed.height;
+    const ctx = previewCanvas.getContext('2d');
+    ctx.drawImage(processed, 0, 0);
   }
 
   async function encodeCanvasToJpeg(canvas) {
@@ -284,12 +379,12 @@
       if (images.some(img => img.sha256 === sha256)) {
         return;
       }
-      const {canvas} = await loadImageToCanvas(file);
+      const bitmap = await loadImageBitmap(file);
       const aspect = qs('#aspectSelect').value;
       const brightness = parseInt(qs('#brightnessRange').value, 10);
       const contrast = parseInt(qs('#contrastRange').value, 10);
-      const processedCanvas = applyAdjustments(canvas, canvas.getContext('2d'), brightness, contrast, aspect);
-      const blob = await encodeCanvasToJpeg(processedCanvas);
+      const processed = applyAdjustments(bitmap, brightness, contrast, aspect);
+      const blob = await encodeCanvasToJpeg(processed);
       if (blob.size > 2 * 1024 * 1024) {
         setStatus('Image exceeds 2MB after compression. Try smaller dimensions.');
         return;
@@ -300,8 +395,8 @@
         sha256,
         blob,
         url,
-        width: processedCanvas.width,
-        height: processedCanvas.height,
+        width: processed.width,
+        height: processed.height,
         ebay_image_url: null,
         is_main: images.length === 0
       };
@@ -373,6 +468,7 @@
         <div class="muted">${img.is_main ? 'Main' : ''}</div>
         <button class="btn btn-small" data-action="main">Set Main</button>
       `;
+      card.addEventListener('click', () => selectImage(index));
       card.addEventListener('dragstart', (e) => {
         e.dataTransfer.setData('text/plain', index.toString());
       });
@@ -386,7 +482,8 @@
         renderImageList();
         debounceSave();
       });
-      card.querySelector('[data-action="main"]').addEventListener('click', () => {
+      card.querySelector('[data-action="main"]').addEventListener('click', (e) => {
+        e.stopPropagation();
         images.forEach(i => i.is_main = false);
         img.is_main = true;
         renderImageList();
@@ -396,11 +493,40 @@
     });
   }
 
+  function selectImage(index) {
+    selectedImageIndex = index;
+    const img = images[index];
+    if (!img) return;
+    const imageEl = new Image();
+    imageEl.onload = () => {
+      baseImageBitmap = imageEl;
+      renderCanvasPreview();
+    };
+    imageEl.src = img.url;
+  }
+
+  async function applyEditsToSelected() {
+    if (selectedImageIndex === null) return;
+    const canvas = qs('#editorCanvas');
+    const blob = await encodeCanvasToJpeg(canvas);
+    if (blob.size > 2 * 1024 * 1024) {
+      setStatus('Image exceeds 2MB after compression.');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const img = images[selectedImageIndex];
+    img.blob = blob;
+    img.url = url;
+    img.width = canvas.width;
+    img.height = canvas.height;
+    renderImageList();
+    await uploadImage(img);
+  }
+
   qs('#categorySearchBtn').addEventListener('click', searchCategories);
   qs('#categorySearchInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') searchCategories();
   });
-
   qs('#refreshSpecificsBtn').addEventListener('click', refreshSpecifics);
 
   qs('#imageInput').addEventListener('change', async (e) => {
@@ -411,14 +537,14 @@
     e.target.value = '';
   });
 
-  qs('#applyEditsBtn').addEventListener('click', () => {
-    setStatus('Adjustments apply to newly added images.');
-  });
+  qs('#applyEditsBtn').addEventListener('click', applyEditsToSelected);
+  qs('#brightnessRange').addEventListener('input', renderCanvasPreview);
+  qs('#contrastRange').addEventListener('input', renderCanvasPreview);
+  qs('#aspectSelect').addEventListener('change', renderCanvasPreview);
 
-  qs('#validateBtn').addEventListener('click', async () => {
-    const res = await fetch(draftUrl(config.draftValidateUrl, draft.id), {method: 'POST'});
-    const data = await res.json();
-    qs('#publishStatus').textContent = data.ok ? 'Draft valid.' : `Validation errors: ${JSON.stringify(data.errors)}`;
+  qs('#saveDraftBtn').addEventListener('click', async () => {
+    await saveDraft();
+    qs('#publishStatus').textContent = 'Draft saved.';
   });
 
   qs('#publishBtn').addEventListener('click', async () => {
@@ -448,6 +574,10 @@
       renderImageList();
     }
     bindInputAutosave();
+    setupEditorToggle();
+    await loadPolicies();
+    await loadLocations();
+    await loadCategoryTree();
   }
 
   init();
