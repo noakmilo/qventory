@@ -1,6 +1,6 @@
 """add ebay listing drafts and specifics cache
 
-Revision ID: 061_ebay_listing_drafts_and_specifics_cache
+Revision ID: 061_ebay_listing_drafts
 Revises: 060_add_hidden_tasks_to_settings
 Create Date: 2026-02-25 12:00:00.000000
 """
@@ -11,7 +11,7 @@ from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
-revision = "061_ebay_listing_drafts_and_specifics_cache"
+revision = "061_ebay_listing_drafts"
 down_revision = "060_add_hidden_tasks_to_settings"
 branch_labels = None
 depends_on = None
