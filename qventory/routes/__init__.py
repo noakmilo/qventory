@@ -7,3 +7,4 @@ from . import main, auth, pickups  # noqa: E402,F401
 
 # Import auto_relist blueprint
 from .auto_relist import auto_relist_bp  # noqa: E402,F401
+from .ebay_list import ebay_list_bp  # noqa: E402,F401

@@ -29,6 +29,11 @@ class Config:
     # PostgreSQL Database URL (required)
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
 
+    # Feature flags
+    FEATURE_EBAY_LISTING_CREATE_ENABLED = os.environ.get(
+        "FEATURE_EBAY_LISTING_CREATE_ENABLED", "False"
+    ).lower() == "true"
+
     # SQLAlchemy Engine Options - optimize connection pooling and prevent idle transactions
     SQLALCHEMY_ENGINE_OPTIONS = {
         'pool_size': 10,              # Max connections in pool per worker

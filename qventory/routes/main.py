@@ -7778,6 +7778,12 @@ def api_ebay_category_search():
 @login_required
 def api_ebay_categories():
     leaf_only = request.args.get("leaf_only", "1") == "1"
+    query = (request.args.get("query") or request.args.get("q") or "").strip()
+    limit = request.args.get("limit")
+    try:
+        limit = int(limit) if limit else None
+    except (TypeError, ValueError):
+        limit = None
 
     if EbayCategory.query.count() == 0:
         try:
@@ -7790,7 +7796,20 @@ def api_ebay_categories():
     if leaf_only:
         q = q.filter(EbayCategory.is_leaf.is_(True))
 
-    categories = q.order_by(EbayCategory.full_path.asc()).all()
+    if query:
+        like = f"%{query}%"
+        q = q.filter(
+            or_(
+                EbayCategory.name.ilike(like),
+                EbayCategory.full_path.ilike(like)
+            )
+        )
+
+    q = q.order_by(EbayCategory.full_path.asc())
+    if limit:
+        q = q.limit(limit)
+
+    categories = q.all()
     return jsonify({"ok": True, "categories": [c.to_dict() for c in categories]})
 
 

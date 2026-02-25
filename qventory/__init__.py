@@ -15,7 +15,7 @@ else:
 
 from .config import Config
 from .extensions import db, login_manager, migrate
-from .routes import main_bp, auth_bp, auto_relist_bp
+from .routes import main_bp, auth_bp, auto_relist_bp, ebay_list_bp
 from .routes.reports import reports_bp
 from .routes.ebay_auth import ebay_auth_bp
 from .routes.expenses import expenses_bp
@@ -88,12 +88,21 @@ def create_app():
     app.register_blueprint(expenses_bp)
     app.register_blueprint(receipts_bp)
     app.register_blueprint(auto_relist_bp)
+    app.register_blueprint(ebay_list_bp)
     app.register_blueprint(webhook_bp)
     app.register_blueprint(platform_webhook_bp)
     # DISABLED: Admin logging/webhooks consoles (reducing server load)
     # app.register_blueprint(admin_webhooks_bp)
     # app.register_blueprint(admin_logs_bp)
     app.register_blueprint(tax_reports_bp)
+
+    @app.context_processor
+    def inject_feature_flags():
+        return {
+            "feature_ebay_listing_create_enabled": app.config.get(
+                "FEATURE_EBAY_LISTING_CREATE_ENABLED", False
+            )
+        }
 
     # ==================== ACTIVITY TRACKING MIDDLEWARE ====================
     @app.before_request

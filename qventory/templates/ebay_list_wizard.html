@@ -1,0 +1,208 @@
+{% extends "base_new.html" %}
+{% block title %}List on eBay – Qventory{% endblock %}
+
+{% block content %}
+<div class="list-wizard">
+  <div class="page-header">
+    <h1 class="page-title"><i class="fab fa-ebay"></i> List on eBay</h1>
+    <p class="page-subtitle">Create a new eBay listing (GOD only)</p>
+  </div>
+
+  <div class="wizard-nav">
+    <button class="wizard-step active" data-step="basic">1. Basic</button>
+    <button class="wizard-step" data-step="category">2. Category</button>
+    <button class="wizard-step" data-step="specifics">3. Specifics</button>
+    <button class="wizard-step" data-step="images">4. Images</button>
+    <button class="wizard-step" data-step="review">5. Review</button>
+  </div>
+
+  <div class="wizard-status" id="wizardStatus">Draft not loaded.</div>
+
+  <section class="wizard-section active" id="step-basic">
+    <div class="card">
+      <h2>Basic Info</h2>
+      <div class="form-grid">
+        <div>
+          <label class="label">Title</label>
+          <input class="input" type="text" id="titleInput" maxlength="80" placeholder="Item title">
+        </div>
+        <div>
+          <label class="label">SKU</label>
+          <input class="input" type="text" id="skuInput" placeholder="SKU">
+        </div>
+        <div>
+          <label class="label">Condition</label>
+          <select class="input" id="conditionInput">
+            <option value="">Select condition</option>
+            <option value="NEW">New</option>
+            <option value="USED_EXCELLENT">Used - Excellent</option>
+            <option value="USED_GOOD">Used - Good</option>
+            <option value="USED_FAIR">Used - Fair</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Quantity</label>
+          <input class="input" type="number" id="quantityInput" min="1" value="1">
+        </div>
+        <div>
+          <label class="label">Price</label>
+          <input class="input" type="number" id="priceInput" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div>
+          <label class="label">Currency</label>
+          <select class="input" id="currencyInput">
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Postal Code</label>
+          <input class="input" type="text" id="postalInput" placeholder="ZIP">
+        </div>
+        <div>
+          <label class="label">City</label>
+          <input class="input" type="text" id="cityInput" placeholder="City">
+        </div>
+        <div>
+          <label class="label">State</label>
+          <input class="input" type="text" id="stateInput" placeholder="State">
+        </div>
+        <div>
+          <label class="label">Country</label>
+          <input class="input" type="text" id="countryInput" value="US">
+        </div>
+        <div>
+          <label class="label">Merchant Location Key</label>
+          <input class="input" type="text" id="merchantLocationKeyInput" placeholder="DEFAULT">
+        </div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <label class="label">Description (HTML)</label>
+        <textarea class="input" id="descriptionHtmlInput" rows="6" placeholder="<p>Describe your item</p>"></textarea>
+      </div>
+      <div style="margin-top:12px;">
+        <label class="label">Description (Plain Text)</label>
+        <textarea class="input" id="descriptionTextInput" rows="4" placeholder="Plain text description"></textarea>
+      </div>
+
+      <div style="margin-top:16px;">
+        <h3 style="margin-bottom:6px;">Policy IDs</h3>
+        <div class="form-grid">
+          <div>
+            <label class="label">Fulfillment Policy ID</label>
+            <input class="input" type="text" id="fulfillmentPolicyInput" placeholder="Fulfillment policy ID">
+          </div>
+          <div>
+            <label class="label">Payment Policy ID</label>
+            <input class="input" type="text" id="paymentPolicyInput" placeholder="Payment policy ID">
+          </div>
+          <div>
+            <label class="label">Return Policy ID</label>
+            <input class="input" type="text" id="returnPolicyInput" placeholder="Return policy ID">
+          </div>
+        </div>
+        <div class="muted" style="margin-top:6px;">TODO: wire to user policy IDs when available.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wizard-section" id="step-category">
+    <div class="card">
+      <h2>Category Selection</h2>
+      <div class="category-search">
+        <input class="input" type="text" id="categorySearchInput" placeholder="Search categories...">
+        <button class="btn" id="categorySearchBtn">Search</button>
+      </div>
+      <div class="category-results" id="categoryResults"></div>
+      <div class="category-selected" id="categorySelected"></div>
+    </div>
+  </section>
+
+  <section class="wizard-section" id="step-specifics">
+    <div class="card">
+      <h2>Item Specifics</h2>
+      <button class="btn" id="refreshSpecificsBtn" style="margin-bottom:8px;">Refresh Specifics</button>
+      <div id="specificsContainer" class="specifics-grid"></div>
+      <div class="muted" style="margin-top:8px;">Required fields are marked.</div>
+    </div>
+  </section>
+
+  <section class="wizard-section" id="step-images">
+    <div class="card">
+      <h2>Images</h2>
+      <input type="file" id="imageInput" accept="image/*" multiple>
+      <div class="image-tools">
+        <div class="image-editor">
+          <canvas id="editorCanvas" width="320" height="320"></canvas>
+          <div class="editor-controls">
+            <label>Aspect
+              <select id="aspectSelect">
+                <option value="original">Original</option>
+                <option value="1:1">1:1</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+              </select>
+            </label>
+            <label>Brightness <input type="range" id="brightnessRange" min="-50" max="50" value="0"></label>
+            <label>Contrast <input type="range" id="contrastRange" min="-50" max="50" value="0"></label>
+            <button class="btn" id="applyEditsBtn">Apply</button>
+          </div>
+        </div>
+        <div class="image-list" id="imageList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="wizard-section" id="step-review">
+    <div class="card">
+      <h2>Review & Publish</h2>
+      <div id="reviewSummary"></div>
+      <div class="review-actions">
+        <button class="btn" id="validateBtn">Validate Draft</button>
+        <button class="btn btn-primary" id="publishBtn">List on eBay</button>
+      </div>
+      <div id="publishStatus" class="muted"></div>
+    </div>
+  </section>
+</div>
+
+<style>
+  .list-wizard .wizard-nav { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+  .list-wizard .wizard-step { background:var(--card); border:1px solid var(--border); padding:8px 12px; border-radius:8px; cursor:pointer; }
+  .list-wizard .wizard-step.active { border-color:#3b82f6; color:#3b82f6; }
+  .list-wizard .wizard-section { display:none; }
+  .list-wizard .wizard-section.active { display:block; }
+  .list-wizard .wizard-status { margin-bottom:12px; color:var(--sub); font-size:13px; }
+  .list-wizard .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .list-wizard .category-search { display:flex; gap:8px; margin-bottom:12px; }
+  .list-wizard .category-results { display:grid; gap:8px; }
+  .list-wizard .category-item { padding:8px 10px; border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+  .list-wizard .category-item:hover { border-color:#60a5fa; }
+  .list-wizard .specifics-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
+  .list-wizard .image-tools { display:grid; grid-template-columns:320px 1fr; gap:16px; }
+  .list-wizard .image-list { display:flex; flex-wrap:wrap; gap:10px; }
+  .list-wizard .image-card { width:120px; border:1px solid var(--border); border-radius:10px; padding:6px; background:var(--card); cursor:grab; }
+  .list-wizard .image-card img { width:100%; height:90px; object-fit:cover; border-radius:6px; }
+  .list-wizard .review-actions { display:flex; gap:10px; margin-top:12px; }
+  .list-wizard .muted { color:var(--sub); font-size:12px; }
+  @media (max-width: 800px) {
+    .list-wizard .image-tools { grid-template-columns:1fr; }
+  }
+</style>
+
+<script>
+  window.EBAY_LIST_CONFIG = {
+    draftCreateUrl: "{{ url_for('ebay_list.create_draft') }}",
+    draftBaseUrl: "{{ url_for('ebay_list.get_draft', draft_id=0) }}".replace("/0", ""),
+    draftValidateUrl: "{{ url_for('ebay_list.validate_draft', draft_id=0) }}".replace("/0", ""),
+    draftPublishUrl: "{{ url_for('ebay_list.publish_draft', draft_id=0) }}".replace("/0", ""),
+    draftDuplicateUrl: "{{ url_for('ebay_list.duplicate_draft', draft_id=0) }}".replace("/0", ""),
+    categoriesUrl: "{{ url_for('main.api_ebay_categories') }}",
+    specificsUrl: "{{ url_for('ebay_list.get_category_specifics_api', category_id='0') }}".replace("/0", ""),
+    specificsRefreshUrl: "{{ url_for('ebay_list.refresh_category_specifics', category_id='0') }}".replace("/0", ""),
+    uploadTokenUrl: "{{ url_for('ebay_list.get_upload_token') }}",
+    imageConfirmUrl: "{{ url_for('ebay_list.confirm_upload') }}"
+  };
+</script>
+<script src="{{ url_for('static', filename='ebay_list.js') }}"></script>
+{% endblock %}
