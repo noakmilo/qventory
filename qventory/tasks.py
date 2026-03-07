@@ -3589,14 +3589,29 @@ def get_user_batch(all_users, batch_size=20, cursor_key=None):
     if cursor_key:
         from qventory.models.system_setting import SystemSetting
         setting = SystemSetting.query.filter_by(key=cursor_key).first()
-        batch_index = int(setting.value) % total_batches if setting else 0
+        batch_index = 0
+        if setting:
+            raw_cursor = setting.value_str
+            if raw_cursor is None and setting.value_int is not None:
+                raw_cursor = str(setting.value_int)
+            try:
+                batch_index = int(raw_cursor) % total_batches if raw_cursor is not None else 0
+            except (TypeError, ValueError):
+                batch_index = 0
 
         # Advance cursor for the next execution
         next_index = (batch_index + 1) % total_batches
         if setting:
-            setting.value = str(next_index)
+            setting.value_str = str(next_index)
+            setting.value_int = next_index
         else:
-            db.session.add(SystemSetting(key=cursor_key, value=str(next_index)))
+            db.session.add(
+                SystemSetting(
+                    key=cursor_key,
+                    value_str=str(next_index),
+                    value_int=next_index
+                )
+            )
         db.session.commit()
     else:
         # Fallback: minute-based rotation (for frequent tasks like every 15 min)
