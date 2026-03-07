@@ -6214,7 +6214,7 @@ def backfill_missing_item_images_for_user(self, user_id):
             try:
                 active_snapshot = get_active_listings_trading_api(
                     user_id,
-                    max_items=max(200, len(active_items) * 5),
+                    max_items=5000,
                     collect_failures=False
                 ) or []
                 for entry in active_snapshot:
