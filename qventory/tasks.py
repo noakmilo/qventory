@@ -6113,9 +6113,11 @@ def backfill_missing_item_images_for_user(self, user_id):
         from qventory.models.sale import Sale
         from qventory.models.marketplace_credential import MarketplaceCredential
         from qventory.helpers.ebay_inventory import (
+            get_active_listings_trading_api,
             get_listing_details_trading_api,
             parse_ebay_inventory_item,
         )
+        from qventory.helpers.image_processor import download_and_upload_image
 
         user = User.query.get(user_id)
         if not user:
@@ -6190,6 +6192,29 @@ def backfill_missing_item_images_for_user(self, user_id):
                 'errors': 0
             }
 
+        # Fallback source for active listings in case GetItem omits picture details.
+        # Key: listing_id -> image_url
+        active_fallback_images = {}
+        if active_items:
+            try:
+                active_snapshot = get_active_listings_trading_api(
+                    user_id,
+                    max_items=max(200, len(active_items) * 5),
+                    collect_failures=False
+                ) or []
+                for entry in active_snapshot:
+                    listing_key = str(entry.get('ebay_listing_id') or '').strip()
+                    image_urls = (entry.get('product') or {}).get('imageUrls') or []
+                    first_image = (image_urls[0] or '').strip() if image_urls else ''
+                    if listing_key and first_image and listing_key not in active_fallback_images:
+                        active_fallback_images[listing_key] = first_image
+                log_task(
+                    f"[BACKFILL_IMAGES_USER] Active fallback map built: "
+                    f"{len(active_fallback_images)} listing images"
+                )
+            except Exception as exc:
+                log_task(f"[BACKFILL_IMAGES_USER] Active fallback snapshot failed: {exc}")
+
         active_backfilled = 0
         sold_backfilled = 0
         skipped = 0
@@ -6199,19 +6224,42 @@ def backfill_missing_item_images_for_user(self, user_id):
             listing_id = (item.ebay_listing_id or '').strip()
             if not listing_id:
                 skipped += 1
+                log_task(f"[BACKFILL_IMAGES_USER] Skipped item_id={item.id}: empty listing_id")
                 continue
 
             try:
                 enriched = get_listing_details_trading_api(user_id, listing_id) or {}
                 if not enriched:
                     skipped += 1
+                    log_task(f"[BACKFILL_IMAGES_USER] Skipped listing={listing_id}: GetItem returned empty payload")
                     continue
 
                 # Use process_images=True to match import behavior (Cloudinary + fallback URL).
                 parsed = parse_ebay_inventory_item(enriched, process_images=True) or {}
                 new_thumb = (parsed.get('item_thumb') or '').strip()
+
+                # Fallback for active listings: use image from active snapshot if GetItem had no image.
+                if not new_thumb and bucket == 'active':
+                    fallback_image = (active_fallback_images.get(listing_id) or '').strip()
+                    if fallback_image:
+                        uploaded = download_and_upload_image(
+                            fallback_image,
+                            target_size_kb=2,
+                            max_dimension=400,
+                            public_id=listing_id
+                        )
+                        new_thumb = (uploaded or fallback_image).strip()
+                        log_task(
+                            f"[BACKFILL_IMAGES_USER] listing={listing_id}: "
+                            f"used active-snapshot fallback image"
+                        )
+
                 if not new_thumb:
                     skipped += 1
+                    log_task(
+                        f"[BACKFILL_IMAGES_USER] Skipped listing={listing_id}: "
+                        f"no image found in GetItem and no usable fallback"
+                    )
                     continue
 
                 changed = False
@@ -6234,8 +6282,14 @@ def backfill_missing_item_images_for_user(self, user_id):
                         active_backfilled += 1
                     else:
                         sold_backfilled += 1
+                    log_task(
+                        f"[BACKFILL_IMAGES_USER] Backfilled item_id={item.id} listing={listing_id} ({bucket})"
+                    )
                 else:
                     skipped += 1
+                    log_task(
+                        f"[BACKFILL_IMAGES_USER] Skipped listing={listing_id}: no field changed after enrichment"
+                    )
 
             except Exception as exc:
                 errors += 1

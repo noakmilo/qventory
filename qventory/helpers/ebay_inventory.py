@@ -487,10 +487,34 @@ def get_listing_details_trading_api(user_id, listing_id):
             gallery_url = picture_details.find('ebay:GalleryURL', _XML_NS)
             if gallery_url is not None and gallery_url.text:
                 image_urls.append(gallery_url.text.strip())
+            gallery_large = picture_details.find('ebay:GalleryURLLarge', _XML_NS)
+            if gallery_large is not None and gallery_large.text:
+                image_urls.append(gallery_large.text.strip())
             picture_urls = picture_details.findall('ebay:PictureURL', _XML_NS)
             for pic in picture_urls:
                 if pic is not None and pic.text:
                     image_urls.append(pic.text.strip())
+            external_urls = picture_details.findall('ebay:ExternalPictureURL', _XML_NS)
+            for ext in external_urls:
+                if ext is not None and ext.text:
+                    image_urls.append(ext.text.strip())
+
+        variation_picture_urls = item_elem.findall(
+            './/ebay:Variations/ebay:Pictures/ebay:VariationSpecificPictureSet/ebay:PictureURL',
+            _XML_NS
+        )
+        for pic in variation_picture_urls:
+            if pic is not None and pic.text:
+                image_urls.append(pic.text.strip())
+
+        deduped_image_urls = []
+        seen_image_urls = set()
+        for url in image_urls:
+            if not url or url in seen_image_urls:
+                continue
+            seen_image_urls.add(url)
+            deduped_image_urls.append(url)
+        image_urls = deduped_image_urls
 
         # View URL
         view_url_elem = item_elem.find('ebay:ListingDetails/ebay:ViewItemURL', _XML_NS)
@@ -1304,13 +1328,41 @@ def get_active_listings_trading_api(
                         if variation_skus:
                             sku = variation_skus[0]
 
-                    # Image
+                    # Image (gallery, explicit picture URLs, and variation picture sets)
+                    image_urls = []
                     picture_details = item_elem.find('ebay:PictureDetails', ns)
-                    image_url = None
                     if picture_details is not None:
                         gallery_url = picture_details.find('ebay:GalleryURL', ns)
-                        if gallery_url is not None:
-                            image_url = gallery_url.text
+                        if gallery_url is not None and gallery_url.text:
+                            image_urls.append(gallery_url.text.strip())
+
+                        gallery_large = picture_details.find('ebay:GalleryURLLarge', ns)
+                        if gallery_large is not None and gallery_large.text:
+                            image_urls.append(gallery_large.text.strip())
+
+                        for pic in picture_details.findall('ebay:PictureURL', ns):
+                            if pic is not None and pic.text:
+                                image_urls.append(pic.text.strip())
+
+                        for ext in picture_details.findall('ebay:ExternalPictureURL', ns):
+                            if ext is not None and ext.text:
+                                image_urls.append(ext.text.strip())
+
+                    variation_picture_urls = item_elem.findall(
+                        './/ebay:Variations/ebay:Pictures/ebay:VariationSpecificPictureSet/ebay:PictureURL',
+                        ns
+                    )
+                    for pic in variation_picture_urls:
+                        if pic is not None and pic.text:
+                            image_urls.append(pic.text.strip())
+
+                    deduped_image_urls = []
+                    seen_image_urls = set()
+                    for url in image_urls:
+                        if not url or url in seen_image_urls:
+                            continue
+                        seen_image_urls.add(url)
+                        deduped_image_urls.append(url)
 
                     start_elem = item_elem.find('ebay:ListingDetails/ebay:StartTime', ns)
                     if start_elem is None:
@@ -1327,7 +1379,7 @@ def get_active_listings_trading_api(
                         'product': {
                             'title': title.text if title is not None else 'Unknown',
                             'description': '',
-                            'imageUrls': [image_url] if image_url else []
+                            'imageUrls': deduped_image_urls
                         },
                         'availability': {
                             'shipToLocationAvailability': {
