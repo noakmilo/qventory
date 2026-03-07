@@ -6097,6 +6097,195 @@ def backfill_recent_item_prices(self, hours=48):
         }
 
 
+@celery.task(bind=True, name='qventory.tasks.backfill_missing_item_images_for_user')
+def backfill_missing_item_images_for_user(self, user_id):
+    """
+    Admin task: backfill missing item images for one user.
+
+    Covers both active inventory and sold items (soft-deleted items with sold_at set)
+    that have an eBay listing ID but no thumbnail in Qventory.
+    """
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.user import User
+        from qventory.models.item import Item
+        from qventory.models.sale import Sale
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.helpers.ebay_inventory import (
+            get_listing_details_trading_api,
+            parse_ebay_inventory_item,
+        )
+
+        user = User.query.get(user_id)
+        if not user:
+            log_task(f"[BACKFILL_IMAGES_USER] User {user_id} not found")
+            return {
+                'success': False,
+                'error': 'User not found',
+                'user_id': user_id
+            }
+
+        cred = MarketplaceCredential.query.filter_by(
+            user_id=user_id,
+            marketplace='ebay',
+            is_active=True
+        ).first()
+        if not cred:
+            log_task(f"[BACKFILL_IMAGES_USER] User {user_id} has no active eBay credential")
+            return {
+                'success': False,
+                'error': 'No active eBay credential',
+                'user_id': user_id
+            }
+
+        log_task(f"[BACKFILL_IMAGES_USER] Starting image backfill for user {user_id} ({user.username})")
+
+        missing_thumb = or_(Item.item_thumb.is_(None), Item.item_thumb == '')
+
+        active_items = Item.query.filter(
+            Item.user_id == user_id,
+            Item.is_active.is_(True),
+            Item.ebay_listing_id.isnot(None),
+            missing_thumb
+        ).all()
+
+        sold_item_ids = db.session.query(Sale.item_id).filter(
+            Sale.user_id == user_id,
+            Sale.item_id.isnot(None),
+            Sale.status.in_(['paid', 'shipped', 'completed'])
+        )
+
+        sold_items = Item.query.filter(
+            Item.user_id == user_id,
+            Item.is_active.is_(False),
+            Item.ebay_listing_id.isnot(None),
+            missing_thumb
+        ).filter(
+            or_(Item.sold_at.isnot(None), Item.id.in_(sold_item_ids))
+        ).all()
+
+        candidates = []
+        for item in active_items:
+            candidates.append((item, 'active'))
+        for item in sold_items:
+            candidates.append((item, 'sold'))
+
+        total = len(candidates)
+        log_task(
+            f"[BACKFILL_IMAGES_USER] Candidates: total={total}, "
+            f"active={len(active_items)}, sold={len(sold_items)}"
+        )
+
+        if total == 0:
+            return {
+                'success': True,
+                'user_id': user_id,
+                'total_candidates': 0,
+                'active_candidates': 0,
+                'sold_candidates': 0,
+                'active_backfilled': 0,
+                'sold_backfilled': 0,
+                'skipped': 0,
+                'errors': 0
+            }
+
+        active_backfilled = 0
+        sold_backfilled = 0
+        skipped = 0
+        errors = 0
+
+        for idx, (item, bucket) in enumerate(candidates, start=1):
+            listing_id = (item.ebay_listing_id or '').strip()
+            if not listing_id:
+                skipped += 1
+                continue
+
+            try:
+                enriched = get_listing_details_trading_api(user_id, listing_id) or {}
+                if not enriched:
+                    skipped += 1
+                    continue
+
+                # Use process_images=True to match import behavior (Cloudinary + fallback URL).
+                parsed = parse_ebay_inventory_item(enriched, process_images=True) or {}
+                new_thumb = (parsed.get('item_thumb') or '').strip()
+                if not new_thumb:
+                    skipped += 1
+                    continue
+
+                changed = False
+                if not (item.item_thumb or '').strip():
+                    item.item_thumb = new_thumb
+                    changed = True
+
+                if parsed.get('ebay_url') and not item.ebay_url:
+                    item.ebay_url = parsed['ebay_url']
+                    changed = True
+
+                listing_start = parsed.get('listing_start_time')
+                if listing_start and not item.listing_date:
+                    item.listing_date = listing_start.date()
+                    changed = True
+
+                if changed:
+                    item.last_ebay_sync = datetime.utcnow()
+                    if bucket == 'active':
+                        active_backfilled += 1
+                    else:
+                        sold_backfilled += 1
+                else:
+                    skipped += 1
+
+            except Exception as exc:
+                errors += 1
+                log_task(
+                    f"[BACKFILL_IMAGES_USER] Error item_id={item.id} listing={listing_id}: {exc}"
+                )
+
+            if idx % 20 == 0:
+                db.session.commit()
+                log_task(
+                    f"[BACKFILL_IMAGES_USER] Batch commit {idx}/{total} "
+                    f"(active_backfilled={active_backfilled}, sold_backfilled={sold_backfilled}, "
+                    f"skipped={skipped}, errors={errors})"
+                )
+
+            if hasattr(self, 'request') and self.request.id:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'current': idx,
+                        'total': total,
+                        'active_backfilled': active_backfilled,
+                        'sold_backfilled': sold_backfilled,
+                        'skipped': skipped,
+                        'errors': errors,
+                    }
+                )
+
+        db.session.commit()
+        total_backfilled = active_backfilled + sold_backfilled
+        log_task(
+            f"[BACKFILL_IMAGES_USER] Complete user {user_id}: "
+            f"backfilled={total_backfilled}, active={active_backfilled}, sold={sold_backfilled}, "
+            f"skipped={skipped}, errors={errors}"
+        )
+
+        return {
+            'success': True,
+            'user_id': user_id,
+            'total_candidates': total,
+            'active_candidates': len(active_items),
+            'sold_candidates': len(sold_items),
+            'backfilled': total_backfilled,
+            'active_backfilled': active_backfilled,
+            'sold_backfilled': sold_backfilled,
+            'skipped': skipped,
+            'errors': errors
+        }
+
+
 @celery.task(bind=True, name='qventory.tasks.sync_ebay_category_fee_catalog')
 def sync_ebay_category_fee_catalog(self, user_id=None, marketplace_id="EBAY_US", force=False):
     """

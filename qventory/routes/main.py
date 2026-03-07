@@ -7413,6 +7413,43 @@ def admin_manual_sales_import():
     return redirect(url_for("main.admin_dashboard"))
 
 
+@main_bp.route("/admin/backfill-missing-images-user", methods=["POST"])
+@require_admin
+def admin_backfill_missing_images_user():
+    """Backfill missing eBay item images for a specific user (active + sold)."""
+    from qventory.tasks import backfill_missing_item_images_for_user
+    from qventory.models.marketplace_credential import MarketplaceCredential
+
+    raw_user_id = (request.form.get("user_id") or "").strip()
+    try:
+        user_id = int(raw_user_id)
+    except (TypeError, ValueError):
+        flash("Invalid user ID.", "error")
+        return redirect(url_for("main.admin_dashboard"))
+
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "error")
+        return redirect(url_for("main.admin_dashboard"))
+
+    ebay_cred = MarketplaceCredential.query.filter_by(
+        user_id=user_id,
+        marketplace='ebay',
+        is_active=True
+    ).first()
+    if not ebay_cred:
+        flash(f"User '{user.username}' does not have an active eBay credential.", "error")
+        return redirect(url_for("main.admin_dashboard"))
+
+    task = backfill_missing_item_images_for_user.delay(user_id)
+    flash(
+        f"Image backfill started for {user.username} (Task ID: {task.id}). "
+        "Active and sold items with missing images will be reviewed.",
+        "ok"
+    )
+    return redirect(url_for("main.admin_dashboard"))
+
+
 @main_bp.route("/admin/sync-and-purge-items", methods=["POST"])
 @require_admin
 def admin_sync_and_purge_items():

@@ -197,6 +197,28 @@
       </div>
     </div>
 
+    <div style="background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.3);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">
+        <div style="flex:1;min-width:220px;">
+          <h3 style="color:#14b8a6;margin:0 0 var(--space-2) 0;font-size:var(--fs-base);">
+            <i class="fas fa-images"></i> Backfill Missing Images (User)
+          </h3>
+          <p style="margin:0;font-size:var(--fs-sm);color:var(--sub);">
+            Review one user account and backfill missing eBay thumbnails for both active and sold items.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('main.admin_backfill_missing_images_user') }}"
+              onsubmit="return confirm('Start image backfill for this user?');"
+              style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <input type="number" name="user_id" min="1" placeholder="User ID"
+                 style="width:120px;padding:8px 10px;border-radius:6px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);">
+          <button type="submit" class="btn" style="background:#14b8a6;color:#0f172a;white-space:nowrap;">
+            <i class="fas fa-bolt"></i> Run Task
+          </button>
+        </form>
+      </div>
+    </div>
+
 
     <h2 style="margin:var(--space-5) 0 var(--space-3) 0;">User List</h2>
 
