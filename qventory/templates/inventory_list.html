@@ -2191,6 +2191,13 @@ document.addEventListener('DOMContentLoaded', function() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      if (!contentType.includes('application/json')) {
+        if (response.status === 401) {
+          throw new Error('Session expired. Please refresh and sign in again.');
+        }
+        throw new Error('Unexpected server response while relisting.');
+      }
       const data = await response.json();
       if (!response.ok || !data.ok) {
         throw new Error(data.error || 'Relist failed');

@@ -657,6 +657,14 @@ document.addEventListener('DOMContentLoaded', function() {
         body: JSON.stringify(changes)
       });
 
+      const contentType = (response.headers.get('content-type') || '').toLowerCase();
+      if (!contentType.includes('application/json')) {
+        if (response.status === 401) {
+          throw new Error('Session expired');
+        }
+        throw new Error('Unexpected server response');
+      }
+
       const data = await response.json();
 
       if (data.success) {

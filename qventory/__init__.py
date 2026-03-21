@@ -81,6 +81,22 @@ def create_app():
     migrate.init_app(app, db)
     login_manager.init_app(app)
 
+    @login_manager.unauthorized_handler
+    def _handle_unauthorized():
+        from flask import jsonify, redirect, request, url_for
+
+        wants_json = (
+            request.path.startswith("/api/")
+            or request.is_json
+            or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or "application/json" in (request.headers.get("Accept") or "")
+        )
+
+        if wants_json:
+            return jsonify({"ok": False, "error": "authentication_required"}), 401
+
+        return redirect(url_for("auth.login", next=request.url))
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
     app.register_blueprint(reports_bp)

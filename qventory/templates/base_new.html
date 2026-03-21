@@ -443,8 +443,20 @@
 
     function checkNotifications() {
       fetch('/api/notifications/unread')
-        .then(res => res.json())
+        .then(async (res) => {
+          const contentType = (res.headers.get('content-type') || '').toLowerCase();
+          if (res.status === 401) {
+            return { ok: false, error: 'authentication_required' };
+          }
+          if (!contentType.includes('application/json')) {
+            throw new Error(`Notifications endpoint returned non-JSON (${res.status})`);
+          }
+          return res.json();
+        })
         .then(data => {
+          if (!data || data.ok === false) {
+            return;
+          }
           if (data.ok && data.notifications && data.notifications.length > 0) {
             // Show only notifications created since last check
             data.notifications.forEach(notification => {

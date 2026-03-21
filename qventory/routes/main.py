@@ -8452,22 +8452,26 @@ CRITICAL RULES:
 @login_required
 def get_unread_notifications():
     """Get unread notifications for current user"""
-    from qventory.models.notification import Notification
+    try:
+        from qventory.models.notification import Notification
 
-    notifications = Notification.get_recent(current_user.id, limit=10, include_read=False)
-    unread_count = Notification.get_unread_count(current_user.id)
-    pickup_unread_count = Notification.query.filter_by(
-        user_id=current_user.id,
-        is_read=False,
-        source="pickup"
-    ).count()
+        notifications = Notification.get_recent(current_user.id, limit=10, include_read=False)
+        unread_count = Notification.get_unread_count(current_user.id)
+        pickup_unread_count = Notification.query.filter_by(
+            user_id=current_user.id,
+            is_read=False,
+            source="pickup"
+        ).count()
 
-    return jsonify({
-        "ok": True,
-        "notifications": [n.to_dict() for n in notifications],
-        "unread_count": unread_count,
-        "pickup_unread_count": pickup_unread_count
-    })
+        return jsonify({
+            "ok": True,
+            "notifications": [n.to_dict() for n in notifications],
+            "unread_count": unread_count,
+            "pickup_unread_count": pickup_unread_count
+        })
+    except Exception as e:
+        print(f"[NOTIFICATIONS] unread endpoint error: {e}", file=sys.stderr)
+        return jsonify({"ok": False, "error": "notifications_unavailable"}), 500
 
 
 @main_bp.route("/api/notifications/<int:notification_id>/read", methods=["POST"])
