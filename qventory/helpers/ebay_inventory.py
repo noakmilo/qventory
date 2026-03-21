@@ -48,6 +48,38 @@ EBAY_STORE_SUBSCRIPTION_LIMITS = {
 }
 
 
+def _normalize_image_url(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered in {"none", "null"}:
+        return None
+    return text
+
+
+def _dedupe_image_urls(urls):
+    deduped = []
+    seen = set()
+    for raw in urls or []:
+        normalized = _normalize_image_url(raw)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def _extract_image_urls(payload):
+    if not isinstance(payload, dict):
+        return []
+    product = payload.get("product") or {}
+    image_urls = product.get("imageUrls") or []
+    return _dedupe_image_urls(image_urls)
+
+
 def get_user_access_token(user_id):
     """
     Get valid access token for user's eBay account
@@ -553,6 +585,48 @@ def get_listing_details_trading_api(user_id, listing_id):
     except Exception as exc:
         log_inv(f"Exception calling GetItem (details) for {listing_id}: {exc}")
         return {}
+
+
+def get_image_candidates_for_listing(
+    user_id,
+    listing_id,
+    *,
+    seed_images=None,
+    include_active_fallback=True,
+    active_fallback_max_items=200
+):
+    """
+    Resolve ordered candidate image URLs for a listing.
+
+    Sources:
+    1) seed_images (already known by caller)
+    2) Trading API GetItem details
+    3) Trading API active listings snapshot fallback (GetMyeBaySelling)
+    """
+    candidates = []
+    candidates.extend(seed_images or [])
+
+    listing_id_text = str(listing_id).strip() if listing_id else None
+    if listing_id_text:
+        details = get_listing_details_trading_api(user_id, listing_id_text) or {}
+        candidates.extend(_extract_image_urls(details))
+
+        if include_active_fallback and not _dedupe_image_urls(candidates):
+            try:
+                active_items, _failed = get_active_listings_trading_api(
+                    user_id,
+                    max_items=active_fallback_max_items,
+                    collect_failures=True
+                )
+                for active in active_items:
+                    if str(active.get("ebay_listing_id") or "").strip() != listing_id_text:
+                        continue
+                    candidates.extend(_extract_image_urls(active))
+                    break
+            except Exception as exc:
+                log_inv(f"Image fallback snapshot failed for listing {listing_id_text}: {exc}")
+
+    return _dedupe_image_urls(candidates)
 
 
 def fetch_trading_order_fees(user_id, order_id):
@@ -1813,6 +1887,7 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'title': title,
             'description': description,
             'item_thumb': item_thumb,
+            'image_urls': images,
             'ebay_sku': sku,
             'quantity': quantity,
         'condition': condition,
@@ -1883,6 +1958,7 @@ def parse_ebay_inventory_item(ebay_item, process_images=True):
             'title': title,
             'description': description,
             'item_thumb': item_thumb,
+            'image_urls': images,
             'ebay_sku': sku,
             'quantity': quantity,
             'condition': condition,

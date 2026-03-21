@@ -20,6 +20,7 @@ echo "Starting Celery worker..."
 celery -A qventory.celery_app worker \
   --loglevel=info \
   --concurrency=2 \
+  --queues=celery,imports,ai,image_hydration \
   --max-tasks-per-child=50 \
   --logfile=/opt/qventory/logs/celery.log \
   --pidfile=/opt/qventory/run/celery.pid

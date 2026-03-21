@@ -6,6 +6,7 @@
 {% set roi = ( (it.item_price - it.item_cost) / it.item_cost * 100 ) if (has_price and has_cost) else None %}
 {% set is_ebay_item = it.synced_from_ebay or it.ebay_listing_id %}
 {% set is_retired = view_type == 'retired' %}
+{% set show_image_pending = (it.image_pending if it.image_pending is defined else (view_type == 'sold' and not it.item_thumb)) %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
@@ -22,7 +23,12 @@
         <span class="thumb-zoom"><i class="fas fa-search"></i></span>
       </button>
     {% else %}
-      <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+        <div style="width:36px;height:36px;border-radius:6px;border:1px dashed #bbb;display:grid;place-items:center;font-size:12px;color:#888;">—</div>
+        {% if show_image_pending %}
+          <span class="tag" style="font-size:10px;line-height:1.2;">image pending</span>
+        {% endif %}
+      </div>
     {% endif %}
   </td>
   <td data-col="title">

@@ -42,6 +42,11 @@ class Item(db.Model):
     # Imágenes
     item_thumb = db.Column(db.String, nullable=True)  # URL de Cloudinary (principal)
     image_urls = db.Column(db.JSON, nullable=True)  # Array de URLs adicionales
+    image_status = db.Column(db.String(32), nullable=False, default='ready', index=True)
+    image_attempts = db.Column(db.Integer, nullable=False, default=0)
+    image_next_retry_at = db.Column(db.DateTime, nullable=True, index=True)
+    image_last_error = db.Column(db.Text, nullable=True)
+    image_pending_since = db.Column(db.DateTime, nullable=True)
 
     # Pricing y costo
     supplier = db.Column(db.String, nullable=True, index=True)  # Nombre de la tienda
@@ -82,6 +87,20 @@ class Item(db.Model):
     def is_low_stock(self):
         """Check if item is below threshold"""
         return self.quantity <= self.low_stock_threshold
+
+    @property
+    def has_image(self):
+        return bool((self.item_thumb or '').strip())
+
+    @property
+    def image_pending(self):
+        is_ebay_item = bool(self.synced_from_ebay or self.ebay_listing_id)
+        return is_ebay_item and (not self.has_image) and self.image_status in {
+            'pending',
+            'queued',
+            'processing',
+            'failed',
+        }
 
     @property
     def total_sold(self):

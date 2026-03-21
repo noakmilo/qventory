@@ -146,7 +146,8 @@ WITH sold_items AS (
         s.item_id,
         MAX(s.sold_at) AS last_sold_at,
         MAX(s.sold_price) AS last_sold_price,
-        COUNT(*) AS sale_count
+        COUNT(*) AS sale_count,
+        MAX(s.sale_item_thumb) AS sale_item_thumb
     FROM sales AS s
     WHERE s.user_id = :user_id
       AND s.item_id IS NOT NULL
@@ -157,7 +158,7 @@ SELECT
     i.id,
     i.title,
     i.sku,
-    i.item_thumb,
+    COALESCE(si.sale_item_thumb, i.item_thumb) AS item_thumb,
     i.ebay_url,
     i.web_url,
     si.last_sold_at,
@@ -186,7 +187,7 @@ SELECT
     s.tracking_number,
     s.marketplace,
     s.status,
-    i.item_thumb,
+    COALESCE(s.sale_item_thumb, i.item_thumb) AS item_thumb,
     CASE
         WHEN s.delivered_at IS NOT NULL THEN 'delivered'
         WHEN s.shipped_at IS NOT NULL THEN 'shipped'

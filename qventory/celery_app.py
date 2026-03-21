@@ -34,6 +34,11 @@ celery.conf.update(
 # Task routing
 celery.conf.task_routes = {
     'qventory.tasks.import_ebay_inventory': {'queue': 'imports'},
+    'qventory.tasks.hydrate_item_image': {'queue': 'image_hydration'},
+    'qventory.tasks.hydrate_sale_image': {'queue': 'image_hydration'},
+    'qventory.tasks.reconcile_missing_images': {'queue': 'imports'},
+    'qventory.tasks.reconcile_recent_missing_images': {'queue': 'imports'},
+    'qventory.tasks.reconcile_historical_missing_images': {'queue': 'imports'},
     'qventory.tasks.process_ai_research': {'queue': 'ai'},
     'qventory.tasks.auto_relist_offers': {'queue': 'celery'},  # Use default 'celery' queue
 }
@@ -123,6 +128,20 @@ celery.conf.beat_schedule = {
         'schedule': crontab(hour=16, minute=0),
         'options': {
             'expires': 60 * 60 * 2,
+        }
+    },
+    'reconcile-missing-images-hourly': {
+        'task': 'qventory.tasks.reconcile_recent_missing_images',
+        'schedule': crontab(minute=7),  # Every hour at minute 7
+        'options': {
+            'expires': 60 * 45,
+        }
+    },
+    'reconcile-missing-images-daily': {
+        'task': 'qventory.tasks.reconcile_historical_missing_images',
+        'schedule': crontab(hour=17, minute=20),
+        'options': {
+            'expires': 60 * 60 * 3,
         }
     },
 }

@@ -169,7 +169,11 @@ SELECT
     s.item_id,
     s.item_title AS title,
     s.item_sku AS sku,
-    COALESCE(i.item_thumb, NULL) AS item_thumb,
+    COALESCE(s.sale_item_thumb, i.item_thumb, NULL) AS item_thumb,
+    CASE
+        WHEN COALESCE(s.sale_item_thumb, i.item_thumb, '') = '' THEN TRUE
+        ELSE FALSE
+    END AS image_pending,
     s.sold_price AS item_price,
     s.sold_price AS sold_price,
     COALESCE(s.item_cost, i.item_cost) AS item_cost,
@@ -183,13 +187,13 @@ SELECT
     COALESCE(i.supplier, NULL) AS supplier,
     COALESCE(i.location_code, NULL) AS location_code,
     COALESCE(i.web_url, NULL) AS web_url,
-    COALESCE(i.ebay_url, NULL) AS ebay_url,
+    COALESCE(s.sale_ebay_url, i.ebay_url, NULL) AS ebay_url,
     COALESCE(i.amazon_url, NULL) AS amazon_url,
     COALESCE(i.mercari_url, NULL) AS mercari_url,
     COALESCE(i.vinted_url, NULL) AS vinted_url,
     COALESCE(i.poshmark_url, NULL) AS poshmark_url,
     COALESCE(i.depop_url, NULL) AS depop_url,
-    COALESCE(i.ebay_listing_id, NULL) AS ebay_listing_id,
+    COALESCE(s.sale_ebay_listing_id, i.ebay_listing_id, NULL) AS ebay_listing_id,
     (SELECT COUNT(*) FROM expenses AS e WHERE e.item_id = s.item_id AND e.item_cost_applied IS TRUE) AS expense_cost_count,
     (SELECT COUNT(*) FROM receipt_items AS ri WHERE ri.inventory_item_id = s.item_id) AS receipt_items_count,
     (SELECT COUNT(*) FROM item_cost_history AS h WHERE h.item_id = s.item_id) AS cost_history_count,

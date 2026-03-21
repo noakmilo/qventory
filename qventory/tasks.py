@@ -2,6 +2,8 @@
 Celery Background Tasks for Qventory
 """
 import hashlib
+import os
+import random
 import sys
 import time
 from datetime import datetime, timedelta
@@ -9,6 +11,20 @@ from sqlalchemy import func, or_
 from qventory.celery_app import celery
 from qventory.extensions import db
 from qventory import create_app
+from qventory.helpers.image_guarantee import (
+    IMAGE_STATUS_EXHAUSTED,
+    IMAGE_STATUS_FAILED,
+    IMAGE_STATUS_PENDING,
+    IMAGE_STATUS_READY,
+    apply_item_image_ready,
+    ensure_item_image_pending,
+    has_image,
+    normalize_image_url,
+    record_item_image_failure,
+)
+
+IMAGE_HYDRATE_MAX_ATTEMPTS = int(os.environ.get("IMAGE_HYDRATE_MAX_ATTEMPTS", "8"))
+IMAGE_HYDRATE_RETRY_SCHEDULE = (0, 60, 300, 900, 3600, 21600, 86400)
 
 def log_task(msg):
     """Helper function for task logging"""
@@ -43,6 +59,420 @@ def _build_external_id(prefix, parts):
     payload = "|".join(str(part) for part in parts if part is not None)
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
     return f"{prefix}_{digest}"[:64]
+
+
+def _retry_delay_seconds(attempt):
+    idx = max(0, min(int(attempt), len(IMAGE_HYDRATE_RETRY_SCHEDULE) - 1))
+    base = int(IMAGE_HYDRATE_RETRY_SCHEDULE[idx])
+    jitter = random.randint(0, max(0, base // 10)) if base > 0 else 0
+    return base + jitter
+
+
+def _queue_item_image_hydration(item, reason="missing_image", countdown=0, force=False):
+    if not item or not getattr(item, "id", None) or not getattr(item, "user_id", None):
+        return False
+
+    if has_image(getattr(item, "item_thumb", None)) and not force:
+        apply_item_image_ready(item, item.item_thumb)
+        return False
+    if not force and getattr(item, "image_status", None) == IMAGE_STATUS_EXHAUSTED:
+        return False
+
+    now = datetime.utcnow()
+    if not force and getattr(item, "image_next_retry_at", None) and item.image_next_retry_at >= now:
+        return False
+
+    ensure_item_image_pending(item, error=reason)
+    delay = max(0, int(countdown or 0))
+    item.image_next_retry_at = now + timedelta(seconds=delay if delay > 0 else 5)
+
+    try:
+        hydrate_item_image.apply_async(
+            kwargs={
+                "user_id": item.user_id,
+                "item_id": item.id,
+                "listing_id": item.ebay_listing_id,
+                "attempt": int(getattr(item, "image_attempts", 0) or 0),
+                "source": reason,
+                "force": bool(force),
+            },
+            queue="image_hydration",
+            countdown=delay,
+        )
+        return True
+    except Exception as exc:
+        log_task(f"⚠ Failed to queue item image hydration item_id={item.id}: {exc}")
+        return False
+
+
+def _queue_sale_image_hydration(sale, reason="missing_sale_image", countdown=0, force=False, attempt=0):
+    if not sale or not getattr(sale, "id", None) or not getattr(sale, "user_id", None):
+        return False
+
+    if has_image(getattr(sale, "sale_item_thumb", None)) and not force:
+        sale.sale_image_status = IMAGE_STATUS_READY
+        sale.sale_image_next_retry_at = None
+        sale.sale_image_last_error = None
+        return False
+    if not force and getattr(sale, "sale_image_status", None) == IMAGE_STATUS_EXHAUSTED:
+        return False
+
+    now = datetime.utcnow()
+    if (
+        not force
+        and getattr(sale, "sale_image_next_retry_at", None)
+        and sale.sale_image_next_retry_at >= now
+    ):
+        return False
+
+    delay = max(0, int(countdown or 0))
+    listing_id = getattr(sale, "sale_ebay_listing_id", None)
+    if not listing_id and getattr(sale, "item", None):
+        listing_id = getattr(sale.item, "ebay_listing_id", None)
+
+    sale.sale_image_status = IMAGE_STATUS_PENDING
+    sale.sale_image_last_error = str(reason)[:2000] if reason else None
+    if getattr(sale, "sale_image_attempts", None) is None:
+        sale.sale_image_attempts = 0
+    sale.sale_image_next_retry_at = now + timedelta(seconds=delay if delay > 0 else 5)
+    effective_attempt = int(attempt or sale.sale_image_attempts or 0)
+
+    try:
+        hydrate_sale_image.apply_async(
+            kwargs={
+                "user_id": sale.user_id,
+                "sale_id": sale.id,
+                "listing_id": listing_id,
+                "attempt": effective_attempt,
+                "source": reason,
+                "force": bool(force),
+            },
+            queue="image_hydration",
+            countdown=delay,
+        )
+        return True
+    except Exception as exc:
+        log_task(f"⚠ Failed to queue sale image hydration sale_id={sale.id}: {exc}")
+        return False
+
+
+@celery.task(bind=True, name="qventory.tasks.hydrate_item_image")
+def hydrate_item_image(
+    self,
+    user_id,
+    item_id,
+    listing_id=None,
+    attempt=0,
+    source="unknown",
+    force=False
+):
+    app = create_app()
+
+    with app.app_context():
+        from qventory.helpers.ebay_inventory import get_image_candidates_for_listing
+        from qventory.helpers.image_processor import download_and_upload_image
+        from qventory.models.item import Item
+
+        item = Item.query.filter_by(id=item_id, user_id=user_id).first()
+        if not item:
+            return {"success": False, "status": "not_found", "item_id": item_id}
+
+        if has_image(item.item_thumb) and not force:
+            apply_item_image_ready(item, item.item_thumb)
+            db.session.commit()
+            return {"success": True, "status": "already_ready", "item_id": item.id}
+
+        target_listing_id = str(listing_id or item.ebay_listing_id or "").strip() or None
+        seed_images = item.image_urls if isinstance(item.image_urls, list) else []
+        candidates = get_image_candidates_for_listing(
+            user_id,
+            target_listing_id,
+            seed_images=seed_images,
+            include_active_fallback=True,
+            active_fallback_max_items=200,
+        )
+
+        resolved_url = None
+        for url in candidates:
+            normalized = normalize_image_url(url)
+            if not normalized:
+                continue
+
+            uploaded = download_and_upload_image(
+                normalized,
+                target_size_kb=2,
+                max_dimension=400,
+                public_id=target_listing_id or f"item-{item.id}",
+            )
+            resolved_url = normalize_image_url(uploaded) or normalized
+            if resolved_url:
+                break
+
+        if resolved_url:
+            apply_item_image_ready(item, resolved_url)
+            item.image_urls = candidates or item.image_urls
+            item.last_ebay_sync = datetime.utcnow()
+            db.session.commit()
+            log_task(
+                f"✓ item image hydrated item_id={item.id} listing={target_listing_id or '-'} source={source}"
+            )
+            return {
+                "success": True,
+                "status": "hydrated",
+                "item_id": item.id,
+                "listing_id": target_listing_id,
+            }
+
+        next_attempt = int(attempt or 0) + 1
+        error_msg = f"no_image_candidates_or_upload_failed (source={source})"
+        record_item_image_failure(
+            item,
+            error_msg,
+            next_attempt,
+            max_attempts=IMAGE_HYDRATE_MAX_ATTEMPTS,
+            retry_schedule=IMAGE_HYDRATE_RETRY_SCHEDULE,
+        )
+        db.session.commit()
+
+        if item.image_status != IMAGE_STATUS_EXHAUSTED:
+            delay = _retry_delay_seconds(next_attempt)
+            hydrate_item_image.apply_async(
+                kwargs={
+                    "user_id": user_id,
+                    "item_id": item_id,
+                    "listing_id": target_listing_id,
+                    "attempt": next_attempt,
+                    "source": source,
+                    "force": force,
+                },
+                queue="image_hydration",
+                countdown=delay,
+            )
+            log_task(
+                f"↻ item image retry scheduled item_id={item.id} attempt={next_attempt} delay={delay}s"
+            )
+            return {
+                "success": False,
+                "status": IMAGE_STATUS_FAILED,
+                "attempt": next_attempt,
+                "next_retry_in_seconds": delay,
+            }
+
+        log_task(f"✗ item image exhausted item_id={item.id} attempts={item.image_attempts}")
+        return {
+            "success": False,
+            "status": IMAGE_STATUS_EXHAUSTED,
+            "attempt": item.image_attempts,
+            "item_id": item.id,
+        }
+
+
+@celery.task(bind=True, name="qventory.tasks.hydrate_sale_image")
+def hydrate_sale_image(
+    self,
+    user_id,
+    sale_id,
+    listing_id=None,
+    attempt=0,
+    source="unknown",
+    force=False
+):
+    app = create_app()
+
+    with app.app_context():
+        from qventory.helpers.ebay_inventory import get_image_candidates_for_listing
+        from qventory.helpers.image_processor import download_and_upload_image
+        from qventory.models.item import Item
+        from qventory.models.sale import Sale
+
+        sale = Sale.query.filter_by(id=sale_id, user_id=user_id).first()
+        if not sale:
+            return {"success": False, "status": "not_found", "sale_id": sale_id}
+
+        if has_image(sale.sale_item_thumb) and not force:
+            sale.sale_image_status = IMAGE_STATUS_READY
+            sale.sale_image_next_retry_at = None
+            sale.sale_image_last_error = None
+            db.session.commit()
+            return {"success": True, "status": "already_ready", "sale_id": sale.id}
+
+        target_listing_id = (
+            str(listing_id or sale.sale_ebay_listing_id or "").strip() or None
+        )
+
+        linked_item = None
+        if sale.item_id:
+            linked_item = Item.query.filter_by(id=sale.item_id, user_id=user_id).first()
+        if not linked_item and target_listing_id:
+            linked_item = Item.query.filter_by(
+                user_id=user_id,
+                ebay_listing_id=target_listing_id
+            ).first()
+            if linked_item:
+                sale.item_id = sale.item_id or linked_item.id
+
+        if linked_item and has_image(linked_item.item_thumb):
+            sale.sale_item_thumb = linked_item.item_thumb
+            sale.sale_ebay_url = sale.sale_ebay_url or linked_item.ebay_url
+            sale.sale_ebay_listing_id = sale.sale_ebay_listing_id or linked_item.ebay_listing_id
+            sale.sale_image_status = IMAGE_STATUS_READY
+            sale.sale_image_next_retry_at = None
+            sale.sale_image_last_error = None
+            db.session.commit()
+            return {"success": True, "status": "linked_item_image", "sale_id": sale.id}
+
+        if linked_item and not has_image(linked_item.item_thumb):
+            ensure_item_image_pending(linked_item, error="sale_missing_item_image")
+            _queue_item_image_hydration(
+                linked_item,
+                reason="sale_missing_item_image",
+                countdown=0,
+                force=force,
+            )
+
+        candidates = get_image_candidates_for_listing(
+            user_id,
+            target_listing_id,
+            seed_images=[],
+            include_active_fallback=True,
+            active_fallback_max_items=200,
+        )
+
+        resolved_url = None
+        for url in candidates:
+            normalized = normalize_image_url(url)
+            if not normalized:
+                continue
+            uploaded = download_and_upload_image(
+                normalized,
+                target_size_kb=2,
+                max_dimension=400,
+                public_id=target_listing_id or f"sale-{sale.id}",
+            )
+            resolved_url = normalize_image_url(uploaded) or normalized
+            if resolved_url:
+                break
+
+        if resolved_url:
+            sale.sale_item_thumb = resolved_url
+            if target_listing_id:
+                sale.sale_ebay_listing_id = target_listing_id
+            if linked_item and not has_image(linked_item.item_thumb):
+                apply_item_image_ready(linked_item, resolved_url)
+            sale.sale_image_status = IMAGE_STATUS_READY
+            sale.sale_image_next_retry_at = None
+            sale.sale_image_last_error = None
+            db.session.commit()
+            log_task(
+                f"✓ sale image hydrated sale_id={sale.id} listing={target_listing_id or '-'} source={source}"
+            )
+            return {"success": True, "status": "hydrated", "sale_id": sale.id}
+
+        next_attempt = int(attempt or 0) + 1
+        sale.sale_image_attempts = next_attempt
+        sale.sale_image_last_error = f"no_image_candidates_or_upload_failed (source={source})"[:2000]
+        if next_attempt < IMAGE_HYDRATE_MAX_ATTEMPTS:
+            delay = _retry_delay_seconds(next_attempt)
+            sale.sale_image_status = IMAGE_STATUS_FAILED
+            sale.sale_image_next_retry_at = datetime.utcnow() + timedelta(seconds=delay)
+            _queue_sale_image_hydration(
+                sale,
+                reason=source or "sale_image_retry",
+                countdown=delay,
+                force=force,
+                attempt=next_attempt,
+            )
+            db.session.commit()
+            return {
+                "success": False,
+                "status": IMAGE_STATUS_FAILED,
+                "sale_id": sale.id,
+                "attempt": next_attempt,
+                "next_retry_in_seconds": delay,
+            }
+
+        note_line = (
+            f"[{datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}] "
+            f"Image hydration exhausted after {next_attempt} attempts"
+        )
+        sale.sale_image_status = IMAGE_STATUS_EXHAUSTED
+        sale.sale_image_next_retry_at = None
+        sale.notes = ((sale.notes or "").strip() + ("\n" if sale.notes else "") + note_line)[:4000]
+        db.session.commit()
+        return {
+            "success": False,
+            "status": IMAGE_STATUS_EXHAUSTED,
+            "sale_id": sale.id,
+            "attempt": next_attempt,
+        }
+
+
+@celery.task(bind=True, name="qventory.tasks.reconcile_missing_images")
+def reconcile_missing_images(self, recent_hours=24, limit=500, include_historical=False):
+    app = create_app()
+
+    with app.app_context():
+        from qventory.models.item import Item
+        from qventory.models.sale import Sale
+
+        now = datetime.utcnow()
+        recent_cutoff = now - timedelta(hours=max(1, int(recent_hours or 24)))
+        max_rows = max(10, min(int(limit or 500), 5000))
+
+        item_query = Item.query.filter(
+            Item.synced_from_ebay.is_(True),
+            or_(Item.item_thumb.is_(None), Item.item_thumb == "")
+        ).filter(
+            or_(Item.image_next_retry_at.is_(None), Item.image_next_retry_at <= now)
+        )
+        if not include_historical:
+            item_query = item_query.filter(Item.created_at >= recent_cutoff)
+        items = item_query.order_by(Item.created_at.desc()).limit(max_rows).all()
+
+        queued_items = 0
+        for item in items:
+            if _queue_item_image_hydration(item, reason="reconcile_missing_images", countdown=0):
+                queued_items += 1
+
+        sale_query = Sale.query.filter(
+            Sale.marketplace == "ebay",
+            or_(Sale.sale_item_thumb.is_(None), Sale.sale_item_thumb == "")
+        ).filter(
+            or_(Sale.sale_image_status.is_(None), Sale.sale_image_status != IMAGE_STATUS_EXHAUSTED)
+        ).filter(
+            or_(Sale.sale_image_next_retry_at.is_(None), Sale.sale_image_next_retry_at <= now)
+        )
+        if not include_historical:
+            sale_query = sale_query.filter(Sale.sold_at >= recent_cutoff)
+        sales = sale_query.order_by(Sale.sold_at.desc()).limit(max_rows).all()
+
+        queued_sales = 0
+        for sale in sales:
+            if _queue_sale_image_hydration(sale, reason="reconcile_missing_images", countdown=0):
+                queued_sales += 1
+
+        db.session.commit()
+
+        log_task(
+            f"reconcile_missing_images queued items={queued_items} sales={queued_sales} "
+            f"historical={bool(include_historical)}"
+        )
+        return {
+            "success": True,
+            "queued_items": queued_items,
+            "queued_sales": queued_sales,
+            "include_historical": bool(include_historical),
+        }
+
+
+@celery.task(bind=True, name="qventory.tasks.reconcile_recent_missing_images")
+def reconcile_recent_missing_images(self):
+    return reconcile_missing_images.run(recent_hours=24, limit=500, include_historical=False)
+
+
+@celery.task(bind=True, name="qventory.tasks.reconcile_historical_missing_images")
+def reconcile_historical_missing_images(self):
+    return reconcile_missing_images.run(recent_hours=24 * 365, limit=1000, include_historical=True)
 
 
 @celery.task(bind=True, name='qventory.tasks.relist_item_sell_similar')
@@ -288,7 +718,6 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             imported_count = 0
             updated_count = 0
             skipped_count = 0
-            needs_shipping_reconcile = False
             error_count = 0
 
             for idx, ebay_item in enumerate(ebay_items):
@@ -432,7 +861,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             if parsed_with_images.get('item_price'):
                                 existing_item.item_price = parsed_with_images['item_price']
                             if parsed_with_images.get('item_thumb'):
-                                existing_item.item_thumb = parsed_with_images['item_thumb']  # Update with Cloudinary URL
+                                apply_item_image_ready(existing_item, parsed_with_images['item_thumb'])
+                            elif not has_image(existing_item.item_thumb):
+                                ensure_item_image_pending(
+                                    existing_item,
+                                    error="missing image during inventory update"
+                                )
+                            if parsed_with_images.get('image_urls'):
+                                existing_item.image_urls = parsed_with_images.get('image_urls')
                             if ebay_sku and not existing_item.ebay_sku:
                                 existing_item.ebay_sku = ebay_sku
                             if start_time:
@@ -445,6 +881,13 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 existing_item.B = parsed_with_images.get('location_B') or parsed.get('location_B')
                                 existing_item.S = parsed_with_images.get('location_S') or parsed.get('location_S')
                                 existing_item.C = parsed_with_images.get('location_C') or parsed.get('location_C')
+
+                            if not has_image(existing_item.item_thumb):
+                                _queue_item_image_hydration(
+                                    existing_item,
+                                    reason="inventory_update_missing_image",
+                                    countdown=0
+                                )
 
                             updated_count += 1
                             log_task(f"  → Updated existing item")
@@ -489,6 +932,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 sku=new_sku,
                                 title=ebay_title,
                                 item_thumb=parsed_with_images.get('item_thumb'),  # Cloudinary URL
+                                image_urls=parsed_with_images.get('image_urls'),
                                 ebay_sku=ebay_sku,
                                 ebay_listing_id=parsed_with_images.get('ebay_listing_id'),
                                 ebay_url=parsed_with_images.get('ebay_url'),
@@ -503,7 +947,21 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 synced_from_ebay=True,
                                 last_ebay_sync=datetime.utcnow()
                             )
+                            if has_image(new_item.item_thumb):
+                                apply_item_image_ready(new_item, new_item.item_thumb)
+                            else:
+                                ensure_item_image_pending(
+                                    new_item,
+                                    error="missing image during inventory create"
+                                )
                             db.session.add(new_item)
+                            db.session.flush()
+                            if not has_image(new_item.item_thumb):
+                                _queue_item_image_hydration(
+                                    new_item,
+                                    reason="inventory_create_missing_image",
+                                    countdown=0
+                                )
                             imported_count += 1
                             log_task(f"  → Created new item (SKU: {new_sku}) [{imported_count}/{max_new_items_allowed if max_new_items_allowed is not None else 'unlimited'}]")
                         else:
@@ -793,6 +1251,8 @@ def import_ebay_sales(self, user_id, days_back=None):
             imported_count = 0
             updated_count = 0
             skipped_count = 0
+            needs_shipping_reconcile = False
+            sales_needing_image = []
 
             # Orders are already parsed by fetch_ebay_sold_orders into sale-ready format
             for sale_data in orders:
@@ -848,6 +1308,8 @@ def import_ebay_sales(self, user_id, days_back=None):
                             match_method = "exact_title"
 
                     if item:
+                        if has_image(item.item_thumb):
+                            apply_item_image_ready(item, item.item_thumb)
                         log_task(f"  ✓ Matched item (method: {match_method}, item_id: {item.id})")
                     else:
                         log_task(f"  ⚠️  No match found for: sku={sku}, title={title[:40]}")
@@ -892,6 +1354,33 @@ def import_ebay_sales(self, user_id, days_back=None):
                             existing_sale.item_id = item.id
                             log_task(f"    → Linked sale to item {item.id}")
 
+                        existing_sale.sale_ebay_listing_id = (
+                            existing_sale.sale_ebay_listing_id
+                            or ebay_listing_id
+                            or (item.ebay_listing_id if item else None)
+                        )
+                        existing_sale.sale_ebay_url = (
+                            sale_data.get('ebay_url')
+                            or existing_sale.sale_ebay_url
+                            or (item.ebay_url if item else None)
+                        )
+                        if (not has_image(existing_sale.sale_item_thumb)) and item and has_image(item.item_thumb):
+                            existing_sale.sale_item_thumb = item.item_thumb
+                        if has_image(existing_sale.sale_item_thumb):
+                            existing_sale.sale_image_status = IMAGE_STATUS_READY
+                            existing_sale.sale_image_next_retry_at = None
+                            existing_sale.sale_image_last_error = None
+                        else:
+                            existing_sale.sale_image_status = IMAGE_STATUS_PENDING
+                            existing_sale.sale_image_last_error = "sale image pending after import update"
+                        if item and not has_image(item.item_thumb):
+                            ensure_item_image_pending(item, error="sale_import_existing_missing_item_image")
+                            _queue_item_image_hydration(
+                                item,
+                                reason="sale_import_existing_missing_item_image",
+                                countdown=0
+                            )
+
                         # Update fulfillment data
                         if tracking_number:
                             existing_sale.tracking_number = tracking_number
@@ -919,6 +1408,13 @@ def import_ebay_sales(self, user_id, days_back=None):
                                 pass
 
                         existing_sale.calculate_profit()
+                        if not has_image(existing_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    existing_sale.id,
+                                    existing_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
                         updated_count += 1
                         log_task(f"  Updated sale: {title[:50]}")
                     else:
@@ -930,6 +1426,14 @@ def import_ebay_sales(self, user_id, days_back=None):
                             marketplace_order_id=order_id,
                             item_title=title,
                             item_sku=sku,
+                            sale_item_thumb=item.item_thumb if item and has_image(item.item_thumb) else None,
+                            sale_image_status=(
+                                IMAGE_STATUS_READY
+                                if item and has_image(item.item_thumb)
+                                else IMAGE_STATUS_PENDING
+                            ),
+                            sale_ebay_url=sale_data.get('ebay_url') or (item.ebay_url if item else None),
+                            sale_ebay_listing_id=ebay_listing_id or (item.ebay_listing_id if item else None),
                             sold_price=sold_price,
                             tax_collected=tax_collected,
                             item_cost=item.item_cost if item else None,
@@ -966,6 +1470,21 @@ def import_ebay_sales(self, user_id, days_back=None):
 
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
+                        db.session.flush()
+                        if not has_image(new_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    new_sale.id,
+                                    new_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
+                            if item and not has_image(item.item_thumb):
+                                ensure_item_image_pending(item, error="sale_import_missing_item_image")
+                                _queue_item_image_hydration(
+                                    item,
+                                    reason="sale_import_missing_item_image",
+                                    countdown=0
+                                )
                         imported_count += 1
                         total_fees_log = marketplace_fee + payment_fee + ad_fee + other_fees
                         log_task(f"  Imported sale: {title[:50]} - ${sold_price} (Fees: ${total_fees_log:.2f})")
@@ -978,6 +1497,23 @@ def import_ebay_sales(self, user_id, days_back=None):
 
             # Commit all sales
             db.session.commit()
+
+            queued_sale_hydrations = 0
+            for sale_id, listing_id in {pair for pair in sales_needing_image if pair[0]}:
+                sale_obj = Sale.query.filter_by(id=sale_id, user_id=user_id).first()
+                if not sale_obj:
+                    continue
+                if _queue_sale_image_hydration(
+                    sale_obj,
+                    reason="import_ebay_sales_missing_image",
+                    countdown=0,
+                    force=False,
+                    attempt=0
+                ):
+                    queued_sale_hydrations += 1
+            if queued_sale_hydrations:
+                db.session.commit()
+                log_task(f"↻ Queued {queued_sale_hydrations} sale image hydration job(s)")
 
             log_task(f"✅ Sales import complete: {imported_count} new, {updated_count} updated, {skipped_count} skipped")
 
@@ -1266,7 +1802,18 @@ def retry_failed_imports(self, user_id, failed_import_ids=None):
                         synced_from_ebay=True,
                         last_ebay_sync=datetime.utcnow()
                     )
+                    if has_image(new_item.item_thumb):
+                        apply_item_image_ready(new_item, new_item.item_thumb)
+                    else:
+                        ensure_item_image_pending(new_item, error="retry_failed_import_missing_image")
                     db.session.add(new_item)
+                    db.session.flush()
+                    if not has_image(new_item.item_thumb):
+                        _queue_item_image_hydration(
+                            new_item,
+                            reason="retry_failed_import_missing_image",
+                            countdown=0
+                        )
 
                     # Mark as resolved
                     failed_import.resolved = True
@@ -2031,6 +2578,14 @@ def process_item_sold_event(event):
             marketplace_order_id=order_id or transaction_id,
             item_title=item.title if item else f'eBay Item {listing_id}',
             item_sku=item.sku if item else None,
+            sale_item_thumb=item.item_thumb if item and has_image(item.item_thumb) else None,
+            sale_image_status=(
+                IMAGE_STATUS_READY
+                if item and has_image(item.item_thumb)
+                else IMAGE_STATUS_PENDING
+            ),
+            sale_ebay_url=item.ebay_url if item else None,
+            sale_ebay_listing_id=str(listing_id) if listing_id else None,
             sold_price=sold_price,
             item_cost=item.item_cost if item else None,
             marketplace_fee=marketplace_fee,
@@ -2056,6 +2611,12 @@ def process_item_sold_event(event):
 
         new_sale.calculate_profit()
         db.session.add(new_sale)
+        db.session.flush()
+        if not has_image(new_sale.sale_item_thumb):
+            if item and not has_image(item.item_thumb):
+                ensure_item_image_pending(item, error="webhook_sale_missing_item_image")
+                _queue_item_image_hydration(item, reason="webhook_sale_missing_item_image", countdown=0)
+            _queue_sale_image_hydration(new_sale, reason="webhook_sale_missing_image", countdown=0)
         db.session.commit()
 
         log_task(f"  ✓ Sale created (ID: {new_sale.id})")
@@ -3139,14 +3700,23 @@ def poll_user_listings(credential):
                         if backfill_price is not None:
                             existing.item_price = backfill_price
                         if backfill_thumb and not existing.item_thumb:
-                            existing.item_thumb = backfill_thumb
+                            apply_item_image_ready(existing, backfill_thumb)
+                        elif not has_image(existing.item_thumb):
+                            ensure_item_image_pending(existing, error="polling_missing_image_backfill")
                         if backfill_title and backfill_title != (existing.title or '').strip():
                             existing.title = backfill_title[:500]
+                        if parsed_missing.get('image_urls'):
+                            existing.image_urls = parsed_missing.get('image_urls')
                         if backfill_price is not None or backfill_thumb or backfill_title:
                             existing.last_ebay_sync = datetime.utcnow()
                             timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                             existing.notes = (existing.notes or '') + f"\n[{timestamp}] Price backfilled from eBay"
                             db.session.commit()
+                        if not has_image(existing.item_thumb):
+                            _queue_item_image_hydration(
+                                existing,
+                                reason="polling_existing_missing_image_backfill"
+                            )
 
                 # If the listing ended, mark inactive and note it
                 if listing_status and listing_status.lower() in ['ended', 'completed', 'closed']:
@@ -3180,8 +3750,12 @@ def poll_user_listings(credential):
                         existing.item_price = new_price
                         changes.append("price")
                     if new_thumb and not existing.item_thumb:
-                        existing.item_thumb = new_thumb
+                        apply_item_image_ready(existing, new_thumb)
                         changes.append("image")
+                    elif not has_image(existing.item_thumb):
+                        ensure_item_image_pending(existing, error="polling_existing_missing_image")
+                    if parsed_existing.get('image_urls'):
+                        existing.image_urls = parsed_existing.get('image_urls')
 
                     if changes:
                         existing.last_ebay_sync = datetime.utcnow()
@@ -3190,6 +3764,11 @@ def poll_user_listings(credential):
                         existing.notes = (existing.notes or '') + change_note
                         db.session.commit()
                         log_task(f"    ↻ Updated existing listing {listing_id}: {', '.join(changes)}")
+                    if not has_image(existing.item_thumb):
+                        _queue_item_image_hydration(
+                            existing,
+                            reason="polling_existing_missing_image"
+                        )
                 continue
 
             if remaining_quota is not None and remaining_quota <= 0:
@@ -3267,11 +3846,16 @@ def poll_user_listings(credential):
                 ebay_url=listing_url,
                 item_price=price,
                 item_thumb=item_thumb,
+                image_urls=parsed_with_images.get('image_urls'),
                 quantity=quantity or 1,
                 synced_from_ebay=True,
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
+            if has_image(new_item.item_thumb):
+                apply_item_image_ready(new_item, new_item.item_thumb)
+            else:
+                ensure_item_image_pending(new_item, error="polling_new_missing_image")
             if relist_source:
                 new_item.previous_item_id = relist_source.id
 
@@ -3289,6 +3873,9 @@ def poll_user_listings(credential):
             last_title = title
             if remaining_quota is not None:
                 remaining_quota -= 1
+
+            if not has_image(new_item.item_thumb):
+                _queue_item_image_hydration(new_item, reason="polling_new_missing_image", countdown=0)
 
             log_task(f"    ✓ New listing: {title[:50]}")
 
@@ -3775,13 +4362,27 @@ def sync_ebay_active_inventory_auto(self):
                                     priceless.item_price = parsed['item_price']
                                     backfilled += 1
                                 if parsed.get('item_thumb') and not priceless.item_thumb:
-                                    priceless.item_thumb = parsed['item_thumb']
+                                    apply_item_image_ready(priceless, parsed['item_thumb'])
+                                elif not has_image(priceless.item_thumb):
+                                    ensure_item_image_pending(
+                                        priceless,
+                                        error="active_sync_missing_image"
+                                    )
                                 if parsed.get('title') and not priceless.title:
                                     priceless.title = parsed['title'][:500]
+                                if parsed.get('image_urls'):
+                                    priceless.image_urls = parsed.get('image_urls')
                         except Exception:
                             pass
                     if backfilled:
                         db.session.commit()
+                for priceless in priceless_items[:5]:
+                    if not has_image(priceless.item_thumb):
+                        _queue_item_image_hydration(
+                            priceless,
+                            reason="active_sync_missing_image",
+                            countdown=0
+                        )
 
                 log_task(f"    ✓ {updated_count} updated, {deleted_count} marked inactive, {backfilled} prices backfilled")
                 total_updated += updated_count + backfilled
@@ -3878,6 +4479,7 @@ def sync_ebay_sold_orders_auto(self):
                 created_count = 0
                 updated_count = 0
                 needs_shipping_reconcile = False
+                sales_needing_image = []
                 
                 for order in sold_orders:
                     shipping_cost = order.get('shipping_cost')
@@ -3903,6 +4505,8 @@ def sync_ebay_sold_orders_auto(self):
                         if item:
                             # Snapshot item cost for profit calculation
                             item_cost = item.item_cost
+                            if has_image(item.item_thumb):
+                                apply_item_image_ready(item, item.item_thumb)
 
                             # Mark item as sold (soft delete) if not already marked
                             if not item.sold_at:
@@ -3915,6 +4519,13 @@ def sync_ebay_sold_orders_auto(self):
                                     remove_featured_items_for_user(user.id, [item.id])
                                 except Exception:
                                     pass
+                            if not has_image(item.item_thumb):
+                                ensure_item_image_pending(item, error="quick_sync_sold_missing_item_image")
+                                _queue_item_image_hydration(
+                                    item,
+                                    reason="quick_sync_sold_missing_item_image",
+                                    countdown=0
+                                )
 
                     if existing_sale:
                         # Update existing sale
@@ -3930,6 +4541,25 @@ def sync_ebay_sold_orders_auto(self):
                             existing_sale.shipping_cost = order.get('shipping_cost')
                         if order.get('shipping_charged') is not None:
                             existing_sale.shipping_charged = order.get('shipping_charged')
+                        existing_sale.sale_ebay_listing_id = (
+                            existing_sale.sale_ebay_listing_id
+                            or ebay_listing_id
+                            or (item.ebay_listing_id if item else None)
+                        )
+                        existing_sale.sale_ebay_url = (
+                            existing_sale.sale_ebay_url
+                            or order.get('ebay_url')
+                            or (item.ebay_url if item else None)
+                        )
+                        if (not has_image(existing_sale.sale_item_thumb)) and item and has_image(item.item_thumb):
+                            existing_sale.sale_item_thumb = item.item_thumb
+                        if has_image(existing_sale.sale_item_thumb):
+                            existing_sale.sale_image_status = IMAGE_STATUS_READY
+                            existing_sale.sale_image_next_retry_at = None
+                            existing_sale.sale_image_last_error = None
+                        else:
+                            existing_sale.sale_image_status = IMAGE_STATUS_PENDING
+                            existing_sale.sale_image_last_error = "sale image pending after quick sync"
 
                         # Update item_cost if we found it
                         if item_cost is not None and existing_sale.item_cost is None:
@@ -3937,6 +4567,13 @@ def sync_ebay_sold_orders_auto(self):
 
                         existing_sale.updated_at = datetime.utcnow()
                         existing_sale.calculate_profit()
+                        if not has_image(existing_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    existing_sale.id,
+                                    existing_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
                         updated_count += 1
                     else:
                         # Create new sale with item_cost snapshot
@@ -3947,6 +4584,14 @@ def sync_ebay_sold_orders_auto(self):
                         # Set item_id if we found the item
                         if item:
                             order_data['item_id'] = item.id
+                        order_data['sale_ebay_listing_id'] = ebay_listing_id or (item.ebay_listing_id if item else None)
+                        order_data['sale_ebay_url'] = order.get('ebay_url') or (item.ebay_url if item else None)
+                        order_data['sale_item_thumb'] = item.item_thumb if item and has_image(item.item_thumb) else None
+                        order_data['sale_image_status'] = (
+                            IMAGE_STATUS_READY
+                            if item and has_image(item.item_thumb)
+                            else IMAGE_STATUS_PENDING
+                        )
 
                         new_sale = Sale(
                             user_id=user.id,
@@ -3954,10 +4599,35 @@ def sync_ebay_sold_orders_auto(self):
                         )
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
+                        db.session.flush()
+                        if not has_image(new_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    new_sale.id,
+                                    new_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
                         created_count += 1
-                
+
                 db.session.commit()
-                
+
+                queued_sale_hydrations = 0
+                for sale_id, _listing in {pair for pair in sales_needing_image if pair[0]}:
+                    sale_obj = Sale.query.filter_by(id=sale_id, user_id=user.id).first()
+                    if not sale_obj:
+                        continue
+                    if _queue_sale_image_hydration(
+                        sale_obj,
+                        reason="quick_sync_sold_missing_image",
+                        countdown=0,
+                        force=False,
+                        attempt=0
+                    ):
+                        queued_sale_hydrations += 1
+                if queued_sale_hydrations:
+                    db.session.commit()
+                    log_task(f"    ↻ queued {queued_sale_hydrations} sale image hydration job(s)")
+
                 log_task(f"    ✓ {created_count} created, {updated_count} updated")
                 total_created += created_count
                 total_updated += updated_count
@@ -4071,6 +4741,7 @@ def sync_ebay_sold_orders_deep(self):
                 created_count = 0
                 updated_count = 0
                 needs_shipping_reconcile = False
+                sales_needing_image = []
 
                 for order in sold_orders:
                     shipping_cost = order.get('shipping_cost')
@@ -4096,6 +4767,8 @@ def sync_ebay_sold_orders_deep(self):
                         if item:
                             # Snapshot item cost for profit calculation
                             item_cost = item.item_cost
+                            if has_image(item.item_thumb):
+                                apply_item_image_ready(item, item.item_thumb)
 
                             # Mark item as sold (soft delete) if not already marked
                             if not item.sold_at:
@@ -4103,6 +4776,13 @@ def sync_ebay_sold_orders_deep(self):
                                 item.sold_at = order.get('sold_at')
                                 item.sold_price = order.get('sold_price')
                                 log_task(f"      Marked item {item.sku} as sold (soft delete)")
+                            if not has_image(item.item_thumb):
+                                ensure_item_image_pending(item, error="deep_sync_sold_missing_item_image")
+                                _queue_item_image_hydration(
+                                    item,
+                                    reason="deep_sync_sold_missing_item_image",
+                                    countdown=0
+                                )
 
                     if existing_sale:
                         # Update existing sale (in case data changed)
@@ -4126,6 +4806,25 @@ def sync_ebay_sold_orders_deep(self):
                             existing_sale.delivered_at = order.get('delivered_at')
                         if order.get('status'):
                             existing_sale.status = order.get('status')
+                        existing_sale.sale_ebay_listing_id = (
+                            existing_sale.sale_ebay_listing_id
+                            or ebay_listing_id
+                            or (item.ebay_listing_id if item else None)
+                        )
+                        existing_sale.sale_ebay_url = (
+                            existing_sale.sale_ebay_url
+                            or order.get('ebay_url')
+                            or (item.ebay_url if item else None)
+                        )
+                        if (not has_image(existing_sale.sale_item_thumb)) and item and has_image(item.item_thumb):
+                            existing_sale.sale_item_thumb = item.item_thumb
+                        if has_image(existing_sale.sale_item_thumb):
+                            existing_sale.sale_image_status = IMAGE_STATUS_READY
+                            existing_sale.sale_image_next_retry_at = None
+                            existing_sale.sale_image_last_error = None
+                        else:
+                            existing_sale.sale_image_status = IMAGE_STATUS_PENDING
+                            existing_sale.sale_image_last_error = "sale image pending after deep sync"
 
                         # Update item_cost if we found it and it wasn't set before
                         if item_cost is not None and existing_sale.item_cost is None:
@@ -4134,6 +4833,13 @@ def sync_ebay_sold_orders_deep(self):
                         # Recalculate profit and update timestamp (consistency with quick sync)
                         existing_sale.updated_at = datetime.utcnow()
                         existing_sale.calculate_profit()
+                        if not has_image(existing_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    existing_sale.id,
+                                    existing_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
                         updated_count += 1
                     else:
                         # Create new sale record
@@ -4153,6 +4859,14 @@ def sync_ebay_sold_orders_deep(self):
                             item_id=item.id if item else None,
                             item_title=order.get('item_title'),
                             item_sku=order.get('item_sku'),
+                            sale_item_thumb=item.item_thumb if item and has_image(item.item_thumb) else None,
+                            sale_image_status=(
+                                IMAGE_STATUS_READY
+                                if item and has_image(item.item_thumb)
+                                else IMAGE_STATUS_PENDING
+                            ),
+                            sale_ebay_url=order.get('ebay_url') or (item.ebay_url if item else None),
+                            sale_ebay_listing_id=ebay_listing_id or (item.ebay_listing_id if item else None),
                             item_cost=item_cost,
                             sold_price=sold_price,
                             tax_collected=order.get('tax_collected'),
@@ -4172,9 +4886,34 @@ def sync_ebay_sold_orders_deep(self):
                         # Use calculate_profit() method for consistency with other sync tasks
                         new_sale.calculate_profit()
                         db.session.add(new_sale)
+                        db.session.flush()
+                        if not has_image(new_sale.sale_item_thumb):
+                            sales_needing_image.append(
+                                (
+                                    new_sale.id,
+                                    new_sale.sale_ebay_listing_id or ebay_listing_id
+                                )
+                            )
                         created_count += 1
 
                 db.session.commit()
+
+                queued_sale_hydrations = 0
+                for sale_id, _listing in {pair for pair in sales_needing_image if pair[0]}:
+                    sale_obj = Sale.query.filter_by(id=sale_id, user_id=user.id).first()
+                    if not sale_obj:
+                        continue
+                    if _queue_sale_image_hydration(
+                        sale_obj,
+                        reason="deep_sync_sold_missing_image",
+                        countdown=0,
+                        force=False,
+                        attempt=0
+                    ):
+                        queued_sale_hydrations += 1
+                if queued_sale_hydrations:
+                    db.session.commit()
+                    log_task(f"    ↻ queued {queued_sale_hydrations} sale image hydration job(s)")
 
                 if created_count > 0 or updated_count > 0 or needs_shipping_reconcile:
                     log_task(f"    ✓ {created_count} created, {updated_count} updated")
@@ -6072,17 +6811,27 @@ def backfill_recent_item_prices(self, hours=48):
                     else:
                         log_task(f"[BACKFILL_PRICES]   Price still 0 or None from eBay (auction without bids?)")
                     if parsed.get('item_thumb') and not item.item_thumb:
-                        item.item_thumb = parsed['item_thumb']
+                        apply_item_image_ready(item, parsed['item_thumb'])
                         changed = True
+                    elif not has_image(item.item_thumb):
+                        ensure_item_image_pending(item, error="backfill_recent_prices_missing_image")
                     if parsed.get('title') and not item.title:
                         item.title = parsed['title'][:500]
                         changed = True
+                    if parsed.get('image_urls'):
+                        item.image_urls = parsed.get('image_urls')
                     if changed:
                         item.last_ebay_sync = datetime.utcnow()
                         backfilled += 1
                         log_task(f"[BACKFILL_PRICES]   ✓ Backfilled")
                     else:
                         log_task(f"[BACKFILL_PRICES]   No new data from GetItem")
+                    if not has_image(item.item_thumb):
+                        _queue_item_image_hydration(
+                            item,
+                            reason="backfill_recent_prices_missing_image",
+                            countdown=0
+                        )
                 else:
                     log_task(f"[BACKFILL_PRICES]   ✗ GetItem returned empty")
                     errors += 1
@@ -6279,8 +7028,10 @@ def backfill_missing_item_images_for_user(self, user_id):
 
                 changed = False
                 if not (item.item_thumb or '').strip():
-                    item.item_thumb = new_thumb
+                    apply_item_image_ready(item, new_thumb)
                     changed = True
+                elif has_image(item.item_thumb):
+                    apply_item_image_ready(item, item.item_thumb)
 
                 if parsed.get('ebay_url') and not item.ebay_url:
                     item.ebay_url = parsed['ebay_url']
@@ -6297,6 +7048,13 @@ def backfill_missing_item_images_for_user(self, user_id):
                         active_backfilled += 1
                     else:
                         sold_backfilled += 1
+                    if bucket == 'sold':
+                        Sale.query.filter_by(user_id=user_id, item_id=item.id).filter(
+                            or_(Sale.sale_item_thumb.is_(None), Sale.sale_item_thumb == '')
+                        ).update(
+                            {"sale_item_thumb": item.item_thumb},
+                            synchronize_session=False
+                        )
                     log_task(
                         f"[BACKFILL_IMAGES_USER] Backfilled item_id={item.id} listing={listing_id} ({bucket})"
                     )
@@ -6304,6 +7062,14 @@ def backfill_missing_item_images_for_user(self, user_id):
                     skipped += 1
                     log_task(
                         f"[BACKFILL_IMAGES_USER] Skipped listing={listing_id}: no field changed after enrichment"
+                    )
+
+                if not has_image(item.item_thumb):
+                    ensure_item_image_pending(item, error="backfill_missing_item_images_no_image")
+                    _queue_item_image_hydration(
+                        item,
+                        reason="backfill_missing_item_images_no_image",
+                        countdown=0
                     )
 
             except Exception as exc:

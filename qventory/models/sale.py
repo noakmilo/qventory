@@ -19,6 +19,13 @@ class Sale(db.Model):
     # Snapshot del item (por si se elimina después)
     item_title = db.Column(db.String, nullable=False)
     item_sku = db.Column(db.String, nullable=True)
+    sale_item_thumb = db.Column(db.String, nullable=True)
+    sale_image_status = db.Column(db.String(32), nullable=False, default='ready', index=True)
+    sale_image_attempts = db.Column(db.Integer, nullable=False, default=0)
+    sale_image_next_retry_at = db.Column(db.DateTime, nullable=True, index=True)
+    sale_image_last_error = db.Column(db.Text, nullable=True)
+    sale_ebay_url = db.Column(db.String, nullable=True)
+    sale_ebay_listing_id = db.Column(db.String(100), nullable=True, index=True)
 
     # Precios y costos
     sold_price = db.Column(db.Float, nullable=False)  # Precio de venta
@@ -68,6 +75,14 @@ class Sale(db.Model):
 
     # Relaciones
     item = db.relationship("Item", backref="sales")
+
+    @property
+    def image_pending(self):
+        return (
+            self.marketplace == 'ebay'
+            and not bool((self.sale_item_thumb or '').strip())
+            and self.sale_image_status in {'pending', 'queued', 'processing', 'failed'}
+        )
 
     def calculate_profit(self):
         """
