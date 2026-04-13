@@ -109,24 +109,9 @@ class User(UserMixin, db.Model):
 
     def can_add_items(self, count: int = 1) -> bool:
         """Check if user can add more items"""
-        # God mode has unlimited items
-        if self.is_god_mode:
-            return True
+        from qventory.helpers.item_limits import can_create_item
 
-        limits = self.get_plan_limits()
-
-        # None means unlimited
-        if limits.max_items is None:
-            return True
-
-        # Efficient count query - use same optimization as items_remaining()
-        from sqlalchemy import text
-        result = db.session.execute(
-            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"),
-            {"user_id": self.id}
-        )
-        current_count = result.scalar()
-        return (current_count + count) <= limits.max_items
+        return can_create_item(self.id, requested=count)
 
     def can_add_marketplace(self) -> bool:
         """Check if user can connect more marketplaces"""
@@ -144,24 +129,10 @@ class User(UserMixin, db.Model):
 
     def items_remaining(self) -> int:
         """Get number of items user can still add (None = unlimited)"""
-        # God mode has unlimited items
-        if self.is_god_mode:
-            return None
+        from qventory.helpers.item_limits import get_item_limit_status
 
-        limits = self.get_plan_limits()
-
-        if limits.max_items is None:
-            return None
-
-        # Efficient count query - only count IDs instead of loading all columns
-        # Use text query to avoid ORM overhead and potential circular imports
-        from sqlalchemy import text
-        result = db.session.execute(
-            text("SELECT COUNT(*) FROM items WHERE user_id = :user_id AND is_active = true AND COALESCE(inactive_by_user, FALSE) = FALSE"),
-            {"user_id": self.id}
-        )
-        current_count = result.scalar()
-        return max(0, limits.max_items - current_count)
+        status = get_item_limit_status(self.id)
+        return status.remaining
 
     @property
     def is_premium(self) -> bool:

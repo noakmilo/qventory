@@ -644,6 +644,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             deduplicate_ebay_items
         )
         from qventory.helpers import generate_sku
+        from qventory.helpers.item_limits import get_item_limit_status
 
         log_task(f"=== Starting eBay import for user {user_id} ===")
         log_task(f"Mode: {import_mode}, Status: {listing_status}")
@@ -669,14 +670,17 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         if not user:
             raise Exception(f"User {user_id} not found")
 
-        items_remaining = user.items_remaining()
+        limit_status = get_item_limit_status(user_id, lock=True)
+        items_remaining = limit_status.remaining
         log_task(f"User plan limits - Items remaining: {items_remaining}")
 
-        # IMPORTANT: In sync_all mode, we allow syncing ALL eBay inventory regardless of plan limits
-        # because the user is syncing their EXISTING eBay inventory, not adding arbitrary new items
+        # sync_all still needs to respect the active-item plan limit for new inserts.
         if import_mode == 'sync_all':
-            max_new_items_allowed = None  # No limit for full sync
-            log_task(f"Mode: sync_all - No item limit (syncing existing eBay inventory)")
+            max_new_items_allowed = items_remaining
+            if max_new_items_allowed is None:
+                log_task("Mode: sync_all - unlimited plan, syncing existing eBay inventory")
+            else:
+                log_task(f"Mode: sync_all - Max new items allowed: {max_new_items_allowed}")
         else:
             if items_remaining is not None and items_remaining <= 0:
                 raise Exception(f"Cannot import: User has reached plan limit (0 items remaining)")
@@ -719,6 +723,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             updated_count = 0
             skipped_count = 0
             error_count = 0
+            plan_limit_reached = False
 
             for idx, ebay_item in enumerate(ebay_items):
                 try:
@@ -903,6 +908,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                             if max_new_items_allowed is not None and imported_count >= max_new_items_allowed:
                                 skipped_count += 1
                                 log_task(f"  → Skipped (plan limit reached: {max_new_items_allowed} items)")
+                                plan_limit_reached = True
                                 continue
 
                             # NOW process images since we're importing a new item
@@ -947,6 +953,14 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 synced_from_ebay=True,
                                 last_ebay_sync=datetime.utcnow()
                             )
+                            limit_status = get_item_limit_status(user_id, lock=True)
+                            if not limit_status.allowed:
+                                skipped_count += 1
+                                plan_limit_reached = True
+                                log_task(
+                                    f"  → Skipped (plan limit reached: {limit_status.max_items} items)"
+                                )
+                                continue
                             if has_image(new_item.item_thumb):
                                 apply_item_image_ready(new_item, new_item.item_thumb)
                             else:
@@ -1071,10 +1085,6 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             log_task(f"✓ Stored {failed_stored} new failed items (total with updates: {len(failed_items)})")
 
             # Check if plan limit was reached before committing job updates
-            plan_limit_reached = (max_new_items_allowed is not None and
-                                imported_count >= max_new_items_allowed and
-                                skipped_count > 0)
-
             if plan_limit_reached:
                 log_task(f"⚠️  PLAN LIMIT REACHED: Imported {imported_count} items (limit: {max_new_items_allowed})")
                 job.error_message = f"Plan limit reached. Imported {imported_count}/{max_new_items_allowed} items. Upgrade to import more."
@@ -1713,6 +1723,7 @@ def retry_failed_imports(self, user_id, failed_import_ids=None):
 
         resolved_count = 0
         still_failed_count = 0
+        from qventory.helpers.item_limits import get_item_limit_status
 
         for failed_import in failed_imports:
             try:
@@ -1781,6 +1792,16 @@ def retry_failed_imports(self, user_id, failed_import_ids=None):
                 else:
                     # Create new item
                     from qventory.helpers.image_processor import download_and_upload_image
+                    limit_status = get_item_limit_status(user_id, lock=True)
+                    if not limit_status.allowed:
+                        log_task(
+                            f"  Skipping failed import due to plan limit ({limit_status.max_items} items)"
+                        )
+                        failed_import.retry_count += 1
+                        failed_import.last_retry_at = datetime.utcnow()
+                        db.session.commit()
+                        still_failed_count += 1
+                        continue
                     item_thumb = None
                     if image_url:
                         log_task(f"  Processing image...")
@@ -3001,6 +3022,7 @@ def process_add_item_notification(event):
     """
     from qventory.models.item import Item
     from qventory.extensions import db
+    from qventory.helpers.item_limits import get_item_limit_status
 
     log_task("Processing AddItem notification")
 
@@ -3058,6 +3080,25 @@ def process_add_item_notification(event):
         if not ebay_sku:
             from qventory.helpers import generate_sku
             ebay_sku = generate_sku()
+
+        if not event.user_id:
+            return {
+                'status': 'error',
+                'message': 'Missing user ID'
+            }
+
+        limit_status = get_item_limit_status(event.user_id, lock=True)
+        if not limit_status.allowed:
+            log_task(
+                f"  Skipping AddItem import for user {event.user_id}: "
+                f"plan limit reached ({limit_status.max_items} items)"
+            )
+            return {
+                'status': 'success',
+                'skipped': True,
+                'reason': 'plan_limit_reached',
+                'message': 'Item skipped because the user has reached their plan limit'
+            }
 
         # Create new item in Qventory
         new_item = Item(
@@ -3505,6 +3546,7 @@ def poll_user_listings(credential):
     from qventory.models.polling_log import PollingLog
     from qventory.models.system_setting import SystemSetting
     from qventory.helpers import generate_sku
+    from qventory.helpers.item_limits import get_item_limit_status
     from qventory.helpers.ebay_inventory import TRADING_API_URL, get_listing_details_trading_api, parse_ebay_inventory_item
     from qventory.extensions import db
     import os
@@ -3852,6 +3894,13 @@ def poll_user_listings(credential):
                 last_ebay_sync=datetime.utcnow(),
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
+            limit_status = get_item_limit_status(user_id, lock=True)
+            if not limit_status.allowed:
+                log_task(
+                    f"    ✗ User reached plan limit while importing new listings "
+                    f"({limit_status.max_items} items)"
+                )
+                break
             if has_image(new_item.item_thumb):
                 apply_item_image_ready(new_item, new_item.item_thumb)
             else:

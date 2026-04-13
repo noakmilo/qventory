@@ -3071,7 +3071,9 @@ def import_csv():
 
             elif not existing_item_by_sku:
                 # Check if user can add more items (plan limit)
-                if not current_user.can_add_items():
+                from qventory.helpers.item_limits import get_item_limit_status
+                limit_status = get_item_limit_status(current_user.id, lock=True)
+                if not limit_status.allowed:
                     limit_reached_count += 1
                     # Stop importing and notify user
                     break
@@ -4069,6 +4071,15 @@ def new_item():
         if not title:
             flash("Title is required.", "error")
             return redirect(url_for("main.new_item"))
+
+        from qventory.helpers.item_limits import get_item_limit_status
+        limit_status = get_item_limit_status(current_user.id, lock=True)
+        if not limit_status.allowed:
+            flash(
+                f"You have reached your plan limit ({limit_status.max_items} items). Upgrade to add more items.",
+                "error",
+            )
+            return redirect(url_for("main.dashboard"))
 
         sku = generate_sku()
         loc = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
