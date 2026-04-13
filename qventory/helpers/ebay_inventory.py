@@ -80,6 +80,32 @@ def _extract_image_urls(payload):
     return _dedupe_image_urls(image_urls)
 
 
+def _merge_missing_listing_fields(target, incoming):
+    """Merge non-empty fields from `incoming` into `target` without clobbering data."""
+    if not isinstance(target, dict) or not isinstance(incoming, dict):
+        return
+
+    for field in [
+        'sku', 'ebay_sku', 'ebay_listing_id', 'listing_id',
+        'ebay_url', 'item_price', 'listing_status',
+        'listing_start_time', 'listing_end_time'
+    ]:
+        if not target.get(field) and incoming.get(field):
+            target[field] = incoming.get(field)
+
+    target_product = target.get('product')
+    incoming_product = incoming.get('product')
+    if isinstance(target_product, dict) and isinstance(incoming_product, dict):
+        for field in ['title', 'description']:
+            if not target_product.get(field) and incoming_product.get(field):
+                target_product[field] = incoming_product.get(field)
+
+        if not _dedupe_image_urls(target_product.get('imageUrls')) and _dedupe_image_urls(incoming_product.get('imageUrls')):
+            target_product['imageUrls'] = _dedupe_image_urls(incoming_product.get('imageUrls'))
+    elif not target.get('product') and isinstance(incoming_product, dict):
+        target['product'] = incoming_product
+
+
 def get_user_access_token(user_id):
     """
     Get valid access token for user's eBay account
@@ -593,7 +619,7 @@ def get_image_candidates_for_listing(
     *,
     seed_images=None,
     include_active_fallback=True,
-    active_fallback_max_items=200
+    active_fallback_max_items=1000
 ):
     """
     Resolve ordered candidate image URLs for a listing.
@@ -887,28 +913,6 @@ def deduplicate_ebay_items(items):
     duplicates = []
     deduped = []
 
-    def merge_missing(target, incoming):
-        if not isinstance(target, dict) or not isinstance(incoming, dict):
-            return
-        for field in [
-            'sku', 'ebay_sku', 'ebay_listing_id', 'listing_id',
-            'ebay_url', 'item_price', 'listing_status',
-            'listing_start_time', 'listing_end_time'
-        ]:
-            if not target.get(field) and incoming.get(field):
-                target[field] = incoming.get(field)
-
-        target_product = target.get('product')
-        incoming_product = incoming.get('product')
-        if isinstance(target_product, dict) and isinstance(incoming_product, dict):
-            for field in ['title', 'description']:
-                if not target_product.get(field) and incoming_product.get(field):
-                    target_product[field] = incoming_product.get(field)
-            if (not target_product.get('imageUrls')) and incoming_product.get('imageUrls'):
-                target_product['imageUrls'] = incoming_product.get('imageUrls')
-        elif not target.get('product') and isinstance(incoming_product, dict):
-            target['product'] = incoming_product
-
     for item in items:
         try:
             key = _normalize_listing_key(item or {})
@@ -918,7 +922,7 @@ def deduplicate_ebay_items(items):
 
         if key and key in seen:
             duplicates.append(item)
-            merge_missing(seen[key], item)
+            _merge_missing_listing_fields(seen[key], item)
             continue
 
         if key:
@@ -2310,16 +2314,25 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
             }
 
     deduped = []
-    seen = set()
+    seen = {}
+    order = []
     for offer in offers:
         listing_id = offer.get('ebay_listing_id')
         sku = offer.get('ebay_sku')
         key = f"id:{listing_id}" if listing_id else f"sku:{sku}" if sku else None
         if key and key in seen:
+            _merge_missing_listing_fields(seen[key], offer)
             continue
         if key:
-            seen.add(key)
-        deduped.append(offer)
+            seen[key] = offer
+            order.append(key)
+        else:
+            deduped.append(offer)
+
+    for key in order:
+        offer = seen.get(key)
+        if offer:
+            deduped.append(offer)
 
     return {
         'success': True,
