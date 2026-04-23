@@ -1,6 +1,6 @@
 """harden free plan limits and import job lock
 
-Revision ID: 063_harden_free_plan_limits_and_import_job_lock
+Revision ID: 063_harden_free_plan_limits_lock
 Revises: 062_image_guarantee
 Create Date: 2026-04-22 18:00:00.000000
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '063_harden_free_plan_limits_and_import_job_lock'
+revision = '063_harden_free_plan_limits_lock'
 down_revision = '062_image_guarantee'
 branch_labels = None
 depends_on = None
