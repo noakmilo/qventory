@@ -3,10 +3,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
+import os
 
 from sqlalchemy import text
 
 from qventory.extensions import db
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _env_positive_int(name: str, default: int) -> int:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        LOGGER.warning("Invalid %s=%r; using default %s", name, raw, default)
+        return default
+    if value <= 0:
+        LOGGER.warning("Non-positive %s=%r; using default %s", name, raw, default)
+        return default
+    return value
+
+
+FREE_PLAN_FALLBACK_MAX_ITEMS = _env_positive_int("FREE_PLAN_FALLBACK_MAX_ITEMS", 100)
 
 
 @dataclass(frozen=True)
@@ -56,6 +78,14 @@ def get_item_limit_status(user_id: int, requested: int = 1, *, lock: bool = Fals
         plan_limits = PlanLimit.query.filter_by(plan="free").first()
 
     max_items = plan_limits.max_items if plan_limits else None
+    if plan_name == "free" and max_items is None:
+        LOGGER.error(
+            "Invalid free-plan limit for user_id=%s; falling back to %s items",
+            user_id,
+            FREE_PLAN_FALLBACK_MAX_ITEMS,
+        )
+        max_items = FREE_PLAN_FALLBACK_MAX_ITEMS
+
     if max_items is None:
         return ItemLimitStatus(
             allowed=True,

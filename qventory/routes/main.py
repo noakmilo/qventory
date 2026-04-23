@@ -11,6 +11,7 @@ import os
 import sys
 import base64
 import time
+import hmac
 import requests
 from urllib.parse import urlparse, parse_qs
 import csv
@@ -170,11 +171,28 @@ if cloudinary_enabled:
 
 # ==================== ADMIN BACKOFFICE ====================
 
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+ADMIN_SESSION_MAX_AGE_SECONDS = 3600 * 24
 
 def check_admin_auth():
-    """Check if admin is authenticated via session"""
-    return request.cookies.get("admin_auth") == "authenticated"
+    """Check if admin is authenticated via signed Flask session."""
+    if not session.get("admin_authenticated"):
+        return False
+
+    issued_at = session.get("admin_authenticated_at")
+    try:
+        issued_at = float(issued_at)
+    except (TypeError, ValueError):
+        session.pop("admin_authenticated", None)
+        session.pop("admin_authenticated_at", None)
+        return False
+
+    if (time.time() - issued_at) > ADMIN_SESSION_MAX_AGE_SECONDS:
+        session.pop("admin_authenticated", None)
+        session.pop("admin_authenticated_at", None)
+        return False
+
+    return True
 
 def require_admin(f):
     """Decorator to require admin authentication"""
@@ -3081,6 +3099,8 @@ def import_csv():
                 # Crear nuevo item
                 new_item = Item(user_id=current_user.id, **parsed_data)
                 db.session.add(new_item)
+                # Ensure subsequent limit checks see this insert in the same import loop.
+                db.session.flush()
                 imported_count += 1
                 # Add to existing_items_by_title to prevent duplicates in same CSV
                 existing_items_by_title[title_normalized] = new_item
@@ -6673,13 +6693,21 @@ def admin_redirect():
 @main_bp.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     """Admin login page"""
+    if check_admin_auth():
+        return redirect(url_for('main.admin_dashboard'))
+
     if request.method == "POST":
         password = request.form.get("password", "")
-        if password == ADMIN_PASSWORD:
-            resp = make_response(redirect(url_for('main.admin_dashboard')))
-            resp.set_cookie('admin_auth', 'authenticated', max_age=3600*24)  # 24 hours
+        if not ADMIN_PASSWORD:
+            flash("Admin login is disabled: ADMIN_PASSWORD is not configured.", "error")
+            return render_template("admin_login.html")
+
+        if hmac.compare_digest(password, ADMIN_PASSWORD):
+            session["admin_authenticated"] = True
+            session["admin_authenticated_at"] = time.time()
+            session.permanent = True
             flash("Admin authentication successful", "ok")
-            return resp
+            return redirect(url_for('main.admin_dashboard'))
         else:
             flash("Invalid admin password", "error")
 
@@ -6689,10 +6717,10 @@ def admin_login():
 @main_bp.route("/admin/logout")
 def admin_logout():
     """Admin logout"""
-    resp = make_response(redirect(url_for('main.admin_login')))
-    resp.set_cookie('admin_auth', '', expires=0)
+    session.pop("admin_authenticated", None)
+    session.pop("admin_authenticated_at", None)
     flash("Logged out from admin", "ok")
-    return resp
+    return redirect(url_for('main.admin_login'))
 
 
 # ---------------------- Admin: Help Center ----------------------
@@ -7702,12 +7730,17 @@ def admin_update_plan_limits(plan):
     try:
         # Parse max_items (can be empty for unlimited)
         max_items_str = request.form.get("max_items", "").strip()
+        parsed_max_items = None
         if max_items_str == "" or max_items_str.lower() == "unlimited":
-            plan_limit.max_items = None
+            parsed_max_items = None
         else:
-            plan_limit.max_items = int(max_items_str)
-            if plan_limit.max_items < 0:
+            parsed_max_items = int(max_items_str)
+            if parsed_max_items < 0:
                 raise ValueError("Max items must be positive")
+
+        if plan == "free" and parsed_max_items is None:
+            raise ValueError("Free plan cannot be unlimited")
+        plan_limit.max_items = parsed_max_items
 
         # Other numeric limits
         plan_limit.max_images_per_item = int(request.form.get("max_images_per_item", 1))

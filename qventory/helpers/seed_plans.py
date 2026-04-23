@@ -154,13 +154,24 @@ def seed_plan_limits():
         # Use raw SQL to avoid SQLAlchemy trying to select non-existent columns
         try:
             result = db.session.execute(
-                text("SELECT id FROM plan_limits WHERE plan = :plan"),
+                text("SELECT id, max_items FROM plan_limits WHERE plan = :plan"),
                 {"plan": plan_name}
             ).fetchone()
 
             if result:
-                # Plan exists - PRESERVE custom values, do not overwrite
-                print(f"Plan '{plan_name}' already exists - preserving custom configuration")
+                # Plan exists - preserve custom values by default
+                # but harden free plan against invalid unlimited configuration.
+                if plan_name == "free" and result.max_items is None:
+                    db.session.execute(
+                        text("UPDATE plan_limits SET max_items = :max_items WHERE id = :id"),
+                        {"max_items": plan_data["max_items"], "id": result.id},
+                    )
+                    print(
+                        f"Plan 'free' had NULL max_items. "
+                        f"Reset to safe default ({plan_data['max_items']})."
+                    )
+                else:
+                    print(f"Plan '{plan_name}' already exists - preserving custom configuration")
             else:
                 # Create new plan - only include columns that exist
                 insert_cols = []

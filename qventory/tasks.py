@@ -616,7 +616,7 @@ def refresh_user_analytics(self, user_id, days_back=90, force=False):
 
 
 @celery.task(bind=True, name='qventory.tasks.import_ebay_inventory')
-def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status='ACTIVE'):
+def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status='ACTIVE', existing_job_id=None):
     """
     Background task to import eBay inventory
 
@@ -624,6 +624,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
         user_id: Qventory user ID
         import_mode: 'new_only', 'update_existing', or 'sync_all'
         listing_status: 'ACTIVE' or 'ALL'
+        existing_job_id: Optional ImportJob ID to reuse when orchestrated by another task
 
     Returns:
         dict with import results
@@ -633,6 +634,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
     with app.app_context():
         from qventory.models.import_job import ImportJob
+        from sqlalchemy.exc import IntegrityError
         from qventory.models.item import Item
         from qventory.models.failed_import import FailedImport
         from qventory.models.user import User
@@ -656,7 +658,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             ImportJob.status.in_(['pending', 'processing'])
         ).first()
 
-        if existing_job:
+        if existing_job and (existing_job_id is None or existing_job.id != existing_job_id):
             log_task(f"⚠️  Import already running for user {user_id} (Job ID: {existing_job.id})")
             log_task(f"⚠️  Skipping this import to prevent duplicates")
             return {
@@ -688,7 +690,11 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
             log_task(f"Mode: {import_mode} - Max new items allowed: {max_new_items_allowed}")
 
         # Get or create ImportJob
-        job = ImportJob.query.filter_by(celery_task_id=self.request.id).first()
+        job = None
+        if existing_job_id:
+            job = ImportJob.query.filter_by(id=existing_job_id, user_id=user_id).first()
+        if not job:
+            job = ImportJob.query.filter_by(celery_task_id=self.request.id).first()
         if not job:
             job = ImportJob(
                 user_id=user_id,
@@ -699,7 +705,21 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                 started_at=datetime.utcnow()
             )
             db.session.add(job)
-            db.session.commit()
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                conflict_job = ImportJob.query.filter(
+                    ImportJob.user_id == user_id,
+                    ImportJob.status.in_(['pending', 'processing'])
+                ).order_by(ImportJob.created_at.desc()).first()
+                conflict_id = conflict_job.id if conflict_job else "unknown"
+                log_task(f"⚠️  Import lock conflict for user {user_id} (Job ID: {conflict_id})")
+                return {
+                    'success': False,
+                    'error': f'Import already in progress (Job ID: {conflict_id})',
+                    'skipped': True
+                }
 
         try:
             # Update status
@@ -804,10 +824,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                         ).first()
 
                         if inactive_relisted:
-                            log_task(f"  ✓ Found relisted item (Qventory ID: {inactive_relisted.id}, reactivating and updating)")
+                            log_task(f"  ✓ Found relisted item (Qventory ID: {inactive_relisted.id}, candidate for reactivation/update)")
                             existing_item = inactive_relisted
-                            # Reactivate the item since it's active on eBay again
-                            existing_item.is_active = True
                             match_method = "relisted_item"
 
                     # Third try: Match by exact title (ONLY if no listing_id, least reliable fallback)
@@ -846,7 +864,19 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
                             # REACTIVATE item if it was marked inactive (from relist)
                             if not existing_item.is_active and match_method == "relisted_item":
-                                log_task(f"  ↻ Reactivating relisted item (preserving supplier: {existing_item.supplier_id})")
+                                relist_limit_status = get_item_limit_status(user_id, lock=True)
+                                if not relist_limit_status.allowed:
+                                    skipped_count += 1
+                                    plan_limit_reached = True
+                                    log_task(
+                                        f"  → Skipped relisted reactivation "
+                                        f"(plan limit reached: {relist_limit_status.max_items} items)"
+                                    )
+                                    continue
+                                log_task(
+                                    f"  ↻ Reactivating relisted item "
+                                    f"(preserving supplier: {existing_item.supplier or 'N/A'})"
+                                )
                                 existing_item.is_active = True
 
                             # Update eBay-specific fields
@@ -1571,10 +1601,23 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
 
     with app.app_context():
         from qventory.models.import_job import ImportJob
+        from sqlalchemy.exc import IntegrityError
 
         log_task(f"=== Starting COMPLETE eBay import for user {user_id} ===")
         log_task(f"Inventory mode: {import_mode}, Status: {listing_status}")
         log_task(f"Sales: last {days_back} days" if days_back else "Sales: ALL TIME")
+
+        existing_job = ImportJob.query.filter(
+            ImportJob.user_id == user_id,
+            ImportJob.status.in_(['pending', 'processing'])
+        ).first()
+        if existing_job:
+            log_task(f"⚠️  Complete import skipped: existing active job {existing_job.id}")
+            return {
+                'success': False,
+                'error': f'Import already in progress (Job ID: {existing_job.id})',
+                'skipped': True,
+            }
 
         # Create ImportJob to track overall progress
         job = ImportJob(
@@ -1586,7 +1629,21 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             started_at=datetime.utcnow()
         )
         db.session.add(job)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            conflict_job = ImportJob.query.filter(
+                ImportJob.user_id == user_id,
+                ImportJob.status.in_(['pending', 'processing'])
+            ).order_by(ImportJob.created_at.desc()).first()
+            conflict_id = conflict_job.id if conflict_job else "unknown"
+            log_task(f"⚠️  Complete import lock conflict for user {user_id} (Job ID: {conflict_id})")
+            return {
+                'success': False,
+                'error': f'Import already in progress (Job ID: {conflict_id})',
+                'skipped': True,
+            }
 
         try:
             # STEP 1: Import Inventory (Active Listings)
@@ -1596,7 +1653,8 @@ def import_ebay_complete(self, user_id, import_mode='new_only', listing_status='
             inventory_result = import_ebay_inventory.run(
                 user_id,
                 import_mode,
-                listing_status
+                listing_status,
+                existing_job_id=job.id,
             )
 
             log_task(f"✅ Inventory imported:")

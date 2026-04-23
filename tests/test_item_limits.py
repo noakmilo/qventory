@@ -83,3 +83,27 @@ def test_item_limit_status_allows_god_mode_without_counting(monkeypatch):
     assert status.allowed is True
     assert status.max_items is None
     assert status.remaining is None
+
+
+def test_item_limit_status_uses_safe_fallback_for_free_plan_without_limit(monkeypatch):
+    dummy_user = SimpleNamespace(id=3, role="free", is_god_mode=False)
+    dummy_subscription = SimpleNamespace(plan="free")
+    dummy_plan_limit = SimpleNamespace(max_items=None)
+
+    monkeypatch.setattr(item_limits, "FREE_PLAN_FALLBACK_MAX_ITEMS", 100)
+    monkeypatch.setattr(item_limits.db, "session", _DummySession(count=100))
+    monkeypatch.setattr("qventory.models.user.User", SimpleNamespace(query=_DummyQuery(dummy_user)))
+    monkeypatch.setattr(
+        "qventory.models.subscription.Subscription",
+        SimpleNamespace(query=_DummyQuery(dummy_subscription)),
+    )
+    monkeypatch.setattr(
+        "qventory.models.subscription.PlanLimit",
+        SimpleNamespace(query=_DummyQuery(dummy_plan_limit)),
+    )
+
+    status = item_limits.get_item_limit_status(3, lock=True)
+
+    assert status.allowed is False
+    assert status.max_items == 100
+    assert status.remaining == 0
