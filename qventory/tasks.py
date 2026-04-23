@@ -891,6 +891,8 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
 
                             if parsed_with_images.get('ebay_listing_id'):
                                 existing_item.ebay_listing_id = parsed_with_images['ebay_listing_id']
+                            if parsed_with_images.get('ebay_offer_id'):
+                                existing_item.ebay_offer_id = parsed_with_images['ebay_offer_id']
                             if parsed_with_images.get('ebay_url'):
                                 existing_item.ebay_url = parsed_with_images['ebay_url']
                             if parsed_with_images.get('item_price'):
@@ -971,6 +973,7 @@ def import_ebay_inventory(self, user_id, import_mode='new_only', listing_status=
                                 image_urls=parsed_with_images.get('image_urls'),
                                 ebay_sku=ebay_sku,
                                 ebay_listing_id=parsed_with_images.get('ebay_listing_id'),
+                                ebay_offer_id=parsed_with_images.get('ebay_offer_id'),
                                 ebay_url=parsed_with_images.get('ebay_url'),
                                 item_price=parsed_with_images.get('item_price'),
                                 listing_date=start_time.date() if start_time else None,
@@ -2252,14 +2255,24 @@ def auto_relist_offers(self):
                 if rule.mode == 'auto' and rule.enable_price_decrease:
                     if not rule.current_price:
                         try:
-                            # Detect if we should use Trading API (listing ID) or Inventory API (offer ID)
-                            use_trading_api = (rule.offer_id and rule.offer_id.isdigit() and len(rule.offer_id) >= 10)
+                            from qventory.helpers.ebay_relist import (
+                                get_item_details_trading_api,
+                                get_offer_details,
+                                is_probable_listing_id,
+                                resolve_rule_offer_id,
+                            )
+
+                            resolved_offer_id = resolve_rule_offer_id(rule.user_id, rule)
+                            if resolved_offer_id and resolved_offer_id != rule.offer_id:
+                                rule.offer_id = resolved_offer_id
+
+                            offer_id_for_price = resolved_offer_id or rule.offer_id
+                            use_trading_api = is_probable_listing_id(offer_id_for_price)
 
                             if use_trading_api:
                                 # Use Trading API to get item price
-                                from qventory.helpers.ebay_relist import get_item_details_trading_api
                                 log_task(f"  Fetching current price via Trading API...")
-                                price_resp = get_item_details_trading_api(rule.user_id, rule.offer_id)
+                                price_resp = get_item_details_trading_api(rule.user_id, offer_id_for_price)
                                 if price_resp.get('success'):
                                     item_data = price_resp.get('item') or {}
                                     price_value = item_data.get('price')
@@ -2271,9 +2284,8 @@ def auto_relist_offers(self):
                                             pass
                             else:
                                 # Use Inventory API to get offer price
-                                from qventory.helpers.ebay_relist import get_offer_details
                                 log_task(f"  Fetching current price via Inventory API...")
-                                price_resp = get_offer_details(rule.user_id, rule.offer_id)
+                                price_resp = get_offer_details(rule.user_id, offer_id_for_price)
                                 if price_resp.get('success'):
                                     offer_data = price_resp.get('offer') or {}
                                     price_value = (
@@ -2390,15 +2402,19 @@ def auto_relist_offers(self):
                     if apply_changes and rule.pending_changes and 'price' in rule.pending_changes:
                         rule.current_price = rule.pending_changes['price']
 
-                    # Fetch and update the new listing ID from eBay
-                    from qventory.helpers.ebay_relist import get_new_listing_id_from_offer
+                    from qventory.helpers.ebay_relist import (
+                        get_new_listing_id_from_offer,
+                        is_probable_listing_id,
+                    )
 
-                    updated_listing_id = get_new_listing_id_from_offer(rule.user_id, rule.offer_id)
-                    if updated_listing_id:
-                        new_listing_id = updated_listing_id
-                        log_task(f"  Updated listing ID: {new_listing_id}")
+                    new_offer_id = result.get('new_offer_id') or rule.offer_id
+                    if new_offer_id and not is_probable_listing_id(str(new_offer_id)):
+                        updated_listing_id = get_new_listing_id_from_offer(rule.user_id, str(new_offer_id))
+                        if updated_listing_id:
+                            new_listing_id = updated_listing_id
+                            log_task(f"  Updated listing ID: {new_listing_id}")
 
-                    rule.mark_success(new_listing_id)
+                    rule.mark_success(new_listing_id, new_offer_id=new_offer_id)
 
                     history.status = 'success'
                     history.old_listing_id = result.get('old_listing_id')
@@ -3936,6 +3952,7 @@ def poll_user_listings(credential):
                 title=title[:500] if title else 'eBay Item',
                 sku=generate_sku(),
                 ebay_listing_id=listing_id,
+                ebay_offer_id=parsed_with_images.get('ebay_offer_id'),
                 ebay_sku=ebay_custom_sku[:100] if ebay_custom_sku else None,
                 location_code=location_code,
                 A=parsed_with_images.get('location_A'),
@@ -4155,6 +4172,8 @@ def reconcile_user_inventory(self, user_id):
                 if offer.get('item_price') and offer['item_price'] != item.item_price:
                     item.item_price = offer['item_price']
                     updated += 1
+                if offer.get('ebay_offer_id'):
+                    item.ebay_offer_id = offer['ebay_offer_id']
             else:
                 if can_mark_inactive and item.is_active:
                     item.is_active = False
@@ -4434,6 +4453,8 @@ def sync_ebay_active_inventory_auto(self):
                         if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
                             item.item_price = offer_data['item_price']
                             updated_count += 1
+                        if offer_data.get('ebay_offer_id'):
+                            item.ebay_offer_id = offer_data['ebay_offer_id']
 
                         # Listing still present in active snapshot; keep active.
                     else:
@@ -6417,6 +6438,8 @@ def reactivate_inactive_ebay_items(self):
                     item.last_ebay_sync = datetime.utcnow()
                     if offer_data.get('item_price'):
                         item.item_price = offer_data['item_price']
+                    if offer_data.get('ebay_offer_id'):
+                        item.ebay_offer_id = offer_data['ebay_offer_id']
                     if offer_data.get('ebay_url') and not item.ebay_url:
                         item.ebay_url = offer_data['ebay_url']
                     if not item.ebay_listing_id and listing_id:

@@ -11,7 +11,10 @@ import sys
 import time
 import requests
 from datetime import datetime, timedelta
-from qventory.helpers.ebay_inventory import get_user_access_token
+from qventory.helpers.ebay_inventory import (
+    fetch_ebay_inventory_offers,
+    get_user_access_token,
+)
 import xml.etree.ElementTree as ET
 import copy
 
@@ -25,6 +28,89 @@ TRADING_API_URL = "https://api.ebay.com/ws/api.dll"
 TRADING_COMPAT_LEVEL = os.environ.get('EBAY_TRADING_COMPAT_LEVEL', '1145')
 _XML_NS = {'ebay': 'urn:ebay:apis:eBLBaseComponents'}
 _XML_NS_URI = 'urn:ebay:apis:eBLBaseComponents'
+
+
+def _normalize_identifier(value) -> str:
+    """Return a trimmed string identifier or empty string."""
+    if value is None:
+        return ''
+    return str(value).strip()
+
+
+def is_probable_listing_id(value: str) -> bool:
+    """
+    Heuristic check for eBay listing IDs used by legacy Trading API paths.
+    """
+    candidate = _normalize_identifier(value)
+    return bool(candidate) and candidate.isdigit() and len(candidate) >= 10
+
+
+def resolve_offer_id_from_listing_id(
+    user_id: int,
+    listing_id: str,
+    limit: int = 200,
+    max_pages: int = 25,
+) -> str:
+    """
+    Resolve Inventory API offerId from a known listingId.
+
+    Returns:
+        str: Offer ID when found, otherwise None.
+    """
+    normalized_listing_id = _normalize_identifier(listing_id)
+    if not normalized_listing_id:
+        return None
+
+    offset = 0
+    for _ in range(max_pages):
+        result = fetch_ebay_inventory_offers(user_id, limit=limit, offset=offset)
+        if not result.get('success'):
+            log_relist(
+                f"✗ Unable to resolve offer ID for listing {normalized_listing_id}: "
+                f"{result.get('error')}"
+            )
+            return None
+
+        offers = result.get('offers') or []
+        if not offers:
+            break
+
+        for offer in offers:
+            candidate_listing_id = _normalize_identifier(offer.get('ebay_listing_id'))
+            if candidate_listing_id != normalized_listing_id:
+                continue
+
+            candidate_offer_id = _normalize_identifier(offer.get('ebay_offer_id'))
+            if candidate_offer_id:
+                return candidate_offer_id
+
+        offset += limit
+        if len(offers) < limit:
+            break
+
+        total = result.get('total')
+        if isinstance(total, int) and offset >= total:
+            break
+
+    return None
+
+
+def resolve_rule_offer_id(user_id: int, rule) -> str:
+    """
+    Return a valid Inventory API offer ID for a rule when available.
+
+    For legacy rules that stored listing IDs in offer_id, this attempts
+    to backfill the real offer ID by matching the listing ID.
+    """
+    current_offer_id = _normalize_identifier(getattr(rule, 'offer_id', None))
+    if current_offer_id and not is_probable_listing_id(current_offer_id):
+        return current_offer_id
+
+    listing_id = _normalize_identifier(getattr(rule, 'listing_id', None)) or current_offer_id
+    if not listing_id:
+        return None
+
+    return resolve_offer_id_from_listing_id(user_id, listing_id)
 
 
 # ==================== INVENTORY API FUNCTIONS (Modern) ====================
@@ -816,6 +902,9 @@ def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
 
             selling_status = item_elem.find('ebay:SellingStatus', _XML_NS)
             current_price = selling_status.find('ebay:CurrentPrice', _XML_NS) if selling_status is not None else None
+            listing_status = selling_status.find('ebay:ListingStatus', _XML_NS) if selling_status is not None else None
+            if listing_status is None:
+                listing_status = item_elem.find('ebay:ListingStatus', _XML_NS)
 
             sku = sku_elem.text if sku_elem is not None else ''
             variation_skus = []
@@ -833,7 +922,8 @@ def get_item_details_trading_api(user_id: int, item_id: str) -> dict:
                 'sku': sku,
                 'variation_skus': variation_skus,
                 'title': title_elem.text if title_elem is not None else '',
-                'price': float(current_price.text) if current_price is not None else 0
+                'price': float(current_price.text) if current_price is not None else 0,
+                'listing_status': listing_status.text if listing_status is not None else 'Unknown',
             }
 
             return {
@@ -1316,27 +1406,49 @@ def execute_relist(user_id: int, rule, apply_changes=False) -> dict:
             'details': dict with API responses
         }
     """
-    from qventory.extensions import db
+    current_offer_id = _normalize_identifier(getattr(rule, 'offer_id', None))
+    if not current_offer_id:
+        return {
+            'success': False,
+            'error': 'Missing offer/listing identifier on rule',
+            'details': {},
+        }
+
+    resolved_offer_id = resolve_rule_offer_id(user_id, rule)
+    if resolved_offer_id and resolved_offer_id != current_offer_id:
+        log_relist(
+            f"Resolved legacy listing-based rule {rule.id}: "
+            f"{current_offer_id} -> offer {resolved_offer_id}"
+        )
+        rule.offer_id = resolved_offer_id
+        current_offer_id = resolved_offer_id
 
     # Determine which API to use
-    # If offer_id looks like a listing ID (numeric, long), use Trading API
-    # If offer_id is a proper UUID/hash, use Inventory API
-    use_trading_api = False
+    # Inventory API if we have a valid offer ID, otherwise fallback to Trading.
+    use_trading_api = is_probable_listing_id(current_offer_id)
 
-    if rule.offer_id and rule.offer_id.isdigit() and len(rule.offer_id) >= 10:
-        # Looks like a listing ID (e.g., 376573575653)
-        use_trading_api = True
-        log_relist(f"=== Starting relist for listing {rule.offer_id} (Trading API) ===")
+    if use_trading_api:
+        log_relist(f"=== Starting relist for listing {current_offer_id} (Trading API) ===")
     else:
-        # Looks like an offer ID (UUID format)
-        log_relist(f"=== Starting relist for offer {rule.offer_id} (Inventory API) ===")
+        log_relist(f"=== Starting relist for offer {current_offer_id} (Inventory API) ===")
 
     log_relist(f"Mode: {rule.mode}, Apply changes: {apply_changes}")
 
     if use_trading_api:
-        return execute_relist_trading_api(user_id, rule, apply_changes)
+        result = execute_relist_trading_api(user_id, rule, apply_changes)
     else:
-        return execute_relist_inventory_api(user_id, rule, apply_changes)
+        result = execute_relist_inventory_api(user_id, rule, apply_changes)
+
+    if resolved_offer_id:
+        result.setdefault('resolved_offer_id', resolved_offer_id)
+
+    if result.get('success'):
+        if use_trading_api:
+            result.setdefault('new_offer_id', result.get('new_listing_id'))
+        else:
+            result.setdefault('new_offer_id', current_offer_id)
+
+    return result
 
 
 def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dict:
@@ -1596,6 +1708,7 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
 
     result['success'] = True
     result['new_listing_id'] = new_listing_id
+    result['new_offer_id'] = str(new_listing_id) if new_listing_id else None
 
     # Mark old item as pending relist so polling can transfer data
     try:

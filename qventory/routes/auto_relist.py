@@ -5,12 +5,13 @@ Handles UI and API endpoints for auto-relist feature
 from flask import Blueprint, render_template, request, jsonify, flash, redirect, url_for
 from flask_login import login_required, current_user
 from datetime import datetime, time as datetime_time, timedelta
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 import sys
 
 from ..extensions import db
 from ..models.auto_relist_rule import AutoRelistRule, AutoRelistHistory
 from ..helpers.ebay_inventory import fetch_ebay_inventory_offers
+from ..helpers.ebay_relist import is_probable_listing_id, resolve_offer_id_from_listing_id
 
 auto_relist_bp = Blueprint('auto_relist', __name__, url_prefix='/auto-relist')
 
@@ -18,6 +19,12 @@ auto_relist_bp = Blueprint('auto_relist', __name__, url_prefix='/auto-relist')
 def log_relist_route(msg):
     """Helper for logging"""
     print(f"[AUTO_RELIST_ROUTE] {msg}", file=sys.stderr, flush=True)
+
+
+def _normalize_id(value):
+    if value is None:
+        return ''
+    return str(value).strip()
 
 
 # ==================== DASHBOARD ====================
@@ -90,8 +97,11 @@ def create_rule():
                     is_active=True
                 ).first()
                 if item and item.ebay_listing_id:
+                    offer_id = _normalize_id(getattr(item, 'ebay_offer_id', None))
+                    if not offer_id:
+                        offer_id = resolve_offer_id_from_listing_id(current_user.id, item.ebay_listing_id)
                     prefill_item = {
-                        'offer_id': item.ebay_listing_id,
+                        'offer_id': offer_id or item.ebay_listing_id,
                         'listing_id': item.ebay_listing_id,
                         'title': item.title,
                         'sku': item.sku or '',
@@ -111,23 +121,50 @@ def create_rule():
         log_relist_route(f"Creating rule - Full form data: {dict(data)}")
 
         # Basic validation
-        # offer_id can be either an actual offerId (Inventory API) or listingId (Trading API legacy)
-        offer_id = data.get('offer_id')
+        offer_id = _normalize_id(data.get('offer_id'))
+        listing_id = _normalize_id(data.get('listing_id'))
         mode = data.get('mode', 'auto')
 
         log_relist_route(f"Extracted: offer_id='{offer_id}' (type: {type(offer_id)}), mode={mode}")
 
         # Validate offer_id - must not be empty, 'None', or None
-        # Note: For legacy listings, this will be the listingId
-        if not offer_id or offer_id == 'None' or offer_id.strip() == '':
+        if not offer_id or offer_id == 'None':
             log_relist_route(f"ERROR: Invalid offer_id/listing_id provided: '{offer_id}'")
             flash('Listing ID is required. Please select a valid listing from the list.', 'error')
             return redirect(url_for('auto_relist.create_rule'))
 
+        if is_probable_listing_id(offer_id):
+            listing_for_lookup = listing_id or offer_id
+            resolved_offer_id = resolve_offer_id_from_listing_id(current_user.id, listing_for_lookup)
+            if not resolved_offer_id:
+                flash(
+                    'Could not resolve the eBay offer ID for this listing. '
+                    'Run Sync Inventory and try again.',
+                    'error'
+                )
+                return redirect(url_for('auto_relist.create_rule'))
+            log_relist_route(
+                f"Resolved listing-based offer_id {offer_id} -> {resolved_offer_id} "
+                f"(listing_id={listing_for_lookup})"
+            )
+            offer_id = resolved_offer_id
+            if listing_for_lookup:
+                from ..models.item import Item
+                item_for_listing = Item.query.filter_by(
+                    user_id=current_user.id,
+                    ebay_listing_id=listing_for_lookup
+                ).first()
+                if item_for_listing and not _normalize_id(getattr(item_for_listing, 'ebay_offer_id', None)):
+                    item_for_listing.ebay_offer_id = offer_id
+
         # Check if rule already exists
-        existing = AutoRelistRule.query.filter_by(
-            user_id=current_user.id,
-            offer_id=offer_id
+        existing_filters = [AutoRelistRule.offer_id == offer_id]
+        if listing_id:
+            existing_filters.append(AutoRelistRule.listing_id == listing_id)
+            existing_filters.append(AutoRelistRule.offer_id == listing_id)
+        existing = AutoRelistRule.query.filter(
+            AutoRelistRule.user_id == current_user.id,
+            or_(*existing_filters),
         ).first()
 
         if existing:
@@ -140,7 +177,7 @@ def create_rule():
         log_relist_route(f"  sku={data.get('sku')}")
         log_relist_route(f"  item_title={data.get('item_title')}")
         log_relist_route(f"  current_price={data.get('current_price')}")
-        log_relist_route(f"  listing_id={data.get('listing_id')}")
+        log_relist_route(f"  listing_id={listing_id}")
 
         rule = AutoRelistRule(
             user_id=current_user.id,
@@ -149,7 +186,7 @@ def create_rule():
             marketplace_id=data.get('marketplace_id', 'EBAY_US'),
             item_title=data.get('item_title'),
             current_price=float(data.get('current_price')) if data.get('current_price') else None,
-            listing_id=data.get('listing_id'),
+            listing_id=listing_id or None,
             mode=mode
         )
 
@@ -417,7 +454,6 @@ def search_items_api():
             return jsonify({'success': True, 'items': [], 'total': 0})
 
         from ..models.item import Item
-        from sqlalchemy import or_
 
         log_relist_route(f"Searching items for query: '{query}' (limit: {limit})")
 
@@ -431,7 +467,8 @@ def search_items_api():
             Item.ebay_listing_id.isnot(None),  # Must have eBay listing
             or_(
                 Item.title.ilike(search_pattern),
-                Item.sku.ilike(search_pattern)
+                Item.sku.ilike(search_pattern),
+                Item.ebay_listing_id.ilike(search_pattern),
             )
         ).limit(limit).all()
 
@@ -440,9 +477,11 @@ def search_items_api():
         # Format results for autocomplete
         filtered_items = []
         for item in items_query:
+            listing_id = _normalize_id(item.ebay_listing_id)
+            offer_id = _normalize_id(getattr(item, 'ebay_offer_id', None)) or listing_id
             item_data = {
-                'offer_id': item.ebay_listing_id,  # Use listing_id as offer_id
-                'listing_id': item.ebay_listing_id,
+                'offer_id': offer_id,
+                'listing_id': listing_id,
                 'title': item.title,
                 'sku': item.sku or '',
                 'price': item.item_price,
@@ -656,30 +695,49 @@ def get_available_offers():
     Returns only offers that don't already have a rule
     """
     try:
-        # Get all active offers
-        offers_result = get_active_listings(current_user.id, limit=200)
+        offers_result = fetch_ebay_inventory_offers(current_user.id, limit=200, offset=0)
+        if not offers_result.get('success'):
+            raise RuntimeError(offers_result.get('error', 'Failed to fetch eBay offers'))
+
         all_offers = offers_result.get('offers', [])
 
         # Get existing rule offer_ids
         existing_rules = AutoRelistRule.query.filter_by(
             user_id=current_user.id
         ).all()
-        existing_offer_ids = {r.offer_id for r in existing_rules}
+        existing_offer_ids = {
+            _normalize_id(rule.offer_id)
+            for rule in existing_rules
+            if _normalize_id(rule.offer_id)
+        }
+        existing_listing_ids = {
+            _normalize_id(rule.listing_id)
+            for rule in existing_rules
+            if _normalize_id(rule.listing_id)
+        }
 
         # Filter out offers that already have rules
-        available_offers = [
-            {
-                'offerId': offer.get('offerId'),
-                'sku': offer.get('sku'),
-                'title': offer.get('title'),
-                'price': offer.get('pricingSummary', {}).get('price', {}).get('value'),
-                'quantity': offer.get('availableQuantity'),
-                'listingId': offer.get('listingId'),
-                'status': offer.get('status')
-            }
-            for offer in all_offers
-            if offer.get('offerId') not in existing_offer_ids
-        ]
+        available_offers = []
+        for offer in all_offers:
+            offer_id = _normalize_id(offer.get('ebay_offer_id'))
+            listing_id = _normalize_id(offer.get('ebay_listing_id'))
+            if not offer_id:
+                continue
+            if (
+                offer_id in existing_offer_ids
+                or listing_id in existing_offer_ids
+                or listing_id in existing_listing_ids
+            ):
+                continue
+            available_offers.append({
+                'offerId': offer_id,
+                'sku': offer.get('ebay_sku'),
+                'title': offer.get('title') or f'Listing {listing_id}',
+                'price': offer.get('item_price'),
+                'quantity': offer.get('item_quantity'),
+                'listingId': listing_id,
+                'status': offer.get('listing_status')
+            })
 
         return jsonify({
             'success': True,

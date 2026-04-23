@@ -258,17 +258,24 @@ class AutoRelistRule(db.Model):
             self.manual_trigger_requested = True
             self.next_run_at = datetime.utcnow()
 
-    def mark_success(self, new_listing_id):
+    def mark_success(self, new_listing_id, new_offer_id=None):
         """
         Mark rule execution as successful
 
         Args:
             new_listing_id: New eBay listing ID generated
+            new_offer_id: Current eBay offer ID (Inventory API).
+                          For legacy Trading API rules this will be the new listing ID.
         """
         self.last_run_status = 'success'
         self.last_run_at = datetime.utcnow()
         self.last_new_listing_id = new_listing_id
         self.listing_id = new_listing_id  # Update current listing ID
+        if new_offer_id:
+            self.offer_id = str(new_offer_id)
+        elif self.offer_id and self.offer_id.isdigit() and len(self.offer_id) >= 10 and new_listing_id:
+            # Legacy Trading API rules store listing IDs in offer_id.
+            self.offer_id = str(new_listing_id)
         self.last_error_message = None
 
         self.run_count += 1
