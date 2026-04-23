@@ -2,6 +2,7 @@ from flask import Flask, request
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from threading import Lock
 
 # Load environment variables before importing Config
 env_path = Path(__file__).parent.parent / '.env'
@@ -26,6 +27,9 @@ from .routes.webhooks_platform import platform_webhook_bp
 # from .routes.admin_webhooks import admin_webhooks_bp
 # from .routes.admin_logs import admin_logs_bp
 from .routes.tax_reports import tax_reports_bp
+
+_BOOTSTRAP_DONE = False
+_BOOTSTRAP_LOCK = Lock()
 
 def _maybe_seed_demo():
     """
@@ -398,19 +402,24 @@ def create_app():
         db.session.rollback()
         return render_template('404.html'), 500
 
-    with app.app_context():
-        # Do not print DB URI to logs (sensitive)
-        db.create_all()
+    global _BOOTSTRAP_DONE
+    if not _BOOTSTRAP_DONE:
+        with _BOOTSTRAP_LOCK:
+            if not _BOOTSTRAP_DONE:
+                with app.app_context():
+                    # Do not print DB URI to logs (sensitive)
+                    db.create_all()
 
-        # Seed plan limits (always run to keep them updated)
-        from qventory.helpers.seed_plans import seed_plan_limits
-        seed_plan_limits()
+                    # Seed plan limits once per process.
+                    from qventory.helpers.seed_plans import seed_plan_limits
+                    seed_plan_limits()
 
-        # Initialize AI token configs (skip during migrations if schema is mid-change)
-        if os.environ.get("SKIP_AI_TOKEN_SEED", "0") != "1":
-            from qventory.models.ai_token import AITokenConfig
-            AITokenConfig.initialize_defaults()
+                    # Initialize AI token configs (skip during migrations if schema is mid-change)
+                    if os.environ.get("SKIP_AI_TOKEN_SEED", "0") != "1":
+                        from qventory.models.ai_token import AITokenConfig
+                        AITokenConfig.initialize_defaults()
 
-        _maybe_seed_demo()  # ahora sí existe
+                    _maybe_seed_demo()  # ahora sí existe
+                _BOOTSTRAP_DONE = True
 
     return app
