@@ -6868,16 +6868,44 @@ def admin_dashboard():
     from qventory.models.system_setting import SystemSetting
     from qventory.models.subscription import Subscription
     from qventory.models.marketplace_credential import MarketplaceCredential
-    # Get all users with item count
+
     users = User.query.all()
-    user_stats = []
     user_ids = [user.id for user in users]
+
     subscriptions = (
         Subscription.query.filter(Subscription.user_id.in_(user_ids)).all()
         if user_ids
         else []
     )
     subscription_map = {sub.user_id: sub for sub in subscriptions}
+
+    item_count_map = {}
+    missing_cost_count_map = {}
+    if user_ids:
+        item_filters = (
+            Item.user_id.in_(user_ids),
+            Item.is_active.is_(True),
+            Item.inactive_by_user.is_(False),
+        )
+        item_count_map = {
+            user_id: count
+            for user_id, count in (
+                db.session.query(Item.user_id, func.count(Item.id))
+                .filter(*item_filters)
+                .group_by(Item.user_id)
+                .all()
+            )
+        }
+        missing_cost_count_map = {
+            user_id: count
+            for user_id, count in (
+                db.session.query(Item.user_id, func.count(Item.id))
+                .filter(*item_filters, Item.item_cost.is_(None))
+                .group_by(Item.user_id)
+                .all()
+            )
+        }
+
     ebay_connected_ids = set()
     if user_ids:
         ebay_connected_ids = {
@@ -6889,18 +6917,10 @@ def admin_dashboard():
             ).all()
         }
 
+    user_stats = []
     for user in users:
-        item_count = Item.query.filter(
-            Item.user_id == user.id,
-            Item.is_active.is_(True),
-            Item.inactive_by_user.is_(False)
-        ).count()
-        missing_cost_count = Item.query.filter(
-            Item.user_id == user.id,
-            Item.is_active.is_(True),
-            Item.inactive_by_user.is_(False),
-            Item.item_cost.is_(None)
-        ).count()
+        item_count = item_count_map.get(user.id, 0)
+        missing_cost_count = missing_cost_count_map.get(user.id, 0)
         subscription = subscription_map.get(user.id)
         subscription_plan = (subscription.plan if subscription else "free")
         user_stats.append({
