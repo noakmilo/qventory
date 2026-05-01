@@ -3697,8 +3697,11 @@ def poll_user_listings(credential):
             finalize_poll('error', errors=['User not found'])
             return {'new_listings': 0, 'errors': ['User not found']}
 
-        items_remaining = user.items_remaining()
-        log_task(f"    User plan: {user.role}, Items remaining: {items_remaining}")
+        limit_status = get_item_limit_status(user_id)
+        items_remaining = limit_status.remaining
+        log_task(
+            f"    User plan: {limit_status.plan_name}, Items remaining: {items_remaining}"
+        )
 
         if items_remaining is not None and items_remaining <= 0:
             log_task(f"    ⚠ User has reached plan limit (0 items remaining); will skip new imports but still sync changes")
@@ -4106,6 +4109,7 @@ def reconcile_user_inventory(self, user_id):
         from qventory.models.item import Item
         from qventory.models.system_setting import SystemSetting
         from qventory.models.user import User
+        from qventory.helpers.item_limits import get_item_limit_status
         from qventory.helpers.ebay_inventory import (
             fetch_active_listings_snapshot,
             get_listing_details_trading_api,
@@ -4160,20 +4164,30 @@ def reconcile_user_inventory(self, user_id):
 
         updated = 0
         inactivated = 0
+        skipped_reactivation_limit = 0
+        limit_status = get_item_limit_status(user_id, lock=True)
+        reactivation_remaining = limit_status.remaining
 
         for item in items_to_sync:
             offer = offers_by_listing.get(item.ebay_listing_id)
             if offer:
                 # Reactivate if was inactive
                 if not item.is_active:
+                    if reactivation_remaining is not None and reactivation_remaining <= 0:
+                        skipped_reactivation_limit += 1
+                    else:
+                        item.is_active = True
+                        updated += 1
+                        if reactivation_remaining is not None:
+                            reactivation_remaining -= 1
+                if item.is_active:
                     item.is_active = True
-                    updated += 1
-                # Update price from snapshot
-                if offer.get('item_price') and offer['item_price'] != item.item_price:
-                    item.item_price = offer['item_price']
-                    updated += 1
-                if offer.get('ebay_offer_id'):
-                    item.ebay_offer_id = offer['ebay_offer_id']
+                    # Update price from snapshot
+                    if offer.get('item_price') and offer['item_price'] != item.item_price:
+                        item.item_price = offer['item_price']
+                        updated += 1
+                    if offer.get('ebay_offer_id'):
+                        item.ebay_offer_id = offer['ebay_offer_id']
             else:
                 if can_mark_inactive and item.is_active:
                     item.is_active = False
@@ -4204,13 +4218,22 @@ def reconcile_user_inventory(self, user_id):
         db.session.commit()
         SystemSetting.set_int(throttle_key, int(datetime.utcnow().timestamp()))
 
-        log_task(f"[RECONCILE] User {user_id}: done — {updated} updated, {inactivated} inactivated, {backfilled} prices backfilled")
+        limit_note = (
+            f", {skipped_reactivation_limit} reactivations skipped by plan limit"
+            if skipped_reactivation_limit
+            else ""
+        )
+        log_task(
+            f"[RECONCILE] User {user_id}: done — {updated} updated, "
+            f"{inactivated} inactivated, {backfilled} prices backfilled{limit_note}"
+        )
 
         return {
             'success': True,
             'updated': updated,
             'inactivated': inactivated,
             'backfilled': backfilled,
+            'skipped_reactivation_limit': skipped_reactivation_limit,
             'snapshot_offers': len(offers_by_listing),
             'db_items': len(items_to_sync)
         }
