@@ -7122,10 +7122,8 @@ def admin_polling_logs():
     )
 
 
-@main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
-@require_admin
-def admin_delete_user(user_id):
-    """Delete a user and all their data"""
+def _delete_user_data(user_id):
+    """Delete a user and related records inside the caller's transaction."""
     from qventory.models.sale import Sale
     from qventory.models.import_job import ImportJob
     from qventory.models.failed_import import FailedImport
@@ -7135,53 +7133,94 @@ def admin_delete_user(user_id):
     from qventory.models.ai_token import AITokenUsage
     from qventory.models.subscription import Subscription
     from qventory.models.expense import Expense
+    from qventory.models.polling_log import PollingLog
 
+    user = User.query.get_or_404(user_id)
+
+    # Delete in order to respect foreign key constraints.
+    FailedImport.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    ImportJob.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Report.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Listing.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Sale.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Expense.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Item.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    AITokenUsage.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    MarketplaceCredential.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Subscription.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    Setting.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+    PollingLog.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+
+    db.session.delete(user)
+    return user
+
+
+@main_bp.route("/admin/user/<int:user_id>/delete", methods=["POST"])
+@require_admin
+def admin_delete_user(user_id):
+    """Delete a user and all their data"""
     user = User.query.get_or_404(user_id)
     username = user.username
 
     try:
-        # Delete in order to respect foreign key constraints
-        # 1. Delete failed imports (references import_jobs)
-        FailedImport.query.filter_by(user_id=user_id).delete()
-
-        # 2. Delete import jobs
-        ImportJob.query.filter_by(user_id=user_id).delete()
-
-        # 3. Delete reports (references items, so must be deleted before items)
-        Report.query.filter_by(user_id=user_id).delete()
-
-        # 4. Delete listings (references items)
-        Listing.query.filter_by(user_id=user_id).delete()
-
-        # 5. Delete sales (references items via item_id)
-        Sale.query.filter_by(user_id=user_id).delete()
-
-        # 6. Delete expenses
-        Expense.query.filter_by(user_id=user_id).delete()
-
-        # 7. Delete all items belonging to this user
-        Item.query.filter_by(user_id=user_id).delete()
-
-        # 8. Delete AI token usage
-        AITokenUsage.query.filter_by(user_id=user_id).delete()
-
-        # 9. Delete marketplace credentials
-        MarketplaceCredential.query.filter_by(user_id=user_id).delete()
-
-        # 10. Delete subscription
-        Subscription.query.filter_by(user_id=user_id).delete()
-
-        # 11. Delete user settings
-        Setting.query.filter_by(user_id=user_id).delete()
-
-        # 12. Delete the user
-        db.session.delete(user)
+        _delete_user_data(user_id)
         db.session.commit()
 
         flash(f"User '{username}' and all their data deleted successfully", "ok")
     except Exception as e:
         db.session.rollback()
         flash(f"Error deleting user '{username}': {str(e)}", "error")
+
+    return redirect(url_for('main.admin_dashboard'))
+
+
+@main_bp.route("/admin/users/bulk-delete", methods=["POST"])
+@require_admin
+def admin_bulk_delete_users():
+    """Delete selected users and all their data."""
+    raw_user_ids = request.form.getlist("user_ids")
+    user_ids = []
+    for raw_user_id in raw_user_ids:
+        try:
+            user_ids.append(int(raw_user_id))
+        except (TypeError, ValueError):
+            continue
+
+    user_ids = sorted(set(user_ids))
+    if not user_ids:
+        flash("Select at least one user to delete.", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    skipped_self = current_user.is_authenticated and current_user.id in user_ids
+    if skipped_self:
+        user_ids = [uid for uid in user_ids if uid != current_user.id]
+
+    if not user_ids:
+        flash("You cannot delete your own admin session from bulk delete.", "error")
+        return redirect(url_for('main.admin_dashboard'))
+
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    existing_ids = {user.id for user in users}
+    missing_count = len(user_ids) - len(existing_ids)
+    usernames = [user.username for user in users]
+
+    try:
+        for user_id in user_ids:
+            if user_id in existing_ids:
+                _delete_user_data(user_id)
+        db.session.commit()
+
+        details = f" Deleted: {', '.join(usernames[:8])}"
+        if len(usernames) > 8:
+            details += f" and {len(usernames) - 8} more"
+        if missing_count:
+            details += f". Skipped {missing_count} missing user(s)"
+        if skipped_self:
+            details += ". Skipped your own admin user"
+        flash(f"Deleted {len(usernames)} user(s).{details}", "ok")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting selected users: {str(e)}", "error")
 
     return redirect(url_for('main.admin_dashboard'))
 

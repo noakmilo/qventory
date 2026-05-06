@@ -10,7 +10,7 @@ class PollingLog(db.Model):
     __tablename__ = 'polling_logs'
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
     marketplace = db.Column(db.String(50), default='ebay', index=True)
 
     started_at = db.Column(db.DateTime)
@@ -25,7 +25,15 @@ class PollingLog(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
 
-    user = db.relationship('User', backref=db.backref('polling_logs', lazy='dynamic'))
+    user = db.relationship(
+        'User',
+        backref=db.backref(
+            'polling_logs',
+            lazy='dynamic',
+            cascade='all, delete-orphan',
+            passive_deletes=True,
+        ),
+    )
 
     def __repr__(self):
         return f'<PollingLog {self.id} user={self.user_id} status={self.status}>'

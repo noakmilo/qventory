@@ -241,10 +241,38 @@
       <div id="searchStats" style="margin-top:8px;font-size:var(--fs-xs);color:var(--sub);"></div>
     </div>
 
+    <form
+      id="bulkDeleteUsersForm"
+      method="post"
+      action="{{ url_for('main.admin_bulk_delete_users') }}"
+      onsubmit="return confirmBulkDeleteUsers();"
+    ></form>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-3) 0;">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--sub);font-size:var(--fs-sm);">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="selectAllUsers">
+          <span>Select visible users</span>
+        </label>
+        <span id="selectedUsersCount">0 selected</span>
+      </div>
+      <button
+        type="submit"
+        form="bulkDeleteUsersForm"
+        id="bulkDeleteUsersBtn"
+        class="btn"
+        disabled
+        style="background:rgba(248,113,113,0.15);border-color:rgba(248,113,113,0.35);color:#f87171;"
+      >
+        <i class="fas fa-trash-alt"></i> Delete Selected
+      </button>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th style="width:44px;"></th>
             <th>User ID</th>
             <th>Username</th>
             <th>Email</th>
@@ -262,7 +290,17 @@
         </thead>
         <tbody>
           {% for stat in user_stats %}
-          <tr>
+          <tr data-username="{{ stat.user.username|lower }}" data-email="{{ stat.user.email|lower }}">
+            <td style="text-align:center;">
+              <input
+                type="checkbox"
+                name="user_ids"
+                value="{{ stat.user.id }}"
+                class="user-select-checkbox"
+                form="bulkDeleteUsersForm"
+                data-username="{{ stat.user.username }}"
+              >
+            </td>
             <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">
               {{ stat.user.id }}
             </td>
@@ -385,14 +423,48 @@ const clearBtn = document.getElementById('clearSearch');
 const searchStats = document.getElementById('searchStats');
 const userRows = document.querySelectorAll('tbody tr');
 const totalUsers = userRows.length;
+const selectAllUsers = document.getElementById('selectAllUsers');
+const selectedUsersCount = document.getElementById('selectedUsersCount');
+const bulkDeleteUsersBtn = document.getElementById('bulkDeleteUsersBtn');
+const userCheckboxes = document.querySelectorAll('.user-select-checkbox');
+
+function getVisibleRows() {
+  return Array.from(userRows).filter(row => row.style.display !== 'none');
+}
+
+function updateBulkDeleteState() {
+  const selected = Array.from(userCheckboxes).filter(checkbox => checkbox.checked);
+  const visible = getVisibleRows();
+  const visibleCheckboxes = visible
+    .map(row => row.querySelector('.user-select-checkbox'))
+    .filter(Boolean);
+  const selectedVisibleCount = visibleCheckboxes.filter(checkbox => checkbox.checked).length;
+
+  selectedUsersCount.textContent = `${selected.length} selected`;
+  bulkDeleteUsersBtn.disabled = selected.length === 0;
+  selectAllUsers.checked = visibleCheckboxes.length > 0 && selectedVisibleCount === visibleCheckboxes.length;
+  selectAllUsers.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCheckboxes.length;
+}
+
+function confirmBulkDeleteUsers() {
+  const selected = Array.from(userCheckboxes).filter(checkbox => checkbox.checked);
+  if (selected.length === 0) {
+    return false;
+  }
+
+  const names = selected.map(checkbox => checkbox.dataset.username).filter(Boolean);
+  const preview = names.slice(0, 8).join(', ');
+  const suffix = names.length > 8 ? ` and ${names.length - 8} more` : '';
+  return confirm(`Delete ${selected.length} selected user(s) and all their data? This cannot be undone.\n\n${preview}${suffix}`);
+}
 
 function filterUsers() {
   const searchTerm = searchInput.value.toLowerCase().trim();
   let visibleCount = 0;
 
   userRows.forEach(row => {
-    const username = row.querySelector('td:nth-child(1)').textContent.toLowerCase();
-    const email = row.querySelector('td:nth-child(2)').textContent.toLowerCase();
+    const username = row.dataset.username || '';
+    const email = row.dataset.email || '';
 
     const matches = username.includes(searchTerm) || email.includes(searchTerm);
 
@@ -416,10 +488,25 @@ function filterUsers() {
   } else {
     searchStats.textContent = '';
   }
+
+  updateBulkDeleteState();
 }
 
 // Filter on input
 searchInput.addEventListener('input', filterUsers);
+selectAllUsers.addEventListener('change', () => {
+  getVisibleRows().forEach(row => {
+    const checkbox = row.querySelector('.user-select-checkbox');
+    if (checkbox) {
+      checkbox.checked = selectAllUsers.checked;
+    }
+  });
+  updateBulkDeleteState();
+});
+userCheckboxes.forEach(checkbox => {
+  checkbox.addEventListener('change', updateBulkDeleteState);
+});
+updateBulkDeleteState();
 
 // Filter on Enter key
 searchInput.addEventListener('keydown', (e) => {
