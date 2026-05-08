@@ -569,6 +569,11 @@
             <button type="button" class="btn" id="relistPriceMinus5" style="padding:6px 10px;font-size:12px;">-5%</button>
             <button type="button" class="btn" id="relistPriceMinus10" style="padding:6px 10px;font-size:12px;">-10%</button>
             <button type="button" class="btn" id="relistPriceMinus15" style="padding:6px 10px;font-size:12px;">-15%</button>
+            <button type="button" class="btn" id="relistPriceMinus20" style="padding:6px 10px;font-size:12px;">-20%</button>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <input class="input" type="number" id="relistCustomDiscount" step="0.01" min="0" max="100" placeholder="Custom %" style="width:112px;padding:6px 8px;font-size:12px;">
+              <button type="button" class="btn" id="relistApplyCustomDiscount" style="padding:6px 10px;font-size:12px;">Apply</button>
+            </div>
           </div>
           <div id="relistMarginWarning" style="display:none;margin-top:8px;font-size:12px;color:#fca5a5;">
             New price is below cost. This may reduce your margin.
@@ -2075,11 +2080,13 @@ function openRelistModal(payload) {
   const titleInput = document.getElementById('relistTitle');
   const priceInput = document.getElementById('relistPrice');
   const itemIdInput = document.getElementById('relistItemId');
+  const customDiscountInput = document.getElementById('relistCustomDiscount');
   const warning = document.getElementById('relistMarginWarning');
   if (!modal || !titleInput || !priceInput || !itemIdInput) return;
   itemIdInput.value = payload.itemId || '';
   titleInput.value = payload.title || '';
   priceInput.value = payload.price || '';
+  if (customDiscountInput) customDiscountInput.value = '';
   modal.dataset.itemCost = payload.cost || '';
   if (warning) warning.style.display = 'none';
   modal.classList.remove('hidden');
@@ -2130,6 +2137,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const relistMinus5 = document.getElementById('relistPriceMinus5');
   const relistMinus10 = document.getElementById('relistPriceMinus10');
   const relistMinus15 = document.getElementById('relistPriceMinus15');
+  const relistMinus20 = document.getElementById('relistPriceMinus20');
+  const relistCustomDiscount = document.getElementById('relistCustomDiscount');
+  const relistApplyCustomDiscount = document.getElementById('relistApplyCustomDiscount');
 
   function updateRelistMarginWarning() {
     if (!relistWarning || !relistPrice || !relistModalEl) return;
@@ -2146,10 +2156,16 @@ document.addEventListener('DOMContentLoaded', function() {
   function applyDiscount(percent) {
     if (!relistPrice) return;
     const current = parseFloat(relistPrice.value);
-    if (!isFinite(current)) return;
+    if (!isFinite(current) || !isFinite(percent) || percent < 0 || percent > 100) return;
     const newPrice = current * (1 - percent / 100);
     relistPrice.value = newPrice.toFixed(2);
     updateRelistMarginWarning();
+  }
+
+  function applyCustomDiscount() {
+    if (!relistCustomDiscount) return;
+    const percent = parseFloat(relistCustomDiscount.value);
+    applyDiscount(percent);
   }
 
   document.addEventListener('click', function(e) {
@@ -2170,6 +2186,14 @@ document.addEventListener('DOMContentLoaded', function() {
   relistMinus5?.addEventListener('click', () => applyDiscount(5));
   relistMinus10?.addEventListener('click', () => applyDiscount(10));
   relistMinus15?.addEventListener('click', () => applyDiscount(15));
+  relistMinus20?.addEventListener('click', () => applyDiscount(20));
+  relistApplyCustomDiscount?.addEventListener('click', applyCustomDiscount);
+  relistCustomDiscount?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyCustomDiscount();
+    }
+  });
 
   relistForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
