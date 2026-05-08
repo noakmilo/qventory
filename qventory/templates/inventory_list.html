@@ -174,6 +174,7 @@
             <option value="">Bulk Actions</option>
             {% if view_type == 'active' or view_type == 'slow_movers' %}
             <option value="bulk_update">Batch Update Fields</option>
+            <option value="bulk_relist">Update &amp; Relist Selected</option>
             <option value="deactivate_by_user">Deactivate (Hide from Active)</option>
             <option value="retire_items">Move to Retirements (Copy)</option>
             {% elif view_type == 'inactive_user' %}
@@ -726,6 +727,54 @@
   </div>
 </div>
 
+<!-- Bulk Update & Relist Modal -->
+<div id="bulkRelistModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="bulkRelist"></div>
+  <div class="modal__dialog modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="bulkRelistTitle">
+    <div class="modal__header">
+      <h3 id="bulkRelistTitle"><i class="fas fa-sync" style="color:#f97316;"></i> Bulk Update &amp; Relist</h3>
+      <button class="modal__close" type="button" data-modal-close="bulkRelist" aria-label="Close">×</button>
+    </div>
+    <form id="bulkRelistForm" class="modal__body">
+      <div style="background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--sub);line-height:1.5;">
+          <i class="fas fa-info-circle" style="color:#f97316;"></i>
+          Relisting <strong id="bulkRelistCount" style="color:#f97316;">0</strong> selected item(s).
+          Tasks will be queued 30 seconds apart to avoid saturating the eBay API.
+        </div>
+      </div>
+
+      <div style="display:grid;gap:10px;margin-bottom:16px;">
+        <label style="font-weight:600;color:var(--text);">Price discount</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn" data-bulk-relist-discount="0" style="padding:6px 10px;font-size:12px;">No discount</button>
+          <button type="button" class="btn" data-bulk-relist-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>
+          <button type="button" class="btn" data-bulk-relist-discount="10" style="padding:6px 10px;font-size:12px;">-10%</button>
+          <button type="button" class="btn" data-bulk-relist-discount="15" style="padding:6px 10px;font-size:12px;">-15%</button>
+          <button type="button" class="btn" data-bulk-relist-discount="20" style="padding:6px 10px;font-size:12px;">-20%</button>
+          <input class="input" type="number" id="bulkRelistCustomDiscount" step="0.01" min="0" max="100" placeholder="Custom %" style="width:120px;padding:6px 8px;font-size:12px;">
+          <button type="button" class="btn" id="bulkRelistApplyCustomDiscount" style="padding:6px 10px;font-size:12px;">Apply</button>
+        </div>
+        <div id="bulkRelistDiscountLabel" style="font-size:12px;color:var(--sub);">Current rule: no discount</div>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);">
+          <strong style="font-size:14px;">Review items</strong>
+          <span id="bulkRelistValidation" style="font-size:12px;color:var(--sub);"></span>
+        </div>
+        <div id="bulkRelistItemsList" style="max-height:320px;overflow:auto;"></div>
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="bulkRelistForm" class="btn submitbtn" id="bulkRelistSubmit">
+        <i class="fas fa-sync"></i> Queue Bulk Relist
+      </button>
+      <button type="button" class="btn" data-modal-close="bulkRelist">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bulk Update Modal -->
 <div id="bulkEditModal" class="modal" hidden>
   <div class="modal__backdrop" data-modal-close="bulkEdit"></div>
@@ -896,7 +945,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='dashboard.js') }}?v=retirements-1"></script>
+<script src="{{ url_for('static', filename='dashboard.js') }}?v=bulk-relist-1"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -2373,6 +2422,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeAllMenus();
     closeRelistModal();
+    window.closeBulkRelistModal?.();
     closeCostHistoryModal();
   }
 });

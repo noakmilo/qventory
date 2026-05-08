@@ -11,6 +11,8 @@ const bulkActionSelect = document.getElementById('bulkActionSelect');
 const bulkActionApply = document.getElementById('bulkActionApply');
 const bulkSelectedCount = document.getElementById('bulkSelectedCount');
 const bulkEditOpenBtn = document.getElementById('bulkEditOpenBtn');
+let bulkRelistItems = [];
+let bulkRelistDiscountPercent = 0;
 
 function getSelectedItemIds() {
   const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
@@ -91,6 +93,12 @@ if (bulkActionApply) {
       openBulkLocationModal(itemIds);
     } else if (action === 'bulk_update') {
       openBulkEditModal(itemIds);
+    } else if (action === 'bulk_relist') {
+      if (itemIds.length < 2) {
+        alert('Select 2 or more items for bulk relist');
+        return;
+      }
+      openBulkRelistModal(itemIds);
     } else if (action === 'retire_items') {
       if (!confirm(`Copy ${itemIds.length} item(s) to Retirements?`)) {
         return;
@@ -233,6 +241,219 @@ if (bulkActionApply) {
   });
 }
 
+
+// ==================== BULK UPDATE & RELIST ====================
+
+function getBulkRelistItemData(itemIds) {
+  return itemIds.map(id => {
+    const row = document.querySelector(`tr[data-item-row="${id}"]`);
+    const price = row ? parseFloat(row.dataset.itemPrice || '') : NaN;
+    const titleCell = row?.querySelector('[data-col="title"]');
+    return {
+      id,
+      title: row?.dataset.itemTitle || titleCell?.textContent?.trim() || `Item ${id}`,
+      price: Number.isFinite(price) ? price : null
+    };
+  });
+}
+
+function calculateBulkRelistPrice(price) {
+  if (!Number.isFinite(price)) return null;
+  return price * (1 - bulkRelistDiscountPercent / 100);
+}
+
+function formatBulkRelistPrice(price) {
+  return Number.isFinite(price) ? `$${price.toFixed(2)}` : 'Missing price';
+}
+
+function updateBulkRelistState() {
+  const countEl = document.getElementById('bulkRelistCount');
+  const validationEl = document.getElementById('bulkRelistValidation');
+  const discountLabel = document.getElementById('bulkRelistDiscountLabel');
+  const submitBtn = document.getElementById('bulkRelistSubmit');
+
+  if (countEl) countEl.textContent = bulkRelistItems.length;
+  if (discountLabel) {
+    discountLabel.textContent = bulkRelistDiscountPercent > 0
+      ? `Current rule: -${bulkRelistDiscountPercent}% from each current price`
+      : 'Current rule: no discount';
+  }
+
+  const requiresPrice = bulkRelistDiscountPercent > 0;
+  const missingPriceCount = bulkRelistItems.filter(item => item.price === null).length;
+  const disabled = bulkRelistItems.length < 2 || (requiresPrice && missingPriceCount > 0);
+
+  if (validationEl) {
+    if (bulkRelistItems.length < 2) {
+      validationEl.textContent = 'Keep at least 2 items to run bulk relist.';
+      validationEl.style.color = '#fca5a5';
+    } else if (requiresPrice && missingPriceCount > 0) {
+      validationEl.textContent = `${missingPriceCount} item(s) need a current price.`;
+      validationEl.style.color = '#fca5a5';
+    } else {
+      validationEl.textContent = `${bulkRelistItems.length} item(s) ready.`;
+      validationEl.style.color = 'var(--sub)';
+    }
+  }
+
+  if (submitBtn) submitBtn.disabled = disabled;
+}
+
+function renderBulkRelistItems() {
+  const list = document.getElementById('bulkRelistItemsList');
+  if (!list) return;
+
+  if (bulkRelistItems.length === 0) {
+    list.innerHTML = '<div style="padding:14px;color:var(--sub);font-size:13px;">No items selected.</div>';
+    updateBulkRelistState();
+    return;
+  }
+
+  list.innerHTML = bulkRelistItems.map(item => {
+    const newPrice = item.price === null ? null : calculateBulkRelistPrice(item.price);
+    return `
+      <div data-bulk-relist-item="${item.id}" style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <div style="min-width:0;">
+          <div style="font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:4px;">
+            Current: <strong>${formatBulkRelistPrice(item.price)}</strong>
+            <span style="margin:0 6px;">→</span>
+            New: <strong style="color:#f97316;">${formatBulkRelistPrice(newPrice)}</strong>
+          </div>
+        </div>
+        <button type="button" class="btn" data-bulk-relist-remove="${item.id}" style="padding:6px 9px;font-size:12px;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  updateBulkRelistState();
+}
+
+function setBulkRelistDiscount(percent) {
+  const parsed = parseFloat(percent);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    alert('Enter a discount between 0 and 100');
+    return;
+  }
+  bulkRelistDiscountPercent = parsed;
+  renderBulkRelistItems();
+}
+
+function openBulkRelistModal(itemIds) {
+  const modal = document.getElementById('bulkRelistModal');
+  if (!modal) {
+    console.error('Bulk relist modal not found');
+    return;
+  }
+
+  bulkRelistItems = getBulkRelistItemData(itemIds);
+  bulkRelistDiscountPercent = 0;
+
+  const customInput = document.getElementById('bulkRelistCustomDiscount');
+  if (customInput) customInput.value = '';
+
+  renderBulkRelistItems();
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function closeBulkRelistModal() {
+  const modal = document.getElementById('bulkRelistModal');
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+document.addEventListener('click', (event) => {
+  const closeBtn = event.target.closest('[data-modal-close="bulkRelist"]');
+  if (closeBtn) {
+    closeBulkRelistModal();
+    return;
+  }
+
+  const discountBtn = event.target.closest('[data-bulk-relist-discount]');
+  if (discountBtn) {
+    setBulkRelistDiscount(discountBtn.dataset.bulkRelistDiscount);
+    return;
+  }
+
+  const removeBtn = event.target.closest('[data-bulk-relist-remove]');
+  if (removeBtn) {
+    const itemId = parseInt(removeBtn.dataset.bulkRelistRemove, 10);
+    bulkRelistItems = bulkRelistItems.filter(item => item.id !== itemId);
+    const checkbox = document.querySelector(`.item-checkbox[data-item-id="${itemId}"]`);
+    if (checkbox) {
+      checkbox.checked = false;
+      updateBulkActions();
+    }
+    renderBulkRelistItems();
+  }
+});
+
+document.getElementById('bulkRelistApplyCustomDiscount')?.addEventListener('click', () => {
+  const input = document.getElementById('bulkRelistCustomDiscount');
+  setBulkRelistDiscount(input?.value);
+});
+
+document.getElementById('bulkRelistCustomDiscount')?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    setBulkRelistDiscount(event.target.value);
+  }
+});
+
+document.getElementById('bulkRelistForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+
+  const itemIds = bulkRelistItems.map(item => item.id);
+  if (itemIds.length < 2) {
+    alert('Keep at least 2 items for bulk relist');
+    return;
+  }
+
+  const submitBtn = document.getElementById('bulkRelistSubmit');
+  const originalHtml = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Queueing...';
+  }
+
+  try {
+    const response = await fetch('/items/bulk_relist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_ids: itemIds,
+        discount_percent: bulkRelistDiscountPercent
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to queue bulk relist');
+    }
+    closeBulkRelistModal();
+    alert(data.message || 'Bulk relist queued');
+    location.reload();
+  } catch (error) {
+    console.error('Bulk relist error:', error);
+    alert(error.message || 'Failed to queue bulk relist');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalHtml;
+    }
+  }
+});
+
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = value ?? '';
+  return div.innerHTML;
+}
+
+window.closeBulkRelistModal = closeBulkRelistModal;
 
 if (bulkEditOpenBtn) {
   bulkEditOpenBtn.addEventListener('click', () => {

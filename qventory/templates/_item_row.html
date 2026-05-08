@@ -9,6 +9,7 @@
 {% set show_image_pending = (it.image_pending if it.image_pending is defined else (view_type == 'sold' and not it.item_thumb)) %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
+    data-item-title="{{ it.title|e }}"
     data-item-price="{{ '%.2f'|format(it.item_price) if it.item_price is not none else '' }}"
     data-item-cost="{{ '%.2f'|format(it.item_cost) if it.item_cost is not none else '' }}">
   {% if view_type != 'sold' %}

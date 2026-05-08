@@ -5177,6 +5177,112 @@ def relist_item_from_inventory():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@main_bp.route("/items/bulk_relist", methods=["POST"])
+@login_required
+def bulk_relist_items_from_inventory():
+    try:
+        data = request.get_json() or {}
+        item_ids = data.get("item_ids")
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        try:
+            item_ids = [int(x) for x in item_ids]
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        # Preserve user-selected order while removing duplicate IDs.
+        item_ids = list(dict.fromkeys(item_ids))
+        if len(item_ids) < 2:
+            return jsonify({"ok": False, "error": "Select at least 2 items for bulk relist"}), 400
+
+        discount_raw = data.get("discount_percent", 0)
+        try:
+            discount_percent = float(discount_raw or 0)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid discount percent"}), 400
+
+        if discount_percent < 0 or discount_percent > 100:
+            return jsonify({"ok": False, "error": "Discount percent must be between 0 and 100"}), 400
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+        items_by_id = {item.id: item for item in items}
+
+        from qventory.tasks import relist_item_sell_similar
+
+        queued = []
+        skipped = []
+        below_cost_count = 0
+
+        for item_id in item_ids:
+            item = items_by_id.get(item_id)
+            if not item:
+                skipped.append({"item_id": item_id, "reason": "not_found"})
+                continue
+
+            if not item.ebay_listing_id:
+                skipped.append({"item_id": item.id, "reason": "missing_ebay_listing_id"})
+                continue
+
+            new_price = None
+            if discount_percent > 0:
+                if item.item_price is None:
+                    skipped.append({"item_id": item.id, "reason": "missing_price"})
+                    continue
+                new_price = round(float(item.item_price) * (1 - discount_percent / 100), 2)
+                if item.item_cost is not None and new_price < float(item.item_cost):
+                    below_cost_count += 1
+
+            delay_seconds = len(queued) * 30
+            task = relist_item_sell_similar.apply_async(
+                args=[current_user.id, item.id, None, new_price],
+                countdown=delay_seconds,
+                priority=1
+            )
+            queued.append({
+                "item_id": item.id,
+                "task_id": task.id,
+                "countdown": delay_seconds,
+                "new_price": new_price
+            })
+
+        if not queued:
+            return jsonify({
+                "ok": False,
+                "error": "No eligible items were queued for relist",
+                "skipped": skipped
+            }), 400
+
+        last_delay = queued[-1]["countdown"]
+        message = (
+            f"Queued {len(queued)} relist task(s). "
+            f"Last task starts in {last_delay} seconds."
+        )
+        if skipped:
+            message += f" Skipped {len(skipped)} item(s)."
+        if below_cost_count:
+            message += f" {below_cost_count} item(s) will relist below cost."
+
+        return jsonify({
+            "ok": True,
+            "queued_count": len(queued),
+            "skipped_count": len(skipped),
+            "last_delay_seconds": last_delay,
+            "queued": queued,
+            "skipped": skipped,
+            "below_cost_count": below_cost_count,
+            "message": message
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_RELIST] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @main_bp.route("/items/bulk_sync_to_ebay", methods=["POST"])
 @login_required
 def bulk_sync_to_ebay():
