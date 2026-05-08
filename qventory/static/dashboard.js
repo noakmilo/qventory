@@ -527,6 +527,7 @@ async function openAutoRelistScheduleModal(itemId, fallback = {}) {
   const customDaysEl = document.getElementById('autoRelistScheduleCustomDays');
   const discountEl = document.getElementById('autoRelistScheduleDiscount');
   const floorEl = document.getElementById('autoRelistScheduleFloorPrice');
+  const runFirstEl = document.getElementById('autoRelistRunFirstImmediately');
   const stopBtn = document.getElementById('autoRelistScheduleStop');
   const submitBtn = document.getElementById('autoRelistScheduleSubmit');
 
@@ -543,6 +544,7 @@ async function openAutoRelistScheduleModal(itemId, fallback = {}) {
   customDaysEl.value = '7';
   discountEl.value = '10';
   floorEl.value = fallback.price ? (parseMoneyValue(fallback.price) * 0.6).toFixed(2) : '';
+  if (runFirstEl) runFirstEl.checked = false;
   stopBtn.style.display = 'none';
   submitBtn.innerHTML = '<i class="fas fa-clock"></i> Schedule';
   toggleCustomDays(frequencyEl, document.getElementById('autoRelistScheduleCustomDaysWrap'));
@@ -569,6 +571,7 @@ async function openAutoRelistScheduleModal(itemId, fallback = {}) {
       customDaysEl.value = rule.custom_interval_days || 7;
       discountEl.value = rule.price_decrease_amount ?? 10;
       floorEl.value = Number.isFinite(parseMoneyValue(rule.min_price)) ? parseMoneyValue(rule.min_price).toFixed(2) : '';
+      if (runFirstEl) runFirstEl.checked = Boolean(rule.run_first_relist_immediately);
       stopBtn.style.display = 'inline-flex';
       submitBtn.innerHTML = '<i class="fas fa-clock"></i> Update Schedule';
     } else if (Number.isFinite(autoRelistScheduleState.currentPrice)) {
@@ -587,7 +590,8 @@ function getAutoRelistSchedulePayload() {
     frequency: document.getElementById('autoRelistScheduleFrequency')?.value,
     custom_interval_days: document.getElementById('autoRelistScheduleCustomDays')?.value,
     discount_percent: document.getElementById('autoRelistScheduleDiscount')?.value,
-    min_price: document.getElementById('autoRelistScheduleFloorPrice')?.value
+    min_price: document.getElementById('autoRelistScheduleFloorPrice')?.value,
+    run_first_relist_immediately: document.getElementById('autoRelistRunFirstImmediately')?.checked || false
   };
 }
 
@@ -756,6 +760,7 @@ function openBulkAutoRelistModal(itemIds) {
   document.getElementById('bulkAutoRelistCustomDays').value = '7';
   document.getElementById('bulkAutoRelistDiscount').value = '10';
   document.getElementById('bulkAutoRelistFloorPercent').value = '60';
+  document.getElementById('bulkAutoRelistRunFirstImmediately').checked = false;
   toggleCustomDays(document.getElementById('bulkAutoRelistFrequency'), document.getElementById('bulkAutoRelistCustomDaysWrap'));
   renderBulkAutoRelistItems();
   modal.hidden = false;
@@ -830,6 +835,7 @@ document.getElementById('bulkAutoRelistForm')?.addEventListener('submit', async 
         custom_interval_days: document.getElementById('bulkAutoRelistCustomDays')?.value,
         discount_percent: document.getElementById('bulkAutoRelistDiscount')?.value,
         floor_percent: document.getElementById('bulkAutoRelistFloorPercent')?.value,
+        run_first_relist_immediately: document.getElementById('bulkAutoRelistRunFirstImmediately')?.checked || false,
         floor_overrides: floorOverrides
       })
     });

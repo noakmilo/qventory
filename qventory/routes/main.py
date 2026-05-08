@@ -5338,6 +5338,7 @@ def _serialize_item_auto_relist_rule(rule):
         "price_decrease_amount": rule.price_decrease_amount,
         "min_price": rule.min_price,
         "current_price": rule.current_price,
+        "run_first_relist_immediately": rule.run_first_relist_immediately,
         "next_run_at": rule.next_run_at.isoformat() if rule.next_run_at else None,
         "enabled": rule.enabled,
     }
@@ -5378,6 +5379,7 @@ def _parse_auto_relist_payload(data, item=None):
         "custom_interval_days": custom_interval_days,
         "discount_percent": discount_percent,
         "min_price": round(min_price, 2),
+        "run_first_relist_immediately": bool(data.get("run_first_relist_immediately")),
     }, None
 
 
@@ -5412,12 +5414,14 @@ def _apply_auto_relist_schedule(rule, item, payload):
     rule.price_decrease_type = "percentage"
     rule.price_decrease_amount = payload["discount_percent"]
     rule.min_price = payload["min_price"]
-    rule.run_first_relist_immediately = False
+    rule.run_first_relist_immediately = bool(payload.get("run_first_relist_immediately"))
     rule.withdraw_publish_delay_seconds = 30
     rule.enabled = True
     rule.last_error_message = None
     rule.updated_at = datetime.utcnow()
     rule.calculate_next_run()
+    if rule.run_first_relist_immediately:
+        rule.next_run_at = datetime.utcnow() - timedelta(seconds=5)
     return rule
 
 
@@ -5468,10 +5472,17 @@ def save_item_auto_relist_rule(item_id):
         _disable_duplicate_auto_relist_rules(item, rule)
         db.session.commit()
 
+        task_id = None
+        if rule.run_first_relist_immediately:
+            from qventory.tasks import auto_relist_offers
+            task = auto_relist_offers.delay()
+            task_id = str(task.id)
+
         return jsonify({
             "ok": True,
             "created": created,
             "rule": _serialize_item_auto_relist_rule(rule),
+            "task_id": task_id,
             "message": "Auto relist schedule saved"
         })
 
@@ -5534,6 +5545,7 @@ def save_bulk_auto_relist_rules():
             "frequency": data.get("frequency"),
             "custom_interval_days": data.get("custom_interval_days"),
             "discount_percent": data.get("discount_percent"),
+            "run_first_relist_immediately": data.get("run_first_relist_immediately"),
             "min_price": 0,
         })
         if error:
@@ -5604,6 +5616,11 @@ def save_bulk_auto_relist_rules():
             }), 400
 
         db.session.commit()
+        task_id = None
+        if payload.get("run_first_relist_immediately"):
+            from qventory.tasks import auto_relist_offers
+            task = auto_relist_offers.delay()
+            task_id = str(task.id)
         return jsonify({
             "ok": True,
             "created": created,
@@ -5611,6 +5628,7 @@ def save_bulk_auto_relist_rules():
             "skipped_count": len(skipped),
             "skipped": skipped,
             "saved": saved,
+            "task_id": task_id,
             "message": f"Scheduled {len(saved)} item(s): {created} created, {updated} updated, {len(skipped)} skipped."
         })
 

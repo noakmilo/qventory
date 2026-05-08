@@ -779,6 +779,11 @@
         <input type="number" id="autoRelistScheduleFloorPrice" class="input" min="0" step="0.01" placeholder="0.00">
       </div>
 
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="autoRelistRunFirstImmediately">
+        <span style="font-size:14px;color:var(--text);">Run first relist immediately</span>
+      </label>
+
       <div id="autoRelistSchedulePreview" style="font-size:13px;color:var(--sub);padding:10px 12px;border:1px solid var(--border);border-radius:8px;">
         Next relist price preview will appear here.
       </div>
@@ -884,6 +889,11 @@
           <input type="number" id="bulkAutoRelistFloorPercent" class="input" min="0.01" max="100" step="0.01" value="60">
         </div>
       </div>
+
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;">
+        <input type="checkbox" id="bulkAutoRelistRunFirstImmediately">
+        <span style="font-size:14px;color:var(--text);">Run first relist immediately for all scheduled items</span>
+      </label>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button type="button" class="btn" data-bulk-auto-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>

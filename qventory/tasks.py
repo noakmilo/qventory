@@ -4014,6 +4014,41 @@ def poll_user_listings(credential):
                 new_item.S = relist_source.S
                 new_item.C = relist_source.C
                 new_item.location_code = relist_source.location_code
+                try:
+                    from qventory.models.auto_relist_rule import AutoRelistRule
+                    old_listing_id = relist_source.ebay_listing_id
+                    new_offer_id = parsed_with_images.get('ebay_offer_id')
+                    rule_filters = [AutoRelistRule.listing_id == listing_id]
+                    rule_filters.append(AutoRelistRule.offer_id == listing_id)
+                    if old_listing_id:
+                        rule_filters.append(AutoRelistRule.listing_id == old_listing_id)
+                        rule_filters.append(AutoRelistRule.offer_id == old_listing_id)
+                    if new_offer_id:
+                        rule_filters.append(AutoRelistRule.offer_id == str(new_offer_id))
+
+                    relist_rule = AutoRelistRule.query.filter(
+                        AutoRelistRule.user_id == user_id,
+                        AutoRelistRule.mode == 'auto',
+                        AutoRelistRule.enabled == True,
+                        or_(*rule_filters)
+                    ).order_by(AutoRelistRule.updated_at.desc()).first()
+
+                    if relist_rule:
+                        relist_rule.listing_id = listing_id
+                        if new_offer_id:
+                            relist_rule.offer_id = str(new_offer_id)
+                        elif relist_rule.offer_id and relist_rule.offer_id.isdigit() and len(relist_rule.offer_id) >= 10:
+                            relist_rule.offer_id = listing_id
+                        relist_rule.item_title = new_item.title
+                        if price is not None:
+                            relist_rule.current_price = float(price)
+                        relist_rule.updated_at = datetime.utcnow()
+                        log_task(
+                            f"    ✓ Preserved auto-relist schedule rule {relist_rule.id} "
+                            f"for new listing {listing_id} (floor: {relist_rule.min_price})"
+                        )
+                except Exception as schedule_err:
+                    log_task(f"    ⚠ Failed to preserve auto-relist schedule: {schedule_err}")
                 relist_source.is_active = False
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                 relist_note = f"\n[{timestamp}] Relist transfer to {listing_id} completed"
