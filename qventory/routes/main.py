@@ -64,7 +64,7 @@ from ..models.sale import Sale
 from ..models.item_cost_history import ItemCostHistory
 from ..models.expense import Expense
 from ..models.receipt_item import ReceiptItem
-from ..models.auto_relist_rule import AutoRelistHistory
+from ..models.auto_relist_rule import AutoRelistRule, AutoRelistHistory
 from ..models.ebay_category import EbayCategory
 from ..models.profit_calculator_report import ProfitCalculatorReport
 from ..models.ebay_fee_rule import EbayFeeRule
@@ -5280,6 +5280,343 @@ def bulk_relist_items_from_inventory():
     except Exception as e:
         db.session.rollback()
         print(f"[BULK_RELIST] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+AUTO_RELIST_FREQUENCIES = {
+    "daily",
+    "every_3_days",
+    "weekly",
+    "biweekly",
+    "monthly",
+    "custom",
+}
+
+
+def _active_auto_relist_rule_for_item(item):
+    offer_id = (getattr(item, "ebay_offer_id", None) or "").strip()
+    filters = [AutoRelistRule.listing_id == item.ebay_listing_id]
+    filters.append(AutoRelistRule.offer_id == item.ebay_listing_id)
+    if offer_id:
+        filters.append(AutoRelistRule.offer_id == offer_id)
+
+    return AutoRelistRule.query.filter(
+        AutoRelistRule.user_id == current_user.id,
+        AutoRelistRule.mode == "auto",
+        AutoRelistRule.enabled.is_(True),
+        or_(*filters)
+    ).order_by(AutoRelistRule.updated_at.desc(), AutoRelistRule.created_at.desc()).first()
+
+
+def _disable_duplicate_auto_relist_rules(item, keep_rule):
+    offer_id = (getattr(item, "ebay_offer_id", None) or "").strip()
+    filters = [AutoRelistRule.listing_id == item.ebay_listing_id]
+    filters.append(AutoRelistRule.offer_id == item.ebay_listing_id)
+    if offer_id:
+        filters.append(AutoRelistRule.offer_id == offer_id)
+
+    duplicates = AutoRelistRule.query.filter(
+        AutoRelistRule.user_id == current_user.id,
+        AutoRelistRule.mode == "auto",
+        AutoRelistRule.enabled.is_(True),
+        AutoRelistRule.id != keep_rule.id,
+        or_(*filters)
+    ).all()
+    for duplicate in duplicates:
+        duplicate.enabled = False
+        duplicate.next_run_at = None
+        duplicate.updated_at = datetime.utcnow()
+
+
+def _serialize_item_auto_relist_rule(rule):
+    if not rule:
+        return None
+    return {
+        "id": rule.id,
+        "frequency": rule.frequency,
+        "custom_interval_days": rule.custom_interval_days,
+        "price_decrease_amount": rule.price_decrease_amount,
+        "min_price": rule.min_price,
+        "current_price": rule.current_price,
+        "next_run_at": rule.next_run_at.isoformat() if rule.next_run_at else None,
+        "enabled": rule.enabled,
+    }
+
+
+def _parse_auto_relist_payload(data, item=None):
+    frequency = (data.get("frequency") or "weekly").strip()
+    if frequency not in AUTO_RELIST_FREQUENCIES:
+        return None, "Invalid frequency"
+
+    custom_interval_days = None
+    if frequency == "custom":
+        try:
+            custom_interval_days = int(data.get("custom_interval_days") or 7)
+        except (TypeError, ValueError):
+            return None, "Invalid custom interval"
+        if custom_interval_days < 1 or custom_interval_days > 365:
+            return None, "Custom interval must be between 1 and 365 days"
+
+    try:
+        discount_percent = float(data.get("discount_percent"))
+    except (TypeError, ValueError):
+        return None, "Invalid discount percent"
+    if discount_percent <= 0 or discount_percent > 100:
+        return None, "Discount percent must be between 0 and 100"
+
+    try:
+        min_price = float(data.get("min_price"))
+    except (TypeError, ValueError):
+        return None, "Invalid floor price"
+    if min_price < 0:
+        return None, "Floor price cannot be negative"
+    if item and item.item_price is not None and min_price > float(item.item_price):
+        return None, "Floor price cannot be above current price"
+
+    return {
+        "frequency": frequency,
+        "custom_interval_days": custom_interval_days,
+        "discount_percent": discount_percent,
+        "min_price": round(min_price, 2),
+    }, None
+
+
+def _resolve_item_offer_id(item):
+    offer_id = (getattr(item, "ebay_offer_id", None) or "").strip()
+    if offer_id:
+        return offer_id
+
+    try:
+        from qventory.helpers.ebay_relist import resolve_offer_id_from_listing_id
+        resolved_offer_id = resolve_offer_id_from_listing_id(current_user.id, item.ebay_listing_id)
+        if resolved_offer_id:
+            item.ebay_offer_id = str(resolved_offer_id)
+            return str(resolved_offer_id)
+    except Exception as e:
+        print(f"[AUTO_RELIST_INLINE] Unable to resolve offer ID: {e}", file=sys.stderr)
+
+    return item.ebay_listing_id
+
+
+def _apply_auto_relist_schedule(rule, item, payload):
+    rule.mode = "auto"
+    rule.sku = item.sku
+    rule.marketplace_id = "EBAY_US"
+    rule.item_title = item.title
+    rule.current_price = float(item.item_price) if item.item_price is not None else None
+    rule.listing_id = item.ebay_listing_id
+    rule.offer_id = _resolve_item_offer_id(item)
+    rule.frequency = payload["frequency"]
+    rule.custom_interval_days = payload["custom_interval_days"]
+    rule.enable_price_decrease = True
+    rule.price_decrease_type = "percentage"
+    rule.price_decrease_amount = payload["discount_percent"]
+    rule.min_price = payload["min_price"]
+    rule.run_first_relist_immediately = False
+    rule.withdraw_publish_delay_seconds = 30
+    rule.enabled = True
+    rule.last_error_message = None
+    rule.updated_at = datetime.utcnow()
+    rule.calculate_next_run()
+    return rule
+
+
+@main_bp.route("/items/<int:item_id>/auto_relist_rule", methods=["GET"])
+@login_required
+def get_item_auto_relist_rule(item_id):
+    item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+    if not item:
+        return jsonify({"ok": False, "error": "Item not found"}), 404
+
+    rule = _active_auto_relist_rule_for_item(item) if item.ebay_listing_id else None
+    return jsonify({
+        "ok": True,
+        "item": {
+            "id": item.id,
+            "title": item.title,
+            "price": float(item.item_price) if item.item_price is not None else None,
+            "ebay_listing_id": item.ebay_listing_id,
+        },
+        "rule": _serialize_item_auto_relist_rule(rule)
+    })
+
+
+@main_bp.route("/items/<int:item_id>/auto_relist_rule", methods=["POST", "PATCH"])
+@login_required
+def save_item_auto_relist_rule(item_id):
+    try:
+        item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+        if not item:
+            return jsonify({"ok": False, "error": "Item not found"}), 404
+        if not item.ebay_listing_id:
+            return jsonify({"ok": False, "error": "Item is not linked to eBay"}), 400
+
+        data = request.get_json() or {}
+        payload, error = _parse_auto_relist_payload(data, item=item)
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+
+        rule = _active_auto_relist_rule_for_item(item)
+        created = False
+        if not rule:
+            rule = AutoRelistRule(user_id=current_user.id, offer_id=item.ebay_listing_id)
+            db.session.add(rule)
+            created = True
+
+        _apply_auto_relist_schedule(rule, item, payload)
+        db.session.flush()
+        _disable_duplicate_auto_relist_rules(item, rule)
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "created": created,
+            "rule": _serialize_item_auto_relist_rule(rule),
+            "message": "Auto relist schedule saved"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[AUTO_RELIST_INLINE_SAVE] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/items/<int:item_id>/auto_relist_rule/stop", methods=["POST"])
+@login_required
+def stop_item_auto_relist_rule(item_id):
+    try:
+        item = Item.query.filter_by(id=item_id, user_id=current_user.id).first()
+        if not item:
+            return jsonify({"ok": False, "error": "Item not found"}), 404
+
+        rule = _active_auto_relist_rule_for_item(item) if item.ebay_listing_id else None
+        if not rule:
+            return jsonify({"ok": False, "error": "No active auto relist rule found"}), 404
+
+        rule.enabled = False
+        rule.next_run_at = None
+        rule.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({"ok": True, "message": "Auto relist schedule stopped"})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[AUTO_RELIST_INLINE_STOP] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/items/bulk_auto_relist_rules", methods=["POST"])
+@login_required
+def save_bulk_auto_relist_rules():
+    try:
+        data = request.get_json() or {}
+        item_ids = data.get("item_ids")
+        if not isinstance(item_ids, list):
+            return jsonify({"ok": False, "error": "item_ids must be an array"}), 400
+
+        try:
+            item_ids = list(dict.fromkeys(int(x) for x in item_ids))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid item ID format"}), 400
+
+        if len(item_ids) < 2:
+            return jsonify({"ok": False, "error": "Select at least 2 items"}), 400
+
+        try:
+            floor_percent = float(data.get("floor_percent"))
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": "Invalid floor percent"}), 400
+        if floor_percent <= 0 or floor_percent > 100:
+            return jsonify({"ok": False, "error": "Floor percent must be between 0 and 100"}), 400
+
+        payload, error = _parse_auto_relist_payload({
+            "frequency": data.get("frequency"),
+            "custom_interval_days": data.get("custom_interval_days"),
+            "discount_percent": data.get("discount_percent"),
+            "min_price": 0,
+        })
+        if error:
+            return jsonify({"ok": False, "error": error}), 400
+
+        floor_overrides = data.get("floor_overrides") or {}
+        if not isinstance(floor_overrides, dict):
+            return jsonify({"ok": False, "error": "floor_overrides must be an object"}), 400
+
+        items = Item.query.filter(
+            Item.id.in_(item_ids),
+            Item.user_id == current_user.id
+        ).all()
+        items_by_id = {item.id: item for item in items}
+
+        created = 0
+        updated = 0
+        skipped = []
+        saved = []
+
+        for item_id in item_ids:
+            item = items_by_id.get(item_id)
+            if not item:
+                skipped.append({"item_id": item_id, "reason": "not_found"})
+                continue
+            if not item.ebay_listing_id:
+                skipped.append({"item_id": item.id, "reason": "missing_ebay_listing_id"})
+                continue
+            if item.item_price is None:
+                skipped.append({"item_id": item.id, "reason": "missing_price"})
+                continue
+
+            override_key = str(item.id)
+            if override_key in floor_overrides and str(floor_overrides[override_key]).strip() != "":
+                try:
+                    min_price = float(floor_overrides[override_key])
+                except (TypeError, ValueError):
+                    skipped.append({"item_id": item.id, "reason": "invalid_floor_override"})
+                    continue
+            else:
+                min_price = float(item.item_price) * (floor_percent / 100)
+
+            if min_price < 0 or min_price > float(item.item_price):
+                skipped.append({"item_id": item.id, "reason": "invalid_floor_price"})
+                continue
+
+            item_payload = dict(payload)
+            item_payload["min_price"] = round(min_price, 2)
+            rule = _active_auto_relist_rule_for_item(item)
+            if rule:
+                updated += 1
+            else:
+                rule = AutoRelistRule(user_id=current_user.id, offer_id=item.ebay_listing_id)
+                db.session.add(rule)
+                created += 1
+
+            _apply_auto_relist_schedule(rule, item, item_payload)
+            db.session.flush()
+            _disable_duplicate_auto_relist_rules(item, rule)
+            saved.append({"item_id": item.id, "min_price": item_payload["min_price"]})
+
+        if not saved:
+            db.session.rollback()
+            return jsonify({
+                "ok": False,
+                "error": "No eligible items were scheduled",
+                "skipped": skipped
+            }), 400
+
+        db.session.commit()
+        return jsonify({
+            "ok": True,
+            "created": created,
+            "updated": updated,
+            "skipped_count": len(skipped),
+            "skipped": skipped,
+            "saved": saved,
+            "message": f"Scheduled {len(saved)} item(s): {created} created, {updated} updated, {len(skipped)} skipped."
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_AUTO_RELIST_SAVE] Error: {str(e)}", file=sys.stderr)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

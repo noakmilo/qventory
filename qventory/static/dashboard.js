@@ -99,6 +99,12 @@ if (bulkActionApply) {
         return;
       }
       openBulkRelistModal(itemIds);
+    } else if (action === 'bulk_schedule_auto_relist') {
+      if (itemIds.length < 2) {
+        alert('Select 2 or more items for bulk auto relist');
+        return;
+      }
+      openBulkAutoRelistModal(itemIds);
     } else if (action === 'retire_items') {
       if (!confirm(`Copy ${itemIds.length} item(s) to Retirements?`)) {
         return;
@@ -454,6 +460,397 @@ function escapeHtml(value) {
 }
 
 window.closeBulkRelistModal = closeBulkRelistModal;
+
+// ==================== SCHEDULED AUTO RELIST ====================
+
+let autoRelistScheduleState = {
+  itemId: null,
+  currentPrice: null,
+  hasRule: false
+};
+let bulkAutoRelistItems = [];
+
+function parseMoneyValue(value) {
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatMoneyValue(value) {
+  return Number.isFinite(value) ? `$${value.toFixed(2)}` : '—';
+}
+
+function calculateDiscountedFloorPrice(currentPrice, discountPercent, floorPrice) {
+  if (!Number.isFinite(currentPrice) || !Number.isFinite(discountPercent)) return null;
+  const discounted = currentPrice * (1 - discountPercent / 100);
+  if (Number.isFinite(floorPrice)) {
+    return Math.max(discounted, floorPrice);
+  }
+  return discounted;
+}
+
+function toggleCustomDays(frequencyEl, wrapEl) {
+  if (!frequencyEl || !wrapEl) return;
+  wrapEl.style.display = frequencyEl.value === 'custom' ? 'block' : 'none';
+}
+
+function updateAutoRelistSchedulePreview() {
+  const discount = parseMoneyValue(document.getElementById('autoRelistScheduleDiscount')?.value);
+  const floor = parseMoneyValue(document.getElementById('autoRelistScheduleFloorPrice')?.value);
+  const preview = document.getElementById('autoRelistSchedulePreview');
+  if (!preview) return;
+
+  const current = autoRelistScheduleState.currentPrice;
+  if (!Number.isFinite(current) || !Number.isFinite(discount) || !Number.isFinite(floor)) {
+    preview.textContent = 'Enter a discount and floor price to preview the next relist price.';
+    return;
+  }
+
+  const nextPrice = calculateDiscountedFloorPrice(current, discount, floor);
+  preview.innerHTML = `Next relist price: <strong style="color:#f97316;">${formatMoneyValue(nextPrice)}</strong> (floor ${formatMoneyValue(floor)})`;
+}
+
+function closeAutoRelistScheduleModal() {
+  const modal = document.getElementById('autoRelistScheduleModal');
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+async function openAutoRelistScheduleModal(itemId, fallback = {}) {
+  const modal = document.getElementById('autoRelistScheduleModal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('autoRelistScheduleItemTitle');
+  const priceEl = document.getElementById('autoRelistScheduleCurrentPrice');
+  const itemInput = document.getElementById('autoRelistScheduleItemId');
+  const frequencyEl = document.getElementById('autoRelistScheduleFrequency');
+  const customDaysEl = document.getElementById('autoRelistScheduleCustomDays');
+  const discountEl = document.getElementById('autoRelistScheduleDiscount');
+  const floorEl = document.getElementById('autoRelistScheduleFloorPrice');
+  const stopBtn = document.getElementById('autoRelistScheduleStop');
+  const submitBtn = document.getElementById('autoRelistScheduleSubmit');
+
+  itemInput.value = itemId;
+  titleEl.textContent = fallback.title || `Item ${itemId}`;
+  priceEl.textContent = formatMoneyValue(parseMoneyValue(fallback.price));
+  autoRelistScheduleState = {
+    itemId,
+    currentPrice: parseMoneyValue(fallback.price),
+    hasRule: false
+  };
+
+  frequencyEl.value = 'weekly';
+  customDaysEl.value = '7';
+  discountEl.value = '10';
+  floorEl.value = fallback.price ? (parseMoneyValue(fallback.price) * 0.6).toFixed(2) : '';
+  stopBtn.style.display = 'none';
+  submitBtn.innerHTML = '<i class="fas fa-clock"></i> Schedule';
+  toggleCustomDays(frequencyEl, document.getElementById('autoRelistScheduleCustomDaysWrap'));
+
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+
+  try {
+    const response = await fetch(`/items/${itemId}/auto_relist_rule`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to load schedule');
+    }
+
+    const item = data.item || {};
+    const rule = data.rule;
+    autoRelistScheduleState.currentPrice = parseMoneyValue(item.price);
+    titleEl.textContent = item.title || titleEl.textContent;
+    priceEl.textContent = formatMoneyValue(autoRelistScheduleState.currentPrice);
+
+    if (rule) {
+      autoRelistScheduleState.hasRule = true;
+      frequencyEl.value = rule.frequency || 'weekly';
+      customDaysEl.value = rule.custom_interval_days || 7;
+      discountEl.value = rule.price_decrease_amount ?? 10;
+      floorEl.value = Number.isFinite(parseMoneyValue(rule.min_price)) ? parseMoneyValue(rule.min_price).toFixed(2) : '';
+      stopBtn.style.display = 'inline-flex';
+      submitBtn.innerHTML = '<i class="fas fa-clock"></i> Update Schedule';
+    } else if (Number.isFinite(autoRelistScheduleState.currentPrice)) {
+      floorEl.value = (autoRelistScheduleState.currentPrice * 0.6).toFixed(2);
+    }
+    toggleCustomDays(frequencyEl, document.getElementById('autoRelistScheduleCustomDaysWrap'));
+    updateAutoRelistSchedulePreview();
+  } catch (error) {
+    alert(error.message || 'Failed to load schedule');
+    closeAutoRelistScheduleModal();
+  }
+}
+
+function getAutoRelistSchedulePayload() {
+  return {
+    frequency: document.getElementById('autoRelistScheduleFrequency')?.value,
+    custom_interval_days: document.getElementById('autoRelistScheduleCustomDays')?.value,
+    discount_percent: document.getElementById('autoRelistScheduleDiscount')?.value,
+    min_price: document.getElementById('autoRelistScheduleFloorPrice')?.value
+  };
+}
+
+document.addEventListener('click', (event) => {
+  const scheduleBtn = event.target.closest('.schedule-auto-relist-btn');
+  if (scheduleBtn) {
+    const itemId = parseInt(scheduleBtn.dataset.itemId, 10);
+    if (Number.isFinite(itemId)) {
+      openAutoRelistScheduleModal(itemId, {
+        title: scheduleBtn.dataset.itemTitle || '',
+        price: scheduleBtn.dataset.itemPrice || ''
+      });
+    }
+    return;
+  }
+
+  const closeBtn = event.target.closest('[data-modal-close="autoRelistSchedule"]');
+  if (closeBtn) {
+    closeAutoRelistScheduleModal();
+    return;
+  }
+
+  const discountBtn = event.target.closest('[data-auto-relist-discount]');
+  if (discountBtn) {
+    const discountEl = document.getElementById('autoRelistScheduleDiscount');
+    if (discountEl) discountEl.value = discountBtn.dataset.autoRelistDiscount;
+    updateAutoRelistSchedulePreview();
+  }
+});
+
+document.getElementById('autoRelistScheduleFrequency')?.addEventListener('change', (event) => {
+  toggleCustomDays(event.target, document.getElementById('autoRelistScheduleCustomDaysWrap'));
+});
+document.getElementById('autoRelistScheduleDiscount')?.addEventListener('input', updateAutoRelistSchedulePreview);
+document.getElementById('autoRelistScheduleFloorPrice')?.addEventListener('input', updateAutoRelistSchedulePreview);
+
+document.getElementById('autoRelistScheduleForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const itemId = document.getElementById('autoRelistScheduleItemId')?.value;
+  const submitBtn = document.getElementById('autoRelistScheduleSubmit');
+  const originalHtml = submitBtn?.innerHTML;
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
+
+  try {
+    const response = await fetch(`/items/${itemId}/auto_relist_rule`, {
+      method: autoRelistScheduleState.hasRule ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getAutoRelistSchedulePayload())
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to save schedule');
+    }
+    alert(data.message || 'Schedule saved');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to save schedule');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalHtml;
+    }
+  }
+});
+
+document.getElementById('autoRelistScheduleStop')?.addEventListener('click', async () => {
+  const itemId = document.getElementById('autoRelistScheduleItemId')?.value;
+  if (!itemId || !confirm('Stop this auto relist schedule?')) return;
+
+  try {
+    const response = await fetch(`/items/${itemId}/auto_relist_rule/stop`, { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to stop schedule');
+    }
+    alert(data.message || 'Schedule stopped');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to stop schedule');
+  }
+});
+
+function closeBulkAutoRelistModal() {
+  const modal = document.getElementById('bulkAutoRelistModal');
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+function getBulkAutoRelistItemData(itemIds) {
+  return itemIds.map(id => {
+    const row = document.querySelector(`tr[data-item-row="${id}"]`);
+    const price = row ? parseMoneyValue(row.dataset.itemPrice || '') : null;
+    const titleCell = row?.querySelector('[data-col="title"]');
+    return {
+      id,
+      title: row?.dataset.itemTitle || titleCell?.textContent?.trim() || `Item ${id}`,
+      price,
+      floorOverride: ''
+    };
+  });
+}
+
+function updateBulkAutoRelistState() {
+  const countEl = document.getElementById('bulkAutoRelistCount');
+  const validationEl = document.getElementById('bulkAutoRelistValidation');
+  const submitBtn = document.getElementById('bulkAutoRelistSubmit');
+  const missingPrice = bulkAutoRelistItems.filter(item => !Number.isFinite(item.price)).length;
+
+  if (countEl) countEl.textContent = bulkAutoRelistItems.length;
+  if (validationEl) {
+    if (bulkAutoRelistItems.length < 2) {
+      validationEl.textContent = 'Keep at least 2 items to schedule.';
+      validationEl.style.color = '#fca5a5';
+    } else if (missingPrice > 0) {
+      validationEl.textContent = `${missingPrice} item(s) need a current price.`;
+      validationEl.style.color = '#fca5a5';
+    } else {
+      validationEl.textContent = `${bulkAutoRelistItems.length} item(s) ready.`;
+      validationEl.style.color = 'var(--sub)';
+    }
+  }
+  if (submitBtn) submitBtn.disabled = bulkAutoRelistItems.length < 2 || missingPrice > 0;
+}
+
+function renderBulkAutoRelistItems() {
+  const list = document.getElementById('bulkAutoRelistItemsList');
+  if (!list) return;
+
+  const floorPercent = parseMoneyValue(document.getElementById('bulkAutoRelistFloorPercent')?.value) ?? 60;
+  const discountPercent = parseMoneyValue(document.getElementById('bulkAutoRelistDiscount')?.value) ?? 10;
+
+  list.innerHTML = bulkAutoRelistItems.map(item => {
+    const defaultFloor = Number.isFinite(item.price) ? item.price * (floorPercent / 100) : null;
+    const floor = item.floorOverride !== '' ? parseMoneyValue(item.floorOverride) : defaultFloor;
+    const nextPrice = calculateDiscountedFloorPrice(item.price, discountPercent, floor);
+    return `
+      <div data-bulk-auto-item="${item.id}" style="display:grid;grid-template-columns:1fr 130px auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <div style="min-width:0;">
+          <div style="font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:4px;">
+            ${formatMoneyValue(item.price)} → <strong style="color:#f97316;">${formatMoneyValue(nextPrice)}</strong>
+            · Floor ${formatMoneyValue(floor)}
+          </div>
+        </div>
+        <input class="input" type="number" data-bulk-auto-floor="${item.id}" step="0.01" min="0" placeholder="Floor override" value="${escapeHtml(item.floorOverride)}" style="padding:6px 8px;font-size:12px;">
+        <button type="button" class="btn" data-bulk-auto-remove="${item.id}" style="padding:6px 9px;font-size:12px;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  updateBulkAutoRelistState();
+}
+
+function openBulkAutoRelistModal(itemIds) {
+  const modal = document.getElementById('bulkAutoRelistModal');
+  if (!modal) return;
+  bulkAutoRelistItems = getBulkAutoRelistItemData(itemIds);
+  document.getElementById('bulkAutoRelistFrequency').value = 'weekly';
+  document.getElementById('bulkAutoRelistCustomDays').value = '7';
+  document.getElementById('bulkAutoRelistDiscount').value = '10';
+  document.getElementById('bulkAutoRelistFloorPercent').value = '60';
+  toggleCustomDays(document.getElementById('bulkAutoRelistFrequency'), document.getElementById('bulkAutoRelistCustomDaysWrap'));
+  renderBulkAutoRelistItems();
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+document.addEventListener('click', (event) => {
+  const closeBtn = event.target.closest('[data-modal-close="bulkAutoRelist"]');
+  if (closeBtn) {
+    closeBulkAutoRelistModal();
+    return;
+  }
+
+  const discountBtn = event.target.closest('[data-bulk-auto-discount]');
+  if (discountBtn) {
+    const input = document.getElementById('bulkAutoRelistDiscount');
+    if (input) input.value = discountBtn.dataset.bulkAutoDiscount;
+    renderBulkAutoRelistItems();
+    return;
+  }
+
+  const removeBtn = event.target.closest('[data-bulk-auto-remove]');
+  if (removeBtn) {
+    const itemId = parseInt(removeBtn.dataset.bulkAutoRemove, 10);
+    bulkAutoRelistItems = bulkAutoRelistItems.filter(item => item.id !== itemId);
+    const checkbox = document.querySelector(`.item-checkbox[data-item-id="${itemId}"]`);
+    if (checkbox) {
+      checkbox.checked = false;
+      updateBulkActions();
+    }
+    renderBulkAutoRelistItems();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  const floorInput = event.target.closest('[data-bulk-auto-floor]');
+  if (floorInput) {
+    const itemId = parseInt(floorInput.dataset.bulkAutoFloor, 10);
+    const item = bulkAutoRelistItems.find(entry => entry.id === itemId);
+    if (item) item.floorOverride = floorInput.value;
+    renderBulkAutoRelistItems();
+  }
+});
+
+document.getElementById('bulkAutoRelistFrequency')?.addEventListener('change', (event) => {
+  toggleCustomDays(event.target, document.getElementById('bulkAutoRelistCustomDaysWrap'));
+});
+document.getElementById('bulkAutoRelistDiscount')?.addEventListener('input', renderBulkAutoRelistItems);
+document.getElementById('bulkAutoRelistFloorPercent')?.addEventListener('input', renderBulkAutoRelistItems);
+
+document.getElementById('bulkAutoRelistForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const floorOverrides = {};
+  bulkAutoRelistItems.forEach(item => {
+    if (item.floorOverride !== '') floorOverrides[String(item.id)] = item.floorOverride;
+  });
+
+  const submitBtn = document.getElementById('bulkAutoRelistSubmit');
+  const originalHtml = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
+
+  try {
+    const response = await fetch('/items/bulk_auto_relist_rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_ids: bulkAutoRelistItems.map(item => item.id),
+        frequency: document.getElementById('bulkAutoRelistFrequency')?.value,
+        custom_interval_days: document.getElementById('bulkAutoRelistCustomDays')?.value,
+        discount_percent: document.getElementById('bulkAutoRelistDiscount')?.value,
+        floor_percent: document.getElementById('bulkAutoRelistFloorPercent')?.value,
+        floor_overrides: floorOverrides
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to schedule items');
+    }
+    alert(data.message || 'Items scheduled');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to schedule items');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalHtml;
+    }
+  }
+});
+
+window.closeAutoRelistScheduleModal = closeAutoRelistScheduleModal;
+window.closeBulkAutoRelistModal = closeBulkAutoRelistModal;
 
 if (bulkEditOpenBtn) {
   bulkEditOpenBtn.addEventListener('click', () => {

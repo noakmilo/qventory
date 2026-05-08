@@ -175,6 +175,7 @@
             {% if view_type == 'active' or view_type == 'slow_movers' %}
             <option value="bulk_update">Batch Update Fields</option>
             <option value="bulk_relist">Update &amp; Relist Selected</option>
+            <option value="bulk_schedule_auto_relist">Schedule Auto Relist</option>
             <option value="deactivate_by_user">Deactivate (Hide from Active)</option>
             <option value="retire_items">Move to Retirements (Copy)</option>
             {% elif view_type == 'inactive_user' %}
@@ -727,6 +728,73 @@
   </div>
 </div>
 
+<!-- Schedule Auto Relist Modal -->
+<div id="autoRelistScheduleModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="autoRelistSchedule"></div>
+  <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="autoRelistScheduleTitle" style="max-width:640px;">
+    <div class="modal__header">
+      <h3 id="autoRelistScheduleTitle"><i class="fas fa-clock" style="color:#f97316;"></i> Schedule Auto Relist</h3>
+      <button class="modal__close" type="button" data-modal-close="autoRelistSchedule" aria-label="Close">×</button>
+    </div>
+    <form id="autoRelistScheduleForm" class="modal__body" style="display:grid;gap:14px;">
+      <input type="hidden" id="autoRelistScheduleItemId">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div id="autoRelistScheduleItemTitle" style="font-weight:600;color:var(--text);"></div>
+        <div style="font-size:12px;color:var(--sub);margin-top:4px;">
+          Current price: <strong id="autoRelistScheduleCurrentPrice">—</strong>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 120px;gap:10px;">
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Frequency</label>
+          <select id="autoRelistScheduleFrequency" class="input">
+            <option value="daily">Daily</option>
+            <option value="every_3_days">Every 3 days</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom days</option>
+          </select>
+        </div>
+        <div id="autoRelistScheduleCustomDaysWrap" style="display:none;">
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Days</label>
+          <input type="number" id="autoRelistScheduleCustomDays" class="input" min="1" max="365" value="7">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;margin-bottom:6px;color:var(--text);">Decrease each cycle</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn" data-auto-relist-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>
+          <button type="button" class="btn" data-auto-relist-discount="10" style="padding:6px 10px;font-size:12px;">-10%</button>
+          <button type="button" class="btn" data-auto-relist-discount="15" style="padding:6px 10px;font-size:12px;">-15%</button>
+          <button type="button" class="btn" data-auto-relist-discount="20" style="padding:6px 10px;font-size:12px;">-20%</button>
+          <input type="number" id="autoRelistScheduleDiscount" class="input" min="0.01" max="100" step="0.01" value="10" style="width:112px;padding:6px 8px;font-size:12px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;margin-bottom:6px;color:var(--text);">Floor price</label>
+        <input type="number" id="autoRelistScheduleFloorPrice" class="input" min="0" step="0.01" placeholder="0.00">
+      </div>
+
+      <div id="autoRelistSchedulePreview" style="font-size:13px;color:var(--sub);padding:10px 12px;border:1px solid var(--border);border-radius:8px;">
+        Next relist price preview will appear here.
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="autoRelistScheduleForm" class="btn submitbtn" id="autoRelistScheduleSubmit">
+        <i class="fas fa-clock"></i> Schedule
+      </button>
+      <button type="button" class="btn" id="autoRelistScheduleStop" style="display:none;color:#fca5a5;border-color:rgba(239,68,68,0.4);">
+        Stop Schedule
+      </button>
+      <button type="button" class="btn" data-modal-close="autoRelistSchedule">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bulk Update & Relist Modal -->
 <div id="bulkRelistModal" class="modal" hidden>
   <div class="modal__backdrop" data-modal-close="bulkRelist"></div>
@@ -771,6 +839,72 @@
         <i class="fas fa-sync"></i> Queue Bulk Relist
       </button>
       <button type="button" class="btn" data-modal-close="bulkRelist">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Schedule Auto Relist Modal -->
+<div id="bulkAutoRelistModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="bulkAutoRelist"></div>
+  <div class="modal__dialog modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="bulkAutoRelistTitle">
+    <div class="modal__header">
+      <h3 id="bulkAutoRelistTitle"><i class="fas fa-clock" style="color:#f97316;"></i> Bulk Schedule Auto Relist</h3>
+      <button class="modal__close" type="button" data-modal-close="bulkAutoRelist" aria-label="Close">×</button>
+    </div>
+    <form id="bulkAutoRelistForm" class="modal__body">
+      <div style="background:rgba(249,115,22,0.1);border:1px solid rgba(249,115,22,0.3);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--sub);line-height:1.5;">
+          Scheduling <strong id="bulkAutoRelistCount" style="color:#f97316;">0</strong> selected item(s).
+          Existing active schedules for these items will be updated.
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 120px 1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Frequency</label>
+          <select id="bulkAutoRelistFrequency" class="input">
+            <option value="daily">Daily</option>
+            <option value="every_3_days">Every 3 days</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom days</option>
+          </select>
+        </div>
+        <div id="bulkAutoRelistCustomDaysWrap" style="display:none;">
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Days</label>
+          <input type="number" id="bulkAutoRelistCustomDays" class="input" min="1" max="365" value="7">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Decrease</label>
+          <input type="number" id="bulkAutoRelistDiscount" class="input" min="0.01" max="100" step="0.01" value="10">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Floor %</label>
+          <input type="number" id="bulkAutoRelistFloorPercent" class="input" min="0.01" max="100" step="0.01" value="60">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" class="btn" data-bulk-auto-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>
+        <button type="button" class="btn" data-bulk-auto-discount="10" style="padding:6px 10px;font-size:12px;">-10%</button>
+        <button type="button" class="btn" data-bulk-auto-discount="15" style="padding:6px 10px;font-size:12px;">-15%</button>
+        <button type="button" class="btn" data-bulk-auto-discount="20" style="padding:6px 10px;font-size:12px;">-20%</button>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);">
+          <strong style="font-size:14px;">Review items</strong>
+          <span id="bulkAutoRelistValidation" style="font-size:12px;color:var(--sub);"></span>
+        </div>
+        <div id="bulkAutoRelistItemsList" style="max-height:320px;overflow:auto;"></div>
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="bulkAutoRelistForm" class="btn submitbtn" id="bulkAutoRelistSubmit">
+        <i class="fas fa-clock"></i> Schedule Items
+      </button>
+      <button type="button" class="btn" data-modal-close="bulkAutoRelist">Cancel</button>
     </div>
   </div>
 </div>
@@ -945,7 +1079,7 @@
   </div>
 </div>
 
-<script src="{{ url_for('static', filename='dashboard.js') }}?v=bulk-relist-1"></script>
+<script src="{{ url_for('static', filename='dashboard.js') }}?v=auto-relist-inline-1"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
@@ -2422,7 +2556,9 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     closeAllMenus();
     closeRelistModal();
+    window.closeAutoRelistScheduleModal?.();
     window.closeBulkRelistModal?.();
+    window.closeBulkAutoRelistModal?.();
     closeCostHistoryModal();
   }
 });

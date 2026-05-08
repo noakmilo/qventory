@@ -107,6 +107,7 @@ normalized AS (
         i.inactive_by_user,
         i.web_url,
         i.ebay_url,
+        i.ebay_offer_id,
         i.amazon_url,
         i.mercari_url,
         i.vinted_url,
@@ -138,7 +139,12 @@ SELECT
     ls.marketplace_url,
     ls.status AS listing_status,
     ls.listed_at,
-    ls.ended_at
+    ls.ended_at,
+    ar.id AS auto_relist_rule_id,
+    ar.frequency AS auto_relist_frequency,
+    ar.price_decrease_amount AS auto_relist_discount,
+    ar.min_price AS auto_relist_min_price,
+    ar.next_run_at AS auto_relist_next_run_at
 FROM normalized AS n
 LEFT JOIN LATERAL (
     SELECT l.marketplace,
@@ -152,6 +158,24 @@ LEFT JOIN LATERAL (
     ORDER BY l.listed_at DESC NULLS LAST, l.created_at DESC NULLS LAST
     LIMIT 1
 ) AS ls ON TRUE
+LEFT JOIN LATERAL (
+    SELECT r.id,
+           r.frequency,
+           r.price_decrease_amount,
+           r.min_price,
+           r.next_run_at
+    FROM auto_relist_rules AS r
+    WHERE r.user_id = n.user_id
+      AND r.enabled IS TRUE
+      AND r.mode = 'auto'
+      AND (
+        r.listing_id = n.ebay_listing_id
+        OR r.offer_id = n.ebay_listing_id
+        OR r.offer_id = n.ebay_offer_id
+      )
+    ORDER BY r.updated_at DESC NULLS LAST, r.created_at DESC NULLS LAST
+    LIMIT 1
+) AS ar ON TRUE
 ORDER BY {order_by}
 LIMIT :limit OFFSET :offset;
 """

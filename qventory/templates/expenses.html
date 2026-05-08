@@ -24,9 +24,14 @@
       </p>
     </div>
 
-    <button class="btn btn-primary" onclick="openAddExpenseModal()">
-      <i class="fas fa-plus"></i> Add Expense
-    </button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" onclick="openRecurringExpensesModal()" style="border-color:rgba(249,115,22,0.35);color:#f97316">
+        <i class="fas fa-sync-alt"></i> Manage Recurrent Expenses
+      </button>
+      <button class="btn btn-primary" onclick="openAddExpenseModal()">
+        <i class="fas fa-plus"></i> Add Expense
+      </button>
+    </div>
   </div>
 
   <!-- Summary Cards -->
@@ -150,6 +155,55 @@
     </table>
   </div>
 
+</div>
+
+<!-- Manage Recurrent Expenses Modal -->
+<div id="recurringExpensesModal" class="modal" hidden>
+  <div class="modal__backdrop" onclick="closeRecurringExpensesModal()"></div>
+  <div class="modal__dialog" style="max-width:820px">
+    <div class="modal__header">
+      <h3><i class="fas fa-sync-alt" style="color:#f97316"></i> Manage Recurrent Expenses</h3>
+      <button class="modal__close" onclick="closeRecurringExpensesModal()">×</button>
+    </div>
+    <div class="modal__body">
+      <div id="recurringExpensesList" style="display:grid;gap:10px">
+        {% if recurring_expenses %}
+          {% for expense in recurring_expenses %}
+          <div class="recurring-expense-row" data-recurring-expense-id="{{ expense.id }}" style="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div style="min-width:0">
+              <div style="font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ expense.description }}</div>
+              <div style="font-size:12px;color:var(--sub);margin-top:4px">
+                ${{ "%.2f"|format(expense.amount) }} · {{ expense.category or 'Other' }} · {{ expense.recurring_frequency|capitalize if expense.recurring_frequency else 'Recurring' }}
+                {% if expense.recurring_until %} · until {{ expense.recurring_until.strftime('%Y-%m-%d') }}{% endif %}
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+              <button type="button" class="btn btn-sm" onclick="editExpense({{ expense.id }})" style="padding:5px 9px">
+                <i class="fas fa-edit"></i> Edit
+              </button>
+              <button type="button" class="btn btn-sm" onclick="stopRecurringExpense({{ expense.id }})" style="padding:5px 9px;color:#fca5a5;border-color:rgba(239,68,68,0.4)">
+                <i class="fas fa-stop-circle"></i> Stop
+              </button>
+              <button type="button" class="btn btn-sm btn-danger" onclick="deleteExpense({{ expense.id }})" style="padding:5px 9px">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div style="text-align:center;color:var(--sub);padding:28px;border:1px dashed var(--border);border-radius:8px">
+            No recurrent expenses configured.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="modal__footer">
+      <button type="button" class="btn" onclick="closeRecurringExpensesModal()">Close</button>
+      <button type="button" class="btn btn-primary" onclick="closeRecurringExpensesModal(); openAddExpenseModal(); document.getElementById('is_recurring').checked = true; toggleRecurring();">
+        <i class="fas fa-plus"></i> Add Recurrent Expense
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- Add/Edit Expense Modal -->
@@ -300,6 +354,14 @@ function openBudgetModal() {
 
 function closeBudgetModal() {
   document.getElementById('budgetModal').hidden = true;
+}
+
+function openRecurringExpensesModal() {
+  document.getElementById('recurringExpensesModal').hidden = false;
+}
+
+function closeRecurringExpensesModal() {
+  document.getElementById('recurringExpensesModal').hidden = true;
 }
 
 async function saveBudget(e) {
@@ -490,8 +552,60 @@ async function saveExpense(e) {
 }
 
 async function editExpense(expenseId) {
-  // TODO: Load expense data and populate form
-  alert('Edit functionality - coming soon');
+  try {
+    const response = await fetch(`/api/expenses/${expenseId}`);
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || 'Failed to load expense');
+    }
+
+    const expense = result.expense;
+    closeRecurringExpensesModal();
+    document.getElementById('modalTitle').textContent = 'Edit Expense';
+    document.getElementById('expenseForm').reset();
+    document.getElementById('expenseId').value = expense.id;
+    document.getElementById('description').value = expense.description || '';
+    document.getElementById('amount').value = expense.amount ?? '';
+    document.getElementById('category').value = expense.category || '';
+    document.getElementById('expense_date').value = expense.expense_date || '';
+    document.getElementById('notes').value = expense.notes || '';
+
+    const hasItem = Boolean(expense.item_id);
+    document.getElementById('link_item').checked = hasItem;
+    document.getElementById('item_id').value = expense.item_id || '';
+    document.getElementById('item_search').value = expense.item_title || '';
+    document.getElementById('itemLinkFields').style.display = hasItem ? 'block' : 'none';
+
+    document.getElementById('is_recurring').checked = Boolean(expense.is_recurring);
+    document.getElementById('recurring_frequency').value = expense.recurring_frequency || 'monthly';
+    document.getElementById('recurring_day').value = expense.recurring_day || '';
+    document.getElementById('recurring_until').value = expense.recurring_until || '';
+    toggleRecurring();
+    hideExpenseItemAutocomplete();
+    document.getElementById('expenseModal').hidden = false;
+  } catch (err) {
+    alert('Error loading expense: ' + err.message);
+  }
+}
+
+async function stopRecurringExpense(expenseId) {
+  if (!confirm('Stop this recurrent expense? Future automatic entries will no longer be created.')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/expenses/${expenseId}/stop-recurring`, {
+      method: 'POST'
+    });
+    const result = await response.json();
+    if (result.ok) {
+      window.location.reload();
+    } else {
+      alert('Error: ' + result.error);
+    }
+  } catch (err) {
+    alert('Error stopping recurrent expense: ' + err.message);
+  }
 }
 
 async function deleteExpense(expenseId) {

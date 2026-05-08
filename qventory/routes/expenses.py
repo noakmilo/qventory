@@ -71,6 +71,10 @@ def expenses_page():
     ).all()
 
     this_month_total = sum(e.amount for e in this_month_expenses)
+    recurring_expenses = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.is_recurring == True
+    ).order_by(Expense.description.asc()).all()
 
     return render_template("expenses.html",
                          expenses=expenses,
@@ -79,7 +83,8 @@ def expenses_page():
                          total_amount=total_amount,
                          range_param=range_param,
                          monthly_budget=monthly_budget,
-                         this_month_total=float(this_month_total))
+                         this_month_total=float(this_month_total),
+                         recurring_expenses=recurring_expenses)
 
 
 @expenses_bp.route("/api/expenses", methods=["POST"])
@@ -147,6 +152,54 @@ def create_expense():
                 "item_id": expense.item_id
             }
         })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@expenses_bp.route("/api/expenses/recurring", methods=["GET"])
+@login_required
+def list_recurring_expenses():
+    """List all recurring expense rules for the current user"""
+    recurring_expenses = Expense.query.filter(
+        Expense.user_id == current_user.id,
+        Expense.is_recurring == True
+    ).order_by(Expense.description.asc()).all()
+
+    return jsonify({
+        "ok": True,
+        "expenses": [_expense_to_dict(expense) for expense in recurring_expenses]
+    })
+
+
+@expenses_bp.route("/api/expenses/<int:expense_id>", methods=["GET"])
+@login_required
+def get_expense(expense_id):
+    """Return a single expense for editing"""
+    expense = Expense.query.filter_by(id=expense_id, user_id=current_user.id).first()
+    if not expense:
+        return jsonify({"ok": False, "error": "Expense not found"}), 404
+    return jsonify({"ok": True, "expense": _expense_to_dict(expense)})
+
+
+@expenses_bp.route("/api/expenses/<int:expense_id>/stop-recurring", methods=["POST"])
+@login_required
+def stop_recurring_expense(expense_id):
+    """Stop a recurring expense rule without deleting the original expense row"""
+    try:
+        expense = Expense.query.filter_by(id=expense_id, user_id=current_user.id).first()
+        if not expense:
+            return jsonify({"ok": False, "error": "Expense not found"}), 404
+
+        expense.is_recurring = False
+        expense.recurring_frequency = None
+        expense.recurring_day = None
+        expense.recurring_until = None
+        expense.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({"ok": True, "message": "Recurring expense stopped"})
 
     except Exception as e:
         db.session.rollback()
@@ -227,6 +280,23 @@ def update_expense(expense_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"ok": False, "error": str(e)}), 400
+
+
+def _expense_to_dict(expense):
+    return {
+        "id": expense.id,
+        "description": expense.description,
+        "amount": float(expense.amount or 0),
+        "category": expense.category,
+        "expense_date": expense.expense_date.isoformat() if expense.expense_date else None,
+        "is_recurring": bool(expense.is_recurring),
+        "recurring_frequency": expense.recurring_frequency,
+        "recurring_day": expense.recurring_day,
+        "recurring_until": expense.recurring_until.isoformat() if expense.recurring_until else None,
+        "notes": expense.notes,
+        "item_id": expense.item_id,
+        "item_title": expense.item.title if expense.item else None,
+    }
 
 
 @expenses_bp.route("/api/expenses/<int:expense_id>", methods=["DELETE"])

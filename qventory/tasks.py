@@ -2386,8 +2386,8 @@ def auto_relist_offers(self):
                         type='error',
                         title=f'Auto-relist failed',
                         message=f'{item_title[:50]}: {error_msg}',
-                        link_url='/auto-relist',
-                        link_text='View Details',
+                        link_url='/inventory/active',
+                        link_text='View Inventory',
                         source='relist'
                     )
 
@@ -2443,8 +2443,8 @@ def auto_relist_offers(self):
                         type='success',
                         title=notification_title,
                         message=notification_message,
-                        link_url='/auto-relist',
-                        link_text='View Auto-Relist Dashboard',
+                        link_url='/inventory/active',
+                        link_text='View Inventory',
                         source='relist'
                     )
 
