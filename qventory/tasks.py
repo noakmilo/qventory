@@ -2195,6 +2195,31 @@ def auto_relist_offers(self):
         for rule in all_rules:
             history = None  # Initialize history outside try block
             try:
+                # Atomically claim the rule so overlapping scheduler/manual runs do not relist it twice.
+                processing_stale_before = now - timedelta(hours=2)
+                claimed = AutoRelistRule.query.filter(
+                    AutoRelistRule.id == rule.id,
+                    AutoRelistRule.enabled == True,
+                    or_(
+                        AutoRelistRule.last_run_status.is_(None),
+                        AutoRelistRule.last_run_status != 'processing',
+                        AutoRelistRule.last_run_at.is_(None),
+                        AutoRelistRule.last_run_at < processing_stale_before,
+                    )
+                ).update(
+                    {
+                        AutoRelistRule.last_run_status: 'processing',
+                        AutoRelistRule.last_run_at: datetime.utcnow(),
+                        AutoRelistRule.updated_at: datetime.utcnow(),
+                    },
+                    synchronize_session=False
+                )
+                db.session.commit()
+                if not claimed:
+                    log_task(f"Skipping rule {rule.id}; already claimed by another relist worker")
+                    skipped_count += 1
+                    continue
+
                 # Minimal logging for normal operations
                 log_task(f"Processing rule {rule.id} ({rule.mode})")
 
@@ -3992,7 +4017,48 @@ def poll_user_listings(credential):
             except Exception as e:
                 db.session.rollback()
                 if "uq_items_user_ebay_listing" in str(e):
-                    log_task(f"    Skipping duplicate listing {listing_id} (already exists)")
+                    duplicate_item = Item.query.filter_by(
+                        user_id=user_id,
+                        ebay_listing_id=listing_id
+                    ).first()
+                    if duplicate_item and relist_source and duplicate_item.id != relist_source.id:
+                        duplicate_item.previous_item_id = duplicate_item.previous_item_id or relist_source.id
+                        duplicate_item.item_cost = relist_source.item_cost
+                        duplicate_item.supplier = relist_source.supplier
+                        duplicate_item.A = relist_source.A
+                        duplicate_item.B = relist_source.B
+                        duplicate_item.S = relist_source.S
+                        duplicate_item.C = relist_source.C
+                        duplicate_item.location_code = relist_source.location_code
+                        relist_source.is_active = False
+                        timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                        duplicate_item.notes = (duplicate_item.notes or '') + f"\n[{timestamp}] Relisted from {relist_source.ebay_listing_id or relist_source.id}"
+                        relist_source.notes = (relist_source.notes or '') + f"\n[{timestamp}] Relist transfer to {listing_id} completed"
+                        try:
+                            from qventory.models.auto_relist_rule import AutoRelistRule
+                            relist_rule = AutoRelistRule.query.filter(
+                                AutoRelistRule.user_id == user_id,
+                                AutoRelistRule.mode == 'auto',
+                                AutoRelistRule.enabled == True,
+                                or_(
+                                    AutoRelistRule.listing_id == listing_id,
+                                    AutoRelistRule.offer_id == listing_id,
+                                    AutoRelistRule.listing_id == relist_source.ebay_listing_id,
+                                    AutoRelistRule.offer_id == relist_source.ebay_listing_id,
+                                )
+                            ).order_by(AutoRelistRule.updated_at.desc()).first()
+                            if relist_rule:
+                                relist_rule.listing_id = listing_id
+                                relist_rule.item_title = duplicate_item.title
+                                if duplicate_item.item_price is not None:
+                                    relist_rule.current_price = float(duplicate_item.item_price)
+                                relist_rule.updated_at = datetime.utcnow()
+                        except Exception as schedule_err:
+                            log_task(f"    ⚠ Failed to preserve schedule on duplicate listing: {schedule_err}")
+                        db.session.commit()
+                        log_task(f"    ↻ Reused duplicate listing {listing_id} and completed relist transfer")
+                    else:
+                        log_task(f"    Skipping duplicate listing {listing_id} (already exists)")
                     continue
                 raise
 
