@@ -8,6 +8,16 @@
 {% set is_retired = view_type == 'retired' %}
 {% set show_image_pending = (it.image_pending if it.image_pending is defined else (view_type == 'sold' and not it.item_thumb)) %}
 {% set has_auto_relist_rule = it.auto_relist_rule_id is defined and it.auto_relist_rule_id %}
+{% set auto_relist_frequency_labels = {
+  'daily': 'Daily',
+  'every_3_days': 'Every 3d',
+  'weekly': 'Weekly',
+  'every_10_days': 'Every 10d',
+  'biweekly': 'Every 14d',
+  'every_20_days': 'Every 20d',
+  'monthly': 'Monthly',
+  'custom': 'Custom'
+} %}
 {% set un = current_user.username %}
 <tr data-item-row="{{ it.id }}"
     data-item-title="{{ it.title|e }}"
@@ -58,7 +68,7 @@
     {% endif %}
     {% if has_auto_relist_rule %}
       <i class="fas fa-clock"
-         title="Scheduled auto relist: {{ it.auto_relist_frequency or 'scheduled' }}, -{{ it.auto_relist_discount|round(2) if it.auto_relist_discount is not none else 0 }}%, floor ${{ '%.2f'|format(it.auto_relist_min_price) if it.auto_relist_min_price is not none else '0.00' }}"
+         title="Scheduled Ruto Relist: {{ auto_relist_frequency_labels.get(it.auto_relist_frequency, it.auto_relist_frequency or 'Scheduled') }}, -{{ it.auto_relist_discount|round(1) if it.auto_relist_discount is not none else 0 }}%, floor ${{ '%.2f'|format(it.auto_relist_min_price) if it.auto_relist_min_price is not none else '0.00' }}{% if it.auto_relist_next_run_at %}, Next relist:{{ it.auto_relist_next_run_at.strftime('%m/%d/%Y') }}{% endif %}"
          style="margin-left:6px;color:#f97316;font-size:12px;vertical-align:middle;"></i>
     {% endif %}
   </td>
