@@ -789,7 +789,30 @@ def _enforce_free_plan_limit(user_id: int, plan: str = 'free') -> int:
     return len(items_to_deactivate)
 
 
+def _has_god_entitlement(user: User, subscription: Subscription | None = None) -> bool:
+    """God users are manual entitlements and must not depend on Stripe status."""
+    if user and user.role == "god":
+        return True
+    return bool(subscription and subscription.plan == "god")
+
+
 def _downgrade_to_free_and_enforce(user: User, subscription: Subscription, now: datetime) -> int:
+    if _has_god_entitlement(user, subscription):
+        user.role = "god"
+        subscription.plan = "god"
+        subscription.status = "active"
+        subscription.on_trial = False
+        subscription.trial_ends_at = None
+        subscription.cancelled_at = None
+        subscription.ended_at = None
+        subscription.current_period_end = None
+        subscription.updated_at = now
+        current_app.logger.warning(
+            "Skipped Stripe downgrade for god user %s; manual entitlement preserved.",
+            user.id,
+        )
+        return 0
+
     subscription.plan = "free"
     subscription.status = "cancelled"
     subscription.on_trial = False

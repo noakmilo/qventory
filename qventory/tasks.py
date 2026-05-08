@@ -6265,7 +6265,7 @@ def backfill_failed_payments(self):
         from datetime import datetime
         from qventory.models.subscription import Subscription
         from qventory.helpers.email_sender import send_payment_failed_email
-        from qventory.routes.main import _downgrade_to_free_and_enforce
+        from qventory.routes.main import _downgrade_to_free_and_enforce, _has_god_entitlement
 
         stripe_secret = os.environ.get("STRIPE_SECRET_KEY")
         if not stripe_secret:
@@ -6293,6 +6293,9 @@ def backfill_failed_payments(self):
                     trial_over = datetime.utcfromtimestamp(trial_end) <= now
 
                 if status not in {"past_due", "unpaid"} or not trial_over:
+                    continue
+
+                if _has_god_entitlement(subscription.user, subscription):
                     continue
 
                 if subscription.plan == "free":
