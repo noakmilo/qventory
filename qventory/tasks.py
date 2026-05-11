@@ -2339,6 +2339,11 @@ def auto_relist_offers(self):
                             skip_reason = 'At floor price'
                         log_task(f"⊘ Price update skipped: {skip_reason}")
                         rule.mark_skipped(skip_reason)
+                        if skip_reason == 'At floor price':
+                            rule.enabled = False
+                            rule.next_run_at = None
+                            rule.last_run_status = 'stopped_floor'
+                            rule.last_error_message = 'Rule stopped: floor price reached'
                         history.status = 'skipped'
                         history.skip_reason = skip_reason
                         history.mark_completed()
@@ -2350,6 +2355,10 @@ def auto_relist_offers(self):
                         skip_reason = 'At floor price'
                         log_task(f"⊘ Price update skipped: {skip_reason}")
                         rule.mark_skipped(skip_reason)
+                        rule.enabled = False
+                        rule.next_run_at = None
+                        rule.last_run_status = 'stopped_floor'
+                        rule.last_error_message = 'Rule stopped: floor price reached'
                         history.status = 'skipped'
                         history.skip_reason = skip_reason
                         history.mark_completed()

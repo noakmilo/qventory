@@ -715,6 +715,40 @@ function updatePriceUpdatePreview() {
   preview.innerHTML = `Next price update: <strong style="color:#eab308;">${formatMoneyValue(nextPrice)}</strong> (floor ${formatMoneyValue(floor)})`;
 }
 
+function applyPriceUpdateDiscountToNowPrice() {
+  const current = priceUpdateState.currentPrice;
+  const discount = parseMoneyValue(document.getElementById('priceUpdateDiscount')?.value);
+  const floor = parseMoneyValue(document.getElementById('priceUpdateFloorPrice')?.value);
+  const nowPriceEl = document.getElementById('priceUpdateNowPrice');
+  if (!nowPriceEl || !Number.isFinite(current) || !Number.isFinite(discount)) return;
+  const nextPrice = calculateDiscountedFloorPrice(current, discount, floor);
+  if (Number.isFinite(nextPrice)) {
+    nowPriceEl.value = nextPrice.toFixed(2);
+  }
+}
+
+function updatePriceScheduleWarning({ hasPriceRule = false, hasAutoRule = false } = {}) {
+  const warningEl = document.getElementById('priceUpdateConflictWarning');
+  if (!warningEl) return;
+
+  const messages = [];
+  if (hasPriceRule) {
+    messages.push('This item already has an active Update Price schedule. Saving will update that schedule.');
+  }
+  if (hasAutoRule) {
+    messages.push('This item has an active Update & Relist schedule. Saving a price update schedule will stop and overwrite that schedule.');
+  }
+
+  if (!messages.length) {
+    warningEl.style.display = 'none';
+    warningEl.innerHTML = '';
+    return;
+  }
+
+  warningEl.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#eab308;"></i> ${messages.join(' ')}`;
+  warningEl.style.display = 'block';
+}
+
 async function openPriceUpdateModal(itemId, fallback = {}) {
   const modal = document.getElementById('priceUpdateModal');
   if (!modal) return;
@@ -730,7 +764,6 @@ async function openPriceUpdateModal(itemId, fallback = {}) {
   const runFirstEl = document.getElementById('priceUpdateRunFirstImmediately');
   const stopBtn = document.getElementById('priceUpdateScheduleStop');
   const submitBtn = document.getElementById('priceUpdateScheduleSubmit');
-  const warningEl = document.getElementById('priceUpdateConflictWarning');
 
   itemInput.value = itemId;
   titleEl.textContent = fallback.title || `Item ${itemId}`;
@@ -746,7 +779,7 @@ async function openPriceUpdateModal(itemId, fallback = {}) {
   if (runFirstEl) runFirstEl.checked = false;
   stopBtn.style.display = 'none';
   submitBtn.innerHTML = '<i class="fas fa-clock"></i> Schedule';
-  if (warningEl) warningEl.style.display = 'none';
+  updatePriceScheduleWarning();
   toggleCustomDays(frequencyEl, document.getElementById('priceUpdateCustomDaysWrap'));
 
   modal.hidden = false;
@@ -765,8 +798,6 @@ async function openPriceUpdateModal(itemId, fallback = {}) {
     titleEl.textContent = item.title || titleEl.textContent;
     priceEl.textContent = formatMoneyValue(priceUpdateState.currentPrice);
     if (nowPriceEl) nowPriceEl.value = Number.isFinite(priceUpdateState.currentPrice) ? priceUpdateState.currentPrice.toFixed(2) : '';
-    if (data.conflicting_auto_relist_rule && warningEl) warningEl.style.display = 'block';
-
     if (rule) {
       priceUpdateState.hasRule = true;
       frequencyEl.value = rule.frequency || 'weekly';
@@ -779,7 +810,12 @@ async function openPriceUpdateModal(itemId, fallback = {}) {
     } else if (Number.isFinite(priceUpdateState.currentPrice)) {
       floorEl.value = (priceUpdateState.currentPrice * 0.6).toFixed(2);
     }
+    updatePriceScheduleWarning({
+      hasPriceRule: Boolean(rule),
+      hasAutoRule: Boolean(data.conflicting_auto_relist_rule)
+    });
     toggleCustomDays(frequencyEl, document.getElementById('priceUpdateCustomDaysWrap'));
+    applyPriceUpdateDiscountToNowPrice();
     updatePriceUpdatePreview();
   } catch (error) {
     alert(error.message || 'Failed to load price update');
@@ -820,6 +856,7 @@ document.addEventListener('click', (event) => {
   if (discountBtn) {
     const discountEl = document.getElementById('priceUpdateDiscount');
     if (discountEl) discountEl.value = discountBtn.dataset.priceUpdateDiscount;
+    applyPriceUpdateDiscountToNowPrice();
     updatePriceUpdatePreview();
   }
 });
@@ -827,8 +864,14 @@ document.addEventListener('click', (event) => {
 document.getElementById('priceUpdateFrequency')?.addEventListener('change', (event) => {
   toggleCustomDays(event.target, document.getElementById('priceUpdateCustomDaysWrap'));
 });
-document.getElementById('priceUpdateDiscount')?.addEventListener('input', updatePriceUpdatePreview);
-document.getElementById('priceUpdateFloorPrice')?.addEventListener('input', updatePriceUpdatePreview);
+document.getElementById('priceUpdateDiscount')?.addEventListener('input', () => {
+  applyPriceUpdateDiscountToNowPrice();
+  updatePriceUpdatePreview();
+});
+document.getElementById('priceUpdateFloorPrice')?.addEventListener('input', () => {
+  applyPriceUpdateDiscountToNowPrice();
+  updatePriceUpdatePreview();
+});
 
 document.getElementById('priceUpdateNowSubmit')?.addEventListener('click', async () => {
   const itemId = document.getElementById('priceUpdateItemId')?.value;
@@ -924,6 +967,8 @@ function getBulkAutoRelistItemData(itemIds) {
       id,
       title: row?.dataset.itemTitle || titleCell?.textContent?.trim() || `Item ${id}`,
       price,
+      hasAutoRelistRule: Boolean(row?.dataset.autoRelistRuleId),
+      hasPriceUpdateRule: Boolean(row?.dataset.priceUpdateRuleId),
       floorOverride: ''
     };
   });
@@ -1101,6 +1146,8 @@ function getBulkPriceUpdateItemData(itemIds) {
       id,
       title: row?.dataset.itemTitle || titleCell?.textContent?.trim() || `Item ${id}`,
       price,
+      hasAutoRelistRule: Boolean(row?.dataset.autoRelistRuleId),
+      hasPriceUpdateRule: Boolean(row?.dataset.priceUpdateRuleId),
       floorOverride: ''
     };
   });
@@ -1111,6 +1158,8 @@ function updateBulkPriceUpdateState() {
   const validationEl = document.getElementById('bulkPriceUpdateValidation');
   const submitBtn = document.getElementById('bulkPriceUpdateSubmit');
   const missingPrice = bulkPriceUpdateItems.filter(item => !Number.isFinite(item.price)).length;
+  const existingPriceRules = bulkPriceUpdateItems.filter(item => item.hasPriceUpdateRule).length;
+  const conflictingAutoRules = bulkPriceUpdateItems.filter(item => item.hasAutoRelistRule).length;
 
   if (countEl) countEl.textContent = bulkPriceUpdateItems.length;
   if (validationEl) {
@@ -1120,6 +1169,12 @@ function updateBulkPriceUpdateState() {
     } else if (missingPrice > 0) {
       validationEl.textContent = `${missingPrice} item(s) need a current price.`;
       validationEl.style.color = '#fca5a5';
+    } else if (existingPriceRules || conflictingAutoRules) {
+      const parts = [];
+      if (existingPriceRules) parts.push(`${existingPriceRules} existing price schedule(s) will be updated`);
+      if (conflictingAutoRules) parts.push(`${conflictingAutoRules} relist schedule(s) will be stopped`);
+      validationEl.textContent = parts.join('; ') + '.';
+      validationEl.style.color = '#eab308';
     } else {
       validationEl.textContent = `${bulkPriceUpdateItems.length} item(s) ready.`;
       validationEl.style.color = 'var(--sub)';
@@ -1139,6 +1194,10 @@ function renderBulkPriceUpdateItems() {
     const defaultFloor = Number.isFinite(item.price) ? item.price * (floorPercent / 100) : null;
     const floor = item.floorOverride !== '' ? parseMoneyValue(item.floorOverride) : defaultFloor;
     const nextPrice = calculateDiscountedFloorPrice(item.price, discountPercent, floor);
+    const scheduleNotes = [
+      item.hasPriceUpdateRule ? 'Existing price schedule will be updated' : '',
+      item.hasAutoRelistRule ? 'Update & Relist schedule will be stopped' : ''
+    ].filter(Boolean).join(' · ');
     return `
       <div data-bulk-price-item="${item.id}" style="display:grid;grid-template-columns:1fr 130px auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
         <div style="min-width:0;">
@@ -1147,6 +1206,7 @@ function renderBulkPriceUpdateItems() {
             ${formatMoneyValue(item.price)} → <strong style="color:#eab308;">${formatMoneyValue(nextPrice)}</strong>
             · Floor ${formatMoneyValue(floor)}
           </div>
+          ${scheduleNotes ? `<div style="font-size:11px;color:#eab308;margin-top:3px;">${escapeHtml(scheduleNotes)}</div>` : ''}
         </div>
         <input class="input" type="number" data-bulk-price-floor="${item.id}" step="0.01" min="0" placeholder="Floor override" value="${escapeHtml(item.floorOverride)}" style="padding:6px 8px;font-size:12px;">
         <button type="button" class="btn" data-bulk-price-remove="${item.id}" style="padding:6px 9px;font-size:12px;">
