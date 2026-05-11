@@ -176,6 +176,7 @@
             <option value="bulk_update">Batch Update Fields</option>
             <option value="bulk_relist">Update &amp; Relist Selected</option>
             <option value="bulk_schedule_auto_relist">Schedule Auto Relist</option>
+            <option value="bulk_schedule_price_update">Schedule Price Update</option>
             <option value="deactivate_by_user">Deactivate (Hide from Active)</option>
             <option value="retire_items">Move to Retirements (Copy)</option>
             {% elif view_type == 'inactive_user' %}
@@ -800,6 +801,95 @@
   </div>
 </div>
 
+<!-- Update Price Modal -->
+<div id="priceUpdateModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="priceUpdate"></div>
+  <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="priceUpdateTitle" style="max-width:640px;">
+    <div class="modal__header">
+      <h3 id="priceUpdateTitle"><i class="fas fa-tag" style="color:#eab308;"></i> Update Price</h3>
+      <button class="modal__close" type="button" data-modal-close="priceUpdate" aria-label="Close">×</button>
+    </div>
+    <form id="priceUpdateForm" class="modal__body" style="display:grid;gap:14px;">
+      <input type="hidden" id="priceUpdateItemId">
+      <div style="border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div id="priceUpdateItemTitle" style="font-weight:600;color:var(--text);"></div>
+        <div style="font-size:12px;color:var(--sub);margin-top:4px;">
+          Current price: <strong id="priceUpdateCurrentPrice">—</strong>
+        </div>
+      </div>
+
+      <div id="priceUpdateConflictWarning" style="display:none;background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:10px 12px;font-size:13px;color:var(--text);line-height:1.45;">
+        <i class="fas fa-exclamation-triangle" style="color:#eab308;"></i>
+        This item has an active Update &amp; Relist schedule. Saving a price update schedule will stop and overwrite that schedule.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end;">
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">New price now</label>
+          <input type="number" id="priceUpdateNowPrice" class="input" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <button type="button" class="btn submitbtn" id="priceUpdateNowSubmit">
+          <i class="fas fa-tag"></i> Update Now
+        </button>
+      </div>
+
+      <div style="height:1px;background:var(--border);"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 120px;gap:10px;">
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Schedule frequency</label>
+          <select id="priceUpdateFrequency" class="input">
+            <option value="daily">Daily</option>
+            <option value="every_3_days">Every 3 days</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom days</option>
+          </select>
+        </div>
+        <div id="priceUpdateCustomDaysWrap" style="display:none;">
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Days</label>
+          <input type="number" id="priceUpdateCustomDays" class="input" min="1" max="365" value="7">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;margin-bottom:6px;color:var(--text);">Decrease each cycle</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button type="button" class="btn" data-price-update-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>
+          <button type="button" class="btn" data-price-update-discount="10" style="padding:6px 10px;font-size:12px;">-10%</button>
+          <button type="button" class="btn" data-price-update-discount="15" style="padding:6px 10px;font-size:12px;">-15%</button>
+          <button type="button" class="btn" data-price-update-discount="20" style="padding:6px 10px;font-size:12px;">-20%</button>
+          <input type="number" id="priceUpdateDiscount" class="input" min="0.01" max="100" step="0.01" value="10" style="width:112px;padding:6px 8px;font-size:12px;">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;margin-bottom:6px;color:var(--text);">Floor price</label>
+        <input type="number" id="priceUpdateFloorPrice" class="input" min="0" step="0.01" placeholder="0.00">
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <input type="checkbox" id="priceUpdateRunFirstImmediately">
+        <span style="font-size:14px;color:var(--text);">Run first price update immediately</span>
+      </label>
+
+      <div id="priceUpdatePreview" style="font-size:13px;color:var(--sub);padding:10px 12px;border:1px solid var(--border);border-radius:8px;">
+        Next price update preview will appear here.
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="priceUpdateForm" class="btn submitbtn" id="priceUpdateScheduleSubmit">
+        <i class="fas fa-clock"></i> Schedule
+      </button>
+      <button type="button" class="btn" id="priceUpdateScheduleStop" style="display:none;color:#fca5a5;border-color:rgba(239,68,68,0.4);">
+        Stop Schedule
+      </button>
+      <button type="button" class="btn" data-modal-close="priceUpdate">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bulk Update & Relist Modal -->
 <div id="bulkRelistModal" class="modal" hidden>
   <div class="modal__backdrop" data-modal-close="bulkRelist"></div>
@@ -915,6 +1005,77 @@
         <i class="fas fa-clock"></i> Schedule Items
       </button>
       <button type="button" class="btn" data-modal-close="bulkAutoRelist">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Schedule Price Update Modal -->
+<div id="bulkPriceUpdateModal" class="modal" hidden>
+  <div class="modal__backdrop" data-modal-close="bulkPriceUpdate"></div>
+  <div class="modal__dialog modal__dialog--wide" role="dialog" aria-modal="true" aria-labelledby="bulkPriceUpdateTitle">
+    <div class="modal__header">
+      <h3 id="bulkPriceUpdateTitle"><i class="fas fa-clock" style="color:#eab308;"></i> Bulk Schedule Price Update</h3>
+      <button class="modal__close" type="button" data-modal-close="bulkPriceUpdate" aria-label="Close">×</button>
+    </div>
+    <form id="bulkPriceUpdateForm" class="modal__body">
+      <div style="background:rgba(234,179,8,0.12);border:1px solid rgba(234,179,8,0.35);border-radius:8px;padding:12px;margin-bottom:16px;">
+        <div style="font-size:13px;color:var(--sub);line-height:1.5;">
+          Scheduling price updates for <strong id="bulkPriceUpdateCount" style="color:#eab308;">0</strong> selected item(s).
+          Any active Update &amp; Relist schedule on these items will be stopped and overwritten.
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 120px 1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Frequency</label>
+          <select id="bulkPriceUpdateFrequency" class="input">
+            <option value="daily">Daily</option>
+            <option value="every_3_days">Every 3 days</option>
+            <option value="weekly" selected>Weekly</option>
+            <option value="biweekly">Biweekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="custom">Custom days</option>
+          </select>
+        </div>
+        <div id="bulkPriceUpdateCustomDaysWrap" style="display:none;">
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Days</label>
+          <input type="number" id="bulkPriceUpdateCustomDays" class="input" min="1" max="365" value="7">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Decrease</label>
+          <input type="number" id="bulkPriceUpdateDiscount" class="input" min="0.01" max="100" step="0.01" value="10">
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:6px;color:var(--text);">Floor %</label>
+          <input type="number" id="bulkPriceUpdateFloorPercent" class="input" min="0.01" max="100" step="0.01" value="60">
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;">
+        <input type="checkbox" id="bulkPriceUpdateRunFirstImmediately">
+        <span style="font-size:14px;color:var(--text);">Run first price update immediately for all scheduled items</span>
+      </label>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button type="button" class="btn" data-bulk-price-discount="5" style="padding:6px 10px;font-size:12px;">-5%</button>
+        <button type="button" class="btn" data-bulk-price-discount="10" style="padding:6px 10px;font-size:12px;">-10%</button>
+        <button type="button" class="btn" data-bulk-price-discount="15" style="padding:6px 10px;font-size:12px;">-15%</button>
+        <button type="button" class="btn" data-bulk-price-discount="20" style="padding:6px 10px;font-size:12px;">-20%</button>
+      </div>
+
+      <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border);">
+          <strong style="font-size:14px;">Review items</strong>
+          <span id="bulkPriceUpdateValidation" style="font-size:12px;color:var(--sub);"></span>
+        </div>
+        <div id="bulkPriceUpdateItemsList" style="max-height:320px;overflow:auto;"></div>
+      </div>
+    </form>
+    <div class="modal__footer">
+      <button type="submit" form="bulkPriceUpdateForm" class="btn submitbtn" id="bulkPriceUpdateSubmit">
+        <i class="fas fa-clock"></i> Schedule Price Updates
+      </button>
+      <button type="button" class="btn" data-modal-close="bulkPriceUpdate">Cancel</button>
     </div>
   </div>
 </div>

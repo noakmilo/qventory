@@ -5,6 +5,7 @@ Manages automatic and manual end/relist cycles for eBay offers
 Two modes:
 1. AUTO: Scheduled relist every N days (no changes to listing)
 2. MANUAL: User-triggered relist with optional price/title/description changes
+3. PRICE_UPDATE: Scheduled price-only updates without ending/relisting
 """
 from datetime import datetime, timedelta
 from ..extensions import db
@@ -31,10 +32,11 @@ class AutoRelistRule(db.Model):
     current_price = db.Column(db.Float)
     listing_id = db.Column(db.String(100))  # Current active listing ID
 
-    # MODE: 'auto' or 'manual'
+    # MODE: 'auto', 'manual', or 'price_update'
     mode = db.Column(db.String(20), nullable=False, default='auto', index=True)
     # 'auto' = scheduled automatic relist (no changes)
     # 'manual' = one-time relist triggered by user (can include changes)
+    # 'price_update' = scheduled price-only updates on the current listing
 
     # ========== AUTO MODE SETTINGS ==========
 
@@ -305,16 +307,16 @@ class AutoRelistRule(db.Model):
         self.error_count += 1
         self.consecutive_errors += 1
 
-        # Auto-disable if too many consecutive errors (auto mode only)
-        if self.mode == 'auto' and self.pause_on_error and self.consecutive_errors >= self.max_consecutive_errors:
+        # Auto-disable if too many consecutive errors (scheduled modes only)
+        if self.mode in ('auto', 'price_update') and self.pause_on_error and self.consecutive_errors >= self.max_consecutive_errors:
             self.enabled = False
 
         # Clear manual trigger on error
         if self.mode == 'manual':
             self.manual_trigger_requested = False
 
-        # Calculate next run (auto mode only)
-        if self.mode == 'auto':
+        # Calculate next run (scheduled modes only)
+        if self.mode in ('auto', 'price_update'):
             self.calculate_next_run()
 
     def mark_skipped(self, reason):
@@ -334,8 +336,8 @@ class AutoRelistRule(db.Model):
         if self.mode == 'manual':
             self.manual_trigger_requested = False
 
-        # Calculate next run (auto mode only)
-        if self.mode == 'auto':
+        # Calculate next run (scheduled modes only)
+        if self.mode in ('auto', 'price_update'):
             self.calculate_next_run()
 
     @property
@@ -369,13 +371,13 @@ class AutoRelistRule(db.Model):
 
     def calculate_new_price(self):
         """
-        Calculate new price with decrease applied (auto mode only)
+        Calculate new price with decrease applied (scheduled modes only)
 
         Returns:
             float: New price after decrease, respecting min_price
             None: If price decrease not enabled or current_price not set
         """
-        if self.mode != 'auto' or not self.enable_price_decrease:
+        if self.mode not in ('auto', 'price_update') or not self.enable_price_decrease:
             return None
 
         if not self.current_price or not self.price_decrease_amount:

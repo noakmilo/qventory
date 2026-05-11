@@ -105,6 +105,12 @@ if (bulkActionApply) {
         return;
       }
       openBulkAutoRelistModal(itemIds);
+    } else if (action === 'bulk_schedule_price_update') {
+      if (itemIds.length < 2) {
+        alert('Select 2 or more items for bulk price update');
+        return;
+      }
+      openBulkPriceUpdateModal(itemIds);
     } else if (action === 'retire_items') {
       if (!confirm(`Copy ${itemIds.length} item(s) to Retirements?`)) {
         return;
@@ -678,6 +684,230 @@ document.getElementById('autoRelistScheduleStop')?.addEventListener('click', asy
   }
 });
 
+// ==================== SCHEDULED PRICE UPDATE ====================
+
+let priceUpdateState = {
+  itemId: null,
+  currentPrice: null,
+  hasRule: false
+};
+let bulkPriceUpdateItems = [];
+
+function closePriceUpdateModal() {
+  const modal = document.getElementById('priceUpdateModal');
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+function updatePriceUpdatePreview() {
+  const discount = parseMoneyValue(document.getElementById('priceUpdateDiscount')?.value);
+  const floor = parseMoneyValue(document.getElementById('priceUpdateFloorPrice')?.value);
+  const preview = document.getElementById('priceUpdatePreview');
+  if (!preview) return;
+
+  const current = priceUpdateState.currentPrice;
+  if (!Number.isFinite(current) || !Number.isFinite(discount) || !Number.isFinite(floor)) {
+    preview.textContent = 'Enter a discount and floor price to preview the next price update.';
+    return;
+  }
+  const nextPrice = calculateDiscountedFloorPrice(current, discount, floor);
+  preview.innerHTML = `Next price update: <strong style="color:#eab308;">${formatMoneyValue(nextPrice)}</strong> (floor ${formatMoneyValue(floor)})`;
+}
+
+async function openPriceUpdateModal(itemId, fallback = {}) {
+  const modal = document.getElementById('priceUpdateModal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('priceUpdateItemTitle');
+  const priceEl = document.getElementById('priceUpdateCurrentPrice');
+  const itemInput = document.getElementById('priceUpdateItemId');
+  const nowPriceEl = document.getElementById('priceUpdateNowPrice');
+  const frequencyEl = document.getElementById('priceUpdateFrequency');
+  const customDaysEl = document.getElementById('priceUpdateCustomDays');
+  const discountEl = document.getElementById('priceUpdateDiscount');
+  const floorEl = document.getElementById('priceUpdateFloorPrice');
+  const runFirstEl = document.getElementById('priceUpdateRunFirstImmediately');
+  const stopBtn = document.getElementById('priceUpdateScheduleStop');
+  const submitBtn = document.getElementById('priceUpdateScheduleSubmit');
+  const warningEl = document.getElementById('priceUpdateConflictWarning');
+
+  itemInput.value = itemId;
+  titleEl.textContent = fallback.title || `Item ${itemId}`;
+  const fallbackPrice = parseMoneyValue(fallback.price);
+  priceEl.textContent = formatMoneyValue(fallbackPrice);
+  if (nowPriceEl) nowPriceEl.value = Number.isFinite(fallbackPrice) ? fallbackPrice.toFixed(2) : '';
+  priceUpdateState = { itemId, currentPrice: fallbackPrice, hasRule: false };
+
+  frequencyEl.value = 'weekly';
+  customDaysEl.value = '7';
+  discountEl.value = '10';
+  floorEl.value = Number.isFinite(fallbackPrice) ? (fallbackPrice * 0.6).toFixed(2) : '';
+  if (runFirstEl) runFirstEl.checked = false;
+  stopBtn.style.display = 'none';
+  submitBtn.innerHTML = '<i class="fas fa-clock"></i> Schedule';
+  if (warningEl) warningEl.style.display = 'none';
+  toggleCustomDays(frequencyEl, document.getElementById('priceUpdateCustomDaysWrap'));
+
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+
+  try {
+    const response = await fetch(`/items/${itemId}/price_update_rule`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to load price update');
+    }
+
+    const item = data.item || {};
+    const rule = data.rule;
+    priceUpdateState.currentPrice = parseMoneyValue(item.price);
+    titleEl.textContent = item.title || titleEl.textContent;
+    priceEl.textContent = formatMoneyValue(priceUpdateState.currentPrice);
+    if (nowPriceEl) nowPriceEl.value = Number.isFinite(priceUpdateState.currentPrice) ? priceUpdateState.currentPrice.toFixed(2) : '';
+    if (data.conflicting_auto_relist_rule && warningEl) warningEl.style.display = 'block';
+
+    if (rule) {
+      priceUpdateState.hasRule = true;
+      frequencyEl.value = rule.frequency || 'weekly';
+      customDaysEl.value = rule.custom_interval_days || 7;
+      discountEl.value = rule.price_decrease_amount ?? 10;
+      floorEl.value = Number.isFinite(parseMoneyValue(rule.min_price)) ? parseMoneyValue(rule.min_price).toFixed(2) : '';
+      if (runFirstEl) runFirstEl.checked = Boolean(rule.run_first_relist_immediately);
+      stopBtn.style.display = 'inline-flex';
+      submitBtn.innerHTML = '<i class="fas fa-clock"></i> Update Schedule';
+    } else if (Number.isFinite(priceUpdateState.currentPrice)) {
+      floorEl.value = (priceUpdateState.currentPrice * 0.6).toFixed(2);
+    }
+    toggleCustomDays(frequencyEl, document.getElementById('priceUpdateCustomDaysWrap'));
+    updatePriceUpdatePreview();
+  } catch (error) {
+    alert(error.message || 'Failed to load price update');
+    closePriceUpdateModal();
+  }
+}
+
+function getPriceUpdateSchedulePayload() {
+  return {
+    frequency: document.getElementById('priceUpdateFrequency')?.value,
+    custom_interval_days: document.getElementById('priceUpdateCustomDays')?.value,
+    discount_percent: document.getElementById('priceUpdateDiscount')?.value,
+    min_price: document.getElementById('priceUpdateFloorPrice')?.value,
+    run_first_relist_immediately: document.getElementById('priceUpdateRunFirstImmediately')?.checked || false
+  };
+}
+
+document.addEventListener('click', (event) => {
+  const updatePriceBtn = event.target.closest('.update-price-btn');
+  if (updatePriceBtn) {
+    const itemId = parseInt(updatePriceBtn.dataset.itemId, 10);
+    if (Number.isFinite(itemId)) {
+      openPriceUpdateModal(itemId, {
+        title: updatePriceBtn.dataset.itemTitle || '',
+        price: updatePriceBtn.dataset.itemPrice || ''
+      });
+    }
+    return;
+  }
+
+  const closeBtn = event.target.closest('[data-modal-close="priceUpdate"]');
+  if (closeBtn) {
+    closePriceUpdateModal();
+    return;
+  }
+
+  const discountBtn = event.target.closest('[data-price-update-discount]');
+  if (discountBtn) {
+    const discountEl = document.getElementById('priceUpdateDiscount');
+    if (discountEl) discountEl.value = discountBtn.dataset.priceUpdateDiscount;
+    updatePriceUpdatePreview();
+  }
+});
+
+document.getElementById('priceUpdateFrequency')?.addEventListener('change', (event) => {
+  toggleCustomDays(event.target, document.getElementById('priceUpdateCustomDaysWrap'));
+});
+document.getElementById('priceUpdateDiscount')?.addEventListener('input', updatePriceUpdatePreview);
+document.getElementById('priceUpdateFloorPrice')?.addEventListener('input', updatePriceUpdatePreview);
+
+document.getElementById('priceUpdateNowSubmit')?.addEventListener('click', async () => {
+  const itemId = document.getElementById('priceUpdateItemId')?.value;
+  const price = document.getElementById('priceUpdateNowPrice')?.value;
+  const button = document.getElementById('priceUpdateNowSubmit');
+  const originalHtml = button?.innerHTML;
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+  }
+  try {
+    const response = await fetch(`/items/${itemId}/update_price`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to update price');
+    }
+    alert(data.message || 'Price updated');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to update price');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+});
+
+document.getElementById('priceUpdateForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const itemId = document.getElementById('priceUpdateItemId')?.value;
+  const submitBtn = document.getElementById('priceUpdateScheduleSubmit');
+  const originalHtml = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
+  try {
+    const response = await fetch(`/items/${itemId}/price_update_rule`, {
+      method: priceUpdateState.hasRule ? 'PATCH' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(getPriceUpdateSchedulePayload())
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to save schedule');
+    }
+    alert(data.message || 'Price update schedule saved');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to save schedule');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalHtml;
+    }
+  }
+});
+
+document.getElementById('priceUpdateScheduleStop')?.addEventListener('click', async () => {
+  const itemId = document.getElementById('priceUpdateItemId')?.value;
+  if (!itemId || !confirm('Stop this price update schedule?')) return;
+  try {
+    const response = await fetch(`/items/${itemId}/price_update_rule/stop`, { method: 'POST' });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to stop schedule');
+    }
+    alert(data.message || 'Schedule stopped');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to stop schedule');
+  }
+});
+
 function closeBulkAutoRelistModal() {
   const modal = document.getElementById('bulkAutoRelistModal');
   if (!modal) return;
@@ -855,8 +1085,187 @@ document.getElementById('bulkAutoRelistForm')?.addEventListener('submit', async 
   }
 });
 
+function closeBulkPriceUpdateModal() {
+  const modal = document.getElementById('bulkPriceUpdateModal');
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+function getBulkPriceUpdateItemData(itemIds) {
+  return itemIds.map(id => {
+    const row = document.querySelector(`tr[data-item-row="${id}"]`);
+    const price = row ? parseMoneyValue(row.dataset.itemPrice || '') : null;
+    const titleCell = row?.querySelector('[data-col="title"]');
+    return {
+      id,
+      title: row?.dataset.itemTitle || titleCell?.textContent?.trim() || `Item ${id}`,
+      price,
+      floorOverride: ''
+    };
+  });
+}
+
+function updateBulkPriceUpdateState() {
+  const countEl = document.getElementById('bulkPriceUpdateCount');
+  const validationEl = document.getElementById('bulkPriceUpdateValidation');
+  const submitBtn = document.getElementById('bulkPriceUpdateSubmit');
+  const missingPrice = bulkPriceUpdateItems.filter(item => !Number.isFinite(item.price)).length;
+
+  if (countEl) countEl.textContent = bulkPriceUpdateItems.length;
+  if (validationEl) {
+    if (bulkPriceUpdateItems.length < 2) {
+      validationEl.textContent = 'Keep at least 2 items to schedule.';
+      validationEl.style.color = '#fca5a5';
+    } else if (missingPrice > 0) {
+      validationEl.textContent = `${missingPrice} item(s) need a current price.`;
+      validationEl.style.color = '#fca5a5';
+    } else {
+      validationEl.textContent = `${bulkPriceUpdateItems.length} item(s) ready.`;
+      validationEl.style.color = 'var(--sub)';
+    }
+  }
+  if (submitBtn) submitBtn.disabled = bulkPriceUpdateItems.length < 2 || missingPrice > 0;
+}
+
+function renderBulkPriceUpdateItems() {
+  const list = document.getElementById('bulkPriceUpdateItemsList');
+  if (!list) return;
+
+  const floorPercent = parseMoneyValue(document.getElementById('bulkPriceUpdateFloorPercent')?.value) ?? 60;
+  const discountPercent = parseMoneyValue(document.getElementById('bulkPriceUpdateDiscount')?.value) ?? 10;
+
+  list.innerHTML = bulkPriceUpdateItems.map(item => {
+    const defaultFloor = Number.isFinite(item.price) ? item.price * (floorPercent / 100) : null;
+    const floor = item.floorOverride !== '' ? parseMoneyValue(item.floorOverride) : defaultFloor;
+    const nextPrice = calculateDiscountedFloorPrice(item.price, discountPercent, floor);
+    return `
+      <div data-bulk-price-item="${item.id}" style="display:grid;grid-template-columns:1fr 130px auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);">
+        <div style="min-width:0;">
+          <div style="font-size:13px;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title)}</div>
+          <div style="font-size:12px;color:var(--sub);margin-top:4px;">
+            ${formatMoneyValue(item.price)} → <strong style="color:#eab308;">${formatMoneyValue(nextPrice)}</strong>
+            · Floor ${formatMoneyValue(floor)}
+          </div>
+        </div>
+        <input class="input" type="number" data-bulk-price-floor="${item.id}" step="0.01" min="0" placeholder="Floor override" value="${escapeHtml(item.floorOverride)}" style="padding:6px 8px;font-size:12px;">
+        <button type="button" class="btn" data-bulk-price-remove="${item.id}" style="padding:6px 9px;font-size:12px;">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  updateBulkPriceUpdateState();
+}
+
+function openBulkPriceUpdateModal(itemIds) {
+  const modal = document.getElementById('bulkPriceUpdateModal');
+  if (!modal) return;
+  bulkPriceUpdateItems = getBulkPriceUpdateItemData(itemIds);
+  document.getElementById('bulkPriceUpdateFrequency').value = 'weekly';
+  document.getElementById('bulkPriceUpdateCustomDays').value = '7';
+  document.getElementById('bulkPriceUpdateDiscount').value = '10';
+  document.getElementById('bulkPriceUpdateFloorPercent').value = '60';
+  document.getElementById('bulkPriceUpdateRunFirstImmediately').checked = false;
+  toggleCustomDays(document.getElementById('bulkPriceUpdateFrequency'), document.getElementById('bulkPriceUpdateCustomDaysWrap'));
+  renderBulkPriceUpdateItems();
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+document.addEventListener('click', (event) => {
+  const closeBtn = event.target.closest('[data-modal-close="bulkPriceUpdate"]');
+  if (closeBtn) {
+    closeBulkPriceUpdateModal();
+    return;
+  }
+
+  const discountBtn = event.target.closest('[data-bulk-price-discount]');
+  if (discountBtn) {
+    const input = document.getElementById('bulkPriceUpdateDiscount');
+    if (input) input.value = discountBtn.dataset.bulkPriceDiscount;
+    renderBulkPriceUpdateItems();
+    return;
+  }
+
+  const removeBtn = event.target.closest('[data-bulk-price-remove]');
+  if (removeBtn) {
+    const itemId = parseInt(removeBtn.dataset.bulkPriceRemove, 10);
+    bulkPriceUpdateItems = bulkPriceUpdateItems.filter(item => item.id !== itemId);
+    const checkbox = document.querySelector(`.item-checkbox[data-item-id="${itemId}"]`);
+    if (checkbox) {
+      checkbox.checked = false;
+      updateBulkActions();
+    }
+    renderBulkPriceUpdateItems();
+  }
+});
+
+document.addEventListener('change', (event) => {
+  const floorInput = event.target.closest('[data-bulk-price-floor]');
+  if (floorInput) {
+    const itemId = parseInt(floorInput.dataset.bulkPriceFloor, 10);
+    const item = bulkPriceUpdateItems.find(entry => entry.id === itemId);
+    if (item) item.floorOverride = floorInput.value;
+    renderBulkPriceUpdateItems();
+  }
+});
+
+document.getElementById('bulkPriceUpdateFrequency')?.addEventListener('change', (event) => {
+  toggleCustomDays(event.target, document.getElementById('bulkPriceUpdateCustomDaysWrap'));
+});
+document.getElementById('bulkPriceUpdateDiscount')?.addEventListener('input', renderBulkPriceUpdateItems);
+document.getElementById('bulkPriceUpdateFloorPercent')?.addEventListener('input', renderBulkPriceUpdateItems);
+
+document.getElementById('bulkPriceUpdateForm')?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const floorOverrides = {};
+  bulkPriceUpdateItems.forEach(item => {
+    if (item.floorOverride !== '') floorOverrides[String(item.id)] = item.floorOverride;
+  });
+
+  const submitBtn = document.getElementById('bulkPriceUpdateSubmit');
+  const originalHtml = submitBtn?.innerHTML;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  }
+
+  try {
+    const response = await fetch('/items/bulk_price_update_rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        item_ids: bulkPriceUpdateItems.map(item => item.id),
+        frequency: document.getElementById('bulkPriceUpdateFrequency')?.value,
+        custom_interval_days: document.getElementById('bulkPriceUpdateCustomDays')?.value,
+        discount_percent: document.getElementById('bulkPriceUpdateDiscount')?.value,
+        floor_percent: document.getElementById('bulkPriceUpdateFloorPercent')?.value,
+        run_first_relist_immediately: document.getElementById('bulkPriceUpdateRunFirstImmediately')?.checked || false,
+        floor_overrides: floorOverrides
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || 'Failed to schedule price updates');
+    }
+    alert(data.message || 'Price updates scheduled');
+    location.reload();
+  } catch (error) {
+    alert(error.message || 'Failed to schedule price updates');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalHtml;
+    }
+  }
+});
+
 window.closeAutoRelistScheduleModal = closeAutoRelistScheduleModal;
 window.closeBulkAutoRelistModal = closeBulkAutoRelistModal;
+window.closePriceUpdateModal = closePriceUpdateModal;
+window.closeBulkPriceUpdateModal = closeBulkPriceUpdateModal;
 
 if (bulkEditOpenBtn) {
   bulkEditOpenBtn.addEventListener('click', () => {

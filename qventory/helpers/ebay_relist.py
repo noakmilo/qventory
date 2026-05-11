@@ -267,6 +267,120 @@ def update_offer(user_id: int, offer_id: str, changes: dict) -> dict:
         return {'success': False, 'error': str(e)}
 
 
+def revise_listing_price_trading_api(user_id: int, item_id: str, price: float) -> dict:
+    """
+    Update the price of an active Trading API listing without ending/relisting it.
+
+    Calls: ReviseFixedPriceItem with ItemID + StartPrice.
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {'success': False, 'error': 'No valid eBay access token'}
+
+    app_id = os.environ.get('EBAY_CLIENT_ID')
+    try:
+        price_value = float(price)
+    except (TypeError, ValueError):
+        return {'success': False, 'error': 'Invalid price'}
+
+    if price_value <= 0:
+        return {'success': False, 'error': 'Price must be greater than zero'}
+
+    item_id = _normalize_identifier(item_id)
+    if not item_id:
+        return {'success': False, 'error': 'Missing eBay listing ID'}
+
+    xml_request = f'''<?xml version="1.0" encoding="utf-8"?>
+<ReviseFixedPriceItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{access_token}</eBayAuthToken>
+  </RequesterCredentials>
+  <Item>
+    <ItemID>{item_id}</ItemID>
+    <StartPrice>{price_value:.2f}</StartPrice>
+  </Item>
+</ReviseFixedPriceItemRequest>'''
+
+    headers = {
+        'X-EBAY-API-SITEID': '0',
+        'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+        'X-EBAY-API-CALL-NAME': 'ReviseFixedPriceItem',
+        'X-EBAY-API-APP-NAME': app_id,
+        'Content-Type': 'text/xml; charset=utf-8'
+    }
+
+    log_relist(f"Updating listing {item_id} price via Trading API to ${price_value:.2f}")
+
+    try:
+        response = requests.post(TRADING_API_URL, data=xml_request.encode('utf-8'), headers=headers, timeout=30)
+        if response.status_code != 200:
+            log_relist(f"✗ ReviseFixedPriceItem failed: HTTP {response.status_code}")
+            return {'success': False, 'error': f'HTTP {response.status_code}'}
+
+        root = ET.fromstring(response.content)
+        ack = root.find('ebay:Ack', _XML_NS)
+        if ack is not None and ack.text in ['Success', 'Warning']:
+            log_relist(f"✓ Listing {item_id} price updated successfully")
+            return {'success': True, 'response': {'item_id': item_id, 'price': price_value}}
+
+        errors = root.findall('.//ebay:Errors', _XML_NS)
+        error_msgs = []
+        for error in errors:
+            error_msg = error.find('ebay:LongMessage', _XML_NS)
+            if error_msg is not None:
+                error_msgs.append(error_msg.text)
+        error_text = '; '.join(error_msgs) if error_msgs else 'Unknown error'
+        log_relist(f"✗ ReviseFixedPriceItem failed: {error_text}")
+        return {'success': False, 'error': error_text}
+
+    except requests.exceptions.Timeout:
+        log_relist("✗ ReviseFixedPriceItem timeout")
+        return {'success': False, 'error': 'Request timeout'}
+    except Exception as e:
+        log_relist(f"✗ Exception during ReviseFixedPriceItem: {str(e)}")
+        return {'success': False, 'error': str(e)}
+
+
+def update_active_listing_price(user_id: int, rule, new_price: float) -> dict:
+    """
+    Update price on the current active eBay listing/offer without relisting.
+    Prefer Inventory API when a real offerId can be resolved; fall back to
+    Trading API when only a listing ID is available.
+    """
+    try:
+        price_value = round(float(new_price), 2)
+    except (TypeError, ValueError):
+        return {'success': False, 'error': 'Invalid price'}
+
+    resolved_offer_id = resolve_rule_offer_id(user_id, rule)
+    if resolved_offer_id:
+        if resolved_offer_id != getattr(rule, 'offer_id', None):
+            rule.offer_id = resolved_offer_id
+        offer_result = update_offer(user_id, resolved_offer_id, {'price': price_value})
+        if offer_result.get('success'):
+            return {
+                'success': True,
+                'method': 'inventory_offer',
+                'offer_id': resolved_offer_id,
+                'response': offer_result.get('response')
+            }
+        log_relist(f"  ⚠ Inventory price update failed, trying Trading API: {offer_result.get('error')}")
+
+    listing_id = _normalize_identifier(getattr(rule, 'listing_id', None)) or _normalize_identifier(getattr(rule, 'offer_id', None))
+    if not listing_id:
+        return {'success': False, 'error': 'Missing eBay listing ID or offer ID'}
+
+    trading_result = revise_listing_price_trading_api(user_id, listing_id, price_value)
+    if trading_result.get('success'):
+        return {
+            'success': True,
+            'method': 'trading_revise',
+            'listing_id': listing_id,
+            'response': trading_result.get('response')
+        }
+    return trading_result
+
+
 def update_inventory_item(user_id: int, sku: str, changes: dict) -> dict:
     """
     Update an eBay Inventory Item (title, description, images, etc.)

@@ -2161,9 +2161,9 @@ def auto_relist_offers(self):
                 time_diff = (rule.next_run_at - now).total_seconds() / 60
                 log_task(f"    Time until next run: {time_diff:.1f} minutes")
 
-        auto_rules = AutoRelistRule.query.filter(
+        scheduled_rules = AutoRelistRule.query.filter(
             AutoRelistRule.enabled == True,
-            AutoRelistRule.mode == 'auto',
+            AutoRelistRule.mode.in_(('auto', 'price_update')),
             AutoRelistRule.next_run_at <= now
         ).all()
 
@@ -2173,9 +2173,9 @@ def auto_relist_offers(self):
             AutoRelistRule.manual_trigger_requested == True
         ).all()
 
-        all_rules = auto_rules + manual_rules
+        all_rules = scheduled_rules + manual_rules
 
-        log_task(f"DEBUG: {len(auto_rules)} auto rules ready, {len(manual_rules)} manual rules triggered")
+        log_task(f"DEBUG: {len(scheduled_rules)} scheduled rules ready, {len(manual_rules)} manual rules triggered")
 
         if not all_rules:
             log_task("No rules to process - waiting for next_run_at or manual trigger")
@@ -2255,7 +2255,7 @@ def auto_relist_offers(self):
                     history.old_price = rule.current_price
 
                 # SALE DETECTION: Check if item has been sold (auto mode only)
-                if rule.mode == 'auto' and rule.listing_id:
+                if rule.mode in ('auto', 'price_update') and rule.listing_id:
                     from qventory.helpers.ebay_relist import check_item_sold_in_fulfillment
 
                     if check_item_sold_in_fulfillment(rule.user_id, rule.listing_id):
@@ -2277,7 +2277,7 @@ def auto_relist_offers(self):
 
                 # PRICE DECREASE: Calculate new price for auto mode
                 new_price_from_decrease = None
-                if rule.mode == 'auto' and rule.enable_price_decrease:
+                if rule.mode in ('auto', 'price_update') and rule.enable_price_decrease:
                     if not rule.current_price:
                         try:
                             from qventory.helpers.ebay_relist import (
@@ -2331,6 +2331,84 @@ def auto_relist_offers(self):
                     if new_price_from_decrease:
                         log_task(f"  Price decrease: ${rule.current_price} → ${new_price_from_decrease}")
                         history.new_price = new_price_from_decrease
+
+                if rule.mode == 'price_update':
+                    if not new_price_from_decrease:
+                        skip_reason = 'No price update needed'
+                        if rule.current_price and rule.min_price and float(rule.current_price) <= float(rule.min_price):
+                            skip_reason = 'At floor price'
+                        log_task(f"⊘ Price update skipped: {skip_reason}")
+                        rule.mark_skipped(skip_reason)
+                        history.status = 'skipped'
+                        history.skip_reason = skip_reason
+                        history.mark_completed()
+                        skipped_count += 1
+                        db.session.commit()
+                        processed_count += 1
+                        continue
+                    if rule.current_price and round(float(rule.current_price), 2) == round(float(new_price_from_decrease), 2):
+                        skip_reason = 'At floor price'
+                        log_task(f"⊘ Price update skipped: {skip_reason}")
+                        rule.mark_skipped(skip_reason)
+                        history.status = 'skipped'
+                        history.skip_reason = skip_reason
+                        history.mark_completed()
+                        skipped_count += 1
+                        db.session.commit()
+                        processed_count += 1
+                        continue
+
+                    from qventory.helpers.ebay_relist import update_active_listing_price
+
+                    log_task(f"  Updating active listing price only: ${rule.current_price} → ${new_price_from_decrease}")
+                    update_result = update_active_listing_price(rule.user_id, rule, new_price_from_decrease)
+                    history.changes_applied = {'price': new_price_from_decrease}
+                    history.new_price = new_price_from_decrease
+                    history.update_response = update_result
+
+                    if not update_result.get('success'):
+                        error_msg = update_result.get('error', 'Price update failed')
+                        log_task(f"✗ Price update failed: {error_msg}")
+                        rule.mark_error(error_msg)
+                        history.status = 'error'
+                        history.error_message = error_msg
+                        history.mark_completed()
+                        failed_count += 1
+                        db.session.commit()
+                        processed_count += 1
+                        continue
+
+                    rule.current_price = new_price_from_decrease
+                    rule.last_run_status = 'success'
+                    rule.last_run_at = datetime.utcnow()
+                    rule.last_error_message = None
+                    rule.run_count += 1
+                    rule.success_count += 1
+                    rule.consecutive_errors = 0
+                    rule.calculate_next_run()
+
+                    try:
+                        from qventory.models.item import Item
+                        item_query = Item.query.filter(Item.user_id == rule.user_id)
+                        item_filters = []
+                        if rule.listing_id:
+                            item_filters.append(Item.ebay_listing_id == rule.listing_id)
+                        if rule.sku:
+                            item_filters.append(Item.sku == rule.sku)
+                        if item_filters:
+                            item_match = item_query.filter(or_(*item_filters)).order_by(Item.updated_at.desc()).first()
+                            if item_match:
+                                item_match.item_price = new_price_from_decrease
+                                history.item_id = item_match.id
+                    except Exception as item_update_err:
+                        log_task(f"  ⚠ Unable to update local item price: {item_update_err}")
+
+                    history.status = 'success'
+                    history.mark_completed()
+                    succeeded_count += 1
+                    db.session.commit()
+                    processed_count += 1
+                    continue
 
                 # Execute relist (with or without changes)
                 # Check if manual mode has changes to apply
