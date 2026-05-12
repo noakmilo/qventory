@@ -63,6 +63,9 @@
         <i class="fas fa-info-circle"></i>
         <span>Thrift Radar is currently available for U.S. ZIP Codes only. More countries are coming soon.</span>
       </div>
+      <button type="button" class="btn submitbtn thrift-new-search-btn" id="thriftNewSearch">
+        <i class="fas fa-search"></i> New Search
+      </button>
 
       <div class="thrift-radar-save-card">
         <div>
@@ -153,6 +156,9 @@
     backdrop-filter: blur(14px);
     padding: 12px;
   }
+  .thrift-floating-search.is-hidden {
+    display: none;
+  }
   .thrift-radar-zip-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -224,6 +230,10 @@
   .thrift-go-btn {
     justify-content: center;
     min-height: 42px;
+  }
+  .thrift-new-search-btn {
+    justify-content: center;
+    width: 100%;
   }
   .thrift-radar-save-card,
   .thrift-saved-section,
@@ -429,6 +439,9 @@
   let thriftArchivedSearches = {{ archived_searches|tojson }};
   let thriftCurrentSearch = null;
   let thriftMarkers = L.layerGroup();
+  const thriftSearchForm = document.getElementById('thriftRadarForm');
+  const thriftEmptyOverlay = document.getElementById('thriftMapEmpty');
+  const thriftNewSearchButton = document.getElementById('thriftNewSearch');
 
   const thriftMap = L.map('thriftMap', { zoomControl: true }).setView([39.8283, -98.5795], 4);
   const normalLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -479,10 +492,18 @@
     document.getElementById('thriftMapLoader').hidden = !loading;
   }
 
+  function thriftSetSearchDialogVisible(visible) {
+    thriftSearchForm?.classList.toggle('is-hidden', !visible);
+    if (visible) {
+      setTimeout(() => document.getElementById('thriftZipCode')?.focus(), 40);
+    }
+  }
+
   function thriftShowResults(search) {
     thriftCurrentSearch = search;
     thriftMarkers.clearLayers();
-    document.getElementById('thriftMapEmpty').style.display = 'none';
+    if (thriftEmptyOverlay) thriftEmptyOverlay.style.display = 'none';
+    thriftSetSearchDialogVisible(false);
     document.getElementById('thriftSaveSearch').disabled = false;
     document.getElementById('thriftCurrentSummary').textContent = `${search.zip_code} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
 
@@ -546,12 +567,28 @@
       ...options,
       headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
     });
-    const data = await response.json();
+    const raw = await response.text();
+    let data = null;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      const titleMatch = raw.match(/<title>(.*?)<\/title>/i);
+      const serverMessage = titleMatch ? titleMatch[1].trim() : `HTTP ${response.status}`;
+      throw new Error(`Thrift Radar server returned ${serverMessage}. Check qventory.service logs and confirm DB migrations are applied.`);
+    }
     if (!response.ok || !data.ok) throw new Error(data.error || 'Request failed');
     return data;
   }
 
-  document.getElementById('thriftRadarForm').addEventListener('submit', async (event) => {
+  thriftNewSearchButton?.addEventListener('click', () => {
+    thriftSetSearchDialogVisible(true);
+    if (!thriftCurrentSearch && thriftEmptyOverlay) {
+      thriftEmptyOverlay.style.display = 'grid';
+    }
+    setTimeout(() => thriftMap.invalidateSize(), 80);
+  });
+
+  thriftSearchForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const zipCode = document.getElementById('thriftZipCode').value.trim();
     const keywords = thriftSelectedKeywords();

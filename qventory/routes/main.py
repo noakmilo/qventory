@@ -3,7 +3,7 @@ from flask import (
     jsonify, send_from_directory, make_response, current_app, abort, session
 )
 from flask_login import login_required, current_user, login_user, logout_user
-from sqlalchemy import func, or_, and_, case
+from sqlalchemy import func, or_, and_, case, text
 import math
 import io
 import re
@@ -985,6 +985,15 @@ def _client_ip_address():
     return (request.remote_addr or "")[:64] or None
 
 
+def _thrift_radar_log_table_available() -> bool:
+    try:
+        return bool(db.session.execute(text("SELECT to_regclass('public.thrift_radar_logs')")).scalar())
+    except Exception as exc:
+        current_app.logger.warning("[THRIFT_RADAR] log table availability check failed: %s", exc)
+        db.session.rollback()
+        return False
+
+
 def _log_thrift_radar_event(
     event: str,
     status: str = "success",
@@ -996,6 +1005,20 @@ def _log_thrift_radar_event(
     saved_search_id: int | None = None,
     metadata: dict | None = None,
 ):
+    current_app.logger.info(
+        "[THRIFT_RADAR] user_id=%s event=%s status=%s zip=%s keywords=%s results=%s duration_ms=%s error=%s",
+        current_user.id if current_user.is_authenticated else None,
+        event,
+        status,
+        zip_code,
+        keywords,
+        result_count,
+        duration_ms,
+        error_message,
+    )
+    if not _thrift_radar_log_table_available():
+        return None
+
     log = ThriftRadarLog(
         user_id=current_user.id if current_user.is_authenticated else None,
         saved_search_id=saved_search_id,
@@ -1011,17 +1034,6 @@ def _log_thrift_radar_event(
         user_agent=(request.headers.get("User-Agent") or "")[:255] or None,
     )
     db.session.add(log)
-    current_app.logger.info(
-        "[THRIFT_RADAR] user_id=%s event=%s status=%s zip=%s keywords=%s results=%s duration_ms=%s error=%s",
-        log.user_id,
-        event,
-        status,
-        zip_code,
-        keywords,
-        result_count,
-        duration_ms,
-        error_message,
-    )
     return log
 
 
