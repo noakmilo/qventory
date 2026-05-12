@@ -41,6 +41,7 @@ from ..models.setting import Setting
 from ..models.user import User
 from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
+from ..models.inventory_source import InventorySource
 from ..models.support import SupportTicket, SupportMessage, SupportAttachment
 from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
@@ -72,6 +73,7 @@ from ..models.retired_item import RetiredItem
 from ..models.ebay_feedback import EbayFeedback
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
+USER_ROLE_OPTIONS = ["free", "early_adopter", "premium", "plus", "pro", "god", "enterprise"]
 
 PENDING_TASK_DEFS = [
     {
@@ -876,6 +878,33 @@ def help_center_article(slug):
         rendered=rendered,
         articles=articles,
     )
+
+
+# ---------------------- Inventory Sources ----------------------
+
+def _visible_inventory_sources_for_role(role: str):
+    role = (role or "free").strip().lower()
+    sources = InventorySource.query.filter(
+        InventorySource.is_active.is_(True)
+    ).order_by(
+        InventorySource.display_order.asc(),
+        InventorySource.title.asc()
+    ).all()
+    return [source for source in sources if source.allows_role(role)]
+
+
+def _parse_inventory_source_roles(form):
+    selected = form.getlist("allowed_roles")
+    return [role for role in USER_ROLE_OPTIONS if role in selected]
+
+
+@main_bp.route("/inventory-sources")
+@login_required
+def inventory_sources():
+    sources = _visible_inventory_sources_for_role(current_user.role)
+    if not sources:
+        abort(404)
+    return render_template("inventory_sources.html", sources=sources)
 
 
 # ---------------------- Dashboard (protegido) ----------------------
@@ -7635,6 +7664,158 @@ def admin_help_center_upload_image():
         up = cloudinary.uploader.upload(
             f,
             folder="qventory/help-center",
+            overwrite=True,
+            resource_type="image",
+            transformation=[{"quality": "auto", "fetch_format": "auto"}]
+        )
+        url = up.get("secure_url") or up.get("url")
+        return jsonify({"ok": True, "url": url})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+
+
+# ---------------------- Admin: Inventory Sources ----------------------
+
+def _normalize_inventory_source_url(value: str) -> str:
+    value = (value or "").strip()
+    if value and not re.match(r"^https?://", value, re.I):
+        value = "https://" + value
+    return value
+
+
+@main_bp.route("/admin/inventory-sources")
+@require_admin
+def admin_inventory_sources():
+    sources = InventorySource.query.order_by(
+        InventorySource.display_order.asc(),
+        InventorySource.title.asc()
+    ).all()
+    return render_template(
+        "admin_inventory_sources.html",
+        sources=sources,
+        role_options=USER_ROLE_OPTIONS,
+    )
+
+
+@main_bp.route("/admin/inventory-sources/new", methods=["GET", "POST"])
+@require_admin
+def admin_inventory_sources_new():
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        description = (request.form.get("description") or "").strip() or None
+        image_url = _normalize_inventory_source_url(request.form.get("image_url") or "") or None
+        link_url = _normalize_inventory_source_url(request.form.get("link_url") or "")
+        display_order = int(request.form.get("display_order") or 0)
+        is_active = request.form.get("is_active") == "on"
+        allowed_roles = _parse_inventory_source_roles(request.form)
+
+        if not title or not link_url:
+            flash("Title and link are required.", "error")
+            return redirect(url_for("main.admin_inventory_sources_new"))
+        if not allowed_roles:
+            flash("Select at least one allowed role.", "error")
+            return redirect(url_for("main.admin_inventory_sources_new"))
+
+        source = InventorySource(
+            title=title,
+            description=description,
+            image_url=image_url,
+            link_url=link_url,
+            display_order=display_order,
+            is_active=is_active,
+            allowed_roles=allowed_roles,
+        )
+        db.session.add(source)
+        db.session.commit()
+        flash("Inventory source created.", "ok")
+        return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+
+    return render_template(
+        "admin_inventory_source_edit.html",
+        source=None,
+        is_new=True,
+        role_options=USER_ROLE_OPTIONS,
+        form_action=url_for("main.admin_inventory_sources_new"),
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/admin/inventory-sources/<int:source_id>/edit", methods=["GET", "POST"])
+@require_admin
+def admin_inventory_sources_edit(source_id):
+    source = InventorySource.query.get_or_404(source_id)
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        description = (request.form.get("description") or "").strip() or None
+        image_url = _normalize_inventory_source_url(request.form.get("image_url") or "") or None
+        link_url = _normalize_inventory_source_url(request.form.get("link_url") or "")
+        display_order = int(request.form.get("display_order") or 0)
+        is_active = request.form.get("is_active") == "on"
+        allowed_roles = _parse_inventory_source_roles(request.form)
+
+        if not title or not link_url:
+            flash("Title and link are required.", "error")
+            return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+        if not allowed_roles:
+            flash("Select at least one allowed role.", "error")
+            return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+
+        source.title = title
+        source.description = description
+        source.image_url = image_url
+        source.link_url = link_url
+        source.display_order = display_order
+        source.is_active = is_active
+        source.allowed_roles = allowed_roles
+        db.session.commit()
+
+        flash("Inventory source updated.", "ok")
+        return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+
+    return render_template(
+        "admin_inventory_source_edit.html",
+        source=source,
+        is_new=False,
+        role_options=USER_ROLE_OPTIONS,
+        form_action=url_for("main.admin_inventory_sources_edit", source_id=source.id),
+        cloudinary_enabled=cloudinary_enabled,
+    )
+
+
+@main_bp.route("/admin/inventory-sources/<int:source_id>/delete", methods=["POST"])
+@require_admin
+def admin_inventory_sources_delete(source_id):
+    source = InventorySource.query.get_or_404(source_id)
+    db.session.delete(source)
+    db.session.commit()
+    flash("Inventory source deleted.", "ok")
+    return redirect(url_for("main.admin_inventory_sources"))
+
+
+@main_bp.route("/admin/inventory-sources/upload-image", methods=["POST"])
+@require_admin
+def admin_inventory_sources_upload_image():
+    if not cloudinary_enabled:
+        return jsonify({"ok": False, "error": "Cloudinary not configured"}), 503
+
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"ok": False, "error": "Missing file"}), 400
+
+    ct = (f.mimetype or "").lower()
+    if not ct.startswith("image/"):
+        return jsonify({"ok": False, "error": "Only image files are allowed"}), 400
+
+    f.seek(0, io.SEEK_END)
+    size = f.tell()
+    f.seek(0)
+    if size > 3 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "Image too large (max 3MB)"}), 400
+
+    try:
+        up = cloudinary.uploader.upload(
+            f,
+            folder="qventory/inventory-sources",
             overwrite=True,
             resource_type="image",
             transformation=[{"quality": "auto", "fetch_format": "auto"}]

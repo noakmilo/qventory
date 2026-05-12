@@ -300,6 +300,27 @@ def create_app():
         return {"slow_movers_count": count}
 
     @app.context_processor
+    def inject_inventory_sources_visibility():
+        from flask_login import current_user
+
+        visible = False
+        try:
+            if current_user.is_authenticated:
+                from qventory.models.inventory_source import InventorySource
+                role = (current_user.role or "free").strip().lower()
+                sources = InventorySource.query.filter(
+                    InventorySource.is_active.is_(True)
+                ).order_by(
+                    InventorySource.display_order.asc(),
+                    InventorySource.title.asc()
+                ).all()
+                visible = any(source.allows_role(role) for source in sources)
+        except Exception:
+            visible = False
+
+        return {"show_inventory_sources": visible}
+
+    @app.context_processor
     def inject_feedback_unread_count():
         from flask_login import current_user
         from qventory.helpers.feedback_queries import count_unread_feedback

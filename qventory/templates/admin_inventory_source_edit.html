@@ -1,0 +1,127 @@
+{% extends "base_admin.html" %}
+
+{% block title %}{{ 'New Inventory Source' if is_new else 'Edit Inventory Source' }} - Admin{% endblock %}
+
+{% block breadcrumb_items %}
+<span class="breadcrumb-separator">/</span>
+<a href="{{ url_for('main.admin_inventory_sources') }}">Inventory Sources</a>
+<span class="breadcrumb-separator">/</span>
+<span class="breadcrumb-current">{{ 'New Source' if is_new else source.title }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="container page-shell" style="max-width:980px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;">
+    <div>
+      <h1 style="margin-bottom:4px;">{{ 'New Inventory Source' if is_new else 'Edit Inventory Source' }}</h1>
+      <p style="color:var(--text-secondary);font-size:13px;">Control visibility by role and activation status.</p>
+    </div>
+    <a href="{{ url_for('main.admin_inventory_sources') }}" class="btn">Back</a>
+  </div>
+
+  <form method="post" action="{{ form_action }}" class="card" style="padding:16px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
+      <div>
+        <label>Title</label>
+        <input class="input" type="text" name="title" value="{{ source.title if source else '' }}" required>
+      </div>
+      <div>
+        <label>Order</label>
+        <input class="input" type="number" name="display_order" value="{{ source.display_order if source else 0 }}" min="0">
+      </div>
+      <div>
+        <label>Status</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <input type="checkbox" id="isActive" name="is_active" {% if source and source.is_active %}checked{% endif %}>
+          <label for="isActive" style="margin:0;">Active</label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Description</label>
+      <textarea class="input" name="description" rows="4">{{ source.description if source else '' }}</textarea>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px;">
+      <div>
+        <label>Link URL</label>
+        <input class="input" type="text" name="link_url" value="{{ source.link_url if source else '' }}" placeholder="https://example.com" required>
+      </div>
+      <div>
+        <label>Image URL</label>
+        <div style="display:flex;gap:8px;">
+          <input class="input" id="sourceImageUrl" type="text" name="image_url" value="{{ source.image_url if source else '' }}" placeholder="https://...">
+          {% if cloudinary_enabled %}
+          <label class="btn" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">
+            <i class="fas fa-image"></i> Upload
+            <input type="file" id="sourceImageUpload" accept="image/*" style="display:none;">
+          </label>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;">
+      <label style="display:block;margin-bottom:8px;">Allowed roles</label>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">
+        {% set selected_roles = source.allowed_roles if source else [] %}
+        {% for role in role_options %}
+        <label style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px 10px;cursor:pointer;">
+          <input type="checkbox" name="allowed_roles" value="{{ role }}" {% if role in selected_roles %}checked{% endif %}>
+          <span>{{ role.replace('_', ' ')|title }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-save"></i> Save Source
+      </button>
+      {% if source %}
+      <a class="btn" href="{{ source.link_url }}" target="_blank" rel="noopener noreferrer">
+        <i class="fas fa-external-link-alt"></i> Open
+      </a>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if source %}
+  <form method="post" action="{{ url_for('main.admin_inventory_sources_delete', source_id=source.id) }}" style="margin-top:12px;" onsubmit="return confirm('Delete this inventory source?');">
+    <button type="submit" class="btn" style="color:#fca5a5;border-color:rgba(239,68,68,0.4);">
+      <i class="fas fa-trash"></i> Delete Source
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+<script>
+  const uploadInput = document.getElementById('sourceImageUpload');
+  const imageUrlInput = document.getElementById('sourceImageUrl');
+
+  if (uploadInput && imageUrlInput) {
+    uploadInput.addEventListener('change', async () => {
+      const file = uploadInput.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const response = await fetch('{{ url_for("main.admin_inventory_sources_upload_image") }}', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'Upload failed');
+        }
+        imageUrlInput.value = data.url;
+      } catch (err) {
+        alert(err.message || 'Upload failed');
+      } finally {
+        uploadInput.value = '';
+      }
+    });
+  }
+</script>
+{% endblock %}

@@ -92,6 +92,10 @@
           <i class="fas fa-life-ring"></i>
           <span>Help Center</span>
         </a>
+        <a href="{{ url_for('main.admin_inventory_sources') }}" class="admin-sidebar-item {% if 'admin_inventory_sources' in request.endpoint %}active{% endif %}">
+          <i class="fas fa-map-marked-alt"></i>
+          <span>Inventory Sources</span>
+        </a>
         <a href="{{ url_for('main.admin_support_inbox') }}" class="admin-sidebar-item {% if 'admin_support' in request.endpoint %}active{% endif %}">
           <i class="fas fa-inbox"></i>
           <span>Support Tickets</span>

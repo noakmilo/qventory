@@ -1,0 +1,105 @@
+{% extends "base_new.html" %}
+
+{% block title %}Inventory Sources{% endblock %}
+{% block meta_description %}Curated inventory sourcing resources for Qventory sellers.{% endblock %}
+
+{% block content %}
+<div class="container page-shell inventory-sources-page" style="max-width:1180px;">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px;">
+    <div>
+      <h1 style="margin-bottom:6px;">Inventory Sources</h1>
+      <p style="color:var(--text-secondary);font-size:14px;margin:0;">Curated places to find inventory and sourcing opportunities.</p>
+    </div>
+  </div>
+
+  <div class="inventory-source-grid">
+    {% for source in sources %}
+    <article class="inventory-source-card">
+      <a href="{{ source.link_url }}" target="_blank" rel="noopener noreferrer" class="inventory-source-media" aria-label="Open {{ source.title }}">
+        {% if source.image_url %}
+          <img src="{{ source.image_url }}" alt="{{ source.title }}" loading="lazy" referrerpolicy="no-referrer">
+        {% else %}
+          <div class="inventory-source-placeholder">
+            <i class="fas fa-map-marked-alt"></i>
+          </div>
+        {% endif %}
+      </a>
+      <div class="inventory-source-body">
+        <div>
+          <h2>{{ source.title }}</h2>
+          {% if source.description %}
+            <p>{{ source.description }}</p>
+          {% endif %}
+        </div>
+        <a href="{{ source.link_url }}" target="_blank" rel="noopener noreferrer" class="btn submitbtn inventory-source-action">
+          Open Source <i class="fas fa-external-link-alt"></i>
+        </a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .inventory-source-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .inventory-source-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--card);
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+  .inventory-source-media {
+    display: block;
+    aspect-ratio: 16 / 9;
+    background: rgba(148, 163, 184, 0.08);
+  }
+  .inventory-source-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .inventory-source-placeholder {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    color: var(--text-secondary);
+    font-size: 32px;
+  }
+  .inventory-source-body {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    justify-content: space-between;
+  }
+  .inventory-source-body h2 {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .inventory-source-body p {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .inventory-source-action {
+    justify-content: center;
+  }
+  @media (max-width: 640px) {
+    .inventory-source-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
