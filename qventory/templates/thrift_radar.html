@@ -6,6 +6,8 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIINfQSM0Yz80NePMMMPb6Lfi+fM+Rcw6pA=" crossorigin="">
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">      
 {% endblock %}
 
 {% block content %}
@@ -308,22 +310,8 @@
   .thrift-map-canvas.leaflet-container {
     overflow: hidden;
   }
-  .thrift-map-canvas .leaflet-pane,
-  .thrift-map-canvas .leaflet-map-pane,
-  .thrift-map-canvas .leaflet-tile-pane,
-  .thrift-map-canvas .leaflet-overlay-pane,
-  .thrift-map-canvas .leaflet-marker-pane,
-  .thrift-map-canvas .leaflet-shadow-pane,
-  .thrift-map-canvas .leaflet-tooltip-pane,
-  .thrift-map-canvas .leaflet-popup-pane,
-  .thrift-map-canvas .leaflet-tile-container,
-  .thrift-map-canvas .leaflet-tile,
-  .thrift-map-canvas .leaflet-marker-icon,
-  .thrift-map-canvas .leaflet-marker-shadow {
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
+  
+  
   .thrift-map-canvas .leaflet-tile {
     width: 256px;
     height: 256px;
