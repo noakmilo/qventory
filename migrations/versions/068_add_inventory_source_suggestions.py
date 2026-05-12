@@ -1,7 +1,7 @@
 """add inventory source suggestions
 
-Revision ID: 068_add_inventory_source_suggestions
-Revises: 067_add_inventory_source_reactions
+Revision ID: 068_inventory_source_suggests
+Revises: 067_inventory_source_reactions
 Create Date: 2026-05-12 00:00:00.000000
 """
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "068_add_inventory_source_suggestions"
-down_revision = "067_add_inventory_source_reactions"
+revision = "068_inventory_source_suggests"
+down_revision = "067_inventory_source_reactions"
 branch_labels = None
 depends_on = None
 
