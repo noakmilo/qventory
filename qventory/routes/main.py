@@ -42,7 +42,7 @@ from ..models.system_setting import SystemSetting
 from ..models.user import User
 from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
-from ..models.inventory_source import InventorySource
+from ..models.inventory_source import InventorySource, InventorySourceReaction, InventorySourceSuggestion
 from ..models.support import SupportTicket, SupportMessage, SupportAttachment
 from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
@@ -912,7 +912,111 @@ def inventory_sources():
     sources = _visible_inventory_sources_for_role(current_user.role)
     if not sources:
         abort(404)
-    return render_template("inventory_sources.html", sources=sources)
+
+    source_ids = [source.id for source in sources]
+    reaction_counts = {
+        source_id: {"like": 0, "dislike": 0}
+        for source_id in source_ids
+    }
+    count_rows = db.session.query(
+        InventorySourceReaction.source_id,
+        InventorySourceReaction.reaction,
+        func.count(InventorySourceReaction.id)
+    ).filter(
+        InventorySourceReaction.source_id.in_(source_ids)
+    ).group_by(
+        InventorySourceReaction.source_id,
+        InventorySourceReaction.reaction
+    ).all()
+    for source_id, reaction, count in count_rows:
+        if source_id in reaction_counts and reaction in reaction_counts[source_id]:
+            reaction_counts[source_id][reaction] = count
+
+    user_reactions = {
+        row.source_id: row.reaction
+        for row in InventorySourceReaction.query.filter(
+            InventorySourceReaction.source_id.in_(source_ids),
+            InventorySourceReaction.user_id == current_user.id
+        ).all()
+    }
+
+    return render_template(
+        "inventory_sources.html",
+        sources=sources,
+        reaction_counts=reaction_counts,
+        user_reactions=user_reactions,
+    )
+
+
+@main_bp.route("/inventory-sources/suggest", methods=["POST"])
+@login_required
+def inventory_sources_suggest():
+    if not _inventory_sources_feature_enabled():
+        abort(404)
+
+    title = (request.form.get("title") or "").strip()
+    link_url = _normalize_inventory_source_url(request.form.get("link_url") or "")
+    parsed_url = urlparse(link_url)
+    if not title or not link_url or parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        flash("Title and URL are required.", "error")
+        return redirect(url_for("main.inventory_sources"))
+
+    suggestion = InventorySourceSuggestion(
+        user_id=current_user.id,
+        title=title[:200],
+        link_url=link_url,
+    )
+    db.session.add(suggestion)
+    db.session.commit()
+    flash("Source suggestion sent.", "ok")
+    return redirect(url_for("main.inventory_sources"))
+
+
+@main_bp.route("/inventory-sources/<int:source_id>/reaction", methods=["POST"])
+@login_required
+def inventory_source_reaction(source_id):
+    source = InventorySource.query.filter_by(id=source_id, is_active=True).first()
+    user_role = (current_user.role or "free").strip().lower()
+    if not source or not _inventory_sources_feature_enabled() or not source.allows_role(user_role):
+        return jsonify({"ok": False, "error": "Source not found"}), 404
+
+    data = request.get_json() or {}
+    reaction_value = (data.get("reaction") or "").strip().lower()
+    if reaction_value not in {"like", "dislike"}:
+        return jsonify({"ok": False, "error": "Invalid reaction"}), 400
+
+    reaction = InventorySourceReaction.query.filter_by(
+        source_id=source.id,
+        user_id=current_user.id
+    ).first()
+
+    current_reaction = None
+    if reaction and reaction.reaction == reaction_value:
+        db.session.delete(reaction)
+    elif reaction:
+        reaction.reaction = reaction_value
+        reaction.updated_at = datetime.utcnow()
+        current_reaction = reaction_value
+    else:
+        reaction = InventorySourceReaction(
+            source_id=source.id,
+            user_id=current_user.id,
+            reaction=reaction_value
+        )
+        db.session.add(reaction)
+        current_reaction = reaction_value
+
+    db.session.commit()
+
+    like_count = InventorySourceReaction.query.filter_by(source_id=source.id, reaction="like").count()
+    dislike_count = InventorySourceReaction.query.filter_by(source_id=source.id, reaction="dislike").count()
+    return jsonify({
+        "ok": True,
+        "source_id": source.id,
+        "reaction": current_reaction,
+        "like_count": like_count,
+        "dislike_count": dislike_count,
+    })
 
 
 # ---------------------- Dashboard (protegido) ----------------------
@@ -7724,13 +7828,51 @@ def admin_inventory_sources():
         InventorySource.display_order.asc(),
         InventorySource.title.asc()
     ).all()
+    suggestions = InventorySourceSuggestion.query.filter(
+        InventorySourceSuggestion.is_archived.is_(False)
+    ).order_by(
+        InventorySourceSuggestion.created_at.desc()
+    ).limit(50).all()
+    source_ids = [source.id for source in sources]
+    reaction_counts = {
+        source_id: {"like": 0, "dislike": 0}
+        for source_id in source_ids
+    }
+    if source_ids:
+        count_rows = db.session.query(
+            InventorySourceReaction.source_id,
+            InventorySourceReaction.reaction,
+            func.count(InventorySourceReaction.id)
+        ).filter(
+            InventorySourceReaction.source_id.in_(source_ids)
+        ).group_by(
+            InventorySourceReaction.source_id,
+            InventorySourceReaction.reaction
+        ).all()
+        for source_id, reaction, count in count_rows:
+            if source_id in reaction_counts and reaction in reaction_counts[source_id]:
+                reaction_counts[source_id][reaction] = count
     feature_enabled = bool(SystemSetting.get_int(INVENTORY_SOURCES_ENABLED_KEY, 0))
     return render_template(
         "admin_inventory_sources.html",
         sources=sources,
         role_options=USER_ROLE_OPTIONS,
         feature_enabled=feature_enabled,
+        reaction_counts=reaction_counts,
+        suggestions=suggestions,
     )
+
+
+@main_bp.route("/admin/inventory-sources/suggestions/<int:suggestion_id>/archive", methods=["POST"])
+@require_admin
+def admin_inventory_source_suggestion_archive(suggestion_id):
+    suggestion = InventorySourceSuggestion.query.get_or_404(suggestion_id)
+    suggestion.is_archived = True
+    suggestion.archived_at = datetime.utcnow()
+    suggestion.archived_by_id = current_user.id
+    db.session.commit()
+    flash("Source suggestion archived.", "ok")
+    return redirect(url_for("main.admin_inventory_sources"))
 
 
 @main_bp.route("/admin/inventory-sources/settings", methods=["POST"])

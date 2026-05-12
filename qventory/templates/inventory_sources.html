@@ -10,6 +10,9 @@
       <h1 style="margin-bottom:6px;">Inventory Sources</h1>
       <p style="color:var(--text-secondary);font-size:14px;margin:0;">Curated places to find inventory and sourcing opportunities.</p>
     </div>
+    <button type="button" class="btn submitbtn" id="openSourceSuggestionModal">
+      <i class="fas fa-lightbulb"></i> Suggest Source
+    </button>
   </div>
 
   <div class="inventory-source-grid">
@@ -31,12 +34,59 @@
             <p>{{ source.description }}</p>
           {% endif %}
         </div>
-        <a href="{{ source.link_url }}" target="_blank" rel="noopener noreferrer" class="btn submitbtn inventory-source-action">
-          Open Source <i class="fas fa-external-link-alt"></i>
-        </a>
+        <div class="inventory-source-footer">
+          {% set counts = reaction_counts.get(source.id, {'like': 0, 'dislike': 0}) %}
+          {% set my_reaction = user_reactions.get(source.id) %}
+          <div class="inventory-source-reactions" data-source-reactions="{{ source.id }}">
+            <button type="button"
+                    class="inventory-source-reaction-btn {% if my_reaction == 'like' %}active{% endif %}"
+                    data-source-id="{{ source.id }}"
+                    data-reaction="like"
+                    title="Like this source">
+              <i class="fas fa-thumbs-up"></i>
+              <span data-like-count="{{ source.id }}">{{ counts.like }}</span>
+            </button>
+            <button type="button"
+                    class="inventory-source-reaction-btn {% if my_reaction == 'dislike' %}active{% endif %}"
+                    data-source-id="{{ source.id }}"
+                    data-reaction="dislike"
+                    title="Dislike this source">
+              <i class="fas fa-thumbs-down"></i>
+              <span data-dislike-count="{{ source.id }}">{{ counts.dislike }}</span>
+            </button>
+          </div>
+          <a href="{{ source.link_url }}" target="_blank" rel="noopener noreferrer" class="btn submitbtn inventory-source-action">
+            Open Source <i class="fas fa-external-link-alt"></i>
+          </a>
+        </div>
       </div>
     </article>
     {% endfor %}
+  </div>
+</div>
+
+<div class="inventory-source-modal" id="sourceSuggestionModal" aria-hidden="true">
+  <div class="inventory-source-modal-panel" role="dialog" aria-modal="true" aria-labelledby="sourceSuggestionTitle">
+    <div class="inventory-source-modal-header">
+      <h2 id="sourceSuggestionTitle">Suggest Source</h2>
+      <button type="button" class="inventory-source-modal-close" id="closeSourceSuggestionModal" aria-label="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('main.inventory_sources_suggest') }}" class="inventory-source-suggestion-form">
+      <label>
+        <span>Title</span>
+        <input type="text" name="title" maxlength="200" required>
+      </label>
+      <label>
+        <span>URL</span>
+        <input type="text" name="link_url" inputmode="url" required>
+      </label>
+      <div class="inventory-source-modal-actions">
+        <button type="button" class="btn" id="cancelSourceSuggestionModal">Cancel</button>
+        <button type="submit" class="btn submitbtn">Send Suggestion</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -96,10 +146,192 @@
   .inventory-source-action {
     justify-content: center;
   }
+  .inventory-source-footer {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .inventory-source-reactions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .inventory-source-reaction-btn {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    height: 34px;
+    min-width: 54px;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .inventory-source-reaction-btn:hover {
+    color: var(--text);
+    border-color: rgba(148, 163, 184, 0.55);
+  }
+  .inventory-source-reaction-btn.active[data-reaction="like"] {
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.45);
+    background: rgba(34, 197, 94, 0.12);
+  }
+  .inventory-source-reaction-btn.active[data-reaction="dislike"] {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.45);
+    background: rgba(248, 113, 113, 0.12);
+  }
+  .inventory-source-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.62);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    z-index: 1200;
+  }
+  .inventory-source-modal.open {
+    display: flex;
+  }
+  .inventory-source-modal-panel {
+    width: min(460px, 100%);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+  }
+  .inventory-source-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .inventory-source-modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+  }
+  .inventory-source-modal-close {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+  .inventory-source-suggestion-form {
+    display: grid;
+    gap: 12px;
+  }
+  .inventory-source-suggestion-form label {
+    display: grid;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .inventory-source-suggestion-form input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--input-bg, transparent);
+    color: var(--text);
+    padding: 0 11px;
+  }
+  .inventory-source-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+  }
   @media (max-width: 640px) {
+    .inventory-sources-page > div:first-child {
+      align-items: stretch !important;
+      flex-direction: column;
+    }
     .inventory-source-grid {
       grid-template-columns: 1fr;
     }
+    .inventory-source-footer,
+    .inventory-source-action {
+      width: 100%;
+    }
   }
 </style>
+
+<script>
+  (() => {
+    const modal = document.getElementById('sourceSuggestionModal');
+    const openButton = document.getElementById('openSourceSuggestionModal');
+    const closeButton = document.getElementById('closeSourceSuggestionModal');
+    const cancelButton = document.getElementById('cancelSourceSuggestionModal');
+
+    function openModal() {
+      if (!modal) return;
+      modal.classList.add('open');
+      modal.setAttribute('aria-hidden', 'false');
+      modal.querySelector('input[name="title"]')?.focus();
+    }
+
+    function closeModal() {
+      if (!modal) return;
+      modal.classList.remove('open');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    openButton?.addEventListener('click', openModal);
+    closeButton?.addEventListener('click', closeModal);
+    cancelButton?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeModal();
+    });
+  })();
+
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('.inventory-source-reaction-btn');
+    if (!button) return;
+
+    const sourceId = button.dataset.sourceId;
+    const reaction = button.dataset.reaction;
+    if (!sourceId || !reaction) return;
+
+    button.disabled = true;
+    try {
+      const response = await fetch(`/inventory-sources/${sourceId}/reaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reaction })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Could not save reaction');
+      }
+
+      const likeCount = document.querySelector(`[data-like-count="${sourceId}"]`);
+      const dislikeCount = document.querySelector(`[data-dislike-count="${sourceId}"]`);
+      if (likeCount) likeCount.textContent = data.like_count;
+      if (dislikeCount) dislikeCount.textContent = data.dislike_count;
+
+      document.querySelectorAll(`[data-source-id="${sourceId}"][data-reaction]`).forEach((btn) => {
+        btn.classList.toggle('active', data.reaction && btn.dataset.reaction === data.reaction);
+      });
+    } catch (error) {
+      alert(error.message || 'Could not save reaction');
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>
 {% endblock %}
