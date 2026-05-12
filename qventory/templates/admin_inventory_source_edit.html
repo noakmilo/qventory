@@ -19,7 +19,7 @@
     <a href="{{ url_for('main.admin_inventory_sources') }}" class="btn">Back</a>
   </div>
 
-  <form method="post" action="{{ form_action }}" class="card" style="padding:16px;">
+  <form method="post" action="{{ form_action }}" enctype="multipart/form-data" class="card" style="padding:16px;">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;">
       <div>
         <label>Title</label>
@@ -49,14 +49,19 @@
         <input class="input" type="text" name="link_url" value="{{ source.link_url if source else '' }}" placeholder="https://example.com" required>
       </div>
       <div>
-        <label>Image URL</label>
-        <div style="display:flex;gap:8px;">
-          <input class="input" id="sourceImageUrl" type="text" name="image_url" value="{{ source.image_url if source else '' }}" placeholder="https://...">
+        <label>Image</label>
+        {% if source and source.image_url %}
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+            <img src="{{ source.image_url }}" alt="{{ source.title }}" style="width:72px;height:48px;border-radius:8px;object-fit:cover;border:1px solid var(--border);">
+            <span style="color:var(--text-secondary);font-size:12px;">Upload a new image to replace the current one.</span>
+          </div>
+        {% endif %}
+        <input class="input" type="file" name="image_file" accept="image/*" {% if not cloudinary_enabled %}disabled{% endif %}>
+        <div style="color:var(--text-secondary);font-size:12px;margin-top:6px;">
           {% if cloudinary_enabled %}
-          <label class="btn" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;">
-            <i class="fas fa-image"></i> Upload
-            <input type="file" id="sourceImageUpload" accept="image/*" style="display:none;">
-          </label>
+            Image uploads go to Cloudinary. Max 3MB.
+          {% else %}
+            Cloudinary is not configured.
           {% endif %}
         </div>
       </div>
@@ -96,32 +101,4 @@
   {% endif %}
 </div>
 
-<script>
-  const uploadInput = document.getElementById('sourceImageUpload');
-  const imageUrlInput = document.getElementById('sourceImageUrl');
-
-  if (uploadInput && imageUrlInput) {
-    uploadInput.addEventListener('change', async () => {
-      const file = uploadInput.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const response = await fetch('{{ url_for("main.admin_inventory_sources_upload_image") }}', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.error || 'Upload failed');
-        }
-        imageUrlInput.value = data.url;
-      } catch (err) {
-        alert(err.message || 'Upload failed');
-      } finally {
-        uploadInput.value = '';
-      }
-    });
-  }
-</script>
 {% endblock %}

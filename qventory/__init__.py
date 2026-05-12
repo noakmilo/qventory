@@ -306,8 +306,12 @@ def create_app():
         visible = False
         try:
             if current_user.is_authenticated:
+                from qventory.models.system_setting import SystemSetting
                 from qventory.models.inventory_source import InventorySource
+                feature_enabled = bool(SystemSetting.get_int("inventory_sources_enabled", 0))
                 role = (current_user.role or "free").strip().lower()
+                if not feature_enabled:
+                    return {"show_inventory_sources": False}
                 sources = InventorySource.query.filter(
                     InventorySource.is_active.is_(True)
                 ).order_by(

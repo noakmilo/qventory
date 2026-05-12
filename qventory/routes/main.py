@@ -38,6 +38,7 @@ import qrcode
 from ..extensions import db
 from ..models.item import Item
 from ..models.setting import Setting
+from ..models.system_setting import SystemSetting
 from ..models.user import User
 from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
@@ -74,6 +75,7 @@ from ..models.ebay_feedback import EbayFeedback
 
 PAGE_SIZES = [10, 20, 50, 100, 500]
 USER_ROLE_OPTIONS = ["free", "early_adopter", "premium", "plus", "pro", "god", "enterprise"]
+INVENTORY_SOURCES_ENABLED_KEY = "inventory_sources_enabled"
 
 PENDING_TASK_DEFS = [
     {
@@ -884,6 +886,8 @@ def help_center_article(slug):
 
 def _visible_inventory_sources_for_role(role: str):
     role = (role or "free").strip().lower()
+    if not _inventory_sources_feature_enabled():
+        return []
     sources = InventorySource.query.filter(
         InventorySource.is_active.is_(True)
     ).order_by(
@@ -896,6 +900,10 @@ def _visible_inventory_sources_for_role(role: str):
 def _parse_inventory_source_roles(form):
     selected = form.getlist("allowed_roles")
     return [role for role in USER_ROLE_OPTIONS if role in selected]
+
+
+def _inventory_sources_feature_enabled() -> bool:
+    return bool(SystemSetting.get_int(INVENTORY_SOURCES_ENABLED_KEY, 0))
 
 
 @main_bp.route("/inventory-sources")
@@ -7683,6 +7691,32 @@ def _normalize_inventory_source_url(value: str) -> str:
     return value
 
 
+def _upload_inventory_source_image_file(file_storage):
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return None
+    if not cloudinary_enabled:
+        raise RuntimeError("Cloudinary not configured")
+
+    ct = (file_storage.mimetype or "").lower()
+    if not ct.startswith("image/"):
+        raise ValueError("Only image files are allowed")
+
+    file_storage.seek(0, io.SEEK_END)
+    size = file_storage.tell()
+    file_storage.seek(0)
+    if size > 3 * 1024 * 1024:
+        raise ValueError("Image too large (max 3MB)")
+
+    up = cloudinary.uploader.upload(
+        file_storage,
+        folder="qventory/inventory-sources",
+        overwrite=True,
+        resource_type="image",
+        transformation=[{"quality": "auto", "fetch_format": "auto"}]
+    )
+    return up.get("secure_url") or up.get("url")
+
+
 @main_bp.route("/admin/inventory-sources")
 @require_admin
 def admin_inventory_sources():
@@ -7690,11 +7724,29 @@ def admin_inventory_sources():
         InventorySource.display_order.asc(),
         InventorySource.title.asc()
     ).all()
+    feature_enabled = bool(SystemSetting.get_int(INVENTORY_SOURCES_ENABLED_KEY, 0))
     return render_template(
         "admin_inventory_sources.html",
         sources=sources,
         role_options=USER_ROLE_OPTIONS,
+        feature_enabled=feature_enabled,
     )
+
+
+@main_bp.route("/admin/inventory-sources/settings", methods=["POST"])
+@require_admin
+def admin_inventory_sources_settings():
+    enabled = request.form.get("inventory_sources_enabled") == "on"
+
+    enabled_setting = SystemSetting.query.filter_by(key=INVENTORY_SOURCES_ENABLED_KEY).first()
+    if not enabled_setting:
+        enabled_setting = SystemSetting(key=INVENTORY_SOURCES_ENABLED_KEY)
+        db.session.add(enabled_setting)
+    enabled_setting.value_int = 1 if enabled else 0
+    db.session.commit()
+
+    flash("Inventory Sources settings updated.", "ok")
+    return redirect(url_for("main.admin_inventory_sources"))
 
 
 @main_bp.route("/admin/inventory-sources/new", methods=["GET", "POST"])
@@ -7703,7 +7755,6 @@ def admin_inventory_sources_new():
     if request.method == "POST":
         title = (request.form.get("title") or "").strip()
         description = (request.form.get("description") or "").strip() or None
-        image_url = _normalize_inventory_source_url(request.form.get("image_url") or "") or None
         link_url = _normalize_inventory_source_url(request.form.get("link_url") or "")
         display_order = int(request.form.get("display_order") or 0)
         is_active = request.form.get("is_active") == "on"
@@ -7714,6 +7765,15 @@ def admin_inventory_sources_new():
             return redirect(url_for("main.admin_inventory_sources_new"))
         if not allowed_roles:
             flash("Select at least one allowed role.", "error")
+            return redirect(url_for("main.admin_inventory_sources_new"))
+
+        try:
+            image_url = _upload_inventory_source_image_file(request.files.get("image_file"))
+        except (RuntimeError, ValueError) as e:
+            flash(str(e), "error")
+            return redirect(url_for("main.admin_inventory_sources_new"))
+        except Exception as e:
+            flash(f"Image upload failed: {e}", "error")
             return redirect(url_for("main.admin_inventory_sources_new"))
 
         source = InventorySource(
@@ -7747,7 +7807,6 @@ def admin_inventory_sources_edit(source_id):
     if request.method == "POST":
         title = (request.form.get("title") or "").strip()
         description = (request.form.get("description") or "").strip() or None
-        image_url = _normalize_inventory_source_url(request.form.get("image_url") or "") or None
         link_url = _normalize_inventory_source_url(request.form.get("link_url") or "")
         display_order = int(request.form.get("display_order") or 0)
         is_active = request.form.get("is_active") == "on"
@@ -7760,9 +7819,19 @@ def admin_inventory_sources_edit(source_id):
             flash("Select at least one allowed role.", "error")
             return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
 
+        try:
+            image_url = _upload_inventory_source_image_file(request.files.get("image_file"))
+        except (RuntimeError, ValueError) as e:
+            flash(str(e), "error")
+            return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+        except Exception as e:
+            flash(f"Image upload failed: {e}", "error")
+            return redirect(url_for("main.admin_inventory_sources_edit", source_id=source.id))
+
         source.title = title
         source.description = description
-        source.image_url = image_url
+        if image_url:
+            source.image_url = image_url
         source.link_url = link_url
         source.display_order = display_order
         source.is_active = is_active

@@ -19,6 +19,25 @@
     </a>
   </div>
 
+  <form method="post" action="{{ url_for('main.admin_inventory_sources_settings') }}" class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin:0 0 4px;font-size:18px;">Feature Visibility</h2>
+        <p style="color:var(--text-secondary);font-size:13px;margin:0;">Turn the Inventory Sources route on or off. Access is controlled per source below.</p>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;">
+        <input type="checkbox" name="inventory_sources_enabled" {% if feature_enabled %}checked{% endif %}>
+        <span>Enable Inventory Sources</span>
+      </label>
+    </div>
+
+    <div style="margin-top:14px;">
+      <button type="submit" class="btn submitbtn">
+        <i class="fas fa-save"></i> Save Visibility
+      </button>
+    </div>
+  </form>
+
   <div class="card" style="padding:16px;">
     {% if sources %}
     <table style="width:100%;border-collapse:collapse;">
