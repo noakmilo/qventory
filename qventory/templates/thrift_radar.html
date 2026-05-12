@@ -3,10 +3,12 @@
 {% block title %}Thrift Radar{% endblock %}
 {% block meta_description %}Find nearby thrift stores, flea markets, and outlets with Thrift Radar.{% endblock %}
 
-{% block content %}
+{% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIINfQSM0Yz80NePMMMPb6Lfi+fM+Rcw6pA=" crossorigin="">
+{% endblock %}
 
+{% block content %}
 <div class="container page-shell thrift-radar-page" style="max-width:1280px;">
   <div class="thrift-radar-header">
     <div>
@@ -303,6 +305,83 @@
     -webkit-user-drag: none;
     user-select: none;
   }
+  .thrift-map-canvas.leaflet-container {
+    overflow: hidden;
+  }
+  .thrift-map-canvas .leaflet-pane,
+  .thrift-map-canvas .leaflet-map-pane,
+  .thrift-map-canvas .leaflet-tile-pane,
+  .thrift-map-canvas .leaflet-overlay-pane,
+  .thrift-map-canvas .leaflet-marker-pane,
+  .thrift-map-canvas .leaflet-shadow-pane,
+  .thrift-map-canvas .leaflet-tooltip-pane,
+  .thrift-map-canvas .leaflet-popup-pane,
+  .thrift-map-canvas .leaflet-tile-container,
+  .thrift-map-canvas .leaflet-tile,
+  .thrift-map-canvas .leaflet-marker-icon,
+  .thrift-map-canvas .leaflet-marker-shadow {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+  .thrift-map-canvas .leaflet-tile {
+    width: 256px;
+    height: 256px;
+    max-width: none !important;
+  }
+  .thrift-map-canvas .leaflet-tile-pane {
+    z-index: 200;
+  }
+  .thrift-map-canvas .leaflet-overlay-pane {
+    z-index: 400;
+  }
+  .thrift-map-canvas .leaflet-shadow-pane {
+    z-index: 500;
+  }
+  .thrift-map-canvas .leaflet-marker-pane {
+    z-index: 600;
+  }
+  .thrift-map-canvas .leaflet-tooltip-pane {
+    z-index: 650;
+  }
+  .thrift-map-canvas .leaflet-popup-pane {
+    z-index: 700;
+  }
+  .thrift-map-canvas .leaflet-control-container .leaflet-top,
+  .thrift-map-canvas .leaflet-control-container .leaflet-bottom {
+    position: absolute;
+    z-index: 1000;
+    pointer-events: none;
+  }
+  .thrift-map-canvas .leaflet-control {
+    position: relative;
+    z-index: 1000;
+    pointer-events: auto;
+  }
+  .thrift-map-canvas .leaflet-top {
+    top: 0;
+  }
+  .thrift-map-canvas .leaflet-right {
+    right: 0;
+  }
+  .thrift-map-canvas .leaflet-bottom {
+    bottom: 0;
+  }
+  .thrift-map-canvas .leaflet-left {
+    left: 0;
+  }
+  .thrift-map-canvas .leaflet-top .leaflet-control {
+    margin-top: 10px;
+  }
+  .thrift-map-canvas .leaflet-left .leaflet-control {
+    margin-left: 10px;
+  }
+  .thrift-map-canvas .leaflet-right .leaflet-control {
+    margin-right: 10px;
+  }
+  .thrift-map-canvas .leaflet-bottom .leaflet-control {
+    margin-bottom: 10px;
+  }
   .thrift-map-loader,
   .thrift-map-empty {
     position: absolute;
@@ -504,6 +583,7 @@
     thriftMarkers.clearLayers();
     if (thriftEmptyOverlay) thriftEmptyOverlay.style.display = 'none';
     thriftSetSearchDialogVisible(false);
+    thriftMap.invalidateSize(true);
     document.getElementById('thriftSaveSearch').disabled = false;
     document.getElementById('thriftCurrentSummary').textContent = `${search.zip_code} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
 
@@ -528,6 +608,7 @@
     } else if (search.center) {
       thriftMap.setView([search.center.lat, search.center.lon], 12);
     }
+    setTimeout(() => thriftMap.invalidateSize(true), 120);
   }
 
   function thriftRenderSavedLists() {

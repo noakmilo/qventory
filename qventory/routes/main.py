@@ -1243,6 +1243,73 @@ def _format_osm_address(tags):
     return address or "Address unavailable"
 
 
+def _nominatim_query_for_keyword(keyword: str) -> str:
+    if keyword == "thrift_store":
+        return "thrift store"
+    if keyword == "flea_market":
+        return "flea market"
+    return "outlet store"
+
+
+def _nominatim_viewbox(center):
+    lat = float(center["lat"])
+    lon = float(center["lon"])
+    lat_delta = THRIFT_RADAR_RADIUS_METERS / 111320
+    lon_delta = THRIFT_RADAR_RADIUS_METERS / max(1, 111320 * math.cos(math.radians(lat)))
+    left = lon - lon_delta
+    right = lon + lon_delta
+    top = lat + lat_delta
+    bottom = lat - lat_delta
+    return f"{left},{top},{right},{bottom}"
+
+
+def _search_nominatim_places(zip_code: str, center, keywords):
+    fallback_results = []
+    seen = set()
+    viewbox = _nominatim_viewbox(center)
+    for index, keyword in enumerate(keywords):
+        if index:
+            time.sleep(1)
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={
+                "q": f"{_nominatim_query_for_keyword(keyword)} near {zip_code}, United States",
+                "countrycodes": "us",
+                "format": "jsonv2",
+                "limit": 12,
+                "addressdetails": 1,
+                "viewbox": viewbox,
+                "bounded": 1,
+            },
+            headers=_thrift_radar_headers(),
+            timeout=12,
+        )
+        response.raise_for_status()
+        for place in response.json() or []:
+            osm_type = place.get("osm_type")
+            osm_id = place.get("osm_id")
+            key = (osm_type, osm_id, keyword)
+            name = (place.get("name") or place.get("display_name") or "").strip()
+            if not name or key in seen:
+                continue
+            seen.add(key)
+            display_name = place.get("display_name") or "Address unavailable"
+            address = display_name
+            if "," in address:
+                parts = [part.strip() for part in address.split(",")]
+                address = ", ".join(parts[1:5]) if len(parts) > 1 else display_name
+            fallback_results.append({
+                "id": f"nominatim-{osm_type}-{osm_id}-{keyword}",
+                "name": name[:160],
+                "address": address or "Address unavailable",
+                "lat": float(place["lat"]),
+                "lon": float(place["lon"]),
+                "keyword": keyword,
+                "keyword_label": THRIFT_RADAR_KEYWORDS.get(keyword, {}).get("label", "Source"),
+            })
+    return fallback_results
+
+
 def _search_thrift_radar(zip_code: str, keywords):
     center = _geocode_us_zip(zip_code)
     if not center:
@@ -1282,6 +1349,14 @@ def _search_thrift_radar(zip_code: str, keywords):
         })
 
     results.sort(key=lambda row: (row["keyword_label"], row["name"].lower()))
+    if not results:
+        current_app.logger.info(
+            "[THRIFT_RADAR] Overpass returned 0 results for zip=%s keywords=%s; trying Nominatim fallback",
+            zip_code,
+            keywords,
+        )
+        results = _search_nominatim_places(zip_code, center, keywords)
+        results.sort(key=lambda row: (row["keyword_label"], row["name"].lower()))
     return center, results[:100]
 
 
