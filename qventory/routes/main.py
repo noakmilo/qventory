@@ -46,6 +46,7 @@ from ..models.inventory_source import (
     InventorySource,
     InventorySourceReaction,
     InventorySourceSuggestion,
+    ThriftRadarLog,
     ThriftRadarSavedSearch,
 )
 from ..models.support import SupportTicket, SupportMessage, SupportAttachment
@@ -977,6 +978,53 @@ def _require_thrift_radar_access():
         abort(404)
 
 
+def _client_ip_address():
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()[:64]
+    return (request.remote_addr or "")[:64] or None
+
+
+def _log_thrift_radar_event(
+    event: str,
+    status: str = "success",
+    zip_code: str | None = None,
+    keywords=None,
+    result_count: int | None = None,
+    duration_ms: int | None = None,
+    error_message: str | None = None,
+    saved_search_id: int | None = None,
+    metadata: dict | None = None,
+):
+    log = ThriftRadarLog(
+        user_id=current_user.id if current_user.is_authenticated else None,
+        saved_search_id=saved_search_id,
+        event=event,
+        status=status,
+        zip_code=zip_code,
+        keywords=keywords or [],
+        result_count=result_count,
+        duration_ms=duration_ms,
+        error_message=(error_message or "")[:2000] or None,
+        metadata_json=metadata or {},
+        ip_address=_client_ip_address(),
+        user_agent=(request.headers.get("User-Agent") or "")[:255] or None,
+    )
+    db.session.add(log)
+    current_app.logger.info(
+        "[THRIFT_RADAR] user_id=%s event=%s status=%s zip=%s keywords=%s results=%s duration_ms=%s error=%s",
+        log.user_id,
+        event,
+        status,
+        zip_code,
+        keywords,
+        result_count,
+        duration_ms,
+        error_message,
+    )
+    return log
+
+
 @main_bp.route("/inventory-sources")
 @login_required
 def inventory_sources():
@@ -1070,7 +1118,7 @@ def thrift_radar():
 
 
 def _validate_us_zip_code(value: str) -> str | None:
-    value = (value or "").strip()
+    value = str(value or "").strip()
     match = re.fullmatch(r"\d{5}(?:-\d{4})?", value)
     if not match:
         return None
@@ -1229,25 +1277,86 @@ def _search_thrift_radar(zip_code: str, keywords):
 @login_required
 def thrift_radar_search():
     _require_thrift_radar_access()
+    started_at = time.monotonic()
     payload = request.get_json() or {}
     zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
     keywords = _normalize_thrift_keywords(payload.get("keywords") or [])
     if not zip_code:
+        _log_thrift_radar_event(
+            "search_validation_error",
+            status="error",
+            zip_code=str(payload.get("zip_code") or "")[:10],
+            keywords=payload.get("keywords") or [],
+            error_message="Invalid or unsupported ZIP Code",
+        )
+        db.session.commit()
         return jsonify({"ok": False, "error": "Thrift Radar currently supports U.S. ZIP Codes only."}), 400
     if not keywords:
+        _log_thrift_radar_event(
+            "search_validation_error",
+            status="error",
+            zip_code=zip_code,
+            keywords=payload.get("keywords") or [],
+            error_message="No keywords selected",
+        )
+        db.session.commit()
         return jsonify({"ok": False, "error": "Select at least one source type."}), 400
 
     try:
         center, results = _search_thrift_radar(zip_code, keywords)
-    except requests.RequestException:
+    except requests.RequestException as exc:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _log_thrift_radar_event(
+            "search_error",
+            status="error",
+            zip_code=zip_code,
+            keywords=keywords,
+            duration_ms=duration_ms,
+            error_message=str(exc),
+            metadata={"error_type": exc.__class__.__name__},
+        )
+        db.session.commit()
         return jsonify({"ok": False, "error": "Map search is temporarily unavailable. Please try again soon."}), 502
-    except Exception:
+    except Exception as exc:
         current_app.logger.exception("Thrift Radar search failed")
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _log_thrift_radar_event(
+            "search_error",
+            status="error",
+            zip_code=zip_code,
+            keywords=keywords,
+            duration_ms=duration_ms,
+            error_message=str(exc),
+            metadata={"error_type": exc.__class__.__name__},
+        )
+        db.session.commit()
         return jsonify({"ok": False, "error": "Could not complete this search."}), 500
 
     if not center:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _log_thrift_radar_event(
+            "search_no_zip_match",
+            status="error",
+            zip_code=zip_code,
+            keywords=keywords,
+            duration_ms=duration_ms,
+            result_count=0,
+            error_message="ZIP Code not found by geocoder",
+        )
+        db.session.commit()
         return jsonify({"ok": False, "error": "Could not find that U.S. ZIP Code."}), 404
 
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    _log_thrift_radar_event(
+        "search_success",
+        status="success",
+        zip_code=zip_code,
+        keywords=keywords,
+        result_count=len(results),
+        duration_ms=duration_ms,
+        metadata={"center": center},
+    )
+    db.session.commit()
     return jsonify({
         "ok": True,
         "zip_code": zip_code,
@@ -1282,6 +1391,16 @@ def thrift_radar_save_search():
         results=results[:100],
     )
     db.session.add(saved)
+    db.session.flush()
+    _log_thrift_radar_event(
+        "save_search",
+        status="success",
+        zip_code=zip_code,
+        keywords=keywords,
+        result_count=len(results[:100]),
+        saved_search_id=saved.id,
+        metadata={"title": saved.title},
+    )
     db.session.commit()
     return jsonify({"ok": True, "search": saved.to_dict()})
 
@@ -1300,6 +1419,15 @@ def thrift_radar_archive_search(search_id):
     saved = _get_owned_thrift_search(search_id)
     saved.is_archived = True
     saved.archived_at = datetime.utcnow()
+    _log_thrift_radar_event(
+        "archive_search",
+        status="success",
+        zip_code=saved.zip_code,
+        keywords=saved.keywords or [],
+        result_count=len(saved.results or []),
+        saved_search_id=saved.id,
+        metadata={"title": saved.title},
+    )
     db.session.commit()
     return jsonify({"ok": True, "search": saved.to_dict()})
 
@@ -1311,6 +1439,15 @@ def thrift_radar_restore_search(search_id):
     saved = _get_owned_thrift_search(search_id)
     saved.is_archived = False
     saved.archived_at = None
+    _log_thrift_radar_event(
+        "restore_search",
+        status="success",
+        zip_code=saved.zip_code,
+        keywords=saved.keywords or [],
+        result_count=len(saved.results or []),
+        saved_search_id=saved.id,
+        metadata={"title": saved.title},
+    )
     db.session.commit()
     return jsonify({"ok": True, "search": saved.to_dict()})
 
@@ -1320,6 +1457,17 @@ def thrift_radar_restore_search(search_id):
 def thrift_radar_delete_search(search_id):
     _require_thrift_radar_access()
     saved = _get_owned_thrift_search(search_id)
+    saved_search_id = saved.id
+    _log_thrift_radar_event(
+        "delete_search",
+        status="success",
+        zip_code=saved.zip_code,
+        keywords=saved.keywords or [],
+        result_count=len(saved.results or []),
+        saved_search_id=saved_search_id,
+        metadata={"title": saved.title},
+    )
+    db.session.flush()
     db.session.delete(saved)
     db.session.commit()
     return jsonify({"ok": True})

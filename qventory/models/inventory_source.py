@@ -82,3 +82,25 @@ class ThriftRadarSavedSearch(db.Model):
             "is_archived": self.is_archived,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class ThriftRadarLog(db.Model):
+    __tablename__ = "thrift_radar_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    saved_search_id = db.Column(db.Integer, db.ForeignKey("thrift_radar_saved_searches.id", ondelete="SET NULL"), nullable=True, index=True)
+    event = db.Column(db.String(50), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="success", index=True)
+    zip_code = db.Column(db.String(10), nullable=True, index=True)
+    keywords = db.Column(db.JSON, nullable=True)
+    result_count = db.Column(db.Integer, nullable=True)
+    duration_ms = db.Column(db.Integer, nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
+    metadata_json = db.Column(db.JSON, nullable=True)
+    ip_address = db.Column(db.String(64), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship("User", backref=db.backref("thrift_radar_logs", cascade="all, delete-orphan", lazy="dynamic"))
+    saved_search = db.relationship("ThriftRadarSavedSearch")
