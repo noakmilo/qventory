@@ -310,8 +310,22 @@
   .thrift-map-canvas.leaflet-container {
     overflow: hidden;
   }
-  
-  
+  .thrift-map-canvas .leaflet-pane,
+  .thrift-map-canvas .leaflet-map-pane,
+  .thrift-map-canvas .leaflet-tile-pane,
+  .thrift-map-canvas .leaflet-overlay-pane,
+  .thrift-map-canvas .leaflet-marker-pane,
+  .thrift-map-canvas .leaflet-shadow-pane,
+  .thrift-map-canvas .leaflet-tooltip-pane,
+  .thrift-map-canvas .leaflet-popup-pane,
+  .thrift-map-canvas .leaflet-tile-container,
+  .thrift-map-canvas .leaflet-tile,
+  .thrift-map-canvas .leaflet-marker-icon,
+  .thrift-map-canvas .leaflet-marker-shadow {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
   .thrift-map-canvas .leaflet-tile {
     width: 256px;
     height: 256px;
