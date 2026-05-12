@@ -1181,7 +1181,7 @@ def _overpass_clause_for_keyword(keyword: str, lat: float, lon: float) -> str:
     if keyword == "thrift_store":
         filters = [
             '["shop"~"^(second_hand|charity)$"]',
-            '["name"~"thrift|goodwill|salvation army|second hand",i]',
+            '["name"~"thrift|goodwill|salvation army|second hand|out of the closet|",i]',
         ]
     elif keyword == "flea_market":
         filters = [
