@@ -42,7 +42,12 @@ from ..models.system_setting import SystemSetting
 from ..models.user import User
 from ..models.subscription import Subscription
 from ..models.help_article import HelpArticle
-from ..models.inventory_source import InventorySource, InventorySourceReaction, InventorySourceSuggestion
+from ..models.inventory_source import (
+    InventorySource,
+    InventorySourceReaction,
+    InventorySourceSuggestion,
+    ThriftRadarSavedSearch,
+)
 from ..models.support import SupportTicket, SupportMessage, SupportAttachment
 from ..helpers.help_center import seed_help_articles, render_help_markdown
 from ..helpers import (
@@ -76,6 +81,26 @@ from ..models.ebay_feedback import EbayFeedback
 PAGE_SIZES = [10, 20, 50, 100, 500]
 USER_ROLE_OPTIONS = ["free", "early_adopter", "premium", "plus", "pro", "god", "enterprise"]
 INVENTORY_SOURCES_ENABLED_KEY = "inventory_sources_enabled"
+THRIFT_RADAR_ENABLED_KEY = "thrift_radar_enabled"
+THRIFT_RADAR_ROLES_KEY = "thrift_radar_roles"
+THRIFT_RADAR_KEYWORDS = {
+    "thrift_store": {
+        "label": "Thrift Store",
+        "icon": "fa-shirt",
+        "color": "#22c55e",
+    },
+    "flea_market": {
+        "label": "Flea Market",
+        "icon": "fa-store",
+        "color": "#f97316",
+    },
+    "outlet": {
+        "label": "Outlet",
+        "icon": "fa-bag-shopping",
+        "color": "#3b82f6",
+    },
+}
+THRIFT_RADAR_RADIUS_METERS = 24140
 
 PENDING_TASK_DEFS = [
     {
@@ -906,11 +931,57 @@ def _inventory_sources_feature_enabled() -> bool:
     return bool(SystemSetting.get_int(INVENTORY_SOURCES_ENABLED_KEY, 0))
 
 
+def _system_setting_value_str(key: str, default: str = "") -> str:
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if setting and setting.value_str is not None:
+        return setting.value_str
+    return default
+
+
+def _set_system_setting_int_str(key: str, value_int=None, value_str=None):
+    setting = SystemSetting.query.filter_by(key=key).first()
+    if not setting:
+        setting = SystemSetting(key=key)
+        db.session.add(setting)
+    if value_int is not None:
+        setting.value_int = value_int
+    if value_str is not None:
+        setting.value_str = value_str
+    return setting
+
+
+def _thrift_radar_allowed_roles():
+    raw = _system_setting_value_str(THRIFT_RADAR_ROLES_KEY, "[]")
+    try:
+        roles = json.loads(raw) or []
+    except Exception:
+        roles = []
+    return [role for role in USER_ROLE_OPTIONS if role in roles]
+
+
+def _thrift_radar_feature_enabled() -> bool:
+    return bool(SystemSetting.get_int(THRIFT_RADAR_ENABLED_KEY, 0))
+
+
+def _thrift_radar_access_allowed(role: str | None = None) -> bool:
+    role = (role or getattr(current_user, "role", "free") or "free").strip().lower()
+    return (
+        _inventory_sources_feature_enabled()
+        and _thrift_radar_feature_enabled()
+        and role in _thrift_radar_allowed_roles()
+    )
+
+
+def _require_thrift_radar_access():
+    if not current_user.is_authenticated or not _thrift_radar_access_allowed(current_user.role):
+        abort(404)
+
+
 @main_bp.route("/inventory-sources")
 @login_required
 def inventory_sources():
     sources = _visible_inventory_sources_for_role(current_user.role)
-    if not sources:
+    if not sources and not _thrift_radar_access_allowed(current_user.role):
         abort(404)
 
     source_ids = [source.id for source in sources]
@@ -970,6 +1041,288 @@ def inventory_sources_suggest():
     db.session.commit()
     flash("Source suggestion sent.", "ok")
     return redirect(url_for("main.inventory_sources"))
+
+
+@main_bp.route("/inventory-sources/thrift-radar")
+@login_required
+def thrift_radar():
+    _require_thrift_radar_access()
+    active_searches = ThriftRadarSavedSearch.query.filter_by(
+        user_id=current_user.id,
+        is_archived=False
+    ).order_by(
+        ThriftRadarSavedSearch.updated_at.desc(),
+        ThriftRadarSavedSearch.created_at.desc()
+    ).all()
+    archived_searches = ThriftRadarSavedSearch.query.filter_by(
+        user_id=current_user.id,
+        is_archived=True
+    ).order_by(
+        ThriftRadarSavedSearch.archived_at.desc(),
+        ThriftRadarSavedSearch.updated_at.desc()
+    ).limit(30).all()
+    return render_template(
+        "thrift_radar.html",
+        keyword_options=THRIFT_RADAR_KEYWORDS,
+        active_searches=[search.to_dict() for search in active_searches],
+        archived_searches=[search.to_dict() for search in archived_searches],
+    )
+
+
+def _validate_us_zip_code(value: str) -> str | None:
+    value = (value or "").strip()
+    match = re.fullmatch(r"\d{5}(?:-\d{4})?", value)
+    if not match:
+        return None
+    return value[:5]
+
+
+def _normalize_thrift_keywords(values):
+    if not isinstance(values, list):
+        return []
+    return [key for key in THRIFT_RADAR_KEYWORDS if key in values]
+
+
+def _thrift_radar_headers():
+    return {
+        "User-Agent": "Qventory Thrift Radar (contact: support@qventory.com)",
+        "Accept": "application/json",
+    }
+
+
+def _geocode_us_zip(zip_code: str):
+    response = requests.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={
+            "postalcode": zip_code,
+            "country": "United States",
+            "countrycodes": "us",
+            "format": "jsonv2",
+            "limit": 1,
+            "addressdetails": 1,
+        },
+        headers=_thrift_radar_headers(),
+        timeout=12,
+    )
+    response.raise_for_status()
+    data = response.json() or []
+    if not data:
+        return None
+    place = data[0]
+    return {
+        "lat": float(place["lat"]),
+        "lon": float(place["lon"]),
+        "display_name": place.get("display_name") or zip_code,
+    }
+
+
+def _overpass_clause_for_keyword(keyword: str, lat: float, lon: float) -> str:
+    radius = THRIFT_RADAR_RADIUS_METERS
+    if keyword == "thrift_store":
+        filters = [
+            '["shop"~"^(second_hand|charity)$"]',
+            '["name"~"thrift|goodwill|salvation army|second hand",i]',
+        ]
+    elif keyword == "flea_market":
+        filters = [
+            '["shop"="flea_market"]',
+            '["amenity"="marketplace"]["name"~"flea|swap",i]',
+            '["name"~"flea market|swap meet",i]',
+        ]
+    else:
+        filters = [
+            '["shop"="outlet"]',
+            '["name"~"outlet|clearance",i]',
+        ]
+
+    clauses = []
+    for filter_expr in filters:
+        clauses.extend([
+            f"node{filter_expr}(around:{radius},{lat},{lon});",
+            f"way{filter_expr}(around:{radius},{lat},{lon});",
+            f"relation{filter_expr}(around:{radius},{lat},{lon});",
+        ])
+    return "\n".join(clauses)
+
+
+def _build_overpass_query(lat: float, lon: float, keywords):
+    clauses = "\n".join(_overpass_clause_for_keyword(keyword, lat, lon) for keyword in keywords)
+    return f"""
+[out:json][timeout:25];
+(
+{clauses}
+);
+out center tags 100;
+"""
+
+
+def _classify_thrift_result(tags, selected_keywords):
+    name = (tags.get("name") or "").lower()
+    shop = (tags.get("shop") or "").lower()
+    amenity = (tags.get("amenity") or "").lower()
+
+    if "thrift_store" in selected_keywords and (
+        shop in {"second_hand", "charity"} or any(term in name for term in ["thrift", "goodwill", "salvation army", "second hand"])
+    ):
+        return "thrift_store"
+    if "flea_market" in selected_keywords and (
+        shop == "flea_market" or "flea" in name or "swap meet" in name or (amenity == "marketplace" and "flea" in name)
+    ):
+        return "flea_market"
+    if "outlet" in selected_keywords and (shop == "outlet" or "outlet" in name or "clearance" in name):
+        return "outlet"
+    return selected_keywords[0] if selected_keywords else "thrift_store"
+
+
+def _format_osm_address(tags):
+    street_parts = [tags.get("addr:housenumber"), tags.get("addr:street")]
+    street = " ".join(part for part in street_parts if part)
+    locality_parts = [tags.get("addr:city") or tags.get("addr:town"), tags.get("addr:state"), tags.get("addr:postcode")]
+    locality = ", ".join(part for part in locality_parts if part)
+    address = ", ".join(part for part in [street, locality] if part)
+    return address or "Address unavailable"
+
+
+def _search_thrift_radar(zip_code: str, keywords):
+    center = _geocode_us_zip(zip_code)
+    if not center:
+        return None, []
+
+    query = _build_overpass_query(center["lat"], center["lon"], keywords)
+    response = requests.post(
+        "https://overpass-api.de/api/interpreter",
+        data={"data": query},
+        headers=_thrift_radar_headers(),
+        timeout=30,
+    )
+    response.raise_for_status()
+    data = response.json() or {}
+    results = []
+    seen = set()
+    for element in data.get("elements", []):
+        tags = element.get("tags") or {}
+        name = (tags.get("name") or "").strip()
+        lat = element.get("lat") or (element.get("center") or {}).get("lat")
+        lon = element.get("lon") or (element.get("center") or {}).get("lon")
+        if not name or lat is None or lon is None:
+            continue
+        key = (element.get("type"), element.get("id"))
+        if key in seen:
+            continue
+        seen.add(key)
+        keyword = _classify_thrift_result(tags, keywords)
+        results.append({
+            "id": f"{element.get('type')}-{element.get('id')}",
+            "name": name[:160],
+            "address": _format_osm_address(tags),
+            "lat": float(lat),
+            "lon": float(lon),
+            "keyword": keyword,
+            "keyword_label": THRIFT_RADAR_KEYWORDS.get(keyword, {}).get("label", "Source"),
+        })
+
+    results.sort(key=lambda row: (row["keyword_label"], row["name"].lower()))
+    return center, results[:100]
+
+
+@main_bp.route("/inventory-sources/thrift-radar/search", methods=["POST"])
+@login_required
+def thrift_radar_search():
+    _require_thrift_radar_access()
+    payload = request.get_json() or {}
+    zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
+    keywords = _normalize_thrift_keywords(payload.get("keywords") or [])
+    if not zip_code:
+        return jsonify({"ok": False, "error": "Thrift Radar currently supports U.S. ZIP Codes only."}), 400
+    if not keywords:
+        return jsonify({"ok": False, "error": "Select at least one source type."}), 400
+
+    try:
+        center, results = _search_thrift_radar(zip_code, keywords)
+    except requests.RequestException:
+        return jsonify({"ok": False, "error": "Map search is temporarily unavailable. Please try again soon."}), 502
+    except Exception:
+        current_app.logger.exception("Thrift Radar search failed")
+        return jsonify({"ok": False, "error": "Could not complete this search."}), 500
+
+    if not center:
+        return jsonify({"ok": False, "error": "Could not find that U.S. ZIP Code."}), 404
+
+    return jsonify({
+        "ok": True,
+        "zip_code": zip_code,
+        "keywords": keywords,
+        "center": center,
+        "results": results,
+    })
+
+
+@main_bp.route("/inventory-sources/thrift-radar/saved", methods=["POST"])
+@login_required
+def thrift_radar_save_search():
+    _require_thrift_radar_access()
+    payload = request.get_json() or {}
+    zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
+    keywords = _normalize_thrift_keywords(payload.get("keywords") or [])
+    results = payload.get("results") or []
+    if not zip_code or not keywords:
+        return jsonify({"ok": False, "error": "Run a valid U.S. ZIP Code search first."}), 400
+    if not isinstance(results, list):
+        results = []
+    title = (payload.get("title") or "").strip()
+    if not title:
+        labels = ", ".join(THRIFT_RADAR_KEYWORDS[key]["label"] for key in keywords)
+        title = f"{zip_code} - {labels}"
+
+    saved = ThriftRadarSavedSearch(
+        user_id=current_user.id,
+        title=title[:200],
+        zip_code=zip_code,
+        keywords=keywords,
+        results=results[:100],
+    )
+    db.session.add(saved)
+    db.session.commit()
+    return jsonify({"ok": True, "search": saved.to_dict()})
+
+
+def _get_owned_thrift_search(search_id):
+    return ThriftRadarSavedSearch.query.filter_by(
+        id=search_id,
+        user_id=current_user.id
+    ).first_or_404()
+
+
+@main_bp.route("/inventory-sources/thrift-radar/saved/<int:search_id>/archive", methods=["POST"])
+@login_required
+def thrift_radar_archive_search(search_id):
+    _require_thrift_radar_access()
+    saved = _get_owned_thrift_search(search_id)
+    saved.is_archived = True
+    saved.archived_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"ok": True, "search": saved.to_dict()})
+
+
+@main_bp.route("/inventory-sources/thrift-radar/saved/<int:search_id>/restore", methods=["POST"])
+@login_required
+def thrift_radar_restore_search(search_id):
+    _require_thrift_radar_access()
+    saved = _get_owned_thrift_search(search_id)
+    saved.is_archived = False
+    saved.archived_at = None
+    db.session.commit()
+    return jsonify({"ok": True, "search": saved.to_dict()})
+
+
+@main_bp.route("/inventory-sources/thrift-radar/saved/<int:search_id>", methods=["DELETE"])
+@login_required
+def thrift_radar_delete_search(search_id):
+    _require_thrift_radar_access()
+    saved = _get_owned_thrift_search(search_id)
+    db.session.delete(saved)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @main_bp.route("/inventory-sources/<int:source_id>/reaction", methods=["POST"])
@@ -7853,6 +8206,8 @@ def admin_inventory_sources():
             if source_id in reaction_counts and reaction in reaction_counts[source_id]:
                 reaction_counts[source_id][reaction] = count
     feature_enabled = bool(SystemSetting.get_int(INVENTORY_SOURCES_ENABLED_KEY, 0))
+    thrift_radar_enabled = _thrift_radar_feature_enabled()
+    thrift_radar_roles = _thrift_radar_allowed_roles()
     return render_template(
         "admin_inventory_sources.html",
         sources=sources,
@@ -7860,6 +8215,8 @@ def admin_inventory_sources():
         feature_enabled=feature_enabled,
         reaction_counts=reaction_counts,
         suggestions=suggestions,
+        thrift_radar_enabled=thrift_radar_enabled,
+        thrift_radar_roles=thrift_radar_roles,
     )
 
 
@@ -7879,12 +8236,12 @@ def admin_inventory_source_suggestion_archive(suggestion_id):
 @require_admin
 def admin_inventory_sources_settings():
     enabled = request.form.get("inventory_sources_enabled") == "on"
+    thrift_radar_enabled = request.form.get("thrift_radar_enabled") == "on"
+    thrift_radar_roles = [role for role in USER_ROLE_OPTIONS if role in request.form.getlist("thrift_radar_roles")]
 
-    enabled_setting = SystemSetting.query.filter_by(key=INVENTORY_SOURCES_ENABLED_KEY).first()
-    if not enabled_setting:
-        enabled_setting = SystemSetting(key=INVENTORY_SOURCES_ENABLED_KEY)
-        db.session.add(enabled_setting)
-    enabled_setting.value_int = 1 if enabled else 0
+    _set_system_setting_int_str(INVENTORY_SOURCES_ENABLED_KEY, value_int=1 if enabled else 0)
+    _set_system_setting_int_str(THRIFT_RADAR_ENABLED_KEY, value_int=1 if thrift_radar_enabled else 0)
+    _set_system_setting_int_str(THRIFT_RADAR_ROLES_KEY, value_str=json.dumps(thrift_radar_roles))
     db.session.commit()
 
     flash("Inventory Sources settings updated.", "ok")

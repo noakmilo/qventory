@@ -24,7 +24,12 @@ from .ebay_feedback import EbayFeedback
 from .ebay_listing_draft import EbayListingDraft
 from .ebay_category_specific_cache import EbayCategorySpecificCache
 from .help_article import HelpArticle
-from .inventory_source import InventorySource, InventorySourceReaction, InventorySourceSuggestion
+from .inventory_source import (
+    InventorySource,
+    InventorySourceReaction,
+    InventorySourceSuggestion,
+    ThriftRadarSavedSearch,
+)
 from .pickup import PickupAppointment, PickupMessage
 from .polling_log import PollingLog
 from .retired_item import RetiredItem
@@ -61,6 +66,7 @@ __all__ = [
     'InventorySource',
     'InventorySourceReaction',
     'InventorySourceSuggestion',
+    'ThriftRadarSavedSearch',
     'PickupAppointment',
     'PickupMessage',
     'PollingLog',

@@ -177,6 +177,12 @@
           <i class="fas fa-map-marked-alt"></i>
           <span>Inventory Sources</span>
         </a>
+        {% if show_thrift_radar %}
+        <a href="{{ url_for('main.thrift_radar') }}" class="sidebar-item {% if 'thrift_radar' in request.endpoint %}active{% endif %}" title="Thrift Radar" style="padding-left:34px;">
+          <i class="fas fa-location-crosshairs"></i>
+          <span>Thrift Radar</span>
+        </a>
+        {% endif %}
         {% endif %}
         {% if current_user.is_authenticated and current_user.get_plan_limits().can_create_listings and feature_ebay_listing_create_enabled %}
         <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="sidebar-item {% if 'ebay_list' in request.endpoint %}active{% endif %}" title="List on eBay">

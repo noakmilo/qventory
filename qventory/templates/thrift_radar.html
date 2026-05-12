@@ -1,0 +1,493 @@
+{% extends "base_new.html" %}
+
+{% block title %}Thrift Radar{% endblock %}
+{% block meta_description %}Find nearby thrift stores, flea markets, and outlets with Thrift Radar.{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIINfQSM0Yz80NePMMMPb6Lfi+fM+Rcw6pA=" crossorigin="">
+
+<div class="container page-shell thrift-radar-page" style="max-width:1280px;">
+  <div class="thrift-radar-header">
+    <div>
+      <h1>Thrift Radar</h1>
+      <p>Find local places to source inventory near a U.S. ZIP Code.</p>
+    </div>
+    <a href="{{ url_for('main.inventory_sources') }}" class="btn">
+      <i class="fas fa-arrow-left"></i> Inventory Sources
+    </a>
+  </div>
+
+  <div class="thrift-radar-layout">
+    <section class="thrift-radar-panel">
+      <form id="thriftRadarForm" class="thrift-radar-form">
+        <div class="thrift-radar-alert">
+          <i class="fas fa-info-circle"></i>
+          <span>Thrift Radar is currently available for U.S. ZIP Codes only. More countries are coming soon.</span>
+        </div>
+        <label>
+          <span>ZIP Code</span>
+          <input type="text" name="zip_code" id="thriftZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="Enter U.S. ZIP Code" maxlength="10" required>
+        </label>
+        <div>
+          <div class="thrift-radar-label">Keywords</div>
+          <div class="thrift-keywords">
+            {% for key, option in keyword_options.items() %}
+            <label>
+              <input type="checkbox" name="keywords" value="{{ key }}" {% if loop.first %}checked{% endif %}>
+              <span style="--keyword-color:{{ option.color }};">
+                <i class="fas {{ option.icon }}"></i> {{ option.label }}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <button type="submit" class="btn submitbtn thrift-go-btn">
+          <i class="fas fa-location-crosshairs"></i> GO
+        </button>
+      </form>
+
+      <div class="thrift-radar-save-card">
+        <div>
+          <h2>Current Search</h2>
+          <p id="thriftCurrentSummary">Run a search to save it.</p>
+        </div>
+        <button type="button" class="btn" id="thriftSaveSearch" disabled>
+          <i class="fas fa-bookmark"></i> Save Search
+        </button>
+      </div>
+
+      <div class="thrift-saved-section">
+        <div class="thrift-saved-header">
+          <h2>Saved Searches</h2>
+          <span id="thriftSavedCount"></span>
+        </div>
+        <div id="thriftSavedList" class="thrift-saved-list"></div>
+      </div>
+
+      <details class="thrift-archived-section">
+        <summary>Archived Searches</summary>
+        <div id="thriftArchivedList" class="thrift-saved-list"></div>
+      </details>
+    </section>
+
+    <section class="thrift-map-shell">
+      <div id="thriftMap"></div>
+      <div class="thrift-map-loader" id="thriftMapLoader" hidden>
+        <div class="thrift-radar-spinner"></div>
+        <span>Scanning nearby sources...</span>
+      </div>
+      <div class="thrift-map-empty" id="thriftMapEmpty">
+        <i class="fas fa-map-location-dot"></i>
+        <span>Enter a U.S. ZIP Code and choose at least one keyword.</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<style>
+  .thrift-radar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .thrift-radar-header h1 {
+    margin: 0 0 6px;
+  }
+  .thrift-radar-header p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .thrift-radar-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 14px;
+  }
+  .thrift-radar-panel,
+  .thrift-map-shell {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+  }
+  .thrift-radar-panel {
+    padding: 14px;
+    display: grid;
+    gap: 14px;
+    align-content: start;
+  }
+  .thrift-radar-form {
+    display: grid;
+    gap: 12px;
+  }
+  .thrift-radar-alert {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  .thrift-radar-form label,
+  .thrift-radar-label {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .thrift-radar-form input[type="text"] {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--input-bg, transparent);
+    color: var(--text);
+    padding: 0 11px;
+    margin-top: 6px;
+  }
+  .thrift-keywords {
+    display: grid;
+    gap: 8px;
+    margin-top: 7px;
+  }
+  .thrift-keywords label {
+    cursor: pointer;
+  }
+  .thrift-keywords input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .thrift-keywords span {
+    min-height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 11px;
+    color: var(--text-secondary);
+  }
+  .thrift-keywords input:checked + span {
+    border-color: color-mix(in srgb, var(--keyword-color) 55%, transparent);
+    background: color-mix(in srgb, var(--keyword-color) 14%, transparent);
+    color: var(--text);
+  }
+  .thrift-keywords i {
+    color: var(--keyword-color);
+  }
+  .thrift-go-btn {
+    justify-content: center;
+  }
+  .thrift-radar-save-card,
+  .thrift-saved-section,
+  .thrift-archived-section {
+    border-top: 1px solid var(--border);
+    padding-top: 14px;
+  }
+  .thrift-radar-save-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .thrift-radar-save-card h2,
+  .thrift-saved-header h2 {
+    margin: 0 0 4px;
+    font-size: 16px;
+  }
+  .thrift-radar-save-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .thrift-saved-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .thrift-saved-list {
+    display: grid;
+    gap: 8px;
+  }
+  .thrift-saved-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+  }
+  .thrift-saved-card strong {
+    font-size: 14px;
+  }
+  .thrift-saved-card small {
+    color: var(--text-secondary);
+  }
+  .thrift-saved-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .thrift-map-shell {
+    min-height: 680px;
+    position: relative;
+    overflow: hidden;
+  }
+  #thriftMap {
+    position: absolute;
+    inset: 0;
+  }
+  .thrift-map-loader,
+  .thrift-map-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 12px;
+    background: rgba(15, 23, 42, 0.72);
+    color: white;
+    z-index: 500;
+    text-align: center;
+    padding: 20px;
+  }
+  .thrift-map-empty i {
+    font-size: 36px;
+    color: #38bdf8;
+  }
+  .thrift-map-loader[hidden] {
+    display: none;
+  }
+  .thrift-radar-spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    border: 4px solid rgba(255, 255, 255, 0.28);
+    border-top-color: #f97316;
+    animation: thriftSpin 0.9s linear infinite;
+  }
+  .thrift-marker {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    color: white;
+    border: 2px solid white;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  }
+  @keyframes thriftSpin {
+    to { transform: rotate(360deg); }
+  }
+  @media (max-width: 960px) {
+    .thrift-radar-layout {
+      grid-template-columns: 1fr;
+    }
+    .thrift-map-shell {
+      min-height: 540px;
+    }
+  }
+  @media (max-width: 640px) {
+    .thrift-radar-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .thrift-radar-save-card {
+      align-items: stretch;
+      flex-direction: column;
+    }
+  }
+</style>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+<script>
+  const thriftKeywordOptions = {{ keyword_options|tojson }};
+  let thriftActiveSearches = {{ active_searches|tojson }};
+  let thriftArchivedSearches = {{ archived_searches|tojson }};
+  let thriftCurrentSearch = null;
+  let thriftMarkers = L.layerGroup();
+
+  const thriftMap = L.map('thriftMap', { zoomControl: true }).setView([39.8283, -98.5795], 4);
+  const normalLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(thriftMap);
+  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19,
+    attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics'
+  });
+  L.control.layers({ Normal: normalLayer, Satellite: satelliteLayer }, { Results: thriftMarkers }, { collapsed: false }).addTo(thriftMap);
+  thriftMarkers.addTo(thriftMap);
+
+  function thriftSelectedKeywords() {
+    return Array.from(document.querySelectorAll('input[name="keywords"]:checked')).map((input) => input.value);
+  }
+
+  function thriftKeywordLabel(key) {
+    return thriftKeywordOptions[key]?.label || key;
+  }
+
+  function thriftEscape(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[char]);
+  }
+
+  function thriftSetLoading(loading) {
+    document.getElementById('thriftMapLoader').hidden = !loading;
+  }
+
+  function thriftShowResults(search) {
+    thriftCurrentSearch = search;
+    thriftMarkers.clearLayers();
+    document.getElementById('thriftMapEmpty').style.display = 'none';
+    document.getElementById('thriftSaveSearch').disabled = false;
+    document.getElementById('thriftCurrentSummary').textContent = `${search.zip_code} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
+
+    const bounds = [];
+    search.results.forEach((result) => {
+      const option = thriftKeywordOptions[result.keyword] || {};
+      const iconHtml = `<div class="thrift-marker" style="background:${option.color || '#64748b'}"><i class="fas ${option.icon || 'fa-location-dot'}"></i></div>`;
+      const marker = L.marker([result.lat, result.lon], {
+        icon: L.divIcon({ html: iconHtml, className: '', iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -18] })
+      });
+      marker.bindPopup(`
+        <strong>${thriftEscape(result.name)}</strong><br>
+        <span>${thriftEscape(result.address)}</span><br>
+        <small>${thriftEscape(result.keyword_label)}</small>
+      `);
+      thriftMarkers.addLayer(marker);
+      bounds.push([result.lat, result.lon]);
+    });
+
+    if (bounds.length) {
+      thriftMap.fitBounds(bounds, { padding: [34, 34], maxZoom: 14 });
+    } else if (search.center) {
+      thriftMap.setView([search.center.lat, search.center.lon], 12);
+    }
+  }
+
+  function thriftRenderSavedLists() {
+    const savedList = document.getElementById('thriftSavedList');
+    const archivedList = document.getElementById('thriftArchivedList');
+    const savedCount = document.getElementById('thriftSavedCount');
+    savedCount.textContent = thriftActiveSearches.length ? `${thriftActiveSearches.length} saved` : '';
+
+    function renderSearch(search, archived) {
+      const keywords = (search.keywords || []).map(thriftKeywordLabel).join(', ');
+      return `
+        <div class="thrift-saved-card" data-search-id="${search.id}">
+          <div>
+            <strong>${thriftEscape(search.title)}</strong><br>
+            <small>${thriftEscape(search.zip_code)} · ${thriftEscape(keywords)} · ${(search.results || []).length} places</small>
+          </div>
+          <div class="thrift-saved-actions">
+            <button type="button" class="btn" data-thrift-action="open" data-search-id="${search.id}" data-archived="${archived ? '1' : '0'}">Open</button>
+            ${archived
+              ? `<button type="button" class="btn" data-thrift-action="restore" data-search-id="${search.id}">Restore</button>`
+              : `<button type="button" class="btn" data-thrift-action="archive" data-search-id="${search.id}">Archive</button>`}
+            <button type="button" class="btn" data-thrift-action="delete" data-search-id="${search.id}">Delete</button>
+          </div>
+        </div>`;
+    }
+
+    savedList.innerHTML = thriftActiveSearches.length
+      ? thriftActiveSearches.map((search) => renderSearch(search, false)).join('')
+      : '<div style="color:var(--text-secondary);font-size:13px;">No saved searches yet.</div>';
+    archivedList.innerHTML = thriftArchivedSearches.length
+      ? thriftArchivedSearches.map((search) => renderSearch(search, true)).join('')
+      : '<div style="color:var(--text-secondary);font-size:13px;">No archived searches.</div>';
+  }
+
+  async function thriftJson(url, options = {}) {
+    const response = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  }
+
+  document.getElementById('thriftRadarForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const zipCode = document.getElementById('thriftZipCode').value.trim();
+    const keywords = thriftSelectedKeywords();
+    thriftSetLoading(true);
+    try {
+      const data = await thriftJson('{{ url_for("main.thrift_radar_search") }}', {
+        method: 'POST',
+        body: JSON.stringify({ zip_code: zipCode, keywords })
+      });
+      thriftShowResults(data);
+    } catch (error) {
+      alert(error.message || 'Search failed');
+    } finally {
+      thriftSetLoading(false);
+    }
+  });
+
+  document.getElementById('thriftSaveSearch').addEventListener('click', async () => {
+    if (!thriftCurrentSearch) return;
+    try {
+      const data = await thriftJson('{{ url_for("main.thrift_radar_save_search") }}', {
+        method: 'POST',
+        body: JSON.stringify(thriftCurrentSearch)
+      });
+      thriftActiveSearches.unshift(data.search);
+      thriftRenderSavedLists();
+    } catch (error) {
+      alert(error.message || 'Could not save search');
+    }
+  });
+
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-thrift-action]');
+    if (!button) return;
+    const id = Number(button.dataset.searchId);
+    const action = button.dataset.thriftAction;
+    const list = button.dataset.archived === '1' ? thriftArchivedSearches : thriftActiveSearches;
+    const search = [...thriftActiveSearches, ...thriftArchivedSearches].find((entry) => entry.id === id);
+    if (!search) return;
+
+    if (action === 'open') {
+      thriftShowResults({ ...search, center: null });
+      return;
+    }
+
+    try {
+      if (action === 'archive') {
+        await thriftJson(`/inventory-sources/thrift-radar/saved/${id}/archive`, { method: 'POST', body: '{}' });
+        thriftActiveSearches = thriftActiveSearches.filter((entry) => entry.id !== id);
+        thriftArchivedSearches.unshift({ ...search, is_archived: true });
+      } else if (action === 'restore') {
+        await thriftJson(`/inventory-sources/thrift-radar/saved/${id}/restore`, { method: 'POST', body: '{}' });
+        thriftArchivedSearches = thriftArchivedSearches.filter((entry) => entry.id !== id);
+        thriftActiveSearches.unshift({ ...search, is_archived: false });
+      } else if (action === 'delete') {
+        if (!confirm('Delete this saved search?')) return;
+        await thriftJson(`/inventory-sources/thrift-radar/saved/${id}`, { method: 'DELETE' });
+        thriftActiveSearches = thriftActiveSearches.filter((entry) => entry.id !== id);
+        thriftArchivedSearches = thriftArchivedSearches.filter((entry) => entry.id !== id);
+      }
+      thriftRenderSavedLists();
+    } catch (error) {
+      alert(error.message || 'Could not update saved search');
+    }
+  });
+
+  thriftRenderSavedLists();
+</script>
+{% endblock %}

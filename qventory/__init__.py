@@ -1,4 +1,5 @@
 from flask import Flask, request
+import json
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -304,6 +305,7 @@ def create_app():
         from flask_login import current_user
 
         visible = False
+        show_thrift_radar = False
         try:
             if current_user.is_authenticated:
                 from qventory.models.system_setting import SystemSetting
@@ -311,18 +313,26 @@ def create_app():
                 feature_enabled = bool(SystemSetting.get_int("inventory_sources_enabled", 0))
                 role = (current_user.role or "free").strip().lower()
                 if not feature_enabled:
-                    return {"show_inventory_sources": False}
+                    return {"show_inventory_sources": False, "show_thrift_radar": False}
+                thrift_enabled = bool(SystemSetting.get_int("thrift_radar_enabled", 0))
+                thrift_roles_setting = SystemSetting.query.filter_by(key="thrift_radar_roles").first()
+                try:
+                    thrift_roles = json.loads(thrift_roles_setting.value_str or "[]") if thrift_roles_setting else []
+                except Exception:
+                    thrift_roles = []
+                show_thrift_radar = thrift_enabled and role in thrift_roles
                 sources = InventorySource.query.filter(
                     InventorySource.is_active.is_(True)
                 ).order_by(
                     InventorySource.display_order.asc(),
                     InventorySource.title.asc()
                 ).all()
-                visible = any(source.allows_role(role) for source in sources)
+                visible = any(source.allows_role(role) for source in sources) or show_thrift_radar
         except Exception:
             visible = False
+            show_thrift_radar = False
 
-        return {"show_inventory_sources": visible}
+        return {"show_inventory_sources": visible, "show_thrift_radar": show_thrift_radar}
 
     @app.context_processor
     def inject_feedback_unread_count():
