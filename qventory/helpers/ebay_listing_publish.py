@@ -7,6 +7,7 @@ def _headers(access_token: str):
     return {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
+        "Content-Language": "en-US",
     }
 
 

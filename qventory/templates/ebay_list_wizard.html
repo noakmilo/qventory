@@ -27,8 +27,10 @@
           <option value="">Select condition</option>
           <option value="NEW">New</option>
           <option value="USED_EXCELLENT">Used - Excellent</option>
+          <option value="USED_VERY_GOOD">Used - Very Good</option>
           <option value="USED_GOOD">Used - Good</option>
-          <option value="USED_FAIR">Used - Fair</option>
+          <option value="USED_ACCEPTABLE">Used - Acceptable</option>
+          <option value="FOR_PARTS_OR_NOT_WORKING">For parts or not working</option>
         </select>
       </div>
       <div>
@@ -108,21 +110,19 @@
     <input type="file" id="imageInput" accept="image/*" multiple>
     <div class="image-tools">
       <div class="image-editor">
-        <div class="editor-preview">
-          <canvas id="editorCanvas" width="320" height="320"></canvas>
-        </div>
+        <div id="tuiImageEditor" class="tui-editor-shell"></div>
         <div class="editor-controls">
-          <label>Aspect
-            <select id="aspectSelect">
+          <label>Resize
+            <select id="resizeSelect">
               <option value="original">Original</option>
-              <option value="1:1">1:1</option>
-              <option value="4:3">4:3</option>
-              <option value="3:4">3:4</option>
+              <option value="1600">Max 1600px</option>
+              <option value="1200">Max 1200px</option>
+              <option value="1000">Max 1000px</option>
+              <option value="800">Max 800px</option>
             </select>
           </label>
-          <label>Brightness <input type="range" id="brightnessRange" min="-50" max="50" value="0"></label>
-          <label>Contrast <input type="range" id="contrastRange" min="-50" max="50" value="0"></label>
-          <button class="btn" id="applyEditsBtn">Apply to Selected</button>
+          <button class="btn" id="applyEditsBtn">Export & Upload</button>
+          <div class="muted" id="imageEditorHint">Select an image to edit.</div>
         </div>
       </div>
       <div class="image-list" id="imageList"></div>
@@ -155,9 +155,12 @@
   .list-wizard .category-node { padding:4px 6px; cursor:pointer; }
   .list-wizard .category-node.leaf { color:#93c5fd; }
   .list-wizard .specifics-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
-  .list-wizard .image-tools { display:grid; grid-template-columns:320px 1fr; gap:16px; }
+  .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 280px; gap:16px; }
+  .list-wizard .tui-editor-shell { min-height:560px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#1f2937; }
+  .list-wizard .editor-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
   .list-wizard .image-list { display:flex; flex-wrap:wrap; gap:10px; }
   .list-wizard .image-card { width:140px; border:1px solid var(--border); border-radius:10px; padding:6px; background:var(--card); cursor:grab; }
+  .list-wizard .image-card.selected { outline:2px solid #38bdf8; }
   .list-wizard .image-card img { width:100%; height:100px; object-fit:cover; border-radius:6px; }
   .list-wizard .review-actions { display:flex; gap:10px; margin-top:12px; }
   .list-wizard .muted { color:var(--sub); font-size:12px; }
@@ -170,15 +173,19 @@
   window.EBAY_LIST_CONFIG = {
     draftCreateUrl: "{{ url_for('ebay_list.create_draft') }}",
     draftBaseUrl: "{{ url_for('ebay_list.get_draft', draft_id=0) }}".replace("/0", ""),
-    draftPublishUrl: "{{ url_for('ebay_list.publish_draft', draft_id=0) }}".replace("/0", ""),
     categoriesUrl: "{{ url_for('main.api_ebay_categories') }}",
-    specificsUrl: "{{ url_for('ebay_list.get_category_specifics_api', category_id='0') }}".replace("/0", ""),
-    specificsRefreshUrl: "{{ url_for('ebay_list.refresh_category_specifics', category_id='0') }}".replace("/0", ""),
+    imageUploadUrl: "{{ url_for('ebay_list.upload_image') }}",
     uploadTokenUrl: "{{ url_for('ebay_list.get_upload_token') }}",
     imageConfirmUrl: "{{ url_for('ebay_list.confirm_upload') }}",
     policiesUrl: "{{ url_for('ebay_list.get_account_policies_api') }}",
     locationsUrl: "{{ url_for('ebay_list.get_account_locations_api') }}"
   };
 </script>
+<link rel="stylesheet" href="https://uicdn.toast.com/tui-color-picker/latest/tui-color-picker.css">
+<link rel="stylesheet" href="https://uicdn.toast.com/tui-image-editor/latest/tui-image-editor.css">
+<script src="https://uicdn.toast.com/tui-code-snippet/latest/tui-code-snippet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.6.0/fabric.min.js"></script>
+<script src="https://uicdn.toast.com/tui-color-picker/latest/tui-color-picker.js"></script>
+<script src="https://uicdn.toast.com/tui-image-editor/latest/tui-image-editor.js"></script>
 <script src="{{ url_for('static', filename='ebay_list.js') }}"></script>
 {% endblock %}

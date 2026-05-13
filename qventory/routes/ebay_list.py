@@ -7,7 +7,7 @@ from ..models.ebay_listing_draft import EbayListingDraft
 from ..models.ebay_category import EbayCategory
 from ..routes.permissions import require_plan_feature, require_feature_flag
 from ..helpers.ebay_specifics_cache import get_category_specifics
-from ..helpers.ebay_image_upload import create_ebay_upload_session
+from ..helpers.ebay_image_upload import create_ebay_upload_session, upload_ebay_image_file
 from ..helpers.ebay_listing_publish import (
     create_or_replace_inventory_item,
     create_offer,
@@ -38,6 +38,19 @@ ALLOWED_DESCRIPTION_TAGS = [
     "h1", "h2", "h3", "h4", "blockquote", "span"
 ]
 ALLOWED_DESCRIPTION_ATTRS = {"span": ["style"]}
+ALLOWED_CONDITION_IDS = {
+    "NEW",
+    "LIKE_NEW",
+    "NEW_OTHER",
+    "NEW_WITH_DEFECTS",
+    "MANUFACTURER_REFURBISHED",
+    "SELLER_REFURBISHED",
+    "USED_EXCELLENT",
+    "USED_VERY_GOOD",
+    "USED_GOOD",
+    "USED_ACCEPTABLE",
+    "FOR_PARTS_OR_NOT_WORKING",
+}
 
 
 def _sanitize_html(html: str | None) -> str | None:
@@ -78,6 +91,8 @@ def _validate_draft(draft: EbayListingDraft):
 
     if not draft.condition_id:
         errors["condition_id"] = "Condition is required."
+    elif draft.condition_id not in ALLOWED_CONDITION_IDS:
+        errors["condition_id"] = "Select a valid eBay condition."
 
     if not draft.sku:
         errors["sku"] = "SKU is required."
@@ -97,6 +112,9 @@ def _validate_draft(draft: EbayListingDraft):
         errors["payment_policy_id"] = "Payment policy ID is required."
     if not draft.return_policy_id:
         errors["return_policy_id"] = "Return policy ID is required."
+
+    if not draft.merchant_location_key:
+        errors["merchant_location_key"] = "Merchant location is required. Create an eBay inventory location first."
 
     images = _draft_images(draft)
     if not images:
@@ -274,7 +292,7 @@ def publish_draft(draft_id):
         "format": "FIXED_PRICE",
         "availableQuantity": int(draft.quantity or 0),
         "categoryId": draft.category_id,
-        "merchantLocationKey": draft.merchant_location_key or "DEFAULT",
+        "merchantLocationKey": draft.merchant_location_key,
         "listingPolicies": {
             "fulfillmentPolicyId": draft.fulfillment_policy_id,
             "paymentPolicyId": draft.payment_policy_id,
@@ -379,6 +397,71 @@ def get_upload_token():
         return jsonify({"ok": False, "error": result.get("error")}), 400
 
     return jsonify({"ok": True, "upload": result})
+
+
+@ebay_list_bp.route("/api/ebay/images/upload", methods=["POST"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def upload_image():
+    if not _rate_limit(f"upload:{current_user.id}", limit=20, window_seconds=60):
+        return jsonify({"ok": False, "error": "rate_limited"}), 429
+
+    draft_id = request.form.get("draft_id")
+    draft = _draft_or_404(int(draft_id)) if draft_id else None
+    if not draft:
+        return jsonify({"ok": False, "error": "draft_not_found"}), 404
+
+    image_file = request.files.get("image")
+    if not image_file:
+        return jsonify({"ok": False, "error": "missing_image"}), 400
+
+    images = _draft_images(draft)
+    if len(images) >= 20:
+        return jsonify({"ok": False, "error": "image_limit_reached"}), 400
+
+    sha256 = request.form.get("sha256")
+    if sha256 and any(img.get("sha256") == sha256 for img in images):
+        return jsonify({"ok": True, "draft": draft.to_dict(), "image": next(img for img in images if img.get("sha256") == sha256)})
+
+    image_file.stream.seek(0, 2)
+    size = image_file.stream.tell()
+    image_file.stream.seek(0)
+    if size <= 0 or size > 2 * 1024 * 1024:
+        return jsonify({"ok": False, "error": "invalid_size"}), 400
+
+    result = upload_ebay_image_file(
+        current_user.id,
+        image_file.stream,
+        request.form.get("filename") or image_file.filename or "image.jpg",
+        image_file.mimetype or "image/jpeg",
+    )
+    if not result.get("success") or not result.get("image_url"):
+        return jsonify({"ok": False, "error": "upload_failed", "details": result.get("error")}), 400
+
+    image_entry = {
+        "filename": request.form.get("filename") or image_file.filename or "image.jpg",
+        "sha256": sha256,
+        "width": int(request.form.get("width") or 0) or None,
+        "height": int(request.form.get("height") or 0) or None,
+        "ebay_image_url": result.get("image_url"),
+        "ebay_image_location": result.get("location"),
+        "is_main": len(images) == 0,
+    }
+    replace_index = request.form.get("replace_index")
+    try:
+        replace_index = int(replace_index) if replace_index not in {None, ""} else None
+    except (TypeError, ValueError):
+        replace_index = None
+    if replace_index is not None and 0 <= replace_index < len(images):
+        image_entry["is_main"] = bool(images[replace_index].get("is_main"))
+        images[replace_index] = image_entry
+    else:
+        images.append(image_entry)
+    draft.images_json = images
+    db.session.commit()
+
+    return jsonify({"ok": True, "draft": draft.to_dict(), "image": image_entry})
 
 
 @ebay_list_bp.route("/api/ebay/images/confirm", methods=["POST"])

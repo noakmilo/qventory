@@ -1,7 +1,44 @@
 import os
 import requests
 from datetime import datetime, timedelta
-from .ebay_inventory import get_user_access_token, EBAY_API_BASE
+from .ebay_inventory import get_user_access_token, EBAY_API_BASE, EBAY_ENV
+
+
+def _media_api_base():
+    if EBAY_ENV == "production":
+        return "https://apim.ebay.com"
+    return "https://apim.sandbox.ebay.com"
+
+
+def upload_ebay_image_file(user_id: int, file_obj, filename: str, content_type: str | None):
+    """
+    Upload an image to eBay Picture Services and return the EPS URL used by Inventory API listings.
+    """
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {"success": False, "error": "missing_access_token"}
+
+    url = f"{_media_api_base()}/commerce/media/v1_beta/image/create_image_from_file"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    files = {
+        "image": (
+            filename or "image.jpg",
+            file_obj,
+            content_type or "image/jpeg",
+        )
+    }
+    resp = requests.post(url, headers=headers, files=files, timeout=60)
+    if resp.status_code >= 400:
+        return {"success": False, "error": resp.text, "status_code": resp.status_code}
+
+    data = resp.json() if resp.text else {}
+    return {
+        "success": True,
+        "image_url": data.get("imageUrl") or data.get("maxDimensionImageUrl"),
+        "max_dimension_image_url": data.get("maxDimensionImageUrl"),
+        "location": resp.headers.get("Location"),
+        "response": data,
+    }
 
 
 def create_ebay_upload_session(user_id: int, filename: str, content_type: str, size: int, sha256: str | None):

@@ -26,7 +26,24 @@ def get_account_policies(user_id: int, marketplace_id: str = "EBAY_US") -> dict:
         )
         if resp.status_code >= 400:
             return {"success": False, "error": resp.text}
-        policies[policy_type] = resp.json().get("policies", [])
+        data = resp.json() or {}
+        list_key = {
+            "fulfillment": "fulfillmentPolicies",
+            "payment": "paymentPolicies",
+            "return": "returnPolicies",
+        }[policy_type]
+        id_key = {
+            "fulfillment": "fulfillmentPolicyId",
+            "payment": "paymentPolicyId",
+            "return": "returnPolicyId",
+        }[policy_type]
+        normalized = []
+        for policy in data.get(list_key, data.get("policies", [])):
+            entry = dict(policy)
+            entry["id"] = entry.get(id_key) or entry.get("policyId") or entry.get("id")
+            entry["name"] = entry.get("name") or entry.get("description") or entry.get("id")
+            normalized.append(entry)
+        policies[policy_type] = normalized
 
     return {"success": True, "policies": policies}
 

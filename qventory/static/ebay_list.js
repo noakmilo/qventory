@@ -5,7 +5,7 @@
   let saveTimer = null;
   let images = [];
   let selectedImageIndex = null;
-  let baseImageBitmap = null;
+  let imageEditor = null;
 
   const qs = (sel) => document.querySelector(sel);
 
@@ -179,12 +179,31 @@
     select.appendChild(empty);
     policies.forEach(p => {
       const opt = document.createElement('option');
-      opt.value = p.id || p.policyId || '';
+      opt.value = policyIdForSelector(selector, p);
       opt.textContent = `${p.name || p.description || p.id}`;
       select.appendChild(opt);
     });
     if (draft && draft.policy_ids) {
-      const current = selector === '#fulfillmentPolicySelect' ? draft.policy_ids.fulfillment\n        : selector === '#paymentPolicySelect' ? draft.policy_ids.payment\n        : draft.policy_ids.return;\n      if (current) select.value = current;\n    }
+      const current = selector === '#fulfillmentPolicySelect'
+        ? draft.policy_ids.fulfillment
+        : selector === '#paymentPolicySelect'
+          ? draft.policy_ids.payment
+          : draft.policy_ids.return;
+      if (current) select.value = current;
+    }
+  }
+
+  function policyIdForSelector(selector, policy) {
+    if (selector === '#fulfillmentPolicySelect') {
+      return policy.fulfillmentPolicyId || policy.policyId || policy.id || '';
+    }
+    if (selector === '#paymentPolicySelect') {
+      return policy.paymentPolicyId || policy.policyId || policy.id || '';
+    }
+    if (selector === '#returnPolicySelect') {
+      return policy.returnPolicyId || policy.policyId || policy.id || '';
+    }
+    return policy.policyId || policy.id || '';
   }
 
   async function loadLocations() {
@@ -257,7 +276,7 @@
   }
 
   async function fetchSpecifics(categoryId) {
-    const url = `${config.specificsUrl}/${categoryId}`;
+    const url = `${config.categoriesUrl}/${categoryId}/specifics`;
     const res = await fetch(url);
     const data = await res.json();
     specificsSchema = data.specifics;
@@ -266,7 +285,7 @@
 
   async function refreshSpecifics() {
     if (!draft || !draft.category_id) return;
-    const url = `${config.specificsRefreshUrl}/${draft.category_id}`;
+    const url = `${config.categoriesUrl}/${draft.category_id}/specifics/refresh`;
     const res = await fetch(url, {method: 'POST'});
     const data = await res.json();
     specificsSchema = data.specifics;
@@ -311,56 +330,44 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  async function loadImageBitmap(file) {
-    return createImageBitmap(file);
+  function dataUrlToBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const binary = atob(parts[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new Blob([bytes], {type: mime});
   }
 
-  function applyAdjustments(source, brightness, contrast, aspect) {
-    const width = source.width;
-    const height = source.height;
-    let sx = 0, sy = 0, sw = width, sh = height;
-    if (aspect && aspect !== 'original') {
-      const [aw, ah] = aspect.split(':').map(Number);
-      const targetRatio = aw / ah;
-      const currentRatio = width / height;
-      if (currentRatio > targetRatio) {
-        sw = height * targetRatio;
-        sx = (width - sw) / 2;
-      } else {
-        sh = width / targetRatio;
-        sy = (height - sh) / 2;
-      }
+  async function blobToImage(blob) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+      });
+      return img;
+    } finally {
+      URL.revokeObjectURL(url);
     }
-    const tmp = document.createElement('canvas');
-    tmp.width = sw;
-    tmp.height = sh;
-    const tctx = tmp.getContext('2d');
-    tctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
-    const imgData = tctx.getImageData(0, 0, sw, sh);
-    const data = imgData.data;
-    const b = brightness / 100;
-    const c = (contrast / 100) + 1;
-    const intercept = 128 * (1 - c);
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = data[i] * c + intercept + 255 * b;
-      data[i + 1] = data[i + 1] * c + intercept + 255 * b;
-      data[i + 2] = data[i + 2] * c + intercept + 255 * b;
-    }
-    tctx.putImageData(imgData, 0, 0);
-    return tmp;
   }
 
-  function renderCanvasPreview() {
-    if (selectedImageIndex === null || !baseImageBitmap) return;
-    const aspect = qs('#aspectSelect').value;
-    const brightness = parseInt(qs('#brightnessRange').value, 10);
-    const contrast = parseInt(qs('#contrastRange').value, 10);
-    const previewCanvas = qs('#editorCanvas');
-    const processed = applyAdjustments(baseImageBitmap, brightness, contrast, aspect);
-    previewCanvas.width = processed.width;
-    previewCanvas.height = processed.height;
-    const ctx = previewCanvas.getContext('2d');
-    ctx.drawImage(processed, 0, 0);
+  async function compressBlobToJpeg(blob, maxDimension = null) {
+    const image = await blobToImage(blob);
+    const ratio = maxDimension && maxDimension !== 'original'
+      ? Math.min(1, Number(maxDimension) / Math.max(image.width, image.height))
+      : 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(image.width * ratio));
+    canvas.height = Math.max(1, Math.round(image.height * ratio));
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return encodeCanvasToJpeg(canvas);
   }
 
   async function encodeCanvasToJpeg(canvas) {
@@ -373,35 +380,83 @@
     return blob;
   }
 
+  function destroyImageEditor() {
+    if (!imageEditor) return;
+    try {
+      imageEditor.destroy();
+    } catch (e) {
+      // Ignore editor cleanup failures from partially initialized instances.
+    }
+    imageEditor = null;
+  }
+
+  function imageEditorMenus(img) {
+    const menus = ['crop', 'flip', 'rotate', 'filter'];
+    if (img && !img.is_main) {
+      menus.push('draw', 'text');
+    }
+    return menus;
+  }
+
+  function ensureToastImageEditor(img) {
+    const editorEl = qs('#tuiImageEditor');
+    const hintEl = qs('#imageEditorHint');
+    if (!editorEl || !window.tui || !window.tui.ImageEditor) {
+      if (hintEl) hintEl.textContent = 'Image editor could not load.';
+      return;
+    }
+    destroyImageEditor();
+    imageEditor = new window.tui.ImageEditor(editorEl, {
+      includeUI: {
+        loadImage: {
+          path: img.url,
+          name: img.filename || 'image'
+        },
+        menu: imageEditorMenus(img),
+        initMenu: 'filter',
+        uiSize: {
+          width: '100%',
+          height: '560px'
+        },
+        menuBarPosition: 'bottom'
+      },
+      cssMaxWidth: 900,
+      cssMaxHeight: 430,
+      usageStatistics: false
+    });
+    if (hintEl) {
+      hintEl.textContent = img.is_main
+        ? 'Main image: crop, rotate, flip, resize/export, brightness and contrast.'
+        : 'Secondary image: crop, rotate, flip, resize/export, brightness, contrast, draw and text.';
+    }
+  }
+
   async function processFile(file) {
     try {
       const sha256 = await hashFile(file);
       if (images.some(img => img.sha256 === sha256)) {
         return;
       }
-      const bitmap = await loadImageBitmap(file);
-      const aspect = qs('#aspectSelect').value;
-      const brightness = parseInt(qs('#brightnessRange').value, 10);
-      const contrast = parseInt(qs('#contrastRange').value, 10);
-      const processed = applyAdjustments(bitmap, brightness, contrast, aspect);
-      const blob = await encodeCanvasToJpeg(processed);
+      const blob = await compressBlobToJpeg(file);
       if (blob.size > 2 * 1024 * 1024) {
         setStatus('Image exceeds 2MB after compression. Try smaller dimensions.');
         return;
       }
+      const previewImage = await blobToImage(blob);
       const url = URL.createObjectURL(blob);
       const img = {
         filename: file.name,
         sha256,
         blob,
         url,
-        width: processed.width,
-        height: processed.height,
+        width: previewImage.width,
+        height: previewImage.height,
         ebay_image_url: null,
         is_main: images.length === 0
       };
       images.push(img);
       renderImageList();
+      selectImage(images.length - 1);
       await uploadImage(img);
     } catch (err) {
       setStatus(`Failed to process image ${file.name}. If it's HEIC/HEIF, convert to JPG first.`);
@@ -409,49 +464,30 @@
   }
 
   async function uploadImage(img) {
-    const tokenResp = await fetch(config.uploadTokenUrl, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        draft_id: draft.id,
-        filename: img.filename,
-        content_type: 'image/jpeg',
-        size: img.blob.size,
-        sha256: img.sha256
-      })
-    });
-    const tokenData = await tokenResp.json();
-    if (!tokenData.ok) return;
-    const upload = tokenData.upload;
-    const uploadHeaders = upload.headers || {};
-    const putResp = await fetch(upload.upload_url, {
-      method: 'PUT',
-      headers: uploadHeaders,
-      body: img.blob
-    });
-    let imageUrl = null;
-    try {
-      const json = await putResp.json();
-      imageUrl = json.imageUrl || json.image_url || json.url || null;
-    } catch (e) {
-      imageUrl = putResp.headers.get('Location');
+    const formData = new FormData();
+    formData.append('draft_id', draft.id);
+    formData.append('filename', img.filename);
+    formData.append('sha256', img.sha256);
+    formData.append('width', img.width);
+    formData.append('height', img.height);
+    if (img.replace_existing && selectedImageIndex !== null) {
+      formData.append('replace_index', selectedImageIndex);
     }
-    img.ebay_image_url = imageUrl;
-    await fetch(config.imageConfirmUrl, {
+    formData.append('image', img.blob, img.filename || 'image.jpg');
+
+    const uploadResp = await fetch(config.imageUploadUrl, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        draft_id: draft.id,
-        image: {
-          filename: img.filename,
-          sha256: img.sha256,
-          width: img.width,
-          height: img.height,
-          ebay_image_url: img.ebay_image_url,
-          upload_session_id: upload.upload_session_id
-        }
-      })
+      body: formData
     });
+    const uploadData = await uploadResp.json();
+    if (!uploadData.ok) {
+      setStatus(`Image upload failed: ${uploadData.details || uploadData.error || 'unknown error'}`);
+      return;
+    }
+    img.ebay_image_url = uploadData.image.ebay_image_url;
+    delete img.replace_existing;
+    draft = uploadData.draft;
+    setStatus('Image uploaded to eBay.');
     debounceSave();
   }
 
@@ -460,7 +496,7 @@
     list.innerHTML = '';
     images.forEach((img, index) => {
       const card = document.createElement('div');
-      card.className = 'image-card';
+      card.className = `image-card ${index === selectedImageIndex ? 'selected' : ''}`;
       card.draggable = true;
       card.dataset.index = index;
       card.innerHTML = `
@@ -487,6 +523,9 @@
         images.forEach(i => i.is_main = false);
         img.is_main = true;
         renderImageList();
+        if (selectedImageIndex === index) {
+          ensureToastImageEditor(img);
+        }
         debounceSave();
       });
       list.appendChild(card);
@@ -497,30 +536,42 @@
     selectedImageIndex = index;
     const img = images[index];
     if (!img) return;
-    const imageEl = new Image();
-    imageEl.onload = () => {
-      baseImageBitmap = imageEl;
-      renderCanvasPreview();
-    };
-    imageEl.src = img.url;
+    renderImageList();
+    ensureToastImageEditor(img);
   }
 
   async function applyEditsToSelected() {
-    if (selectedImageIndex === null) return;
-    const canvas = qs('#editorCanvas');
-    const blob = await encodeCanvasToJpeg(canvas);
-    if (blob.size > 2 * 1024 * 1024) {
-      setStatus('Image exceeds 2MB after compression.');
-      return;
+    if (selectedImageIndex === null || !imageEditor) return;
+    try {
+      let dataUrl;
+      try {
+        dataUrl = imageEditor.toDataURL({format: 'jpeg', quality: 0.9});
+      } catch (e) {
+        dataUrl = imageEditor.toDataURL();
+      }
+      const rawBlob = dataUrlToBlob(dataUrl);
+      const resizeValue = qs('#resizeSelect').value;
+      const blob = await compressBlobToJpeg(rawBlob, resizeValue);
+      if (blob.size > 2 * 1024 * 1024) {
+        setStatus('Image exceeds 2MB after export. Try a smaller resize option.');
+        return;
+      }
+      const previewImage = await blobToImage(blob);
+      const url = URL.createObjectURL(blob);
+      const img = images[selectedImageIndex];
+      img.blob = blob;
+      img.url = url;
+      img.width = previewImage.width;
+      img.height = previewImage.height;
+      img.sha256 = await hashFile(blob);
+      img.ebay_image_url = null;
+      img.replace_existing = true;
+      renderImageList();
+      ensureToastImageEditor(img);
+      await uploadImage(img);
+    } catch (err) {
+      setStatus('Could not export this image. Try re-uploading the original file before editing.');
     }
-    const url = URL.createObjectURL(blob);
-    const img = images[selectedImageIndex];
-    img.blob = blob;
-    img.url = url;
-    img.width = canvas.width;
-    img.height = canvas.height;
-    renderImageList();
-    await uploadImage(img);
   }
 
   qs('#categorySearchBtn').addEventListener('click', searchCategories);
@@ -538,9 +589,6 @@
   });
 
   qs('#applyEditsBtn').addEventListener('click', applyEditsToSelected);
-  qs('#brightnessRange').addEventListener('input', renderCanvasPreview);
-  qs('#contrastRange').addEventListener('input', renderCanvasPreview);
-  qs('#aspectSelect').addEventListener('change', renderCanvasPreview);
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
     await saveDraft();
@@ -549,7 +597,7 @@
 
   qs('#publishBtn').addEventListener('click', async () => {
     qs('#publishStatus').textContent = 'Publishing...';
-    const res = await fetch(draftUrl(config.draftPublishUrl, draft.id), {method: 'POST'});
+    const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
     const data = await res.json();
     if (data.ok) {
       qs('#publishStatus').textContent = `Published! Listing ID: ${data.draft.ebay_listing_id || 'N/A'}`;
@@ -572,6 +620,7 @@
         is_main: img.is_main || false
       }));
       renderImageList();
+      selectImage(0);
     }
     bindInputAutosave();
     setupEditorToggle();
