@@ -62,6 +62,13 @@
               {% endfor %}
             </div>
           </div>
+          <div class="thrift-radius-control">
+            <div>
+              <label for="thriftRadiusMiles">Search radius</label>
+              <strong><span id="thriftRadiusValue">25</span> mi</strong>
+            </div>
+            <input type="range" id="thriftRadiusMiles" min="1" max="25" step="1" value="25">
+          </div>
         </form>
       </div>
 
@@ -363,6 +370,26 @@
   }
   .thrift-keywords i {
     color: var(--keyword-color);
+  }
+  .thrift-radius-control {
+    display: grid;
+    gap: 8px;
+  }
+  .thrift-radius-control > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .thrift-radius-control strong {
+    color: var(--text);
+    font-size: 13px;
+  }
+  .thrift-radius-control input[type="range"] {
+    width: 100%;
+    accent-color: #38bdf8;
   }
   .thrift-go-btn {
     justify-content: center;
@@ -818,12 +845,19 @@
   const thriftSearchForm = document.getElementById('thriftRadarForm');
   const thriftEmptyOverlay = document.getElementById('thriftMapEmpty');
   const thriftNewSearchButton = document.getElementById('thriftNewSearch');
+  const thriftRadiusInput = document.getElementById('thriftRadiusMiles');
+  const thriftRadiusValue = document.getElementById('thriftRadiusValue');
   const thriftLayout = document.querySelector('.thrift-radar-layout');
   const thriftSidePanel = document.getElementById('thriftSidePanel');
   const thriftSheetHandle = document.getElementById('thriftSheetHandle');
 
   function thriftSelectedKeywords() {
     return Array.from(document.querySelectorAll('input[name="keywords"]:checked')).map((input) => input.value);
+  }
+
+  function thriftSelectedRadiusMiles() {
+    const value = Number(thriftRadiusInput?.value || 25);
+    return Math.max(1, Math.min(25, Number.isFinite(value) ? value : 25));
   }
 
   function thriftKeywordLabel(key) {
@@ -1244,7 +1278,8 @@
     const searchMode = thriftSelectedSearchMode();
     const payload = {
       search_mode: searchMode,
-      keywords: thriftSelectedKeywords()
+      keywords: thriftSelectedKeywords(),
+      radius_miles: thriftSelectedRadiusMiles()
     };
     if (searchMode === 'zip') {
       payload.zip_code = document.getElementById('thriftZipCode').value.trim();
@@ -1457,6 +1492,10 @@
 
   document.querySelectorAll('input[name="search_mode"]').forEach((input) => {
     input.addEventListener('change', thriftUpdateSearchMode);
+  });
+
+  thriftRadiusInput?.addEventListener('input', () => {
+    thriftRadiusValue.textContent = thriftSelectedRadiusMiles();
   });
 
   document.querySelectorAll('input[name="map_type"]').forEach((input) => {

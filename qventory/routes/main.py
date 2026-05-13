@@ -132,6 +132,8 @@ DEFAULT_THRIFT_RADAR_KEYWORDS = {
 THRIFT_RADAR_KEYWORDS = DEFAULT_THRIFT_RADAR_KEYWORDS
 THRIFT_RADAR_CATEGORY_SLUGS = tuple(DEFAULT_THRIFT_RADAR_KEYWORDS.keys())
 THRIFT_RADAR_RADIUS_METERS = 40233
+THRIFT_RADAR_MAX_RADIUS_MILES = 25
+THRIFT_RADAR_METERS_PER_MILE = 1609.344
 
 PENDING_TASK_DEFS = [
     {
@@ -1093,6 +1095,15 @@ def _normalize_thrift_keywords(values):
     return [key for key in THRIFT_RADAR_CATEGORY_SLUGS if key in options and key in values]
 
 
+def _normalize_thrift_radius_meters(value):
+    try:
+        miles = float(value)
+    except (TypeError, ValueError):
+        miles = THRIFT_RADAR_MAX_RADIUS_MILES
+    miles = max(1.0, min(float(THRIFT_RADAR_MAX_RADIUS_MILES), miles))
+    return int(round(miles * THRIFT_RADAR_METERS_PER_MILE)), miles
+
+
 def _client_ip_address():
     forwarded_for = request.headers.get("X-Forwarded-For", "")
     if forwarded_for:
@@ -1563,7 +1574,7 @@ def _thrift_match_store_name(name: str | None, keyword_option: dict) -> bool:
     return any(term in store_name for term in terms)
 
 
-def _google_fetch_places(lat: float, lng: float, keyword: str):
+def _google_fetch_places(lat: float, lng: float, keyword: str, radius_meters: int):
     api_key = _google_maps_server_key()
     if not api_key:
         raise RuntimeError("Missing GMAPS_SERVER_API_KEY or GMAPS_API_KEY")
@@ -1571,7 +1582,7 @@ def _google_fetch_places(lat: float, lng: float, keyword: str):
         "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
         params={
             "location": f"{lat},{lng}",
-            "radius": THRIFT_RADAR_RADIUS_METERS,
+            "radius": radius_meters,
             "keyword": keyword,
             "key": api_key,
         },
@@ -1628,10 +1639,11 @@ def _resolve_thrift_search_center(payload):
 
 def _search_thrift_radar_google(payload, keywords):
     center, search_mode, validation_error = _resolve_thrift_search_center(payload)
+    radius_meters, radius_miles = _normalize_thrift_radius_meters(payload.get("radius_miles"))
     if validation_error:
-        return None, [], search_mode, validation_error
+        return None, [], search_mode, validation_error, radius_meters, radius_miles
     if not center:
-        return None, [], search_mode, "Could not find that location in the U.S."
+        return None, [], search_mode, "Could not find that location in the U.S.", radius_meters, radius_miles
 
     keyword_options = _thrift_radar_keywords(active_only=True)
     results = []
@@ -1641,7 +1653,7 @@ def _search_thrift_radar_google(payload, keywords):
         if not option:
             continue
         for term in option.get("keywords") or [option.get("label") or slug]:
-            for place in _google_fetch_places(center["lat"], center["lng"], term):
+            for place in _google_fetch_places(center["lat"], center["lng"], term, radius_meters):
                 place_id = place.get("place_id")
                 if not place_id or place_id in seen:
                     continue
@@ -1668,7 +1680,7 @@ def _search_thrift_radar_google(payload, keywords):
                     "color": option.get("color") or "#64748b",
                 })
     results.sort(key=lambda row: (row["keyword_label"], row["name"].lower()))
-    return center, results[:120], search_mode, None
+    return center, results[:120], search_mode, None, radius_meters, radius_miles
 
 
 @main_bp.route("/inventory-sources/thrift-radar/cities")
@@ -1717,7 +1729,7 @@ def thrift_radar_search():
         return jsonify({"ok": False, "error": "Select at least one source type."}), 400
 
     try:
-        center, results, search_mode, validation_error = _search_thrift_radar_google(payload, keywords)
+        center, results, search_mode, validation_error, radius_meters, radius_miles = _search_thrift_radar_google(payload, keywords)
         if validation_error:
             _log_thrift_radar_event(
                 "search_validation_error",
@@ -1795,7 +1807,7 @@ def thrift_radar_search():
         keywords=keywords,
         result_count=len(results),
         duration_ms=duration_ms,
-        metadata={"center": center, "search_mode": search_mode},
+        metadata={"center": center, "search_mode": search_mode, "radius_miles": radius_miles},
     )
     db.session.commit()
     return jsonify({
@@ -1805,7 +1817,8 @@ def thrift_radar_search():
         "city": payload.get("city"),
         "keywords": keywords,
         "center": center,
-        "radius_meters": THRIFT_RADAR_RADIUS_METERS,
+        "radius_meters": radius_meters,
+        "radius_miles": radius_miles,
         "results": results,
     })
 
@@ -1845,7 +1858,7 @@ def thrift_radar_save_search():
         state=(center.get("state") or "")[:80] or None if isinstance(center, dict) else None,
         center_lat=float(center["lat"]) if isinstance(center, dict) and center.get("lat") is not None else None,
         center_lng=float(center.get("lng", center.get("lon"))) if isinstance(center, dict) and (center.get("lng") is not None or center.get("lon") is not None) else None,
-        radius_meters=int(payload.get("radius_meters") or THRIFT_RADAR_RADIUS_METERS),
+        radius_meters=_normalize_thrift_radius_meters(payload.get("radius_miles"))[0],
         keywords=keywords,
         results=results[:120],
     )
