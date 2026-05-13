@@ -375,6 +375,7 @@ def create_app():
                 "script-src 'self' https: 'unsafe-inline'; "
                 "style-src 'self' https: 'unsafe-inline'; "
                 "connect-src 'self' https:; "
+                "worker-src 'self' blob:; "
                 "font-src 'self' https: data:; "
                 "frame-ancestors 'none'; "
                 "base-uri 'self'; "

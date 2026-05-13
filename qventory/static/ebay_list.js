@@ -330,18 +330,6 @@
     return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
-  function dataUrlToBlob(dataUrl) {
-    const parts = dataUrl.split(',');
-    const mimeMatch = parts[0].match(/:(.*?);/);
-    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
-    const binary = atob(parts[1]);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    return new Blob([bytes], {type: mime});
-  }
-
   async function blobToImage(blob) {
     const url = URL.createObjectURL(blob);
     try {
@@ -357,7 +345,7 @@
     }
   }
 
-  async function compressBlobToJpeg(blob, maxDimension = null) {
+  async function compressBlobToJpeg(blob, maxDimension = null, tone = null) {
     const image = await blobToImage(blob);
     const ratio = maxDimension && maxDimension !== 'original'
       ? Math.min(1, Number(maxDimension) / Math.max(image.width, image.height))
@@ -367,7 +355,24 @@
     canvas.height = Math.max(1, Math.round(image.height * ratio));
     const ctx = canvas.getContext('2d');
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    if (tone && (tone.brightness || tone.contrast)) {
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      const brightness = Number(tone.brightness || 0) * 2.55;
+      const contrastValue = Number(tone.contrast || 0);
+      const contrast = (259 * (contrastValue + 255)) / (255 * (259 - contrastValue));
+      for (let i = 0; i < data.length; i += 4) {
+        data[i] = clampChannel(contrast * (data[i] - 128) + 128 + brightness);
+        data[i + 1] = clampChannel(contrast * (data[i + 1] - 128) + 128 + brightness);
+        data[i + 2] = clampChannel(contrast * (data[i + 2] - 128) + 128 + brightness);
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
     return encodeCanvasToJpeg(canvas);
+  }
+
+  function clampChannel(value) {
+    return Math.max(0, Math.min(255, value));
   }
 
   async function encodeCanvasToJpeg(canvas) {
@@ -390,38 +395,30 @@
     imageEditor = null;
   }
 
-  function imageEditorMenus(img) {
-    const menus = ['crop', 'flip', 'rotate'];
+  function imageEditorUtils(img) {
+    const utils = ['crop', 'resize'];
     if (img && !img.is_main) {
-      menus.push('draw', 'text');
+      utils.splice(1, 0, 'annotate');
     }
-    return menus;
+    return utils;
   }
 
-  function ensureToastImageEditor(img) {
-    const editorEl = qs('#tuiImageEditor');
+  function ensurePinturaImageEditor(img) {
+    const editorEl = qs('#pinturaImageEditor');
     const hintEl = qs('#imageEditorHint');
-    if (!editorEl || !window.tui || !window.tui.ImageEditor) {
+    const pinturaApi = window.pintura;
+    if (!editorEl || !pinturaApi || !pinturaApi.appendDefaultEditor) {
       if (hintEl) hintEl.textContent = 'Image editor could not load.';
       return;
     }
     destroyImageEditor();
-    imageEditor = new window.tui.ImageEditor(editorEl, {
-      includeUI: {
-        loadImage: {
-          path: img.url,
-          name: img.filename || 'image'
-        },
-        menu: imageEditorMenus(img),
-        initMenu: 'crop',
-        uiSize: {
-          width: '100%',
-          height: '560px'
-        },
-        menuBarPosition: 'bottom'
+    imageEditor = pinturaApi.appendDefaultEditor(editorEl, {
+      src: img.blob || img.url,
+      utils: imageEditorUtils(img),
+      imageWriter: {
+        mimeType: 'image/jpeg',
+        quality: 0.9
       },
-      cssMaxWidth: 900,
-      cssMaxHeight: 430,
       usageStatistics: false
     });
     if (hintEl) {
@@ -429,8 +426,8 @@
         ? 'Main image: crop, rotate, flip, brightness, contrast and resize/export.'
         : 'Secondary image: crop, rotate, flip, brightness, contrast, draw, text and resize/export.';
     }
-    qs('#toastBrightnessRange').value = '0';
-    qs('#toastContrastRange').value = '0';
+    qs('#imageBrightnessRange').value = '0';
+    qs('#imageContrastRange').value = '0';
   }
 
   async function processFile(file) {
@@ -526,7 +523,7 @@
         img.is_main = true;
         renderImageList();
         if (selectedImageIndex === index) {
-          ensureToastImageEditor(img);
+          ensurePinturaImageEditor(img);
         }
         debounceSave();
       });
@@ -539,21 +536,24 @@
     const img = images[index];
     if (!img) return;
     renderImageList();
-    ensureToastImageEditor(img);
+    ensurePinturaImageEditor(img);
   }
 
   async function applyEditsToSelected() {
     if (selectedImageIndex === null || !imageEditor) return;
     try {
-      let dataUrl;
-      try {
-        dataUrl = imageEditor.toDataURL({format: 'jpeg', quality: 0.9});
-      } catch (e) {
-        dataUrl = imageEditor.toDataURL();
+      const result = await imageEditor.processImage();
+      const rawBlob = result.dest || result.file || result.blob;
+      if (!rawBlob) {
+        setStatus('Could not export this image from the editor.');
+        return;
       }
-      const rawBlob = dataUrlToBlob(dataUrl);
       const resizeValue = qs('#resizeSelect').value;
-      const blob = await compressBlobToJpeg(rawBlob, resizeValue);
+      const tone = {
+        brightness: Number(qs('#imageBrightnessRange').value || 0),
+        contrast: Number(qs('#imageContrastRange').value || 0)
+      };
+      const blob = await compressBlobToJpeg(rawBlob, resizeValue, tone);
       if (blob.size > 2 * 1024 * 1024) {
         setStatus('Image exceeds 2MB after export. Try a smaller resize option.');
         return;
@@ -569,29 +569,10 @@
       img.ebay_image_url = null;
       img.replace_existing = true;
       renderImageList();
-      ensureToastImageEditor(img);
+      ensurePinturaImageEditor(img);
       await uploadImage(img);
     } catch (err) {
       setStatus('Could not export this image. Try re-uploading the original file before editing.');
-    }
-  }
-
-  async function applyToneAdjustments() {
-    if (selectedImageIndex === null || !imageEditor) return;
-    const brightness = Number(qs('#toastBrightnessRange').value || 0) / 100;
-    const contrast = Number(qs('#toastContrastRange').value || 0) / 100;
-    try {
-      if (brightness !== 0) {
-        await imageEditor.applyFilter('brightness', {brightness});
-      }
-      if (contrast !== 0) {
-        await imageEditor.applyFilter('contrast', {contrast});
-      }
-      qs('#toastBrightnessRange').value = '0';
-      qs('#toastContrastRange').value = '0';
-      setStatus('Brightness and contrast applied. Export when ready.');
-    } catch (err) {
-      setStatus('Could not apply brightness/contrast in the editor.');
     }
   }
 
@@ -610,7 +591,6 @@
   });
 
   qs('#applyEditsBtn').addEventListener('click', applyEditsToSelected);
-  qs('#applyToneBtn').addEventListener('click', applyToneAdjustments);
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
     await saveDraft();
