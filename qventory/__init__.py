@@ -371,7 +371,7 @@ def create_app():
         if "Content-Security-Policy" not in response.headers:
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
-                "img-src 'self' data: https:; "
+                "img-src 'self' data: blob: https:; "
                 "script-src 'self' https: 'unsafe-inline'; "
                 "style-src 'self' https: 'unsafe-inline'; "
                 "connect-src 'self' https:; "
