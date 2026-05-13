@@ -112,6 +112,9 @@
       <div class="image-editor">
         <div id="tuiImageEditor" class="tui-editor-shell"></div>
         <div class="editor-controls">
+          <label>Brightness <input type="range" id="toastBrightnessRange" min="-100" max="100" value="0"></label>
+          <label>Contrast <input type="range" id="toastContrastRange" min="-100" max="100" value="0"></label>
+          <button class="btn" id="applyToneBtn">Apply Tone</button>
           <label>Resize
             <select id="resizeSelect">
               <option value="original">Original</option>
@@ -158,6 +161,20 @@
   .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 280px; gap:16px; }
   .list-wizard .tui-editor-shell { min-height:560px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#1f2937; }
   .list-wizard .editor-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .list-wizard .editor-controls label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--text); }
+  .list-wizard .editor-controls input[type="range"] { width:110px; }
+  .list-wizard .tui-image-editor-header,
+  .list-wizard .tui-image-editor-header-logo,
+  .list-wizard .tui-image-editor-header-buttons,
+  .list-wizard .tui-image-editor-download-btn,
+  .list-wizard .tie-btn-delete,
+  .list-wizard .tie-btn-deleteAll,
+  .list-wizard .tie-btn-history,
+  .list-wizard .tie-btn-undo,
+  .list-wizard .tie-btn-redo,
+  .list-wizard .tie-btn-reset {
+    display:none !important;
+  }
   .list-wizard .image-list { display:flex; flex-wrap:wrap; gap:10px; }
   .list-wizard .image-card { width:140px; border:1px solid var(--border); border-radius:10px; padding:6px; background:var(--card); cursor:grab; }
   .list-wizard .image-card.selected { outline:2px solid #38bdf8; }

@@ -391,7 +391,7 @@
   }
 
   function imageEditorMenus(img) {
-    const menus = ['crop', 'flip', 'rotate', 'filter'];
+    const menus = ['crop', 'flip', 'rotate'];
     if (img && !img.is_main) {
       menus.push('draw', 'text');
     }
@@ -413,7 +413,7 @@
           name: img.filename || 'image'
         },
         menu: imageEditorMenus(img),
-        initMenu: 'filter',
+        initMenu: 'crop',
         uiSize: {
           width: '100%',
           height: '560px'
@@ -426,9 +426,11 @@
     });
     if (hintEl) {
       hintEl.textContent = img.is_main
-        ? 'Main image: crop, rotate, flip, resize/export, brightness and contrast.'
-        : 'Secondary image: crop, rotate, flip, resize/export, brightness, contrast, draw and text.';
+        ? 'Main image: crop, rotate, flip, brightness, contrast and resize/export.'
+        : 'Secondary image: crop, rotate, flip, brightness, contrast, draw, text and resize/export.';
     }
+    qs('#toastBrightnessRange').value = '0';
+    qs('#toastContrastRange').value = '0';
   }
 
   async function processFile(file) {
@@ -574,6 +576,25 @@
     }
   }
 
+  async function applyToneAdjustments() {
+    if (selectedImageIndex === null || !imageEditor) return;
+    const brightness = Number(qs('#toastBrightnessRange').value || 0) / 100;
+    const contrast = Number(qs('#toastContrastRange').value || 0) / 100;
+    try {
+      if (brightness !== 0) {
+        await imageEditor.applyFilter('brightness', {brightness});
+      }
+      if (contrast !== 0) {
+        await imageEditor.applyFilter('contrast', {contrast});
+      }
+      qs('#toastBrightnessRange').value = '0';
+      qs('#toastContrastRange').value = '0';
+      setStatus('Brightness and contrast applied. Export when ready.');
+    } catch (err) {
+      setStatus('Could not apply brightness/contrast in the editor.');
+    }
+  }
+
   qs('#categorySearchBtn').addEventListener('click', searchCategories);
   qs('#categorySearchInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') searchCategories();
@@ -589,6 +610,7 @@
   });
 
   qs('#applyEditsBtn').addEventListener('click', applyEditsToSelected);
+  qs('#applyToneBtn').addEventListener('click', applyToneAdjustments);
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
     await saveDraft();
