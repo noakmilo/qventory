@@ -1092,6 +1092,12 @@ tbody tr:hover td{
   /* Export/Import menos intrusivos */
   .backup-btn{ background:var(--glass-bg-strong); color:var(--text); border-color:var(--glass-border); padding:6px 10px !important; font-size:12px !important }
 
+  /* Listing wizard cards separadas */
+
+  .listing-card{
+    margin-bottom:16px;
+  }
+  
   /* Tabla móvil: scroll horizontal suave + touch optimizado */
   .table-wrap{
     width:100%;
