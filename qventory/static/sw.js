@@ -1,5 +1,5 @@
 // static/sw.js
-const CACHE = 'qventory-v5'; // <-- sube versión (v2, v3...) cuando cambies el SW
+const CACHE = 'qventory-v6'; // <-- sube versión (v2, v3...) cuando cambies el SW
 const APP_SHELL = [
   '/',                     // landing pública
   '/offline',              // fallback sin conexión
@@ -40,6 +40,9 @@ self.addEventListener('fetch', (event) => {
   if (req.url.includes('/inventory/')) {
     return; // Avoid caching inventory routes (auth + dynamic)
   }
+  if (req.url.includes('/inventory-sources/thrift-radar')) {
+    return; // Avoid caching map/API routes and Google Maps driven pages
+  }
 
   // Navegación: intenta red, si falla usa /offline
   if (req.mode === 'navigate') {
@@ -66,6 +69,6 @@ self.addEventListener('fetch', (event) => {
 
   // Otros: network con fallback a cache
   event.respondWith(
-    fetch(req).catch(() => caches.match(req))
+    fetch(req).catch(() => caches.match(req).then(res => res || new Response('', { status: 503, statusText: 'Offline' })))
   );
 });

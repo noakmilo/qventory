@@ -1488,6 +1488,8 @@ def _google_geocode_location(query: str):
     status = data.get("status")
     if status != "OK":
         current_app.logger.warning("[THRIFT_RADAR] Google geocode status=%s query=%s msg=%s", status, query, data.get("error_message"))
+        if status in {"REQUEST_DENIED", "INVALID_REQUEST"}:
+            raise RuntimeError(data.get("error_message") or f"Google Geocoding returned {status}")
         return None
     place = (data.get("results") or [None])[0]
     if not place:
@@ -1530,6 +1532,8 @@ def _google_places_autocomplete_cities(query: str):
     data = response.json() or {}
     if data.get("status") not in {"OK", "ZERO_RESULTS"}:
         current_app.logger.warning("[THRIFT_RADAR] Google city autocomplete status=%s msg=%s", data.get("status"), data.get("error_message"))
+        if data.get("status") in {"REQUEST_DENIED", "INVALID_REQUEST"}:
+            raise RuntimeError(data.get("error_message") or f"Google Places Autocomplete returned {data.get('status')}")
     return [
         {
             "description": row.get("description"),
@@ -1730,6 +1734,22 @@ def thrift_radar_search():
         )
         db.session.commit()
         return jsonify({"ok": False, "error": "Map search is temporarily unavailable. Please try again soon."}), 502
+    except RuntimeError as exc:
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        _log_thrift_radar_event(
+            "search_google_config_error",
+            status="error",
+            zip_code=zip_code,
+            keywords=keywords,
+            duration_ms=duration_ms,
+            error_message=str(exc),
+            metadata={"search_mode": search_mode, "server_key_present": bool(os.getenv("GMAPS_SERVER_API_KEY"))},
+        )
+        db.session.commit()
+        return jsonify({
+            "ok": False,
+            "error": "Google Maps server access is not configured correctly. Check GMAPS_SERVER_API_KEY, enabled APIs, billing, and IP restrictions."
+        }), 502
     except Exception as exc:
         current_app.logger.exception("Thrift Radar search failed")
         duration_ms = int((time.monotonic() - started_at) * 1000)
