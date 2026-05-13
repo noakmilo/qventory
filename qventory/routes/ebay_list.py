@@ -455,11 +455,17 @@ def upload_image():
         return jsonify({"ok": False, "error": "missing_image"}), 400
 
     images = _draft_images(draft)
-    if len(images) >= 20:
+    replace_index = request.form.get("replace_index")
+    try:
+        replace_index = int(replace_index) if replace_index not in {None, ""} else None
+    except (TypeError, ValueError):
+        replace_index = None
+    is_replacement = replace_index is not None and 0 <= replace_index < len(images)
+    if len(images) >= 20 and not is_replacement:
         return jsonify({"ok": False, "error": "image_limit_reached"}), 400
 
     sha256 = request.form.get("sha256")
-    if sha256 and any(img.get("sha256") == sha256 for img in images):
+    if sha256 and not is_replacement and any(img.get("sha256") == sha256 for img in images):
         return jsonify({"ok": True, "draft": draft.to_dict(), "image": next(img for img in images if img.get("sha256") == sha256)})
 
     image_file.stream.seek(0, 2)
@@ -486,12 +492,7 @@ def upload_image():
         "ebay_image_location": result.get("location"),
         "is_main": len(images) == 0,
     }
-    replace_index = request.form.get("replace_index")
-    try:
-        replace_index = int(replace_index) if replace_index not in {None, ""} else None
-    except (TypeError, ValueError):
-        replace_index = None
-    if replace_index is not None and 0 <= replace_index < len(images):
+    if is_replacement:
         image_entry["is_main"] = bool(images[replace_index].get("is_main"))
         images[replace_index] = image_entry
     else:

@@ -94,13 +94,17 @@
 
   <div class="card">
     <h2>Category</h2>
-    <div class="category-search">
-      <input class="input" type="text" id="categorySearchInput" placeholder="Search categories...">
-      <button class="btn" id="categorySearchBtn">Search</button>
+    <div class="category-picker">
+      <div class="category-search">
+        <i class="fas fa-search"></i>
+        <input class="input" type="text" id="categorySearchInput" placeholder="Start typing an eBay category, for example: vintage stereo, vinyl records, jacket">
+        <button class="btn" id="categorySearchBtn">Search</button>
+      </div>
       <div class="autocomplete" id="categoryAutocomplete"></div>
+      <div class="category-selected" id="categorySelected">
+        <span class="muted">No category selected.</span>
+      </div>
     </div>
-    <div class="category-tree" id="categoryTree"></div>
-    <div class="category-selected" id="categorySelected"></div>
   </div>
 
   <div class="card">
@@ -111,25 +115,51 @@
   </div>
 
   <div class="card">
-    <h2>Images</h2>
-    <input type="file" id="imageInput" accept="image/*" multiple>
+    <div class="image-header">
+      <div>
+        <h2>Images</h2>
+        <p class="muted">Drag images to reorder them. The first image is the main eBay photo.</p>
+      </div>
+      <label class="btn btn-primary image-upload-label">
+        <i class="fas fa-plus"></i> Add Images
+        <input type="file" id="imageInput" accept="image/*" multiple>
+      </label>
+    </div>
     <div class="image-tools">
       <div class="image-editor">
-        <div id="pinturaImageEditor" class="pintura-editor-shell"></div>
+        <div class="open-image-editor-shell">
+          <img id="cropperImage" alt="">
+          <div class="image-empty-state" id="imageEmptyState">
+            <i class="far fa-images"></i>
+            <span>Select or add an image to edit.</span>
+          </div>
+        </div>
         <div class="editor-controls">
-          <label>Brightness <input type="range" id="imageBrightnessRange" min="-100" max="100" value="0"></label>
-          <label>Contrast <input type="range" id="imageContrastRange" min="-100" max="100" value="0"></label>
-          <label>Resize
-            <select id="resizeSelect">
-              <option value="original">Original</option>
-              <option value="1600">Max 1600px</option>
-              <option value="1200">Max 1200px</option>
-              <option value="1000">Max 1000px</option>
-              <option value="800">Max 800px</option>
-            </select>
-          </label>
-          <button class="btn" id="applyEditsBtn">Export & Upload</button>
-          <div class="muted" id="imageEditorHint">Select an image to edit.</div>
+          <div class="editor-tool-row">
+            <button class="btn btn-small" id="cropResetBtn" title="Reset crop"><i class="fas fa-undo"></i> Reset</button>
+            <button class="btn btn-small" id="rotateLeftBtn" title="Rotate left"><i class="fas fa-rotate-left"></i></button>
+            <button class="btn btn-small" id="rotateRightBtn" title="Rotate right"><i class="fas fa-rotate-right"></i></button>
+            <button class="btn btn-small" id="flipHorizontalBtn" title="Flip horizontal"><i class="fas fa-arrows-left-right"></i></button>
+            <button class="btn btn-small" id="flipVerticalBtn" title="Flip vertical"><i class="fas fa-arrows-up-down"></i></button>
+          </div>
+          <div class="editor-tool-row">
+            <label>Brightness <input type="range" id="imageBrightnessRange" min="-100" max="100" value="0"></label>
+            <label>Contrast <input type="range" id="imageContrastRange" min="-100" max="100" value="0"></label>
+            <label>Resize
+              <select id="resizeSelect">
+                <option value="original">Original</option>
+                <option value="1600">Max 1600px</option>
+                <option value="1200">Max 1200px</option>
+                <option value="1000">Max 1000px</option>
+                <option value="800">Max 800px</option>
+              </select>
+            </label>
+          </div>
+          <div class="editor-tool-row">
+            <button class="btn btn-primary" id="applyEditsBtn"><i class="fas fa-cloud-arrow-up"></i> Export & Upload</button>
+            <button class="btn danger" id="deleteImageBtn"><i class="fas fa-trash"></i> Delete Image</button>
+          </div>
+          <div class="muted" id="imageEditorHint">Cropper.js editor loaded. Select an image to edit.</div>
         </div>
       </div>
       <div class="image-list" id="imageList"></div>
@@ -155,24 +185,41 @@
   .list-wizard .editor-toggle { display:flex; gap:6px; }
   .list-wizard .editor-toolbar { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .list-wizard .visual-editor { min-height:160px; border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(255,255,255,0.02); }
-  .list-wizard .category-search { display:flex; gap:8px; margin-bottom:12px; position:relative; }
-  .list-wizard .autocomplete { position:absolute; top:44px; left:0; right:0; background:var(--card); border:1px solid var(--border); border-radius:8px; display:none; z-index:5; }
-  .list-wizard .autocomplete .item { padding:8px 10px; cursor:pointer; }
+  .list-wizard .category-picker { position:relative; display:grid; gap:10px; }
+  .list-wizard .category-search { display:grid; grid-template-columns:22px minmax(0, 1fr) auto; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--card); }
+  .list-wizard .category-search i { color:var(--sub); }
+  .list-wizard .category-search .input { border:0; padding:8px 0; background:transparent; }
+  .list-wizard .category-search .input:focus { outline:none; box-shadow:none; }
+  .list-wizard .autocomplete { position:absolute; top:54px; left:0; right:0; background:var(--card); border:1px solid var(--border); border-radius:8px; display:none; z-index:10; max-height:340px; overflow:auto; box-shadow:0 16px 40px rgba(0,0,0,.24); }
+  .list-wizard .autocomplete .item { padding:10px 12px; cursor:pointer; border-bottom:1px solid var(--border); display:grid; gap:3px; }
+  .list-wizard .autocomplete .item:last-child { border-bottom:0; }
   .list-wizard .autocomplete .item:hover { background:rgba(59,130,246,0.1); }
-  .list-wizard .category-tree { max-height:320px; overflow:auto; border:1px solid var(--border); border-radius:8px; padding:8px; }
-  .list-wizard .category-node { padding:4px 6px; cursor:pointer; }
-  .list-wizard .category-node.leaf { color:#93c5fd; }
+  .list-wizard .autocomplete .item-title { font-weight:700; color:var(--text); }
+  .list-wizard .autocomplete .item-meta { font-size:12px; color:var(--sub); }
+  .list-wizard .category-selected { border:1px dashed var(--border); border-radius:8px; padding:10px 12px; background:rgba(59,130,246,.06); }
+  .list-wizard .category-selected strong { display:block; margin-bottom:2px; }
   .list-wizard .specifics-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
-  .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 280px; gap:16px; }
-  .list-wizard .pintura-editor-shell { min-height:560px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#1f2937; }
-  .list-wizard .pintura-editor { height:560px; --color-background:#111827; --color-foreground:#f8fafc; }
-  .list-wizard .editor-controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+  .list-wizard .image-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .list-wizard .image-upload-label { position:relative; overflow:hidden; cursor:pointer; }
+  .list-wizard .image-upload-label input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 310px; gap:16px; align-items:start; }
+  .list-wizard .open-image-editor-shell { min-height:560px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#111827; display:flex; align-items:center; justify-content:center; position:relative; }
+  .list-wizard #cropperImage { display:block; max-width:100%; max-height:560px; }
+  .list-wizard .image-empty-state { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#94a3b8; background:#111827; }
+  .list-wizard .image-empty-state i { font-size:38px; }
+  .list-wizard .editor-controls { display:grid; gap:10px; margin-top:10px; }
+  .list-wizard .editor-tool-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .list-wizard .editor-controls label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--text); }
   .list-wizard .editor-controls input[type="range"] { width:110px; }
-  .list-wizard .image-list { display:flex; flex-wrap:wrap; gap:10px; }
-  .list-wizard .image-card { width:140px; border:1px solid var(--border); border-radius:10px; padding:6px; background:var(--card); cursor:grab; }
+  .list-wizard .image-list { display:grid; gap:10px; max-height:720px; overflow:auto; }
+  .list-wizard .image-card { display:grid; grid-template-columns:84px minmax(0, 1fr); gap:10px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--card); cursor:grab; }
   .list-wizard .image-card.selected { outline:2px solid #38bdf8; }
-  .list-wizard .image-card img { width:100%; height:100px; object-fit:cover; border-radius:6px; }
+  .list-wizard .image-card img { width:84px; height:84px; object-fit:cover; border-radius:6px; }
+  .list-wizard .image-card-info { min-width:0; display:grid; gap:6px; }
+  .list-wizard .image-card-title { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .list-wizard .image-card-actions { display:flex; gap:5px; flex-wrap:wrap; }
+  .list-wizard .image-card .btn-small { padding:5px 7px; font-size:11px; }
+  .list-wizard .danger { color:#f87171; border-color:rgba(248,113,113,.35); }
   .list-wizard .review-actions { display:flex; gap:10px; margin-top:12px; }
   .list-wizard .muted { color:var(--sub); font-size:12px; }
   @media (max-width: 800px) {
@@ -192,7 +239,7 @@
     locationsUrl: "{{ url_for('ebay_list.get_account_locations_api') }}"
   };
 </script>
-<link rel="stylesheet" href="https://unpkg.com/@pqina/pintura@8.95.6/pintura.css">
-<script src="https://unpkg.com/@pqina/pintura@8.95.6/pintura-iife.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
+<script src="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js"></script>
 <script src="{{ url_for('static', filename='ebay_list.js') }}"></script>
 {% endblock %}

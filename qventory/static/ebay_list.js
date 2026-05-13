@@ -5,7 +5,10 @@
   let saveTimer = null;
   let images = [];
   let selectedImageIndex = null;
-  let imageEditor = null;
+  let cropper = null;
+  let flipX = 1;
+  let flipY = 1;
+  let categorySearchTimer = null;
 
   const qs = (sel) => document.querySelector(sel);
 
@@ -17,6 +20,16 @@
 
   function draftUrl(base, id) {
     return `${base}/${id}`;
+  }
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
   }
 
   async function createDraft() {
@@ -81,6 +94,7 @@
 
   async function saveDraft() {
     if (!draft) return;
+    normalizeMainImage();
     const payload = serializeDraftFromInputs();
     payload.category_id = draft.category_id || null;
     payload.item_specifics = draft.item_specifics || {};
@@ -219,33 +233,51 @@
     }
   }
 
-  async function loadCategoryTree() {
-    const res = await fetch(`${config.categoriesUrl}?leaf_only=0`);
-    const data = await res.json();
-    const categories = data.categories || [];
-    renderCategoryTree(categories);
+  async function loadCategoryPicker() {
+    if (!draft || !draft.category_id) {
+      renderSelectedCategory(null);
+      return;
+    }
+    try {
+      const res = await fetch(`${config.categoriesUrl}/${draft.category_id}/path`);
+      const data = await res.json();
+      if (data.ok) {
+        const selected = {
+          category_id: draft.category_id,
+          full_path: data.full_path,
+          is_leaf: true
+        };
+        renderSelectedCategory(selected);
+        qs('#categorySearchInput').value = selected.full_path || '';
+      }
+    } catch (err) {
+      const selected = {category_id: draft.category_id, full_path: `Category ${draft.category_id}`, is_leaf: true};
+      renderSelectedCategory(selected);
+      qs('#categorySearchInput').value = selected.full_path;
+    }
+    await fetchSpecifics(draft.category_id);
   }
 
-  function renderCategoryTree(categories) {
-    const tree = qs('#categoryTree');
-    tree.innerHTML = '';
-    categories.forEach(cat => {
-      const div = document.createElement('div');
-      div.className = `category-node ${cat.is_leaf ? 'leaf' : ''}`;
-      div.style.marginLeft = `${cat.level * 10}px`;
-      div.textContent = cat.full_path;
-      div.addEventListener('click', () => selectCategory(cat));
-      tree.appendChild(div);
-    });
+  function scheduleCategorySearch() {
+    if (categorySearchTimer) clearTimeout(categorySearchTimer);
+    categorySearchTimer = setTimeout(searchCategories, 250);
   }
 
   async function searchCategories() {
     const query = qs('#categorySearchInput').value.trim();
-    if (!query) return;
-    const url = `${config.categoriesUrl}?query=${encodeURIComponent(query)}&leaf_only=0&limit=20`;
-    const res = await fetch(url);
-    const data = await res.json();
-    renderAutocomplete(data.categories || []);
+    if (query.length < 2) {
+      renderAutocomplete([]);
+      return;
+    }
+    const url = `${config.categoriesUrl}?query=${encodeURIComponent(query)}&leaf_only=1&limit=18`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      renderAutocomplete(data.categories || []);
+    } catch (err) {
+      setStatus('Could not search eBay categories.');
+      renderAutocomplete([]);
+    }
   }
 
   function renderAutocomplete(categories) {
@@ -258,7 +290,12 @@
     categories.forEach(cat => {
       const div = document.createElement('div');
       div.className = 'item';
-      div.textContent = cat.full_path;
+      const path = cat.full_path || cat.name || cat.category_id;
+      const parts = path.split(' > ');
+      div.innerHTML = `
+        <div class="item-title">${escapeHtml(parts[parts.length - 1])}</div>
+        <div class="item-meta">${escapeHtml(path)}</div>
+      `;
       div.addEventListener('click', () => {
         selectCategory(cat);
         box.style.display = 'none';
@@ -270,9 +307,23 @@
 
   async function selectCategory(cat) {
     draft.category_id = cat.category_id;
-    qs('#categorySelected').textContent = `Selected: ${cat.full_path}`;
+    renderSelectedCategory(cat);
+    qs('#categorySearchInput').value = cat.full_path || cat.name || '';
     await fetchSpecifics(cat.category_id);
     debounceSave();
+  }
+
+  function renderSelectedCategory(cat) {
+    const selected = qs('#categorySelected');
+    if (!selected) return;
+    if (!cat || !cat.category_id) {
+      selected.innerHTML = '<span class="muted">No category selected.</span>';
+      return;
+    }
+    selected.innerHTML = `
+      <strong>${escapeHtml(cat.full_path || cat.name || 'Selected category')}</strong>
+      <span class="muted">eBay category ID: ${escapeHtml(cat.category_id)}</span>
+    `;
   }
 
   async function fetchSpecifics(categoryId) {
@@ -386,48 +437,58 @@
   }
 
   function destroyImageEditor() {
-    if (!imageEditor) return;
+    if (!cropper) return;
     try {
-      imageEditor.destroy();
+      cropper.destroy();
     } catch (e) {
       // Ignore editor cleanup failures from partially initialized instances.
     }
-    imageEditor = null;
+    cropper = null;
   }
 
-  function imageEditorUtils(img) {
-    const utils = ['crop', 'resize'];
-    if (img && !img.is_main) {
-      utils.splice(1, 0, 'annotate');
-    }
-    return utils;
-  }
-
-  function ensurePinturaImageEditor(img) {
-    const editorEl = qs('#pinturaImageEditor');
+  function ensureOpenImageEditor(img) {
+    const imageEl = qs('#cropperImage');
+    const emptyEl = qs('#imageEmptyState');
     const hintEl = qs('#imageEditorHint');
-    const pinturaApi = window.pintura;
-    if (!editorEl || !pinturaApi || !pinturaApi.appendDefaultEditor) {
-      if (hintEl) hintEl.textContent = 'Image editor could not load.';
+    if (!imageEl || !window.Cropper) {
+      if (hintEl) hintEl.textContent = 'Open source image editor could not load.';
       return;
     }
     destroyImageEditor();
-    imageEditor = pinturaApi.appendDefaultEditor(editorEl, {
-      src: img.blob || img.url,
-      utils: imageEditorUtils(img),
-      imageWriter: {
-        mimeType: 'image/jpeg',
-        quality: 0.9
-      },
-      usageStatistics: false
+    flipX = 1;
+    flipY = 1;
+    imageEl.style.display = 'block';
+    if (emptyEl) emptyEl.style.display = 'none';
+    imageEl.removeAttribute('crossorigin');
+    imageEl.src = img.url;
+    cropper = new window.Cropper(imageEl, {
+      viewMode: 1,
+      autoCropArea: 0.92,
+      background: false,
+      responsive: true,
+      checkOrientation: true,
+      movable: true,
+      zoomable: true,
+      rotatable: true,
+      scalable: true
     });
     if (hintEl) {
-      hintEl.textContent = img.is_main
-        ? 'Main image: crop, rotate, flip, brightness, contrast and resize/export.'
-        : 'Secondary image: crop, rotate, flip, brightness, contrast, draw, text and resize/export.';
+      hintEl.textContent = img.blob
+        ? 'Crop, rotate, flip, adjust brightness/contrast, resize and export to eBay.'
+        : 'Saved eBay image loaded. If export fails, re-add the original image and edit it locally.';
     }
     qs('#imageBrightnessRange').value = '0';
     qs('#imageContrastRange').value = '0';
+    updateTonePreview();
+  }
+
+  function updateTonePreview() {
+    const brightness = 100 + Number(qs('#imageBrightnessRange').value || 0);
+    const contrast = 100 + Number(qs('#imageContrastRange').value || 0);
+    const filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+    document.querySelectorAll('.open-image-editor-shell img').forEach((imgEl) => {
+      imgEl.style.filter = filter;
+    });
   }
 
   async function processFile(file) {
@@ -486,6 +547,7 @@
     img.ebay_image_url = uploadData.image.ebay_image_url;
     delete img.replace_existing;
     draft = uploadData.draft;
+    renderImageList();
     setStatus('Image uploaded to eBay.');
     debounceSave();
   }
@@ -493,15 +555,28 @@
   function renderImageList() {
     const list = qs('#imageList');
     list.innerHTML = '';
+    if (!images.length) {
+      list.innerHTML = '<div class="muted">No images yet.</div>';
+      return;
+    }
     images.forEach((img, index) => {
       const card = document.createElement('div');
       card.className = `image-card ${index === selectedImageIndex ? 'selected' : ''}`;
       card.draggable = true;
       card.dataset.index = index;
+      const label = index === 0 || img.is_main ? 'Main image' : `Image ${index + 1}`;
       card.innerHTML = `
-        <img src="${img.url}" alt="">
-        <div class="muted">${img.is_main ? 'Main' : ''}</div>
-        <button class="btn btn-small" data-action="main">Set Main</button>
+        <img src="${escapeHtml(img.url)}" alt="">
+        <div class="image-card-info">
+          <div class="image-card-title">${escapeHtml(img.filename || label)}</div>
+          <div class="muted">${label}${img.ebay_image_url ? ' · uploaded' : ' · pending upload'}</div>
+          <div class="image-card-actions">
+            <button class="btn btn-small" data-action="main" title="Set as main image"><i class="fas fa-star"></i></button>
+            <button class="btn btn-small" data-action="up" title="Move up"><i class="fas fa-arrow-up"></i></button>
+            <button class="btn btn-small" data-action="down" title="Move down"><i class="fas fa-arrow-down"></i></button>
+            <button class="btn btn-small danger" data-action="delete" title="Delete image"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
       `;
       card.addEventListener('click', () => selectImage(index));
       card.addEventListener('dragstart', (e) => {
@@ -512,23 +587,82 @@
         e.preventDefault();
         const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
         const to = parseInt(card.dataset.index, 10);
+        if (Number.isNaN(from) || Number.isNaN(to) || from === to) return;
         const moved = images.splice(from, 1)[0];
         images.splice(to, 0, moved);
+        normalizeMainImage();
+        selectedImageIndex = to;
         renderImageList();
+        if (images[selectedImageIndex]) ensureOpenImageEditor(images[selectedImageIndex]);
         debounceSave();
       });
       card.querySelector('[data-action="main"]').addEventListener('click', (e) => {
         e.stopPropagation();
         images.forEach(i => i.is_main = false);
         img.is_main = true;
-        renderImageList();
-        if (selectedImageIndex === index) {
-          ensurePinturaImageEditor(img);
-        }
-        debounceSave();
+        moveImage(index, 0);
+      });
+      card.querySelector('[data-action="up"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveImage(index, index - 1);
+      });
+      card.querySelector('[data-action="down"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveImage(index, index + 1);
+      });
+      card.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteImageAt(index);
       });
       list.appendChild(card);
     });
+  }
+
+  function normalizeMainImage() {
+    images.forEach((image, idx) => {
+      image.is_main = idx === 0;
+    });
+  }
+
+  function moveImage(from, to) {
+    if (to < 0 || to >= images.length || from === to) return;
+    const moved = images.splice(from, 1)[0];
+    images.splice(to, 0, moved);
+    normalizeMainImage();
+    selectedImageIndex = to;
+    renderImageList();
+    const img = images[selectedImageIndex];
+    if (img) ensureOpenImageEditor(img);
+    debounceSave();
+  }
+
+  function deleteImageAt(index) {
+    const removed = images.splice(index, 1)[0];
+    if (removed && removed.url && removed.url.startsWith('blob:')) {
+      URL.revokeObjectURL(removed.url);
+    }
+    normalizeMainImage();
+    if (!images.length) {
+      selectedImageIndex = null;
+      destroyImageEditor();
+      const imageEl = qs('#cropperImage');
+      const emptyEl = qs('#imageEmptyState');
+      if (imageEl) {
+        imageEl.removeAttribute('src');
+        imageEl.style.display = 'none';
+      }
+      if (emptyEl) emptyEl.style.display = 'flex';
+    } else {
+      selectedImageIndex = Math.min(index, images.length - 1);
+      ensureOpenImageEditor(images[selectedImageIndex]);
+    }
+    renderImageList();
+    debounceSave();
+  }
+
+  function deleteSelectedImage() {
+    if (selectedImageIndex === null) return;
+    deleteImageAt(selectedImageIndex);
   }
 
   function selectImage(index) {
@@ -536,18 +670,22 @@
     const img = images[index];
     if (!img) return;
     renderImageList();
-    ensurePinturaImageEditor(img);
+    ensureOpenImageEditor(img);
   }
 
   async function applyEditsToSelected() {
-    if (selectedImageIndex === null || !imageEditor) return;
+    if (selectedImageIndex === null || !cropper) return;
     try {
-      const result = await imageEditor.processImage();
-      const rawBlob = result.dest || result.file || result.blob;
-      if (!rawBlob) {
+      const canvas = cropper.getCroppedCanvas({
+        fillColor: '#ffffff',
+        imageSmoothingEnabled: true,
+        imageSmoothingQuality: 'high'
+      });
+      if (!canvas) {
         setStatus('Could not export this image from the editor.');
         return;
       }
+      const rawBlob = await encodeCanvasToJpeg(canvas);
       const resizeValue = qs('#resizeSelect').value;
       const tone = {
         brightness: Number(qs('#imageBrightnessRange').value || 0),
@@ -569,16 +707,25 @@
       img.ebay_image_url = null;
       img.replace_existing = true;
       renderImageList();
-      ensurePinturaImageEditor(img);
+      ensureOpenImageEditor(img);
       await uploadImage(img);
     } catch (err) {
-      setStatus('Could not export this image. Try re-uploading the original file before editing.');
+      setStatus('Could not export this image. If it was loaded from a saved eBay URL, re-add the original file and edit it locally.');
     }
   }
 
   qs('#categorySearchBtn').addEventListener('click', searchCategories);
+  qs('#categorySearchInput').addEventListener('input', scheduleCategorySearch);
   qs('#categorySearchInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') searchCategories();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchCategories();
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.category-picker')) {
+      renderAutocomplete([]);
+    }
   });
   qs('#refreshSpecificsBtn').addEventListener('click', refreshSpecifics);
 
@@ -591,6 +738,34 @@
   });
 
   qs('#applyEditsBtn').addEventListener('click', applyEditsToSelected);
+  qs('#deleteImageBtn').addEventListener('click', deleteSelectedImage);
+  qs('#imageBrightnessRange').addEventListener('input', updateTonePreview);
+  qs('#imageContrastRange').addEventListener('input', updateTonePreview);
+  qs('#cropResetBtn').addEventListener('click', () => {
+    if (!cropper) return;
+    cropper.reset();
+    flipX = 1;
+    flipY = 1;
+    qs('#imageBrightnessRange').value = '0';
+    qs('#imageContrastRange').value = '0';
+    updateTonePreview();
+  });
+  qs('#rotateLeftBtn').addEventListener('click', () => {
+    if (cropper) cropper.rotate(-90);
+  });
+  qs('#rotateRightBtn').addEventListener('click', () => {
+    if (cropper) cropper.rotate(90);
+  });
+  qs('#flipHorizontalBtn').addEventListener('click', () => {
+    if (!cropper) return;
+    flipX *= -1;
+    cropper.scaleX(flipX);
+  });
+  qs('#flipVerticalBtn').addEventListener('click', () => {
+    if (!cropper) return;
+    flipY *= -1;
+    cropper.scaleY(flipY);
+  });
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
     await saveDraft();
@@ -628,7 +803,7 @@
     setupEditorToggle();
     await loadPolicies();
     await loadLocations();
-    await loadCategoryTree();
+    await loadCategoryPicker();
   }
 
   init();
