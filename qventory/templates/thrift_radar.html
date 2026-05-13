@@ -496,6 +496,9 @@
     font-size: 36px;
     color: #38bdf8;
   }
+  .thrift-map-loader {
+    z-index: 1800;
+  }
   .thrift-map-loader[hidden] {
     display: none;
   }
@@ -546,14 +549,48 @@
     accent-color: #38bdf8;
     margin: 0;
   }
+  .thrift-map-canvas .gm-style .gm-style-iw-c,
+  .thrift-map-canvas .gm-style .gm-style-iw-d {
+    background: var(--card) !important;
+    color: var(--text) !important;
+  }
+  .thrift-map-canvas .gm-style .gm-style-iw-c {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.3);
+    padding: 0 !important;
+  }
+  .thrift-map-canvas .gm-style .gm-style-iw-d {
+    overflow: auto !important;
+  }
+  .thrift-map-canvas .gm-style .gm-style-iw-t::after {
+    background: var(--card) !important;
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+  .thrift-map-canvas .gm-style .gm-ui-hover-effect {
+    filter: var(--thrift-info-close-filter, none);
+  }
   .thrift-google-info {
-    color: #0f172a;
+    color: var(--text);
     min-width: 220px;
     max-width: 280px;
+    padding: 12px;
+    background: var(--card);
   }
   .thrift-google-info strong {
     display: block;
     margin-bottom: 4px;
+    color: var(--text);
+  }
+  .thrift-google-info div {
+    color: var(--text-secondary);
+    line-height: 1.35;
+  }
+  .thrift-google-info small {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--text-secondary);
   }
   .thrift-google-info button {
     margin-top: 8px;
@@ -572,8 +609,9 @@
     min-height: 112px;
     border-radius: 8px;
     overflow: hidden;
-    background: #e2e8f0;
-    color: #475569;
+    background: var(--input-bg, rgba(148, 163, 184, 0.12));
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
     display: grid;
     place-items: center;
     margin-bottom: 8px;
@@ -1374,9 +1412,11 @@
 
   thriftSearchForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    thriftSetLoading(true);
     try {
       const payload = thriftSearchPayload();
+      thriftSetSearchDialogVisible(false);
+      if (thriftEmptyOverlay) thriftEmptyOverlay.style.display = 'none';
+      thriftSetLoading(true);
       const data = await thriftJson('{{ url_for("main.thrift_radar_search") }}', {
         method: 'POST',
         body: JSON.stringify(payload)
@@ -1384,6 +1424,7 @@
       thriftShowResults(data);
     } catch (error) {
       alert(error.message || 'Search failed');
+      thriftSetSearchDialogVisible(true);
     } finally {
       thriftSetLoading(false);
     }
