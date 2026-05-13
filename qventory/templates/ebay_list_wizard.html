@@ -87,6 +87,33 @@
   </div>
 
   <div class="card">
+    <h2>Package Details</h2>
+    <div class="form-grid">
+      <div>
+        <label class="label">Weight lb</label>
+        <input class="input" type="number" id="packageWeightLbsInput" min="0" step="1" placeholder="0">
+      </div>
+      <div>
+        <label class="label">Weight oz</label>
+        <input class="input" type="number" id="packageWeightOzInput" min="0" step="0.1" placeholder="0">
+      </div>
+      <div>
+        <label class="label">Length in</label>
+        <input class="input" type="number" id="packageLengthInput" min="0" step="0.1" placeholder="Optional">
+      </div>
+      <div>
+        <label class="label">Width in</label>
+        <input class="input" type="number" id="packageWidthInput" min="0" step="0.1" placeholder="Optional">
+      </div>
+      <div>
+        <label class="label">Height in</label>
+        <input class="input" type="number" id="packageHeightInput" min="0" step="0.1" placeholder="Optional">
+      </div>
+    </div>
+    <div class="muted" style="margin-top:8px;">Weight is required by eBay for calculated shipping policies. Dimensions are optional unless your policy or carrier service requires them.</div>
+  </div>
+
+  <div class="card">
     <h2>Category</h2>
     <div class="category-picker">
       <div class="category-search">

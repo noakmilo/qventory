@@ -35,6 +35,7 @@ class EbayListingDraft(db.Model):
     payment_policy_id = db.Column(db.String(64), nullable=True)
     return_policy_id = db.Column(db.String(64), nullable=True)
 
+    package_details_json = db.Column(db.JSON, nullable=True)
     images_json = db.Column(db.JSON, nullable=True)
 
     last_error = db.Column(db.Text, nullable=True)
@@ -75,6 +76,7 @@ class EbayListingDraft(db.Model):
                 "payment": self.payment_policy_id,
                 "return": self.return_policy_id,
             },
+            "package_details": self.package_details_json or {},
             "images": self.images_json or [],
             "last_error": self.last_error,
             "ebay_listing_id": self.ebay_listing_id,

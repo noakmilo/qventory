@@ -74,6 +74,7 @@
       quantity: parseInt(qs('#quantityInput').value || '0', 10),
       price: parseFloat(qs('#priceInput').value || '0'),
       currency: qs('#currencyInput').value,
+      package_details: serializePackageDetails(),
       description_html: getDescriptionHtml(),
       fulfillment_policy_id: qs('#fulfillmentPolicySelect').value || null,
       payment_policy_id: qs('#paymentPolicySelect').value || null,
@@ -91,6 +92,23 @@
       return qs('#visualEditor').innerHTML;
     }
     return qs('#descriptionHtmlInput').value;
+  }
+
+  function readFloat(selector) {
+    const value = parseFloat(qs(selector).value || '0');
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function serializePackageDetails() {
+    return {
+      weight_lbs: readFloat('#packageWeightLbsInput'),
+      weight_oz: readFloat('#packageWeightOzInput'),
+      length_in: readFloat('#packageLengthInput'),
+      width_in: readFloat('#packageWidthInput'),
+      height_in: readFloat('#packageHeightInput'),
+      weight_unit: 'OUNCE',
+      dimension_unit: 'INCH'
+    };
   }
 
   async function saveDraft() {
@@ -123,7 +141,10 @@
   }
 
   function bindInputAutosave() {
-    ['#titleInput', '#skuInput', '#conditionInput', '#quantityInput', '#priceInput', '#currencyInput']
+    [
+      '#titleInput', '#skuInput', '#conditionInput', '#quantityInput', '#priceInput', '#currencyInput',
+      '#packageWeightLbsInput', '#packageWeightOzInput', '#packageLengthInput', '#packageWidthInput', '#packageHeightInput'
+    ]
       .forEach(sel => {
         const el = qs(sel);
         el.addEventListener('input', debounceSave);
@@ -143,6 +164,12 @@
     qs('#quantityInput').value = draft.quantity || 1;
     qs('#priceInput').value = draft.price || '';
     qs('#currencyInput').value = draft.currency || 'USD';
+    const packageDetails = draft.package_details || {};
+    qs('#packageWeightLbsInput').value = packageDetails.weight_lbs || '';
+    qs('#packageWeightOzInput').value = packageDetails.weight_oz || '';
+    qs('#packageLengthInput').value = packageDetails.length_in || '';
+    qs('#packageWidthInput').value = packageDetails.width_in || '';
+    qs('#packageHeightInput').value = packageDetails.height_in || '';
     setDescriptionHtml(draft.description_html || '');
     populateConditionSelect([], draft.condition_id || '');
   }
@@ -828,6 +855,7 @@
 
   qs('#publishBtn').addEventListener('click', async () => {
     qs('#publishStatus').textContent = 'Publishing...';
+    await saveDraft();
     const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
     const data = await res.json();
     if (data.ok) {

@@ -156,6 +156,47 @@ def _ensure_draft_images_uploaded_to_ebay(draft: EbayListingDraft):
     return {"success": True, "image_urls": uploaded}
 
 
+def _package_weight_ounces(package_details: dict | None) -> float:
+    details = package_details or {}
+    try:
+        pounds = float(details.get("weight_lbs") or 0)
+        ounces = float(details.get("weight_oz") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, pounds * 16 + ounces)
+
+
+def _build_package_weight_and_size(package_details: dict | None):
+    details = package_details or {}
+    total_ounces = _package_weight_ounces(details)
+    if total_ounces <= 0:
+        return None
+
+    package = {
+        "weight": {
+            "value": round(total_ounces, 2),
+            "unit": "OUNCE",
+        }
+    }
+
+    try:
+        length = float(details.get("length_in") or 0)
+        width = float(details.get("width_in") or 0)
+        height = float(details.get("height_in") or 0)
+    except (TypeError, ValueError):
+        length = width = height = 0
+
+    if length > 0 and width > 0 and height > 0:
+        package["dimensions"] = {
+            "length": round(length, 2),
+            "width": round(width, 2),
+            "height": round(height, 2),
+            "unit": "INCH",
+        }
+
+    return package
+
+
 def _validate_draft(draft: EbayListingDraft):
     errors = {}
     if not draft.title:
@@ -206,6 +247,9 @@ def _validate_draft(draft: EbayListingDraft):
 
     if not draft.merchant_location_key:
         errors["merchant_location_key"] = "Merchant location is required. Create an eBay inventory location first."
+
+    if _package_weight_ounces(draft.package_details_json) <= 0:
+        errors["package_weight"] = "Package weight is required."
 
     images = _draft_images(draft)
     if not images:
@@ -308,6 +352,7 @@ def update_draft(draft_id):
         "item_specifics", "condition_id", "condition_label", "sku",
         "quantity", "price", "currency",
         "images", "status", "merchant_location_key",
+        "package_details",
         "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
     }
 
@@ -334,6 +379,8 @@ def update_draft(draft_id):
                 for public_id in old_public_ids - new_public_ids:
                     _delete_cloudinary_public_id(public_id)
                 draft.images_json = value
+        elif key == "package_details":
+            draft.package_details_json = value if isinstance(value, dict) else {}
         elif key in {"fulfillment_policy_id", "payment_policy_id", "return_policy_id"}:
             setattr(draft, key, value)
         else:
@@ -407,6 +454,9 @@ def publish_draft(draft_id):
             "imageUrls": image_urls,
         },
     }
+    package_weight_and_size = _build_package_weight_and_size(draft.package_details_json)
+    if package_weight_and_size:
+        inventory_payload["packageWeightAndSize"] = package_weight_and_size
 
     inv_result = create_or_replace_inventory_item(current_user.id, draft.sku, inventory_payload)
     if not inv_result.get("success"):
@@ -497,6 +547,7 @@ def duplicate_draft(draft_id):
         fulfillment_policy_id=draft.fulfillment_policy_id,
         payment_policy_id=draft.payment_policy_id,
         return_policy_id=draft.return_policy_id,
+        package_details_json=draft.package_details_json,
         images_json=draft.images_json,
     )
     db.session.add(new_draft)
