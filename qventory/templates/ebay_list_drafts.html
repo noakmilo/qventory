@@ -1,0 +1,154 @@
+{% extends "base_new.html" %}
+{% block title %}eBay Drafts - Qventory{% endblock %}
+
+{% block content %}
+<div class="list-drafts">
+  <div class="page-header drafts-header">
+    <div>
+      <h1 class="page-title"><i class="fab fa-ebay"></i> eBay Drafts</h1>
+      <p class="page-subtitle">Manage saved listing drafts before publishing to eBay</p>
+    </div>
+    <a class="btn btn-primary" href="{{ url_for('ebay_list.ebay_list_wizard') }}">
+      <i class="fas fa-plus"></i> New Draft
+    </a>
+  </div>
+
+  {% if not drafts %}
+    <div class="empty-state">
+      <i class="far fa-file-alt"></i>
+      <h2>No drafts yet</h2>
+      <p>Create your first eBay listing draft.</p>
+      <a class="btn btn-primary" href="{{ url_for('ebay_list.ebay_list_wizard') }}">Create Draft</a>
+    </div>
+  {% else %}
+    <div class="drafts-table-wrap">
+      <table class="drafts-table">
+        <thead>
+          <tr>
+            <th>Draft</th>
+            <th>Status</th>
+            <th>SKU</th>
+            <th>Price</th>
+            <th>Images</th>
+            <th>Updated</th>
+            <th>Last Error</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for draft in drafts %}
+          {% set images = draft.images_json or [] %}
+          <tr data-draft-id="{{ draft.id }}">
+            <td>
+              <div class="draft-title">{{ draft.title or 'Untitled draft' }}</div>
+              <div class="draft-sub">#{{ draft.id }}{% if draft.ebay_listing_id %} · eBay {{ draft.ebay_listing_id }}{% endif %}</div>
+            </td>
+            <td><span class="status-badge status-{{ draft.status|lower }}">{{ draft.status }}</span></td>
+            <td>{{ draft.sku or '-' }}</td>
+            <td>{% if draft.price is not none %}${{ '%.2f'|format(draft.price|float) }}{% else %}-{% endif %}</td>
+            <td>{{ images|length }}</td>
+            <td>{{ draft.updated_at.strftime('%m/%d/%Y %I:%M %p') if draft.updated_at else '-' }}</td>
+            <td>
+              {% if draft.last_error %}
+                <details>
+                  <summary>View</summary>
+                  <pre>{{ draft.last_error }}</pre>
+                </details>
+              {% else %}
+                <span class="muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="draft-actions">
+                <a class="btn btn-small" href="{{ url_for('ebay_list.ebay_list_wizard') }}?draft_id={{ draft.id }}">
+                  <i class="fas fa-edit"></i> Edit
+                </a>
+                <button class="btn btn-small duplicate-draft-btn" data-draft-id="{{ draft.id }}">
+                  <i class="far fa-copy"></i> Duplicate
+                </button>
+                {% if draft.ebay_listing_id %}
+                  <a class="btn btn-small" href="https://www.ebay.com/itm/{{ draft.ebay_listing_id }}" target="_blank" rel="noopener">
+                    <i class="fas fa-external-link-alt"></i> eBay
+                  </a>
+                {% endif %}
+                {% if draft.status != 'POSTED' %}
+                  <button class="btn btn-small danger delete-draft-btn" data-draft-id="{{ draft.id }}">
+                    <i class="fas fa-trash"></i> Delete
+                  </button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</div>
+
+<style>
+  .list-drafts .drafts-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .list-drafts .empty-state { border:1px solid var(--border); border-radius:8px; padding:36px 20px; text-align:center; background:var(--card); }
+  .list-drafts .empty-state i { font-size:38px; color:var(--sub); margin-bottom:10px; }
+  .list-drafts .drafts-table-wrap { overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--card); }
+  .list-drafts .drafts-table { width:100%; border-collapse:collapse; min-width:980px; }
+  .list-drafts th, .list-drafts td { padding:12px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  .list-drafts th { font-size:12px; color:var(--sub); text-transform:uppercase; letter-spacing:.02em; }
+  .list-drafts tr:last-child td { border-bottom:none; }
+  .list-drafts .draft-title { font-weight:700; max-width:340px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .list-drafts .draft-sub, .list-drafts .muted { color:var(--sub); font-size:12px; margin-top:4px; }
+  .list-drafts .status-badge { display:inline-flex; border-radius:999px; padding:4px 8px; font-size:12px; font-weight:700; border:1px solid var(--border); }
+  .list-drafts .status-draft { color:#60a5fa; background:rgba(96,165,250,.12); border-color:rgba(96,165,250,.28); }
+  .list-drafts .status-posted { color:#34d399; background:rgba(52,211,153,.12); border-color:rgba(52,211,153,.28); }
+  .list-drafts .status-failed { color:#f87171; background:rgba(248,113,113,.12); border-color:rgba(248,113,113,.28); }
+  .list-drafts .draft-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .list-drafts .danger { color:#f87171; border-color:rgba(248,113,113,.35); }
+  .list-drafts details pre { max-width:360px; white-space:pre-wrap; font-size:11px; color:var(--text); background:rgba(0,0,0,.08); padding:8px; border-radius:6px; }
+  @media (max-width: 800px) {
+    .list-drafts .drafts-header { flex-direction:column; }
+  }
+</style>
+
+<script>
+  document.querySelectorAll('.duplicate-draft-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const draftId = btn.dataset.draftId;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/ebay/drafts/${draftId}/duplicate`, {method: 'POST'});
+        const data = await res.json();
+        if (data.ok && data.draft) {
+          window.location.href = `{{ url_for('ebay_list.ebay_list_wizard') }}?draft_id=${data.draft.id}`;
+          return;
+        }
+        alert(data.error || 'Could not duplicate draft.');
+      } catch (err) {
+        alert(err.message || 'Network error.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
+  document.querySelectorAll('.delete-draft-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const draftId = btn.dataset.draftId;
+      if (!confirm('Delete this draft?')) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/ebay/drafts/${draftId}`, {method: 'DELETE'});
+        const data = await res.json();
+        if (data.ok) {
+          document.querySelector(`tr[data-draft-id="${draftId}"]`)?.remove();
+          return;
+        }
+        alert(data.error || 'Could not delete draft.');
+      } catch (err) {
+        alert(err.message || 'Network error.');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+</script>
+{% endblock %}

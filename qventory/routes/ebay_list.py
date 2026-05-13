@@ -149,6 +149,20 @@ def ebay_list_wizard():
     return render_template("ebay_list_wizard.html")
 
 
+@ebay_list_bp.route("/ebay/list/drafts")
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def ebay_list_drafts():
+    drafts = (
+        EbayListingDraft.query
+        .filter_by(user_id=current_user.id)
+        .order_by(EbayListingDraft.updated_at.desc(), EbayListingDraft.created_at.desc())
+        .all()
+    )
+    return render_template("ebay_list_drafts.html", drafts=drafts)
+
+
 @ebay_list_bp.route("/api/ebay/drafts", methods=["POST"])
 @login_required
 @require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
@@ -374,6 +388,22 @@ def duplicate_draft(draft_id):
     db.session.add(new_draft)
     db.session.commit()
     return jsonify({"ok": True, "draft": new_draft.to_dict()})
+
+
+@ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>", methods=["DELETE"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def delete_draft(draft_id):
+    draft = _draft_or_404(draft_id)
+    if not draft:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if draft.status == "POSTED":
+        return jsonify({"ok": False, "error": "posted_drafts_cannot_be_deleted"}), 400
+
+    db.session.delete(draft)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @ebay_list_bp.route("/api/ebay/images/upload-token", methods=["POST"])

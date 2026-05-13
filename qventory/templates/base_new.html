@@ -185,9 +185,13 @@
         {% endif %}
         {% endif %}
         {% if current_user.is_authenticated and current_user.get_plan_limits().can_create_listings and feature_ebay_listing_create_enabled %}
-        <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="sidebar-item {% if 'ebay_list' in request.endpoint %}active{% endif %}" title="List on eBay">
+        <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="sidebar-item {% if request.endpoint == 'ebay_list.ebay_list_wizard' %}active{% endif %}" title="List on eBay">
           <i class="fab fa-ebay"></i>
           <span>List on eBay</span>
+        </a>
+        <a href="{{ url_for('ebay_list.ebay_list_drafts') }}" class="sidebar-item {% if request.endpoint == 'ebay_list.ebay_list_drafts' %}active{% endif %}" title="eBay Drafts" style="padding-left:34px;">
+          <i class="far fa-file-alt"></i>
+          <span>eBay Drafts</span>
         </a>
         {% endif %}
         <a href="{{ url_for('receipts.list_receipts') }}" class="sidebar-item {% if 'receipts' in request.endpoint %}active{% endif %}" title="Receipt Scanner">

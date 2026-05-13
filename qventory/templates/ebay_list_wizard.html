@@ -4,8 +4,13 @@
 {% block content %}
 <div class="list-wizard">
   <div class="page-header">
-    <h1 class="page-title"><i class="fab fa-ebay"></i> List on eBay</h1>
-    <p class="page-subtitle">Create a new eBay listing</p>
+    <div>
+      <h1 class="page-title"><i class="fab fa-ebay"></i> List on eBay</h1>
+      <p class="page-subtitle">Create a new eBay listing</p>
+    </div>
+    <a class="btn" href="{{ url_for('ebay_list.ebay_list_drafts') }}">
+      <i class="far fa-file-alt"></i> Manage Drafts
+    </a>
   </div>
 
   <div class="wizard-status" id="wizardStatus">Draft not loaded.</div>
@@ -144,6 +149,7 @@
 
 <style>
   .list-wizard .wizard-status { margin-bottom:12px; color:var(--sub); font-size:13px; }
+  .list-wizard .page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
   .list-wizard .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
   .list-wizard .editor-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
   .list-wizard .editor-toggle { display:flex; gap:6px; }
