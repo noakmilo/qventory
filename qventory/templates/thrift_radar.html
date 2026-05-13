@@ -66,6 +66,12 @@
       </div>
 
       <div id="thriftMap" class="thrift-map-canvas"></div>
+      <div class="thrift-photo-lightbox" id="thriftPhotoLightbox" hidden>
+        <button type="button" class="thrift-photo-close" id="thriftPhotoClose" aria-label="Close photo">
+          <i class="fas fa-times"></i>
+        </button>
+        <img id="thriftPhotoZoomImage" alt="">
+      </div>
       <div class="thrift-google-layer-footer" id="thriftLayerFooter">
         <span>Layers</span>
         <label><input type="radio" name="map_type" value="roadmap" checked> Normal</label>
@@ -516,6 +522,7 @@
   .thrift-google-info {
     color: #0f172a;
     min-width: 220px;
+    max-width: 280px;
   }
   .thrift-google-info strong {
     display: block;
@@ -524,10 +531,81 @@
   .thrift-google-info button {
     margin-top: 8px;
   }
+  .thrift-place-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .thrift-place-actions .btn {
+    margin-top: 0;
+  }
+  .thrift-place-photo {
+    width: 100%;
+    min-height: 112px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #e2e8f0;
+    color: #475569;
+    display: grid;
+    place-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .thrift-place-photo button {
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: zoom-in;
+    background: transparent;
+  }
+  .thrift-place-photo img {
+    display: block;
+    width: 100%;
+    height: 128px;
+    object-fit: cover;
+  }
+  .thrift-photo-lightbox {
+    position: absolute;
+    inset: 0;
+    z-index: 2100;
+    background: rgba(2, 6, 23, 0.88);
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    cursor: zoom-out;
+  }
+  .thrift-photo-lightbox[hidden] {
+    display: none;
+  }
+  .thrift-photo-lightbox img {
+    max-width: min(100%, 980px);
+    max-height: min(100%, 82vh);
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    cursor: default;
+  }
+  .thrift-photo-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(15, 23, 42, 0.8);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
   .thrift-fa-marker {
     position: absolute;
-    width: 44px;
-    height: 52px;
+    width: 34px;
+    height: 42px;
     border: 0;
     background: transparent;
     padding: 0;
@@ -540,9 +618,9 @@
     content: "";
     position: absolute;
     top: 4px;
-    left: 6px;
-    width: 32px;
-    height: 32px;
+    left: 5px;
+    width: 24px;
+    height: 24px;
     background: var(--pin-color, #64748b);
     border: 2px solid #fff;
     border-radius: 50% 50% 50% 0;
@@ -552,19 +630,20 @@
   .thrift-fa-marker::after {
     content: "";
     position: absolute;
-    top: 10px;
-    left: 12px;
-    width: 20px;
-    height: 20px;
+    top: 9px;
+    left: 10px;
+    width: 14px;
+    height: 14px;
     border-radius: 999px;
     background: #fff;
   }
   .thrift-fa-marker i {
     position: relative;
     z-index: 1;
-    margin-top: 14px;
+    margin-top: 11px;
     color: var(--pin-color, #64748b);
-    font-size: 13px;
+    font-size: 9px;
+    line-height: 1;
   }
   @keyframes thriftSpin {
     to { transform: rotate(360deg); }
@@ -676,10 +755,27 @@
       transform: translateY(0);
     }
     .thrift-google-layer-footer {
-      bottom: min(76%, 580px);
-      transform: translateY(44px);
-      font-size: 12px;
-      padding: 7px 8px;
+      top: 74px;
+      bottom: auto;
+      left: 10px;
+      right: 10px;
+      width: auto;
+      transform: none;
+      border-top: 0;
+      border-radius: 10px;
+      font-size: 10px;
+      padding: 6px 8px;
+      gap: 8px;
+      justify-content: center;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+    }
+    .thrift-google-layer-footer label,
+    .thrift-google-layer-footer span {
+      font-size: 10px;
+      gap: 4px;
+    }
+    .thrift-google-layer-footer input {
+      transform: scale(0.88);
     }
     .thrift-radar-zip-row {
       grid-template-columns: 1fr;
@@ -703,6 +799,8 @@
   let thriftMap = null;
   let thriftMarkers = [];
   let thriftInfoWindow = null;
+  let thriftPlacesService = null;
+  const thriftPhotoCache = {};
   let thriftTrafficLayer = null;
   let thriftDirectionsService = null;
   let thriftDirectionsRenderer = null;
@@ -884,6 +982,7 @@
       clickableIcons: false
     });
     thriftInfoWindow = new google.maps.InfoWindow();
+    thriftPlacesService = new google.maps.places.PlacesService(thriftMap);
     thriftTrafficLayer = new google.maps.TrafficLayer();
     thriftDirectionsService = new google.maps.DirectionsService();
     thriftDirectionsRenderer = new google.maps.DirectionsRenderer({
@@ -929,7 +1028,7 @@
         if (!this.element) return;
         const point = this.getProjection().fromLatLngToDivPixel(this.position);
         if (!point) return;
-        this.element.style.transform = `translate(${point.x - 22}px, ${point.y - 52}px)`;
+        this.element.style.transform = `translate(${point.x - 17}px, ${point.y - 42}px)`;
       }
       onRemove() {
         this.element?.remove();
@@ -949,6 +1048,70 @@
 
   function thriftGooglePosition(result) {
     return { lat: Number(result.lat), lng: Number(result.lng ?? result.lon) };
+  }
+
+  function thriftGoogleMapsUrl(result) {
+    if (result.place_id) {
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(result.name || '')}&query_place_id=${encodeURIComponent(result.place_id)}`;
+    }
+    const position = thriftGooglePosition(result);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${position.lat},${position.lng}`)}`;
+  }
+
+  function thriftDomToken(value) {
+    return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  }
+
+  function thriftShowPhotoZoom(url, title) {
+    const lightbox = document.getElementById('thriftPhotoLightbox');
+    const image = document.getElementById('thriftPhotoZoomImage');
+    if (!lightbox || !image || !url) return;
+    image.src = url;
+    image.alt = title || 'Place photo';
+    lightbox.hidden = false;
+  }
+
+  function thriftClosePhotoZoom() {
+    const lightbox = document.getElementById('thriftPhotoLightbox');
+    const image = document.getElementById('thriftPhotoZoomImage');
+    if (!lightbox || !image) return;
+    lightbox.hidden = true;
+    image.removeAttribute('src');
+  }
+
+  function thriftRenderPlacePhoto(mount, url, title) {
+    mount.innerHTML = '';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.title = 'Zoom photo';
+    const image = document.createElement('img');
+    image.src = url;
+    image.alt = title || 'Place photo';
+    image.loading = 'lazy';
+    button.appendChild(image);
+    button.addEventListener('click', () => thriftShowPhotoZoom(url, title));
+    mount.appendChild(button);
+  }
+
+  function thriftLoadPlacePhoto(result) {
+    const placeId = result.place_id || result.id;
+    if (!placeId || !thriftPlacesService) return;
+    const mount = document.getElementById(`thrift-photo-${thriftDomToken(placeId)}`);
+    if (!mount) return;
+    if (thriftPhotoCache[placeId]) {
+      thriftRenderPlacePhoto(mount, thriftPhotoCache[placeId], result.name);
+      return;
+    }
+    mount.textContent = 'Loading photo...';
+    thriftPlacesService.getDetails({ placeId, fields: ['photos'] }, (place, status) => {
+      if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.photos?.length) {
+        mount.textContent = 'No photo available';
+        return;
+      }
+      const url = place.photos[0].getUrl({ maxWidth: 1200, maxHeight: 900 });
+      thriftPhotoCache[placeId] = url;
+      thriftRenderPlacePhoto(mount, url, result.name);
+    });
   }
 
   function thriftClearMarkers() {
@@ -1044,17 +1207,23 @@
         iconClass: result.fallback_icon || option.icon || 'fa-location-dot',
         color: result.color || option.color || '#64748b',
         onClick: (activeMarker) => {
+          const photoToken = thriftDomToken(result.place_id || result.id);
           thriftInfoWindow.setContent(`
             <div class="thrift-google-info">
+              <div class="thrift-place-photo" id="thrift-photo-${photoToken}">Loading photo...</div>
               <strong>${thriftEscape(result.name)}</strong>
               <div>${thriftEscape(result.address)}</div>
               <small>${thriftEscape(result.keyword_label || thriftKeywordLabel(result.keyword))}${result.rating ? ` · Rating ${thriftEscape(result.rating)}` : ''}</small><br>
-              <button type="button" class="btn submitbtn" data-add-route-stop="${thriftEscape(result.id)}">Add Stop</button>
+              <div class="thrift-place-actions">
+                <button type="button" class="btn submitbtn" data-add-route-stop="${thriftEscape(result.id)}">Add Stop</button>
+                <a class="btn" href="${thriftEscape(thriftGoogleMapsUrl(result))}" target="_blank" rel="noopener noreferrer">Open on Google Maps</a>
+              </div>
             </div>
           `);
           thriftInfoWindow.setPosition(activeMarker.getPosition());
           thriftInfoWindow.open(thriftMap);
           setTimeout(() => {
+            thriftLoadPlacePhoto(result);
             document.querySelector(`[data-add-route-stop="${CSS.escape(String(result.id))}"]`)?.addEventListener('click', () => thriftAddRouteStop(result));
           }, 0);
         }
@@ -1299,6 +1468,14 @@
   document.getElementById('thriftToggleTraffic')?.addEventListener('change', (event) => {
     if (!thriftTrafficLayer || !thriftMap) return;
     thriftTrafficLayer.setMap(event.target.checked ? thriftMap : null);
+  });
+
+  document.getElementById('thriftPhotoClose')?.addEventListener('click', thriftClosePhotoZoom);
+  document.getElementById('thriftPhotoLightbox')?.addEventListener('click', (event) => {
+    if (event.target.id === 'thriftPhotoLightbox') thriftClosePhotoZoom();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') thriftClosePhotoZoom();
   });
 
   document.getElementById('thriftEnableLocation')?.addEventListener('click', () => {
