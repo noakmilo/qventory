@@ -1,5 +1,6 @@
 import os
 import requests
+from io import BytesIO
 from datetime import datetime, timedelta
 from .ebay_inventory import get_user_access_token, EBAY_API_BASE, EBAY_ENV
 
@@ -39,6 +40,32 @@ def upload_ebay_image_file(user_id: int, file_obj, filename: str, content_type: 
         "location": resp.headers.get("Location"),
         "response": data,
     }
+
+
+def upload_ebay_image_from_url(user_id: int, image_url: str, filename: str | None = None):
+    """
+    Download a persisted draft image and upload it to eBay Picture Services.
+    Draft editing stores images in Cloudinary; eBay upload happens only at publish time.
+    """
+    if not image_url:
+        return {"success": False, "error": "missing_image_url"}
+
+    try:
+        resp = requests.get(image_url, timeout=30)
+        if resp.status_code >= 400:
+            return {"success": False, "error": f"download_failed:{resp.status_code}"}
+        content_type = resp.headers.get("Content-Type") or "image/jpeg"
+        if not content_type.startswith("image/"):
+            content_type = "image/jpeg"
+        image_file = BytesIO(resp.content)
+        return upload_ebay_image_file(
+            user_id,
+            image_file,
+            filename or "image.jpg",
+            content_type,
+        )
+    except requests.RequestException as exc:
+        return {"success": False, "error": f"download_failed:{exc}"}
 
 
 def create_ebay_upload_session(user_id: int, filename: str, content_type: str, size: int, sha256: str | None):

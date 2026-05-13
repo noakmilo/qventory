@@ -1,13 +1,16 @@
 from datetime import datetime
+import os
 import bleach
 from flask import Blueprint, jsonify, request, render_template
 from flask_login import login_required, current_user
+import cloudinary
+import cloudinary.uploader
 from ..extensions import db
 from ..models.ebay_listing_draft import EbayListingDraft
 from ..models.ebay_category import EbayCategory
 from ..routes.permissions import require_plan_feature, require_feature_flag
 from ..helpers.ebay_specifics_cache import get_category_specifics, get_category_condition_options
-from ..helpers.ebay_image_upload import create_ebay_upload_session, upload_ebay_image_file
+from ..helpers.ebay_image_upload import create_ebay_upload_session, upload_ebay_image_from_url
 from ..helpers.ebay_listing_publish import (
     create_or_replace_inventory_item,
     create_offer,
@@ -21,6 +24,30 @@ from ..models.marketplace_credential import MarketplaceCredential
 ebay_list_bp = Blueprint("ebay_list", __name__)
 
 _rate_limits = {}
+
+
+def _cloudinary_configured() -> bool:
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME")
+    api_key = os.environ.get("CLOUDINARY_API_KEY")
+    api_secret = os.environ.get("CLOUDINARY_API_SECRET")
+    if not (cloud_name and api_key and api_secret):
+        return False
+    cloudinary.config(
+        cloud_name=cloud_name,
+        api_key=api_key,
+        api_secret=api_secret,
+        secure=True,
+    )
+    return True
+
+
+def _delete_cloudinary_public_id(public_id: str | None):
+    if not public_id or not _cloudinary_configured():
+        return
+    try:
+        cloudinary.uploader.destroy(public_id, resource_type="image")
+    except Exception as exc:
+        print(f"[EBAY_LIST] Cloudinary cleanup failed for {public_id}: {exc}")
 
 
 def _rate_limit(key: str, limit: int, window_seconds: int) -> bool:
@@ -81,6 +108,54 @@ def _draft_images(draft: EbayListingDraft):
     return draft.images_json or []
 
 
+def _draft_image_source_url(image_entry: dict):
+    return (
+        image_entry.get("cloudinary_url")
+        or image_entry.get("image_url")
+        or image_entry.get("url")
+        or image_entry.get("ebay_image_url")
+    )
+
+
+def _ensure_draft_images_uploaded_to_ebay(draft: EbayListingDraft):
+    images = _draft_images(draft)
+    uploaded = []
+    changed = False
+
+    for index, image_entry in enumerate(images):
+        ebay_url = image_entry.get("ebay_image_url")
+        if ebay_url:
+            uploaded.append(ebay_url)
+            continue
+
+        source_url = _draft_image_source_url(image_entry)
+        if not source_url:
+            return {"success": False, "error": f"missing_image_source:{index + 1}"}
+
+        result = upload_ebay_image_from_url(
+            current_user.id,
+            source_url,
+            image_entry.get("filename") or f"draft-{draft.id}-{index + 1}.jpg",
+        )
+        if not result.get("success") or not result.get("image_url"):
+            return {
+                "success": False,
+                "error": result.get("error") or "upload_failed",
+                "image_index": index,
+            }
+
+        image_entry["ebay_image_url"] = result.get("image_url")
+        image_entry["ebay_image_location"] = result.get("location")
+        uploaded.append(result.get("image_url"))
+        changed = True
+
+    if changed:
+        draft.images_json = images
+        db.session.commit()
+
+    return {"success": True, "image_urls": uploaded}
+
+
 def _validate_draft(draft: EbayListingDraft):
     errors = {}
     if not draft.title:
@@ -136,9 +211,9 @@ def _validate_draft(draft: EbayListingDraft):
     if not images:
         errors["images"] = "At least one image is required."
     else:
-        has_ref = any(img.get("ebay_image_url") for img in images)
+        has_ref = any(img.get("cloudinary_url") or img.get("image_url") or img.get("ebay_image_url") for img in images)
         if not has_ref:
-            errors["images"] = "Images must be uploaded to eBay."
+            errors["images"] = "Images must be uploaded before publishing."
 
     if draft.category_id:
         try:
@@ -246,6 +321,18 @@ def update_draft(draft_id):
             draft.item_specifics_json = value
         elif key == "images":
             if isinstance(value, list) and len(value) <= 20:
+                old_public_ids = {
+                    img.get("cloudinary_public_id")
+                    for img in _draft_images(draft)
+                    if img.get("cloudinary_public_id")
+                }
+                new_public_ids = {
+                    img.get("cloudinary_public_id")
+                    for img in value
+                    if isinstance(img, dict) and img.get("cloudinary_public_id")
+                }
+                for public_id in old_public_ids - new_public_ids:
+                    _delete_cloudinary_public_id(public_id)
                 draft.images_json = value
         elif key in {"fulfillment_policy_id", "payment_policy_id", "return_policy_id"}:
             setattr(draft, key, value)
@@ -292,7 +379,19 @@ def publish_draft(draft_id):
         return jsonify({"ok": False, "error": "ebay_not_connected"}), 400
 
     images = _draft_images(draft)
-    image_urls = [img.get("ebay_image_url") for img in images if img.get("ebay_image_url")]
+    image_upload_result = _ensure_draft_images_uploaded_to_ebay(draft)
+    if not image_upload_result.get("success"):
+        draft.status = "FAILED"
+        draft.last_error = image_upload_result.get("error")
+        db.session.commit()
+        return jsonify({
+            "ok": False,
+            "error": "image_upload_failed",
+            "details": image_upload_result.get("error"),
+            "image_index": image_upload_result.get("image_index"),
+        }), 400
+
+    image_urls = image_upload_result.get("image_urls") or []
 
     inventory_payload = {
         "availability": {
@@ -468,6 +567,8 @@ def upload_image():
     image_file = request.files.get("image")
     if not image_file:
         return jsonify({"ok": False, "error": "missing_image"}), 400
+    if not _cloudinary_configured():
+        return jsonify({"ok": False, "error": "cloudinary_not_configured"}), 503
 
     images = _draft_images(draft)
     replace_index = request.form.get("replace_index")
@@ -486,29 +587,39 @@ def upload_image():
     image_file.stream.seek(0, 2)
     size = image_file.stream.tell()
     image_file.stream.seek(0)
-    if size <= 0 or size > 2 * 1024 * 1024:
+    if size <= 0 or size > 8 * 1024 * 1024:
         return jsonify({"ok": False, "error": "invalid_size"}), 400
 
-    result = upload_ebay_image_file(
-        current_user.id,
-        image_file.stream,
-        request.form.get("filename") or image_file.filename or "image.jpg",
-        image_file.mimetype or "image/jpeg",
-    )
-    if not result.get("success") or not result.get("image_url"):
-        return jsonify({"ok": False, "error": "upload_failed", "details": result.get("error")}), 400
+    try:
+        public_id = f"ebay_drafts/user_{current_user.id}/draft_{draft.id}/{sha256 or int(datetime.utcnow().timestamp())}"
+        result = cloudinary.uploader.upload(
+            image_file.stream,
+            public_id=public_id,
+            overwrite=True,
+            resource_type="image",
+            format="jpg",
+            transformation=[{"quality": "auto:good"}],
+            tags=["ebay_listing_draft", f"user_{current_user.id}", f"draft_{draft.id}"],
+            context=f"user_id={current_user.id}|draft_id={draft.id}|source=ebay_listing_draft",
+        )
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "cloudinary_upload_failed", "details": str(exc)}), 502
 
     image_entry = {
         "filename": request.form.get("filename") or image_file.filename or "image.jpg",
         "sha256": sha256,
-        "width": int(request.form.get("width") or 0) or None,
-        "height": int(request.form.get("height") or 0) or None,
-        "ebay_image_url": result.get("image_url"),
-        "ebay_image_location": result.get("location"),
+        "width": result.get("width") or int(request.form.get("width") or 0) or None,
+        "height": result.get("height") or int(request.form.get("height") or 0) or None,
+        "cloudinary_url": result.get("secure_url") or result.get("url"),
+        "cloudinary_public_id": result.get("public_id"),
+        "image_url": result.get("secure_url") or result.get("url"),
+        "ebay_image_url": None,
+        "ebay_image_location": None,
         "is_main": len(images) == 0,
     }
     if is_replacement:
         image_entry["is_main"] = bool(images[replace_index].get("is_main"))
+        _delete_cloudinary_public_id(images[replace_index].get("cloudinary_public_id"))
         images[replace_index] = image_entry
     else:
         images.append(image_entry)
@@ -573,6 +684,7 @@ def get_category_conditions_api(category_id):
     try:
         options = get_category_condition_options(str(category_id))
     except Exception as exc:
+        print(f"[EBAY_LIST] Condition lookup failed for category {category_id}: {exc}")
         return jsonify({"ok": False, "error": "condition_lookup_failed", "details": str(exc)}), 500
     return jsonify({"ok": True, "conditions": options})
 

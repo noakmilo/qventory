@@ -105,7 +105,11 @@
       sha256: img.sha256,
       width: img.width,
       height: img.height,
+      cloudinary_url: img.cloudinary_url || img.image_url || null,
+      cloudinary_public_id: img.cloudinary_public_id || null,
+      image_url: img.cloudinary_url || img.image_url || img.url || null,
       ebay_image_url: img.ebay_image_url,
+      ebay_image_location: img.ebay_image_location || null,
       is_main: img.is_main || false
     }));
     const res = await fetch(draftUrl(config.draftBaseUrl, draft.id), {
@@ -511,7 +515,7 @@
       viewMode: 1,
       autoCropArea: 0.92,
       background: false,
-      responsive: true,
+      responsive: false,
       checkOrientation: true,
       movable: true,
       zoomable: true,
@@ -590,11 +594,15 @@
       setStatus(`Image upload failed: ${uploadData.details || uploadData.error || 'unknown error'}`);
       return;
     }
-    img.ebay_image_url = uploadData.image.ebay_image_url;
+    img.cloudinary_url = uploadData.image.cloudinary_url || uploadData.image.image_url;
+    img.cloudinary_public_id = uploadData.image.cloudinary_public_id;
+    img.image_url = uploadData.image.image_url || img.cloudinary_url;
+    img.ebay_image_url = uploadData.image.ebay_image_url || null;
+    img.url = img.cloudinary_url || img.url;
     delete img.replace_existing;
     draft = uploadData.draft;
     renderImageList();
-    setStatus('Image uploaded to eBay.');
+    setStatus('Image saved to Cloudinary. It will upload to eBay when you publish.');
     debounceSave();
   }
 
@@ -615,7 +623,7 @@
         <img src="${escapeHtml(img.url)}" alt="">
         <div class="image-card-info">
           <div class="image-card-title">${escapeHtml(img.filename || label)}</div>
-          <div class="muted">${label}${img.ebay_image_url ? ' · uploaded' : ' · pending upload'}</div>
+          <div class="muted">${label}${img.cloudinary_url || img.image_url ? ' · saved' : ' · pending save'}</div>
           <div class="image-card-actions">
             <button class="btn btn-small" data-action="main" title="Set as main image"><i class="fas fa-star"></i></button>
             <button class="btn btn-small" data-action="up" title="Move up"><i class="fas fa-arrow-up"></i></button>
@@ -838,8 +846,12 @@
         sha256: img.sha256,
         width: img.width,
         height: img.height,
+        cloudinary_url: img.cloudinary_url || img.image_url,
+        cloudinary_public_id: img.cloudinary_public_id,
+        image_url: img.image_url || img.cloudinary_url || img.ebay_image_url,
         ebay_image_url: img.ebay_image_url,
-        url: img.ebay_image_url,
+        ebay_image_location: img.ebay_image_location,
+        url: img.cloudinary_url || img.image_url || img.ebay_image_url,
         is_main: img.is_main || false
       }));
       renderImageList();

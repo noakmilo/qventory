@@ -156,26 +156,31 @@ def get_category_specifics(category_id: str, marketplace_id: str = "EBAY_US", fo
 def get_category_condition_options(category_id: str, marketplace_id: str = "EBAY_US") -> list[dict]:
     oauth = get_ebay_oauth()
     headers = oauth.get_auth_header()
-    tree_id = _get_category_tree_id(marketplace_id)
-    url = f"{oauth.api_endpoint}/commerce/taxonomy/v1/category_tree/{tree_id}/get_item_condition_policies"
+    headers["Accept-Encoding"] = "gzip"
+    url = f"{oauth.api_endpoint}/sell/metadata/v1/marketplace/{marketplace_id}/get_item_condition_policies"
     resp = requests.get(
         url,
         headers=headers,
-        params={"category_id": category_id},
+        params={"filter": f"categoryIds:{{{category_id}}}"},
         timeout=20
     )
     resp.raise_for_status()
     data = resp.json() or {}
     policies = data.get("itemConditionPolicies") or data.get("conditionPolicies") or []
+    policy = next(
+        (item for item in policies if str(item.get("categoryId")) == str(category_id)),
+        policies[0] if policies else {}
+    )
+    item_conditions = policy.get("itemConditions") or []
     options = []
     seen = set()
-    for policy in policies:
-        condition_id = str(policy.get("conditionId") or policy.get("itemConditionId") or "")
+    for condition in item_conditions:
+        condition_id = str(condition.get("conditionId") or condition.get("itemConditionId") or "")
         value = CONDITION_ID_TO_INVENTORY_ENUM.get(condition_id)
         raw_label = (
-            policy.get("conditionDescription")
-            or policy.get("localizedConditionName")
-            or policy.get("conditionDisplayName")
+            condition.get("conditionDescription")
+            or condition.get("localizedConditionName")
+            or condition.get("conditionDisplayName")
             or ""
         )
         if condition_id == "2000" and "certified" in raw_label.lower():
