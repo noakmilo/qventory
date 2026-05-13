@@ -569,7 +569,22 @@
     border-top: 1px solid var(--border);
   }
   .thrift-map-canvas .gm-style .gm-ui-hover-effect {
-    filter: var(--thrift-info-close-filter, none);
+    top: 2px !important;
+    right: 2px !important;
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 999px;
+    background: var(--card) !important;
+    opacity: 1 !important;
+  }
+  .thrift-map-canvas .gm-style .gm-ui-hover-effect span {
+    background-color: var(--text) !important;
+    opacity: 1 !important;
+  }
+  .thrift-map-canvas .gm-style .gm-style-iw-tc::after {
+    background: var(--card) !important;
+    border-left: 1px solid var(--border);
+    border-top: 1px solid var(--border);
   }
   .thrift-google-info {
     color: var(--text);
