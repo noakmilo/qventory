@@ -14,7 +14,49 @@
   </div>
 
   <div class="wizard-status" id="wizardStatus">Draft not loaded.</div>
-
+<div class="card">
+      <div class="image-tools">
+      <div class="image-editor">
+        <div class="open-image-editor-shell">
+          <img id="cropperImage" alt="">
+          <div class="image-empty-state" id="imageEmptyState">
+            <i class="far fa-images"></i>
+            <span>Select or add an image to edit.</span>
+          </div>
+        </div>
+        <div class="editor-controls">
+          <div class="editor-tool-row">
+            <button class="btn btn-small" id="cropResetBtn" title="Reset crop"><i class="fas fa-undo"></i> Reset</button>
+            <button class="btn btn-small" id="rotateLeftBtn" title="Rotate left"><i class="fas fa-rotate-left"></i></button>
+            <button class="btn btn-small" id="rotateRightBtn" title="Rotate right"><i class="fas fa-rotate-right"></i></button>
+            <button class="btn btn-small" id="flipHorizontalBtn" title="Flip horizontal"><i class="fas fa-arrows-left-right"></i></button>
+            <button class="btn btn-small" id="flipVerticalBtn" title="Flip vertical"><i class="fas fa-arrows-up-down"></i></button>
+          </div>
+          <div class="editor-tool-row">
+            <label>Brightness <input type="range" id="imageBrightnessRange" min="-100" max="100" value="0"></label>
+            <label>Contrast <input type="range" id="imageContrastRange" min="-100" max="100" value="0"></label>
+            <label>Resize
+              <select id="resizeSelect">
+                <option value="original">Original</option>
+                <option value="1600">Max 1600px</option>
+                <option value="1200">Max 1200px</option>
+                <option value="1000">Max 1000px</option>
+                <option value="800">Max 800px</option>
+              </select>
+            </label>
+          </div>
+          <div class="editor-tool-row">
+            <button class="btn btn-primary" id="applyEditsBtn"><i class="fas fa-cloud-arrow-up"></i> Export & Upload</button>
+            <button class="btn danger" id="deleteImageBtn"><i class="fas fa-trash"></i> Delete Image</button>
+          </div>
+        <!--  <div class="muted" id="imageEditorHint">Cropper.js editor loaded. Select an image to edit.</div> 
+          -->
+        </div>
+      </div>
+      <div class="image-list" id="imageList"></div>
+    </div>
+  </div>
+</div>
   <div class="card">
     <h2>Basic Info</h2>
     <div class="form-grid">
@@ -146,46 +188,7 @@
         <input type="file" id="imageInput" accept="image/*" multiple>
       </label>
     </div>
-    <div class="image-tools">
-      <div class="image-editor">
-        <div class="open-image-editor-shell">
-          <img id="cropperImage" alt="">
-          <div class="image-empty-state" id="imageEmptyState">
-            <i class="far fa-images"></i>
-            <span>Select or add an image to edit.</span>
-          </div>
-        </div>
-        <div class="editor-controls">
-          <div class="editor-tool-row">
-            <button class="btn btn-small" id="cropResetBtn" title="Reset crop"><i class="fas fa-undo"></i> Reset</button>
-            <button class="btn btn-small" id="rotateLeftBtn" title="Rotate left"><i class="fas fa-rotate-left"></i></button>
-            <button class="btn btn-small" id="rotateRightBtn" title="Rotate right"><i class="fas fa-rotate-right"></i></button>
-            <button class="btn btn-small" id="flipHorizontalBtn" title="Flip horizontal"><i class="fas fa-arrows-left-right"></i></button>
-            <button class="btn btn-small" id="flipVerticalBtn" title="Flip vertical"><i class="fas fa-arrows-up-down"></i></button>
-          </div>
-          <div class="editor-tool-row">
-            <label>Brightness <input type="range" id="imageBrightnessRange" min="-100" max="100" value="0"></label>
-            <label>Contrast <input type="range" id="imageContrastRange" min="-100" max="100" value="0"></label>
-            <label>Resize
-              <select id="resizeSelect">
-                <option value="original">Original</option>
-                <option value="1600">Max 1600px</option>
-                <option value="1200">Max 1200px</option>
-                <option value="1000">Max 1000px</option>
-                <option value="800">Max 800px</option>
-              </select>
-            </label>
-          </div>
-          <div class="editor-tool-row">
-            <button class="btn btn-primary" id="applyEditsBtn"><i class="fas fa-cloud-arrow-up"></i> Export & Upload</button>
-            <button class="btn danger" id="deleteImageBtn"><i class="fas fa-trash"></i> Delete Image</button>
-          </div>
-          <div class="muted" id="imageEditorHint">Cropper.js editor loaded. Select an image to edit.</div>
-        </div>
-      </div>
-      <div class="image-list" id="imageList"></div>
-    </div>
-  </div>
+
 
   <div class="card">
     <h2>Review & Publish</h2>
