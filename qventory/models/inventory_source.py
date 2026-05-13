@@ -62,7 +62,13 @@ class ThriftRadarSavedSearch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = db.Column(db.String(200), nullable=False)
-    zip_code = db.Column(db.String(10), nullable=False)
+    zip_code = db.Column(db.String(10), nullable=True)
+    search_mode = db.Column(db.String(20), nullable=False, default="zip", index=True)
+    city = db.Column(db.String(120), nullable=True)
+    state = db.Column(db.String(80), nullable=True)
+    center_lat = db.Column(db.Float, nullable=True)
+    center_lng = db.Column(db.Float, nullable=True)
+    radius_meters = db.Column(db.Integer, nullable=False, default=40233)
     keywords = db.Column(db.JSON, nullable=False, default=list)
     results = db.Column(db.JSON, nullable=True)
     is_archived = db.Column(db.Boolean, nullable=False, default=False, index=True)
@@ -77,8 +83,81 @@ class ThriftRadarSavedSearch(db.Model):
             "id": self.id,
             "title": self.title,
             "zip_code": self.zip_code,
+            "search_mode": self.search_mode or "zip",
+            "city": self.city,
+            "state": self.state,
+            "center": (
+                {"lat": self.center_lat, "lng": self.center_lng}
+                if self.center_lat is not None and self.center_lng is not None
+                else None
+            ),
+            "radius_meters": self.radius_meters,
             "keywords": self.keywords or [],
             "results": self.results or [],
+            "is_archived": self.is_archived,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ThriftRadarKeyword(db.Model):
+    __tablename__ = "thrift_radar_keywords"
+
+    id = db.Column(db.Integer, primary_key=True)
+    slug = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    label = db.Column(db.String(120), nullable=False)
+    keywords = db.Column(db.JSON, nullable=False, default=list)
+    match_type = db.Column(db.String(12), nullable=False, default="any")
+    icon_url = db.Column(db.String(1000), nullable=True)
+    fallback_icon = db.Column(db.String(80), nullable=True)
+    color = db.Column(db.String(20), nullable=False, default="#22c55e")
+    is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    display_order = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_option(self):
+        return {
+            "id": self.id,
+            "slug": self.slug,
+            "label": self.label,
+            "keywords": self.keywords or [],
+            "match_type": self.match_type or "any",
+            "icon_url": self.icon_url,
+            "icon": self.fallback_icon or "fa-location-dot",
+            "color": self.color or "#64748b",
+            "is_active": bool(self.is_active),
+            "display_order": self.display_order,
+        }
+
+
+class ThriftRadarSavedRoute(db.Model):
+    __tablename__ = "thrift_radar_saved_routes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    saved_search_id = db.Column(db.Integer, db.ForeignKey("thrift_radar_saved_searches.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    mode = db.Column(db.String(20), nullable=False, default="driving")
+    origin = db.Column(db.JSON, nullable=True)
+    stops = db.Column(db.JSON, nullable=False, default=list)
+    route_data = db.Column(db.JSON, nullable=True)
+    is_archived = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    archived_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("thrift_radar_saved_routes", cascade="all, delete-orphan", lazy="dynamic"))
+    saved_search = db.relationship("ThriftRadarSavedSearch")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "saved_search_id": self.saved_search_id,
+            "title": self.title,
+            "mode": self.mode,
+            "origin": self.origin or {},
+            "stops": self.stops or [],
+            "route_data": self.route_data or {},
             "is_archived": self.is_archived,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

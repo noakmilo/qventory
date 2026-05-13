@@ -47,6 +47,8 @@ from ..models.inventory_source import (
     InventorySourceReaction,
     InventorySourceSuggestion,
     ThriftRadarLog,
+    ThriftRadarKeyword,
+    ThriftRadarSavedRoute,
     ThriftRadarSavedSearch,
 )
 from ..models.support import SupportTicket, SupportMessage, SupportAttachment
@@ -84,24 +86,58 @@ USER_ROLE_OPTIONS = ["free", "early_adopter", "premium", "plus", "pro", "god", "
 INVENTORY_SOURCES_ENABLED_KEY = "inventory_sources_enabled"
 THRIFT_RADAR_ENABLED_KEY = "thrift_radar_enabled"
 THRIFT_RADAR_ROLES_KEY = "thrift_radar_roles"
-THRIFT_RADAR_KEYWORDS = {
-    "thrift_store": {
-        "label": "Thrift Store",
+DEFAULT_THRIFT_RADAR_KEYWORDS = {
+    "goodwill": {
+        "label": "Goodwill",
+        "keywords": ["goodwill", "goodwill store", "goodwill outlet", "goodwill specialty store"],
+        "match_type": "any",
         "icon": "fa-shirt",
         "color": "#22c55e",
+        "display_order": 10,
+    },
+    "savers": {
+        "label": "Savers / Value Village",
+        "keywords": ["savers thrift", "value village"],
+        "match_type": "any",
+        "icon": "fa-store",
+        "color": "#3b82f6",
+        "display_order": 20,
+    },
+    "salvation_army": {
+        "label": "Salvation Army",
+        "keywords": ["salvation army thrift"],
+        "match_type": "all",
+        "icon": "fa-hand-holding-heart",
+        "color": "#ef4444",
+        "display_order": 30,
     },
     "flea_market": {
         "label": "Flea Market",
+        "keywords": ["flea market", "swap meet"],
+        "match_type": "any",
         "icon": "fa-store",
         "color": "#f97316",
+        "display_order": 40,
     },
     "outlet": {
         "label": "Outlet",
+        "keywords": ["outlet store", "clearance outlet", "liquidation outlet"],
+        "match_type": "any",
         "icon": "fa-bag-shopping",
-        "color": "#3b82f6",
+        "color": "#8b5cf6",
+        "display_order": 50,
+    },
+    "other": {
+        "label": "Other Thrift Store",
+        "keywords": ["thrift", "second hand", "consignment", "pawn shop"],
+        "match_type": "any",
+        "icon": "fa-location-dot",
+        "color": "#64748b",
+        "display_order": 90,
     },
 }
-THRIFT_RADAR_RADIUS_METERS = 24140
+THRIFT_RADAR_KEYWORDS = DEFAULT_THRIFT_RADAR_KEYWORDS
+THRIFT_RADAR_RADIUS_METERS = 40233
 
 PENDING_TASK_DEFS = [
     {
@@ -978,6 +1014,76 @@ def _require_thrift_radar_access():
         abort(404)
 
 
+def _google_maps_browser_key():
+    return os.getenv("GMAPS_API_KEY", "")
+
+
+def _google_maps_server_key():
+    return os.getenv("GMAPS_SERVER_API_KEY") or os.getenv("GMAPS_API_KEY") or ""
+
+
+def _ensure_default_thrift_keywords():
+    existing_slugs = {
+        row.slug
+        for row in ThriftRadarKeyword.query.with_entities(ThriftRadarKeyword.slug).all()
+    }
+    added = False
+    for slug, option in DEFAULT_THRIFT_RADAR_KEYWORDS.items():
+        if slug in existing_slugs:
+            continue
+        keyword = ThriftRadarKeyword(
+            slug=slug,
+            label=option["label"],
+            keywords=option.get("keywords") or [option["label"]],
+            match_type=option.get("match_type") or "any",
+            fallback_icon=option.get("icon") or "fa-location-dot",
+            color=option.get("color") or "#64748b",
+            display_order=option.get("display_order") or 0,
+            is_active=True,
+        )
+        db.session.add(keyword)
+        added = True
+    if added:
+        db.session.commit()
+
+
+def _thrift_radar_keywords(active_only: bool = True):
+    try:
+        _ensure_default_thrift_keywords()
+        query = ThriftRadarKeyword.query
+        if active_only:
+            query = query.filter(ThriftRadarKeyword.is_active.is_(True))
+        rows = query.order_by(
+            ThriftRadarKeyword.display_order.asc(),
+            ThriftRadarKeyword.label.asc()
+        ).all()
+        return {row.slug: row.to_option() for row in rows}
+    except Exception as exc:
+        current_app.logger.warning("[THRIFT_RADAR] keyword load failed, using defaults: %s", exc)
+        db.session.rollback()
+        return {
+            slug: {
+                "slug": slug,
+                "label": option["label"],
+                "keywords": option.get("keywords") or [],
+                "match_type": option.get("match_type") or "any",
+                "icon": option.get("icon") or "fa-location-dot",
+                "icon_url": None,
+                "color": option.get("color") or "#64748b",
+                "is_active": True,
+                "display_order": option.get("display_order") or 0,
+            }
+            for slug, option in DEFAULT_THRIFT_RADAR_KEYWORDS.items()
+        }
+
+
+def _normalize_thrift_keywords(values):
+    if not isinstance(values, list):
+        return []
+    options = _thrift_radar_keywords(active_only=True)
+    return [key for key in options if key in values]
+
+
 def _client_ip_address():
     forwarded_for = request.headers.get("X-Forwarded-For", "")
     if forwarded_for:
@@ -1107,6 +1213,7 @@ def inventory_sources_suggest():
 @login_required
 def thrift_radar():
     _require_thrift_radar_access()
+    keyword_options = _thrift_radar_keywords(active_only=True)
     active_searches = ThriftRadarSavedSearch.query.filter_by(
         user_id=current_user.id,
         is_archived=False
@@ -1121,11 +1228,20 @@ def thrift_radar():
         ThriftRadarSavedSearch.archived_at.desc(),
         ThriftRadarSavedSearch.updated_at.desc()
     ).limit(30).all()
+    saved_routes = ThriftRadarSavedRoute.query.filter_by(
+        user_id=current_user.id,
+        is_archived=False
+    ).order_by(
+        ThriftRadarSavedRoute.updated_at.desc(),
+        ThriftRadarSavedRoute.created_at.desc()
+    ).limit(30).all()
     return render_template(
         "thrift_radar.html",
-        keyword_options=THRIFT_RADAR_KEYWORDS,
+        keyword_options=keyword_options,
         active_searches=[search.to_dict() for search in active_searches],
         archived_searches=[search.to_dict() for search in archived_searches],
+        saved_routes=[route.to_dict() for route in saved_routes],
+        gmaps_key=_google_maps_browser_key(),
     )
 
 
@@ -1135,12 +1251,6 @@ def _validate_us_zip_code(value: str) -> str | None:
     if not match:
         return None
     return value[:5]
-
-
-def _normalize_thrift_keywords(values):
-    if not isinstance(values, list):
-        return []
-    return [key for key in THRIFT_RADAR_KEYWORDS if key in values]
 
 
 def _thrift_radar_headers():
@@ -1360,6 +1470,210 @@ def _search_thrift_radar(zip_code: str, keywords):
     return center, results[:100]
 
 
+def _google_geocode_location(query: str):
+    api_key = _google_maps_server_key()
+    if not api_key:
+        raise RuntimeError("Missing GMAPS_SERVER_API_KEY or GMAPS_API_KEY")
+    response = requests.get(
+        "https://maps.googleapis.com/maps/api/geocode/json",
+        params={
+            "address": query,
+            "components": "country:US",
+            "key": api_key,
+        },
+        timeout=12,
+    )
+    response.raise_for_status()
+    data = response.json() or {}
+    status = data.get("status")
+    if status != "OK":
+        current_app.logger.warning("[THRIFT_RADAR] Google geocode status=%s query=%s msg=%s", status, query, data.get("error_message"))
+        return None
+    place = (data.get("results") or [None])[0]
+    if not place:
+        return None
+    location = ((place.get("geometry") or {}).get("location") or {})
+    address_components = place.get("address_components") or []
+    state = None
+    city = None
+    for component in address_components:
+        types = component.get("types") or []
+        if "administrative_area_level_1" in types:
+            state = component.get("short_name") or component.get("long_name")
+        if "locality" in types or "postal_town" in types:
+            city = component.get("long_name")
+    return {
+        "lat": float(location["lat"]),
+        "lng": float(location["lng"]),
+        "lon": float(location["lng"]),
+        "display_name": place.get("formatted_address") or query,
+        "city": city,
+        "state": state,
+    }
+
+
+def _google_places_autocomplete_cities(query: str):
+    api_key = _google_maps_server_key()
+    if not api_key:
+        raise RuntimeError("Missing GMAPS_SERVER_API_KEY or GMAPS_API_KEY")
+    response = requests.get(
+        "https://maps.googleapis.com/maps/api/place/autocomplete/json",
+        params={
+            "input": query,
+            "types": "(cities)",
+            "components": "country:us",
+            "key": api_key,
+        },
+        timeout=12,
+    )
+    response.raise_for_status()
+    data = response.json() or {}
+    if data.get("status") not in {"OK", "ZERO_RESULTS"}:
+        current_app.logger.warning("[THRIFT_RADAR] Google city autocomplete status=%s msg=%s", data.get("status"), data.get("error_message"))
+    return [
+        {
+            "description": row.get("description"),
+            "place_id": row.get("place_id"),
+        }
+        for row in data.get("predictions", [])[:8]
+        if row.get("description")
+    ]
+
+
+def _thrift_match_store_name(name: str | None, keyword_option: dict) -> bool:
+    store_name = (name or "").lower()
+    terms = [str(term).lower() for term in keyword_option.get("keywords") or [] if str(term).strip()]
+    if not terms:
+        return True
+    if keyword_option.get("match_type") == "all":
+        return all(part in store_name for term in terms for part in term.split())
+    return any(term in store_name for term in terms)
+
+
+def _google_fetch_places(lat: float, lng: float, keyword: str):
+    api_key = _google_maps_server_key()
+    if not api_key:
+        raise RuntimeError("Missing GMAPS_SERVER_API_KEY or GMAPS_API_KEY")
+    response = requests.get(
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+        params={
+            "location": f"{lat},{lng}",
+            "radius": THRIFT_RADAR_RADIUS_METERS,
+            "keyword": keyword,
+            "key": api_key,
+        },
+        timeout=12,
+    )
+    response.raise_for_status()
+    data = response.json() or {}
+    status = data.get("status")
+    current_app.logger.info(
+        "[THRIFT_RADAR] Google Places status=%s keyword=%s results=%s msg=%s",
+        status,
+        keyword,
+        len(data.get("results") or []),
+        data.get("error_message"),
+    )
+    if status == "OK":
+        return data.get("results") or []
+    if status == "ZERO_RESULTS":
+        return []
+    raise RuntimeError(data.get("error_message") or f"Google Places returned {status}")
+
+
+def _resolve_thrift_search_center(payload):
+    search_mode = (payload.get("search_mode") or "zip").strip().lower()
+    if search_mode not in {"zip", "city", "location"}:
+        search_mode = "zip"
+
+    if search_mode == "location":
+        lat = payload.get("lat")
+        lng = payload.get("lng")
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (TypeError, ValueError):
+            return None, "location", "Current location is unavailable."
+        return {
+            "lat": lat,
+            "lng": lng,
+            "lon": lng,
+            "display_name": "Current location",
+        }, "location", None
+
+    if search_mode == "city":
+        city = (payload.get("city") or "").strip()
+        if len(city) < 2:
+            return None, "city", "Enter a U.S. city."
+        return _google_geocode_location(f"{city}, United States"), "city", None
+
+    zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
+    if not zip_code:
+        return None, "zip", "Thrift Radar currently supports U.S. ZIP Codes only."
+    return _google_geocode_location(f"{zip_code}, United States"), "zip", None
+
+
+def _search_thrift_radar_google(payload, keywords):
+    center, search_mode, validation_error = _resolve_thrift_search_center(payload)
+    if validation_error:
+        return None, [], search_mode, validation_error
+    if not center:
+        return None, [], search_mode, "Could not find that location in the U.S."
+
+    keyword_options = _thrift_radar_keywords(active_only=True)
+    results = []
+    seen = set()
+    for slug in keywords:
+        option = keyword_options.get(slug)
+        if not option:
+            continue
+        for term in option.get("keywords") or [option.get("label") or slug]:
+            for place in _google_fetch_places(center["lat"], center["lng"], term):
+                place_id = place.get("place_id")
+                if not place_id or place_id in seen:
+                    continue
+                if not _thrift_match_store_name(place.get("name"), option):
+                    continue
+                loc = ((place.get("geometry") or {}).get("location") or {})
+                lat = loc.get("lat")
+                lng = loc.get("lng")
+                if lat is None or lng is None:
+                    continue
+                seen.add(place_id)
+                results.append({
+                    "id": place_id,
+                    "place_id": place_id,
+                    "name": (place.get("name") or "Unnamed source")[:160],
+                    "address": place.get("vicinity") or place.get("formatted_address") or "Address unavailable",
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "lon": float(lng),
+                    "rating": place.get("rating"),
+                    "keyword": slug,
+                    "keyword_label": option.get("label") or slug,
+                    "icon_url": option.get("icon_url"),
+                    "fallback_icon": option.get("icon"),
+                    "color": option.get("color") or "#64748b",
+                })
+    results.sort(key=lambda row: (row["keyword_label"], row["name"].lower()))
+    return center, results[:120], search_mode, None
+
+
+@main_bp.route("/inventory-sources/thrift-radar/cities")
+@login_required
+def thrift_radar_city_suggestions():
+    _require_thrift_radar_access()
+    query = (request.args.get("q") or "").strip()
+    if len(query) < 2:
+        return jsonify({"ok": True, "cities": []})
+    try:
+        cities = _google_places_autocomplete_cities(query)
+    except Exception as exc:
+        current_app.logger.warning("[THRIFT_RADAR] city autocomplete failed: %s", exc)
+        return jsonify({"ok": False, "error": "City autocomplete is temporarily unavailable."}), 502
+    return jsonify({"ok": True, "cities": cities})
+
+
 @main_bp.route("/inventory-sources/thrift-radar/search", methods=["POST"])
 @login_required
 def thrift_radar_search():
@@ -1367,8 +1681,9 @@ def thrift_radar_search():
     started_at = time.monotonic()
     payload = request.get_json() or {}
     zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
+    search_mode = (payload.get("search_mode") or "zip").strip().lower()
     keywords = _normalize_thrift_keywords(payload.get("keywords") or [])
-    if not zip_code:
+    if search_mode == "zip" and not zip_code:
         _log_thrift_radar_event(
             "search_validation_error",
             status="error",
@@ -1390,7 +1705,18 @@ def thrift_radar_search():
         return jsonify({"ok": False, "error": "Select at least one source type."}), 400
 
     try:
-        center, results = _search_thrift_radar(zip_code, keywords)
+        center, results, search_mode, validation_error = _search_thrift_radar_google(payload, keywords)
+        if validation_error:
+            _log_thrift_radar_event(
+                "search_validation_error",
+                status="error",
+                zip_code=zip_code,
+                keywords=keywords,
+                error_message=validation_error,
+                metadata={"search_mode": search_mode},
+            )
+            db.session.commit()
+            return jsonify({"ok": False, "error": validation_error}), 400
     except requests.RequestException as exc:
         duration_ms = int((time.monotonic() - started_at) * 1000)
         _log_thrift_radar_event(
@@ -1441,14 +1767,17 @@ def thrift_radar_search():
         keywords=keywords,
         result_count=len(results),
         duration_ms=duration_ms,
-        metadata={"center": center},
+        metadata={"center": center, "search_mode": search_mode},
     )
     db.session.commit()
     return jsonify({
         "ok": True,
         "zip_code": zip_code,
+        "search_mode": search_mode,
+        "city": payload.get("city"),
         "keywords": keywords,
         "center": center,
+        "radius_meters": THRIFT_RADAR_RADIUS_METERS,
         "results": results,
     })
 
@@ -1459,23 +1788,38 @@ def thrift_radar_save_search():
     _require_thrift_radar_access()
     payload = request.get_json() or {}
     zip_code = _validate_us_zip_code(payload.get("zip_code") or "")
+    search_mode = (payload.get("search_mode") or "zip").strip().lower()
+    city = (payload.get("city") or "").strip() or None
+    center = payload.get("center") or {}
     keywords = _normalize_thrift_keywords(payload.get("keywords") or [])
     results = payload.get("results") or []
-    if not zip_code or not keywords:
+    if search_mode not in {"zip", "city", "location"}:
+        search_mode = "zip"
+    if (search_mode == "zip" and not zip_code) or not keywords:
         return jsonify({"ok": False, "error": "Run a valid U.S. ZIP Code search first."}), 400
+    if search_mode == "city" and not city:
+        return jsonify({"ok": False, "error": "Run a valid U.S. city search first."}), 400
     if not isinstance(results, list):
         results = []
     title = (payload.get("title") or "").strip()
     if not title:
-        labels = ", ".join(THRIFT_RADAR_KEYWORDS[key]["label"] for key in keywords)
-        title = f"{zip_code} - {labels}"
+        keyword_options = _thrift_radar_keywords(active_only=True)
+        labels = ", ".join(keyword_options.get(key, {}).get("label", key) for key in keywords)
+        location_label = city or zip_code or "Current location"
+        title = f"{location_label} - {labels}"
 
     saved = ThriftRadarSavedSearch(
         user_id=current_user.id,
         title=title[:200],
         zip_code=zip_code,
+        search_mode=search_mode,
+        city=city,
+        state=(center.get("state") or "")[:80] or None if isinstance(center, dict) else None,
+        center_lat=float(center["lat"]) if isinstance(center, dict) and center.get("lat") is not None else None,
+        center_lng=float(center.get("lng", center.get("lon"))) if isinstance(center, dict) and (center.get("lng") is not None or center.get("lon") is not None) else None,
+        radius_meters=int(payload.get("radius_meters") or THRIFT_RADAR_RADIUS_METERS),
         keywords=keywords,
-        results=results[:100],
+        results=results[:120],
     )
     db.session.add(saved)
     db.session.flush()
@@ -1484,9 +1828,9 @@ def thrift_radar_save_search():
         status="success",
         zip_code=zip_code,
         keywords=keywords,
-        result_count=len(results[:100]),
+        result_count=len(results[:120]),
         saved_search_id=saved.id,
-        metadata={"title": saved.title},
+        metadata={"title": saved.title, "search_mode": search_mode, "city": city},
     )
     db.session.commit()
     return jsonify({"ok": True, "search": saved.to_dict()})
@@ -1556,6 +1900,79 @@ def thrift_radar_delete_search(search_id):
     )
     db.session.flush()
     db.session.delete(saved)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@main_bp.route("/inventory-sources/thrift-radar/routes", methods=["POST"])
+@login_required
+def thrift_radar_save_route():
+    _require_thrift_radar_access()
+    payload = request.get_json() or {}
+    title = (payload.get("title") or "").strip() or "Thrift route"
+    stops = payload.get("stops") or []
+    origin = payload.get("origin") or {}
+    route_data = payload.get("route_data") or {}
+    mode = (payload.get("mode") or "driving").strip().lower()
+    saved_search_id = payload.get("saved_search_id")
+    if mode not in {"driving", "free"}:
+        mode = "driving"
+    if not isinstance(stops, list) or len(stops) < 2:
+        return jsonify({"ok": False, "error": "Select at least two stops before saving a route."}), 400
+    if len(stops) > 60:
+        return jsonify({"ok": False, "error": "Route has too many stops."}), 400
+
+    saved = ThriftRadarSavedRoute(
+        user_id=current_user.id,
+        saved_search_id=saved_search_id if isinstance(saved_search_id, int) else None,
+        title=title[:200],
+        mode=mode,
+        origin=origin if isinstance(origin, dict) else {},
+        stops=stops[:60],
+        route_data=route_data if isinstance(route_data, dict) else {},
+    )
+    db.session.add(saved)
+    db.session.flush()
+    _log_thrift_radar_event(
+        "save_route",
+        status="success",
+        result_count=len(stops[:60]),
+        saved_search_id=saved.saved_search_id,
+        metadata={"title": saved.title, "mode": saved.mode, "route_id": saved.id},
+    )
+    db.session.commit()
+    return jsonify({"ok": True, "route": saved.to_dict()})
+
+
+@main_bp.route("/inventory-sources/thrift-radar/routes/<int:route_id>/archive", methods=["POST"])
+@login_required
+def thrift_radar_archive_route(route_id):
+    _require_thrift_radar_access()
+    route = ThriftRadarSavedRoute.query.filter_by(id=route_id, user_id=current_user.id).first_or_404()
+    route.is_archived = True
+    route.archived_at = datetime.utcnow()
+    _log_thrift_radar_event(
+        "archive_route",
+        status="success",
+        saved_search_id=route.saved_search_id,
+        metadata={"title": route.title, "route_id": route.id},
+    )
+    db.session.commit()
+    return jsonify({"ok": True, "route": route.to_dict()})
+
+
+@main_bp.route("/inventory-sources/thrift-radar/routes/<int:route_id>", methods=["DELETE"])
+@login_required
+def thrift_radar_delete_route(route_id):
+    _require_thrift_radar_access()
+    route = ThriftRadarSavedRoute.query.filter_by(id=route_id, user_id=current_user.id).first_or_404()
+    _log_thrift_radar_event(
+        "delete_route",
+        status="success",
+        saved_search_id=route.saved_search_id,
+        metadata={"title": route.title, "route_id": route.id},
+    )
+    db.session.delete(route)
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -8383,7 +8800,7 @@ def _normalize_inventory_source_url(value: str) -> str:
     return value
 
 
-def _upload_inventory_source_image_file(file_storage):
+def _upload_inventory_source_image_file(file_storage, folder="qventory/inventory-sources"):
     if not file_storage or not getattr(file_storage, "filename", ""):
         return None
     if not cloudinary_enabled:
@@ -8401,7 +8818,7 @@ def _upload_inventory_source_image_file(file_storage):
 
     up = cloudinary.uploader.upload(
         file_storage,
-        folder="qventory/inventory-sources",
+        folder=folder,
         overwrite=True,
         resource_type="image",
         transformation=[{"quality": "auto", "fetch_format": "auto"}]
@@ -8412,9 +8829,14 @@ def _upload_inventory_source_image_file(file_storage):
 @main_bp.route("/admin/inventory-sources")
 @require_admin
 def admin_inventory_sources():
+    _ensure_default_thrift_keywords()
     sources = InventorySource.query.order_by(
         InventorySource.display_order.asc(),
         InventorySource.title.asc()
+    ).all()
+    thrift_keywords = ThriftRadarKeyword.query.order_by(
+        ThriftRadarKeyword.display_order.asc(),
+        ThriftRadarKeyword.label.asc()
     ).all()
     suggestions = InventorySourceSuggestion.query.filter(
         InventorySourceSuggestion.is_archived.is_(False)
@@ -8452,6 +8874,8 @@ def admin_inventory_sources():
         suggestions=suggestions,
         thrift_radar_enabled=thrift_radar_enabled,
         thrift_radar_roles=thrift_radar_roles,
+        thrift_keywords=thrift_keywords,
+        cloudinary_enabled=cloudinary_enabled,
     )
 
 
@@ -8480,6 +8904,83 @@ def admin_inventory_sources_settings():
     db.session.commit()
 
     flash("Inventory Sources settings updated.", "ok")
+    return redirect(url_for("main.admin_inventory_sources"))
+
+
+def _parse_thrift_keyword_terms(raw: str):
+    return [part.strip() for part in re.split(r"[\n,]+", raw or "") if part.strip()]
+
+
+@main_bp.route("/admin/inventory-sources/thrift-keywords", methods=["POST"])
+@require_admin
+def admin_thrift_radar_keyword_save():
+    keyword_id = request.form.get("keyword_id")
+    slug = (request.form.get("slug") or "").strip().lower()
+    slug = re.sub(r"[^a-z0-9_]+", "_", slug).strip("_")
+    label = (request.form.get("label") or "").strip()
+    terms = _parse_thrift_keyword_terms(request.form.get("keywords") or "")
+    match_type = (request.form.get("match_type") or "any").strip().lower()
+    color = (request.form.get("color") or "#64748b").strip()[:20]
+    fallback_icon = (request.form.get("fallback_icon") or "fa-location-dot").strip()[:80]
+    is_active = request.form.get("is_active") == "on"
+
+    try:
+        display_order = int(request.form.get("display_order") or 0)
+    except ValueError:
+        display_order = 0
+
+    if not slug or not label or not terms:
+        flash("Keyword slug, label, and search terms are required.", "error")
+        return redirect(url_for("main.admin_inventory_sources"))
+    if match_type not in {"any", "all"}:
+        match_type = "any"
+
+    query = ThriftRadarKeyword.query
+    keyword = query.get(int(keyword_id)) if keyword_id else None
+    duplicate = ThriftRadarKeyword.query.filter(ThriftRadarKeyword.slug == slug)
+    if keyword:
+        duplicate = duplicate.filter(ThriftRadarKeyword.id != keyword.id)
+    if duplicate.first():
+        flash("That keyword slug already exists.", "error")
+        return redirect(url_for("main.admin_inventory_sources"))
+    if not keyword:
+        keyword = ThriftRadarKeyword(slug=slug)
+        db.session.add(keyword)
+
+    try:
+        icon_url = _upload_inventory_source_image_file(
+            request.files.get("icon_file"),
+            folder="qventory/thrift-radar-icons",
+        )
+    except (RuntimeError, ValueError) as e:
+        flash(str(e), "error")
+        return redirect(url_for("main.admin_inventory_sources"))
+    except Exception as e:
+        flash(f"Icon upload failed: {e}", "error")
+        return redirect(url_for("main.admin_inventory_sources"))
+
+    keyword.slug = slug
+    keyword.label = label[:120]
+    keyword.keywords = terms
+    keyword.match_type = match_type
+    keyword.color = color or "#64748b"
+    keyword.fallback_icon = fallback_icon or "fa-location-dot"
+    keyword.display_order = display_order
+    keyword.is_active = is_active
+    if icon_url:
+        keyword.icon_url = icon_url
+    db.session.commit()
+    flash("Thrift Radar keyword saved.", "ok")
+    return redirect(url_for("main.admin_inventory_sources"))
+
+
+@main_bp.route("/admin/inventory-sources/thrift-keywords/<int:keyword_id>/delete", methods=["POST"])
+@require_admin
+def admin_thrift_radar_keyword_delete(keyword_id):
+    keyword = ThriftRadarKeyword.query.get_or_404(keyword_id)
+    db.session.delete(keyword)
+    db.session.commit()
+    flash("Thrift Radar keyword deleted.", "ok")
     return redirect(url_for("main.admin_inventory_sources"))
 
 

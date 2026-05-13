@@ -29,6 +29,8 @@ from .inventory_source import (
     InventorySourceReaction,
     InventorySourceSuggestion,
     ThriftRadarLog,
+    ThriftRadarKeyword,
+    ThriftRadarSavedRoute,
     ThriftRadarSavedSearch,
 )
 from .pickup import PickupAppointment, PickupMessage
@@ -68,6 +70,8 @@ __all__ = [
     'InventorySourceReaction',
     'InventorySourceSuggestion',
     'ThriftRadarLog',
+    'ThriftRadarKeyword',
+    'ThriftRadarSavedRoute',
     'ThriftRadarSavedSearch',
     'PickupAppointment',
     'PickupMessage',

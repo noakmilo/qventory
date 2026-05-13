@@ -4,8 +4,6 @@
 {% block meta_description %}Find nearby thrift stores, flea markets, and outlets with Thrift Radar.{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIINfQSM0Yz80NePMMMPb6Lfi+fM+Rcw6pA=" crossorigin="">
 <link rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">      
 {% endblock %}
@@ -15,7 +13,7 @@
   <div class="thrift-radar-header">
     <div>
       <h1>Thrift Radar</h1>
-      <p>Find local places to source inventory near a U.S. ZIP Code.</p>
+      <p>Find local places to source inventory by U.S. ZIP Code, city, or optional location sharing.</p>
     </div>
     <a href="{{ url_for('main.inventory_sources') }}" class="btn">
       <i class="fas fa-arrow-left"></i> Inventory Sources
@@ -26,11 +24,27 @@
     <section class="thrift-map-stage">
       <div class="thrift-floating-stack">
         <form id="thriftRadarForm" class="thrift-radar-form thrift-floating-search">
+          <div class="thrift-search-modes" role="group" aria-label="Search mode">
+            <label><input type="radio" name="search_mode" value="zip" checked><span>ZIP</span></label>
+            <label><input type="radio" name="search_mode" value="city"><span>City</span></label>
+            <label><input type="radio" name="search_mode" value="location"><span>My Location</span></label>
+          </div>
           <div class="thrift-radar-zip-row">
-            <label>
+            <label data-mode-field="zip">
               <span>ZIP Code</span>
               <input type="text" name="zip_code" id="thriftZipCode" inputmode="numeric" autocomplete="postal-code" placeholder="Enter U.S. ZIP Code" maxlength="10" required>
             </label>
+            <label data-mode-field="city" hidden>
+              <span>City</span>
+              <input type="text" name="city" id="thriftCity" list="thriftCitySuggestions" autocomplete="off" placeholder="Start typing a U.S. city">
+              <datalist id="thriftCitySuggestions"></datalist>
+            </label>
+            <div data-mode-field="location" hidden class="thrift-location-copy">
+              <span>Search within 25 miles of your current location.</span>
+              <button type="button" class="btn" id="thriftEnableLocation">
+                <i class="fas fa-location-crosshairs"></i> Enable Location
+              </button>
+            </div>
             <button type="submit" class="btn submitbtn thrift-go-btn">
               <i class="fas fa-location-crosshairs"></i> GO
             </button>
@@ -52,6 +66,12 @@
       </div>
 
       <div id="thriftMap" class="thrift-map-canvas"></div>
+      <div class="thrift-google-layer-footer" id="thriftLayerFooter">
+        <span>Layers</span>
+        <label><input type="radio" name="map_type" value="roadmap" checked> Normal</label>
+        <label><input type="radio" name="map_type" value="satellite"> Satellite</label>
+        <label><input type="checkbox" id="thriftToggleTraffic"> Traffic</label>
+      </div>
       <div class="thrift-map-loader" id="thriftMapLoader" hidden>
         <div class="thrift-radar-spinner"></div>
         <span>Scanning nearby sources...</span>
@@ -65,7 +85,7 @@
     <aside class="thrift-radar-panel">
       <div class="thrift-radar-alert">
         <i class="fas fa-info-circle"></i>
-        <span>Thrift Radar is currently available for U.S. ZIP Codes only. More countries are coming soon.</span>
+        <span>Thrift Radar is currently available in the United States only. More countries are coming soon.</span>
       </div>
       <button type="button" class="btn submitbtn thrift-new-search-btn" id="thriftNewSearch">
         <i class="fas fa-search"></i> New Search
@@ -79,6 +99,30 @@
         <button type="button" class="btn" id="thriftSaveSearch" disabled>
           <i class="fas fa-bookmark"></i> Save Search
         </button>
+      </div>
+
+      <div class="thrift-route-card">
+        <div>
+          <h2>Route Builder</h2>
+          <p id="thriftRouteSummary">Click pins to add stops.</p>
+        </div>
+        <div class="thrift-route-controls">
+          <label><input type="radio" name="route_mode" value="driving" checked> Driving</label>
+          <label><input type="radio" name="route_mode" value="free"> Drawing</label>
+        </div>
+        <div class="thrift-saved-actions">
+          <button type="button" class="btn" id="thriftGenerateRoute" disabled>Draw Route</button>
+          <button type="button" class="btn" id="thriftSaveRoute" disabled>Save Route</button>
+          <button type="button" class="btn" id="thriftClearRoute" disabled>Clear</button>
+        </div>
+      </div>
+
+      <div class="thrift-saved-section">
+        <div class="thrift-saved-header">
+          <h2>Saved Routes</h2>
+          <span id="thriftSavedRouteCount"></span>
+        </div>
+        <div id="thriftSavedRouteList" class="thrift-saved-list"></div>
       </div>
 
       <div class="thrift-saved-section">
@@ -169,6 +213,42 @@
     gap: 10px;
     align-items: end;
   }
+  .thrift-search-modes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .thrift-search-modes label {
+    cursor: pointer;
+  }
+  .thrift-search-modes input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .thrift-search-modes span {
+    min-height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+  }
+  .thrift-search-modes input:checked + span {
+    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(56, 189, 248, 0.14);
+    color: var(--text);
+  }
+  .thrift-location-copy {
+    min-height: 42px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
   .thrift-radar-form {
     display: grid;
     gap: 12px;
@@ -240,6 +320,7 @@
     width: 100%;
   }
   .thrift-radar-save-card,
+  .thrift-route-card,
   .thrift-saved-section,
   .thrift-archived-section {
     border-top: 1px solid var(--border);
@@ -252,6 +333,7 @@
     gap: 10px;
   }
   .thrift-radar-save-card h2,
+  .thrift-route-card h2,
   .thrift-saved-header h2 {
     margin: 0 0 4px;
     font-size: 16px;
@@ -260,6 +342,21 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
+  }
+  .thrift-route-card {
+    display: grid;
+    gap: 10px;
+  }
+  .thrift-route-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .thrift-route-controls {
+    display: flex;
+    gap: 10px;
+    color: var(--text-secondary);
+    font-size: 13px;
   }
   .thrift-saved-header {
     display: flex;
@@ -301,89 +398,6 @@
     border-radius: 0;
     background: linear-gradient(135deg, #0e1419, #101b21);
   }
-  .thrift-map-canvas .leaflet-pane,
-  .thrift-map-canvas .leaflet-pane img,
-  .thrift-map-canvas .leaflet-pane canvas {
-    -webkit-user-drag: none;
-    user-select: none;
-  }
-  .thrift-map-canvas.leaflet-container {
-    overflow: hidden;
-  }
-  .thrift-map-canvas .leaflet-pane,
-  .thrift-map-canvas .leaflet-map-pane,
-  .thrift-map-canvas .leaflet-tile-pane,
-  .thrift-map-canvas .leaflet-overlay-pane,
-  .thrift-map-canvas .leaflet-marker-pane,
-  .thrift-map-canvas .leaflet-shadow-pane,
-  .thrift-map-canvas .leaflet-tooltip-pane,
-  .thrift-map-canvas .leaflet-popup-pane,
-  .thrift-map-canvas .leaflet-tile-container,
-  .thrift-map-canvas .leaflet-tile,
-  .thrift-map-canvas .leaflet-marker-icon,
-  .thrift-map-canvas .leaflet-marker-shadow {
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
-  .thrift-map-canvas .leaflet-tile {
-    width: 256px;
-    height: 256px;
-    max-width: none !important;
-  }
-  .thrift-map-canvas .leaflet-tile-pane {
-    z-index: 200;
-  }
-  .thrift-map-canvas .leaflet-overlay-pane {
-    z-index: 400;
-  }
-  .thrift-map-canvas .leaflet-shadow-pane {
-    z-index: 500;
-  }
-  .thrift-map-canvas .leaflet-marker-pane {
-    z-index: 600;
-  }
-  .thrift-map-canvas .leaflet-tooltip-pane {
-    z-index: 650;
-  }
-  .thrift-map-canvas .leaflet-popup-pane {
-    z-index: 700;
-  }
-  .thrift-map-canvas .leaflet-control-container .leaflet-top,
-  .thrift-map-canvas .leaflet-control-container .leaflet-bottom {
-    position: absolute;
-    z-index: 1000;
-    pointer-events: none;
-  }
-  .thrift-map-canvas .leaflet-control {
-    position: relative;
-    z-index: 1000;
-    pointer-events: auto;
-  }
-  .thrift-map-canvas .leaflet-top {
-    top: 0;
-  }
-  .thrift-map-canvas .leaflet-right {
-    right: 0;
-  }
-  .thrift-map-canvas .leaflet-bottom {
-    bottom: 0;
-  }
-  .thrift-map-canvas .leaflet-left {
-    left: 0;
-  }
-  .thrift-map-canvas .leaflet-top .leaflet-control {
-    margin-top: 10px;
-  }
-  .thrift-map-canvas .leaflet-left .leaflet-control {
-    margin-left: 10px;
-  }
-  .thrift-map-canvas .leaflet-right .leaflet-control {
-    margin-right: 10px;
-  }
-  .thrift-map-canvas .leaflet-bottom .leaflet-control {
-    margin-bottom: 10px;
-  }
   .thrift-map-loader,
   .thrift-map-empty {
     position: absolute;
@@ -423,52 +437,24 @@
     border: 2px solid white;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   }
-  .thrift-map-canvas .leaflet-control-layers.thrift-layer-control {
-    border-radius: 0;
-    border: 0;
-    border-top: 1px solid rgba(56, 189, 248, 0.28);
-    box-shadow: 0 -12px 28px rgba(0, 0, 0, 0.24);
-    background: rgba(15, 23, 42, 0.9);
-    backdrop-filter: blur(14px);
-    margin: 0;
-    padding: 9px 12px;
-    width: 100%;
-    max-width: none;
-  }
-  .thrift-map-canvas .leaflet-bottom.leaflet-left {
+  .thrift-google-layer-footer {
+    position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-    width: 100%;
-  }
-  .thrift-map-canvas .leaflet-control-layers-expanded {
-    padding: 9px 12px;
+    z-index: 650;
+    border-top: 1px solid rgba(56, 189, 248, 0.28);
     background: rgba(15, 23, 42, 0.9);
-  }
-  .thrift-map-canvas .leaflet-control-layers-list {
+    backdrop-filter: blur(14px);
+    padding: 9px 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 10px 16px;
     flex-wrap: wrap;
   }
-  .thrift-map-canvas .leaflet-control-layers-base,
-  .thrift-map-canvas .leaflet-control-layers-overlays {
-    display: flex;
-    align-items: center;
-    gap: 10px 14px;
-    flex-wrap: wrap;
-  }
-  .thrift-map-canvas .leaflet-control-layers-separator {
-    display: block;
-    width: 1px;
-    height: 24px;
-    margin: 0 2px;
-    border: 0;
-    background: rgba(148, 163, 184, 0.3);
-  }
-  .thrift-map-canvas .leaflet-control-layers.thrift-layer-control label,
-  .thrift-map-canvas .leaflet-control-layers.thrift-layer-control label span {
+  .thrift-google-layer-footer label,
+  .thrift-google-layer-footer span {
     color: #ffffff;
     font-weight: 600;
     margin: 0;
@@ -476,9 +462,20 @@
     align-items: center;
     gap: 6px;
   }
-  .thrift-map-canvas .leaflet-control-layers-selector {
+  .thrift-google-layer-footer input {
     accent-color: #38bdf8;
     margin: 0;
+  }
+  .thrift-google-info {
+    color: #0f172a;
+    min-width: 220px;
+  }
+  .thrift-google-info strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+  .thrift-google-info button {
+    margin-top: 8px;
   }
   @keyframes thriftSpin {
     to { transform: rotate(360deg); }
@@ -526,47 +523,32 @@
     .thrift-radar-zip-row {
       grid-template-columns: 1fr;
     }
+    .thrift-location-copy {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin=""></script>
 <script>
   const thriftKeywordOptions = {{ keyword_options|tojson }};
   let thriftActiveSearches = {{ active_searches|tojson }};
   let thriftArchivedSearches = {{ archived_searches|tojson }};
+  let thriftSavedRoutes = {{ saved_routes|tojson }};
   let thriftCurrentSearch = null;
-  let thriftMarkers = L.layerGroup();
+  let thriftMap = null;
+  let thriftMarkers = [];
+  let thriftInfoWindow = null;
+  let thriftTrafficLayer = null;
+  let thriftDirectionsService = null;
+  let thriftDirectionsRenderer = null;
+  let thriftRoutePolyline = null;
+  let thriftRouteStops = [];
+  let thriftUserLocation = null;
+  let thriftUserMarker = null;
+  let thriftLiveWatchId = null;
   const thriftSearchForm = document.getElementById('thriftRadarForm');
   const thriftEmptyOverlay = document.getElementById('thriftMapEmpty');
   const thriftNewSearchButton = document.getElementById('thriftNewSearch');
-
-  const thriftMap = L.map('thriftMap', { zoomControl: true }).setView([39.8283, -98.5795], 4);
-  const normalLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(thriftMap);
-  const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    maxZoom: 19,
-    attribution: 'Tiles &copy; Esri, Maxar, Earthstar Geographics'
-  });
-  const layersControl = L.control.layers(
-    { Normal: normalLayer, Satellite: satelliteLayer },
-    { Results: thriftMarkers },
-    { collapsed: false, position: 'bottomleft' }
-  ).addTo(thriftMap);
-  thriftMarkers.addTo(thriftMap);
-  decorateThriftLayerControl(layersControl);
-  setTimeout(() => thriftMap.invalidateSize(), 80);
-  window.addEventListener('resize', () => thriftMap.invalidateSize());
-
-  function decorateThriftLayerControl(control) {
-    const container = control?.getContainer?.();
-    if (!container) return;
-    container.classList.add('thrift-layer-control');
-    container.setAttribute('aria-label', 'Map layers');
-  }
 
   function thriftSelectedKeywords() {
     return Array.from(document.querySelectorAll('input[name="keywords"]:checked')).map((input) => input.value);
@@ -597,35 +579,227 @@
     }
   }
 
+  function thriftSelectedSearchMode() {
+    return document.querySelector('input[name="search_mode"]:checked')?.value || 'zip';
+  }
+
+  function thriftUpdateSearchMode() {
+    const mode = thriftSelectedSearchMode();
+    document.querySelectorAll('[data-mode-field]').forEach((field) => {
+      field.hidden = field.dataset.modeField !== mode;
+    });
+    document.getElementById('thriftZipCode').required = mode === 'zip';
+    document.getElementById('thriftCity').required = mode === 'city';
+  }
+
+  function thriftInitMap() {
+    thriftMap = new google.maps.Map(document.getElementById('thriftMap'), {
+      center: { lat: 39.8283, lng: -98.5795 },
+      zoom: 4,
+      mapTypeId: 'roadmap',
+      streetViewControl: false,
+      fullscreenControl: true,
+      mapTypeControl: false,
+      zoomControl: true,
+      clickableIcons: false
+    });
+    thriftInfoWindow = new google.maps.InfoWindow();
+    thriftTrafficLayer = new google.maps.TrafficLayer();
+    thriftDirectionsService = new google.maps.DirectionsService();
+    thriftDirectionsRenderer = new google.maps.DirectionsRenderer({
+      suppressMarkers: true,
+      preserveViewport: true,
+      polylineOptions: { strokeColor: '#f97316', strokeWeight: 5, strokeOpacity: 0.9 }
+    });
+    thriftDirectionsRenderer.setMap(thriftMap);
+    thriftUpdateSearchMode();
+    thriftRenderSavedLists();
+    thriftRenderSavedRoutes();
+  }
+
+  function thriftRequireMap() {
+    if (!thriftMap || !window.google?.maps) {
+      throw new Error('Google Maps is still loading. Try again in a moment.');
+    }
+  }
+
+  function thriftGooglePosition(result) {
+    return { lat: Number(result.lat), lng: Number(result.lng ?? result.lon) };
+  }
+
+  function thriftMarkerIcon(result) {
+    if (result.icon_url) {
+      return {
+        url: result.icon_url,
+        scaledSize: new google.maps.Size(40, 40),
+        anchor: new google.maps.Point(20, 40)
+      };
+    }
+    const option = thriftKeywordOptions[result.keyword] || {};
+    const color = result.color || option.color || '#64748b';
+    const svg = encodeURIComponent(`
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
+        <path fill="${color}" stroke="white" stroke-width="3" d="M22 2C11 2 4 10 4 20c0 14 18 30 18 30s18-16 18-30C40 10 33 2 22 2z"/>
+        <circle cx="22" cy="20" r="8" fill="white" opacity=".96"/>
+      </svg>`);
+    return {
+      url: `data:image/svg+xml;charset=UTF-8,${svg}`,
+      scaledSize: new google.maps.Size(40, 48),
+      anchor: new google.maps.Point(20, 46)
+    };
+  }
+
+  function thriftClearMarkers() {
+    thriftMarkers.forEach((marker) => marker.setMap(null));
+    thriftMarkers = [];
+  }
+
+  function thriftAddRouteStop(result) {
+    if (thriftRouteStops.some((stop) => stop.id === result.id)) return;
+    thriftRouteStops.push(result);
+    thriftUpdateRouteUi();
+  }
+
+  function thriftUpdateRouteUi() {
+    const count = thriftRouteStops.length;
+    document.getElementById('thriftRouteSummary').textContent = count
+      ? `${count} stop${count === 1 ? '' : 's'} selected`
+      : 'Click pins to add stops.';
+    document.getElementById('thriftGenerateRoute').disabled = count < 2;
+    document.getElementById('thriftSaveRoute').disabled = count < 2;
+    document.getElementById('thriftClearRoute').disabled = count === 0;
+  }
+
+  function thriftClearRoute() {
+    thriftRouteStops = [];
+    if (thriftRoutePolyline) {
+      thriftRoutePolyline.setMap(null);
+      thriftRoutePolyline = null;
+    }
+    thriftDirectionsRenderer?.set('directions', null);
+    thriftUpdateRouteUi();
+  }
+
+  function thriftDrawRoute() {
+    thriftRequireMap();
+    if (thriftRouteStops.length < 2) return;
+    if (thriftRoutePolyline) {
+      thriftRoutePolyline.setMap(null);
+      thriftRoutePolyline = null;
+    }
+    thriftDirectionsRenderer?.set('directions', null);
+
+    const mode = document.querySelector('input[name="route_mode"]:checked')?.value || 'driving';
+    const positions = thriftRouteStops.map(thriftGooglePosition);
+    if (mode === 'free') {
+      thriftRoutePolyline = new google.maps.Polyline({
+        path: positions,
+        map: thriftMap,
+        strokeColor: '#f97316',
+        strokeWeight: 5,
+        strokeOpacity: 0.92
+      });
+      const bounds = new google.maps.LatLngBounds();
+      positions.forEach((position) => bounds.extend(position));
+      thriftMap.fitBounds(bounds);
+      return;
+    }
+
+    thriftDirectionsService.route({
+      origin: positions[0],
+      destination: positions[positions.length - 1],
+      waypoints: positions.slice(1, -1).slice(0, 23).map((location) => ({ location, stopover: true })),
+      travelMode: google.maps.TravelMode.DRIVING,
+      optimizeWaypoints: false
+    }, (response, status) => {
+      if (status !== 'OK') {
+        alert(`Could not draw route: ${status}`);
+        return;
+      }
+      thriftDirectionsRenderer.setDirections(response);
+    });
+  }
+
   function thriftShowResults(search) {
+    thriftRequireMap();
     thriftCurrentSearch = search;
-    thriftMarkers.clearLayers();
+    thriftClearMarkers();
+    thriftClearRoute();
     if (thriftEmptyOverlay) thriftEmptyOverlay.style.display = 'none';
     thriftSetSearchDialogVisible(false);
-    thriftMap.invalidateSize(true);
     document.getElementById('thriftSaveSearch').disabled = false;
-    document.getElementById('thriftCurrentSummary').textContent = `${search.zip_code} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
+    const locationLabel = search.city || search.zip_code || 'Current location';
+    document.getElementById('thriftCurrentSummary').textContent = `${locationLabel} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
 
-    const bounds = [];
+    const bounds = new google.maps.LatLngBounds();
     search.results.forEach((result) => {
-      const option = thriftKeywordOptions[result.keyword] || {};
-      const iconHtml = `<div class="thrift-marker" style="background:${option.color || '#64748b'}"><i class="fas ${option.icon || 'fa-location-dot'}"></i></div>`;
-      const marker = L.marker([result.lat, result.lon]);
-      marker.bindPopup(`
-        <strong>${thriftEscape(result.name)}</strong><br>
-        <span>${thriftEscape(result.address)}</span><br>
-        <small>${thriftEscape(result.keyword_label)}</small>
-      `);
-      thriftMarkers.addLayer(marker);
-      bounds.push([result.lat, result.lon]);
+      const marker = new google.maps.Marker({
+        position: thriftGooglePosition(result),
+        map: thriftMap,
+        title: result.name,
+        icon: thriftMarkerIcon(result)
+      });
+      marker.addListener('click', () => {
+        thriftInfoWindow.setContent(`
+          <div class="thrift-google-info">
+            <strong>${thriftEscape(result.name)}</strong>
+            <div>${thriftEscape(result.address)}</div>
+            <small>${thriftEscape(result.keyword_label || thriftKeywordLabel(result.keyword))}${result.rating ? ` · Rating ${thriftEscape(result.rating)}` : ''}</small><br>
+            <button type="button" class="btn submitbtn" data-add-route-stop="${thriftEscape(result.id)}">Add Stop</button>
+          </div>
+        `);
+        thriftInfoWindow.open(thriftMap, marker);
+        setTimeout(() => {
+          document.querySelector(`[data-add-route-stop="${CSS.escape(String(result.id))}"]`)?.addEventListener('click', () => thriftAddRouteStop(result));
+        }, 0);
+      });
+      thriftMarkers.push(marker);
+      bounds.extend(marker.getPosition());
     });
 
-    if (bounds.length) {
-      thriftMap.fitBounds(bounds, { padding: [34, 34], maxZoom: 14 });
+    if (search.results.length) {
+      thriftMap.fitBounds(bounds, 34);
     } else if (search.center) {
-      thriftMap.setView([search.center.lat, search.center.lon], 12);
+      thriftMap.setCenter({ lat: Number(search.center.lat), lng: Number(search.center.lng ?? search.center.lon) });
+      thriftMap.setZoom(12);
     }
-    setTimeout(() => thriftMap.invalidateSize(true), 120);
+  }
+
+  function thriftSearchPayload() {
+    const searchMode = thriftSelectedSearchMode();
+    const payload = {
+      search_mode: searchMode,
+      keywords: thriftSelectedKeywords()
+    };
+    if (searchMode === 'zip') {
+      payload.zip_code = document.getElementById('thriftZipCode').value.trim();
+    } else if (searchMode === 'city') {
+      payload.city = document.getElementById('thriftCity').value.trim();
+    } else if (searchMode === 'location') {
+      if (!thriftUserLocation) throw new Error('Enable location before searching around you.');
+      payload.lat = thriftUserLocation.lat;
+      payload.lng = thriftUserLocation.lng;
+    }
+    return payload;
+  }
+
+  function thriftRenderSavedRoutes() {
+    const list = document.getElementById('thriftSavedRouteList');
+    const count = document.getElementById('thriftSavedRouteCount');
+    count.textContent = thriftSavedRoutes.length ? `${thriftSavedRoutes.length} saved` : '';
+    list.innerHTML = thriftSavedRoutes.length
+      ? thriftSavedRoutes.map((route) => `
+        <div class="thrift-saved-card" data-route-id="${route.id}">
+          <div>
+            <strong>${thriftEscape(route.title)}</strong><br>
+            <small>${(route.stops || []).length} stops · ${thriftEscape(route.mode || 'driving')}</small>
+          </div>
+          <div class="thrift-saved-actions">
+            <button type="button" class="btn" data-route-action="open" data-route-id="${route.id}">Open</button>
+            <button type="button" class="btn" data-route-action="delete" data-route-id="${route.id}">Delete</button>
+          </div>
+        </div>`).join('')
+      : '<div style="color:var(--text-secondary);font-size:13px;">No saved routes yet.</div>';
   }
 
   function thriftRenderSavedLists() {
@@ -636,11 +810,12 @@
 
     function renderSearch(search, archived) {
       const keywords = (search.keywords || []).map(thriftKeywordLabel).join(', ');
+      const locationLabel = search.city || search.zip_code || 'Current location';
       return `
         <div class="thrift-saved-card" data-search-id="${search.id}">
           <div>
             <strong>${thriftEscape(search.title)}</strong><br>
-            <small>${thriftEscape(search.zip_code)} · ${thriftEscape(keywords)} · ${(search.results || []).length} places</small>
+            <small>${thriftEscape(locationLabel)} · ${thriftEscape(keywords)} · ${(search.results || []).length} places</small>
           </div>
           <div class="thrift-saved-actions">
             <button type="button" class="btn" data-thrift-action="open" data-search-id="${search.id}" data-archived="${archived ? '1' : '0'}">Open</button>
@@ -683,18 +858,16 @@
     if (!thriftCurrentSearch && thriftEmptyOverlay) {
       thriftEmptyOverlay.style.display = 'grid';
     }
-    setTimeout(() => thriftMap.invalidateSize(), 80);
   });
 
   thriftSearchForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const zipCode = document.getElementById('thriftZipCode').value.trim();
-    const keywords = thriftSelectedKeywords();
     thriftSetLoading(true);
     try {
+      const payload = thriftSearchPayload();
       const data = await thriftJson('{{ url_for("main.thrift_radar_search") }}', {
         method: 'POST',
-        body: JSON.stringify({ zip_code: zipCode, keywords })
+        body: JSON.stringify(payload)
       });
       thriftShowResults(data);
     } catch (error) {
@@ -728,7 +901,7 @@
     if (!search) return;
 
     if (action === 'open') {
-      thriftShowResults({ ...search, center: null });
+      thriftShowResults(search);
       return;
     }
 
@@ -753,6 +926,143 @@
     }
   });
 
+  document.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-route-action]');
+    if (!button) return;
+    const id = Number(button.dataset.routeId);
+    const action = button.dataset.routeAction;
+    const route = thriftSavedRoutes.find((entry) => entry.id === id);
+    if (!route) return;
+
+    if (action === 'open') {
+      thriftRouteStops = route.stops || [];
+      thriftUpdateRouteUi();
+      thriftDrawRoute();
+      return;
+    }
+
+    if (action === 'delete') {
+      if (!confirm('Delete this saved route?')) return;
+      try {
+        await thriftJson(`/inventory-sources/thrift-radar/routes/${id}`, { method: 'DELETE' });
+        thriftSavedRoutes = thriftSavedRoutes.filter((entry) => entry.id !== id);
+        thriftRenderSavedRoutes();
+      } catch (error) {
+        alert(error.message || 'Could not delete route');
+      }
+    }
+  });
+
+  document.getElementById('thriftGenerateRoute')?.addEventListener('click', thriftDrawRoute);
+  document.getElementById('thriftClearRoute')?.addEventListener('click', thriftClearRoute);
+  document.getElementById('thriftSaveRoute')?.addEventListener('click', async () => {
+    if (thriftRouteStops.length < 2) return;
+    const title = prompt('Route name', thriftCurrentSearch ? `${thriftCurrentSearch.city || thriftCurrentSearch.zip_code || 'Thrift'} route` : 'Thrift route');
+    if (!title) return;
+    try {
+      const data = await thriftJson('{{ url_for("main.thrift_radar_save_route") }}', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          mode: document.querySelector('input[name="route_mode"]:checked')?.value || 'driving',
+          saved_search_id: thriftCurrentSearch?.id || null,
+          origin: thriftCurrentSearch?.center || thriftUserLocation || {},
+          stops: thriftRouteStops,
+          route_data: { map_type: thriftMap?.getMapTypeId?.() || 'roadmap' }
+        })
+      });
+      thriftSavedRoutes.unshift(data.route);
+      thriftRenderSavedRoutes();
+    } catch (error) {
+      alert(error.message || 'Could not save route');
+    }
+  });
+
+  document.querySelectorAll('input[name="search_mode"]').forEach((input) => {
+    input.addEventListener('change', thriftUpdateSearchMode);
+  });
+
+  document.querySelectorAll('input[name="map_type"]').forEach((input) => {
+    input.addEventListener('change', () => {
+      if (thriftMap) thriftMap.setMapTypeId(input.value);
+    });
+  });
+
+  document.getElementById('thriftToggleTraffic')?.addEventListener('change', (event) => {
+    if (!thriftTrafficLayer || !thriftMap) return;
+    thriftTrafficLayer.setMap(event.target.checked ? thriftMap : null);
+  });
+
+  document.getElementById('thriftEnableLocation')?.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      alert('Your browser does not support location sharing.');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition((position) => {
+      thriftUserLocation = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude
+      };
+      if (thriftMap) {
+        if (!thriftUserMarker) {
+          thriftUserMarker = new google.maps.Marker({
+            map: thriftMap,
+            title: 'Your location',
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: '#38bdf8',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2
+            }
+          });
+        }
+        thriftUserMarker.setPosition(thriftUserLocation);
+        thriftMap.setCenter(thriftUserLocation);
+        thriftMap.setZoom(12);
+      }
+      if (!thriftLiveWatchId) {
+        thriftLiveWatchId = navigator.geolocation.watchPosition((livePosition) => {
+          thriftUserLocation = {
+            lat: livePosition.coords.latitude,
+            lng: livePosition.coords.longitude
+          };
+          thriftUserMarker?.setPosition(thriftUserLocation);
+        });
+      }
+    }, () => {
+      alert('Location permission was not granted.');
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  });
+
+  const thriftCityInput = document.getElementById('thriftCity');
+  let thriftCityTimer = null;
+  thriftCityInput?.addEventListener('input', () => {
+    clearTimeout(thriftCityTimer);
+    const query = thriftCityInput.value.trim();
+    if (query.length < 2) return;
+    thriftCityTimer = setTimeout(async () => {
+      try {
+        const data = await thriftJson(`{{ url_for("main.thrift_radar_city_suggestions") }}?q=${encodeURIComponent(query)}`);
+        document.getElementById('thriftCitySuggestions').innerHTML = (data.cities || [])
+          .map((city) => `<option value="${thriftEscape(city.description)}"></option>`)
+          .join('');
+      } catch (error) {
+        console.warn(error);
+      }
+    }, 250);
+  });
+
+  window.thriftInitMap = thriftInitMap;
+
+  {% if not gmaps_key %}
+  document.getElementById('thriftMapEmpty').innerHTML = '<i class="fas fa-triangle-exclamation"></i><span>Google Maps is not configured. Add GMAPS_API_KEY to the Qventory .env file.</span>';
   thriftRenderSavedLists();
+  thriftRenderSavedRoutes();
+  {% endif %}
 </script>
+{% if gmaps_key %}
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ gmaps_key }}&libraries=places,geometry&callback=thriftInitMap"></script>
+{% endif %}
 {% endblock %}
