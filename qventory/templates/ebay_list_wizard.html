@@ -29,13 +29,7 @@
       <div>
         <label class="label">Condition</label>
         <select class="input" id="conditionInput">
-          <option value="">Select condition</option>
-          <option value="NEW">New</option>
-          <option value="USED_EXCELLENT">Used - Excellent</option>
-          <option value="USED_VERY_GOOD">Used - Very Good</option>
-          <option value="USED_GOOD">Used - Good</option>
-          <option value="USED_ACCEPTABLE">Used - Acceptable</option>
-          <option value="FOR_PARTS_OR_NOT_WORKING">For parts or not working</option>
+          <option value="">Select a category first</option>
         </select>
       </div>
       <div>
@@ -232,6 +226,7 @@
     draftCreateUrl: "{{ url_for('ebay_list.create_draft') }}",
     draftBaseUrl: "{{ url_for('ebay_list.get_draft', draft_id=0) }}".replace("/0", ""),
     categoriesUrl: "{{ url_for('main.api_ebay_categories') }}",
+    categoryConditionBaseUrl: "{{ url_for('ebay_list.get_category_conditions_api', category_id=0) }}".replace("/0/conditions", ""),
     imageUploadUrl: "{{ url_for('ebay_list.upload_image') }}",
     uploadTokenUrl: "{{ url_for('ebay_list.get_upload_token') }}",
     imageConfirmUrl: "{{ url_for('ebay_list.confirm_upload') }}",

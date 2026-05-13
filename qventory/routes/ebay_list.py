@@ -6,7 +6,7 @@ from ..extensions import db
 from ..models.ebay_listing_draft import EbayListingDraft
 from ..models.ebay_category import EbayCategory
 from ..routes.permissions import require_plan_feature, require_feature_flag
-from ..helpers.ebay_specifics_cache import get_category_specifics
+from ..helpers.ebay_specifics_cache import get_category_specifics, get_category_condition_options
 from ..helpers.ebay_image_upload import create_ebay_upload_session, upload_ebay_image_file
 from ..helpers.ebay_listing_publish import (
     create_or_replace_inventory_item,
@@ -45,6 +45,10 @@ ALLOWED_CONDITION_IDS = {
     "NEW_OTHER",
     "NEW_WITH_DEFECTS",
     "MANUFACTURER_REFURBISHED",
+    "CERTIFIED_REFURBISHED",
+    "EXCELLENT_REFURBISHED",
+    "VERY_GOOD_REFURBISHED",
+    "GOOD_REFURBISHED",
     "SELLER_REFURBISHED",
     "USED_EXCELLENT",
     "USED_VERY_GOOD",
@@ -94,6 +98,17 @@ def _validate_draft(draft: EbayListingDraft):
         errors["condition_id"] = "Condition is required."
     elif draft.condition_id not in ALLOWED_CONDITION_IDS:
         errors["condition_id"] = "Select a valid eBay condition."
+    elif draft.category_id:
+        try:
+            allowed_category_conditions = {
+                option["value"]
+                for option in get_category_condition_options(str(draft.category_id))
+                if option.get("value")
+            }
+            if allowed_category_conditions and draft.condition_id not in allowed_category_conditions:
+                errors["condition_id"] = "This condition is not valid for the selected eBay category."
+        except Exception:
+            pass
 
     if not draft.sku:
         errors["sku"] = "SKU is required."
@@ -548,6 +563,18 @@ def refresh_category_specifics(category_id):
     if not cache:
         return jsonify({"ok": False, "error": "not_found"}), 404
     return jsonify({"ok": True, "specifics": cache.to_dict()})
+
+
+@ebay_list_bp.route("/api/ebay/categories/<category_id>/conditions", methods=["GET"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def get_category_conditions_api(category_id):
+    try:
+        options = get_category_condition_options(str(category_id))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "condition_lookup_failed", "details": str(exc)}), 500
+    return jsonify({"ok": True, "conditions": options})
 
 
 @ebay_list_bp.route("/api/ebay/categories/<category_id>/path", methods=["GET"])

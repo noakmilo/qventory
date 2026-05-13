@@ -9,6 +9,41 @@ from .ebay_oauth import get_ebay_oauth
 
 DEFAULT_SPECIFICS_TTL_DAYS = 30
 
+CONDITION_ID_TO_INVENTORY_ENUM = {
+    "1000": "NEW",
+    "1500": "NEW_OTHER",
+    "1750": "NEW_WITH_DEFECTS",
+    "2000": "MANUFACTURER_REFURBISHED",
+    "2010": "EXCELLENT_REFURBISHED",
+    "2020": "VERY_GOOD_REFURBISHED",
+    "2030": "GOOD_REFURBISHED",
+    "2500": "SELLER_REFURBISHED",
+    "2750": "LIKE_NEW",
+    "3000": "USED_EXCELLENT",
+    "4000": "USED_VERY_GOOD",
+    "5000": "USED_GOOD",
+    "6000": "USED_ACCEPTABLE",
+    "7000": "FOR_PARTS_OR_NOT_WORKING",
+}
+
+CONDITION_ENUM_LABELS = {
+    "NEW": "New",
+    "LIKE_NEW": "Like New",
+    "NEW_OTHER": "New Other",
+    "NEW_WITH_DEFECTS": "New With Defects",
+    "MANUFACTURER_REFURBISHED": "Manufacturer Refurbished",
+    "CERTIFIED_REFURBISHED": "Certified Refurbished",
+    "EXCELLENT_REFURBISHED": "Excellent Refurbished",
+    "VERY_GOOD_REFURBISHED": "Very Good Refurbished",
+    "GOOD_REFURBISHED": "Good Refurbished",
+    "SELLER_REFURBISHED": "Seller Refurbished",
+    "USED_EXCELLENT": "Used",
+    "USED_VERY_GOOD": "Used - Very Good",
+    "USED_GOOD": "Used - Good",
+    "USED_ACCEPTABLE": "Used - Acceptable",
+    "FOR_PARTS_OR_NOT_WORKING": "For Parts or Not Working",
+}
+
 
 def _get_category_tree_id(marketplace_id: str) -> str:
     # Prefer cached tree_id from existing categories
@@ -116,3 +151,46 @@ def get_category_specifics(category_id: str, marketplace_id: str = "EBAY_US", fo
             marketplace_id=marketplace_id
         ).first()
     return cache
+
+
+def get_category_condition_options(category_id: str, marketplace_id: str = "EBAY_US") -> list[dict]:
+    oauth = get_ebay_oauth()
+    headers = oauth.get_auth_header()
+    tree_id = _get_category_tree_id(marketplace_id)
+    url = f"{oauth.api_endpoint}/commerce/taxonomy/v1/category_tree/{tree_id}/get_item_condition_policies"
+    resp = requests.get(
+        url,
+        headers=headers,
+        params={"category_id": category_id},
+        timeout=20
+    )
+    resp.raise_for_status()
+    data = resp.json() or {}
+    policies = data.get("itemConditionPolicies") or data.get("conditionPolicies") or []
+    options = []
+    seen = set()
+    for policy in policies:
+        condition_id = str(policy.get("conditionId") or policy.get("itemConditionId") or "")
+        value = CONDITION_ID_TO_INVENTORY_ENUM.get(condition_id)
+        raw_label = (
+            policy.get("conditionDescription")
+            or policy.get("localizedConditionName")
+            or policy.get("conditionDisplayName")
+            or ""
+        )
+        if condition_id == "2000" and "certified" in raw_label.lower():
+            value = "CERTIFIED_REFURBISHED"
+        if not value or value in seen:
+            continue
+        label = (
+            raw_label
+            or CONDITION_ENUM_LABELS.get(value)
+            or value.replace("_", " ").title()
+        )
+        options.append({
+            "value": value,
+            "label": label,
+            "condition_id": condition_id,
+        })
+        seen.add(value)
+    return options

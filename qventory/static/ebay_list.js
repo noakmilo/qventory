@@ -70,6 +70,7 @@
       title: qs('#titleInput').value.trim(),
       sku: qs('#skuInput').value.trim(),
       condition_id: qs('#conditionInput').value,
+      condition_label: qs('#conditionInput').selectedOptions[0]?.textContent || null,
       quantity: parseInt(qs('#quantityInput').value || '0', 10),
       price: parseFloat(qs('#priceInput').value || '0'),
       currency: qs('#currencyInput').value,
@@ -139,6 +140,7 @@
     qs('#priceInput').value = draft.price || '';
     qs('#currencyInput').value = draft.currency || 'USD';
     setDescriptionHtml(draft.description_html || '');
+    populateConditionSelect([], draft.condition_id || '');
   }
 
   function applyCommand(cmd) {
@@ -255,6 +257,7 @@
       renderSelectedCategory(selected);
       qs('#categorySearchInput').value = selected.full_path;
     }
+    await loadCategoryConditions(draft.category_id, draft.condition_id);
     await fetchSpecifics(draft.category_id);
   }
 
@@ -309,8 +312,51 @@
     draft.category_id = cat.category_id;
     renderSelectedCategory(cat);
     qs('#categorySearchInput').value = cat.full_path || cat.name || '';
+    await loadCategoryConditions(cat.category_id, draft.condition_id);
     await fetchSpecifics(cat.category_id);
     debounceSave();
+  }
+
+  async function loadCategoryConditions(categoryId, preferredValue = '') {
+    const select = qs('#conditionInput');
+    populateConditionSelect([], '');
+    select.disabled = true;
+    select.innerHTML = '<option value="">Loading valid conditions...</option>';
+    try {
+      const res = await fetch(`${config.categoryConditionBaseUrl}/${categoryId}/conditions`);
+      const data = await res.json();
+      if (!data.ok) {
+        throw new Error(data.details || data.error || 'condition lookup failed');
+      }
+      populateConditionSelect(data.conditions || [], preferredValue);
+    } catch (err) {
+      select.innerHTML = '<option value="">Could not load category conditions</option>';
+      select.disabled = false;
+      setStatus('Could not load valid conditions for this category.');
+    }
+  }
+
+  function populateConditionSelect(conditions, preferredValue = '') {
+    const select = qs('#conditionInput');
+    select.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = conditions.length ? 'Select condition' : 'Select a category first';
+    select.appendChild(empty);
+    conditions.forEach((condition) => {
+      const opt = document.createElement('option');
+      opt.value = condition.value;
+      opt.textContent = condition.label || condition.value.replaceAll('_', ' ');
+      opt.dataset.conditionId = condition.condition_id || '';
+      select.appendChild(opt);
+    });
+    select.disabled = !conditions.length;
+    if (preferredValue && conditions.some((condition) => condition.value === preferredValue)) {
+      select.value = preferredValue;
+    } else if (preferredValue && conditions.length) {
+      draft.condition_id = null;
+      setStatus('Previous condition is not valid for this category. Select one of the valid conditions.');
+    }
   }
 
   function renderSelectedCategory(cat) {
