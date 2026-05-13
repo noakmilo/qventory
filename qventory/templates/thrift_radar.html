@@ -82,61 +82,67 @@
       </div>
     </section>
 
-    <aside class="thrift-radar-panel">
-      <div class="thrift-radar-alert">
-        <i class="fas fa-info-circle"></i>
-        <span>Thrift Radar is currently available in the United States only. More countries are coming soon.</span>
-      </div>
-      <button type="button" class="btn submitbtn thrift-new-search-btn" id="thriftNewSearch">
-        <i class="fas fa-search"></i> New Search
+    <aside class="thrift-radar-panel" id="thriftSidePanel" data-mobile-state="mid">
+      <button type="button" class="thrift-sheet-handle" id="thriftSheetHandle" aria-controls="thriftSidePanel" aria-label="Move panel">
+        <span class="thrift-sheet-grip" aria-hidden="true"></span>
+        <span class="thrift-sheet-title">Searches and routes</span>
       </button>
-
-      <div class="thrift-radar-save-card">
-        <div>
-          <h2>Current Search</h2>
-          <p id="thriftCurrentSummary">Run a search to save it.</p>
+      <div class="thrift-panel-scroll">
+        <div class="thrift-radar-alert">
+          <i class="fas fa-info-circle"></i>
+          <span>Thrift Radar is currently available in the United States only. More countries are coming soon.</span>
         </div>
-        <button type="button" class="btn" id="thriftSaveSearch" disabled>
-          <i class="fas fa-bookmark"></i> Save Search
+        <button type="button" class="btn submitbtn thrift-new-search-btn" id="thriftNewSearch">
+          <i class="fas fa-search"></i> New Search
         </button>
-      </div>
 
-      <div class="thrift-route-card">
-        <div>
-          <h2>Route Builder</h2>
-          <p id="thriftRouteSummary">Click pins to add stops.</p>
+        <div class="thrift-radar-save-card">
+          <div>
+            <h2>Current Search</h2>
+            <p id="thriftCurrentSummary">Run a search to save it.</p>
+          </div>
+          <button type="button" class="btn" id="thriftSaveSearch" disabled>
+            <i class="fas fa-bookmark"></i> Save Search
+          </button>
         </div>
-        <div class="thrift-route-controls">
-          <label><input type="radio" name="route_mode" value="driving" checked> Driving</label>
-          <label><input type="radio" name="route_mode" value="free"> Drawing</label>
-        </div>
-        <div class="thrift-saved-actions">
-          <button type="button" class="btn" id="thriftGenerateRoute" disabled>Draw Route</button>
-          <button type="button" class="btn" id="thriftSaveRoute" disabled>Save Route</button>
-          <button type="button" class="btn" id="thriftClearRoute" disabled>Clear</button>
-        </div>
-      </div>
 
-      <div class="thrift-saved-section">
-        <div class="thrift-saved-header">
-          <h2>Saved Routes</h2>
-          <span id="thriftSavedRouteCount"></span>
+        <div class="thrift-route-card">
+          <div>
+            <h2>Route Builder</h2>
+            <p id="thriftRouteSummary">Click pins to add stops.</p>
+          </div>
+          <div class="thrift-route-controls">
+            <label><input type="radio" name="route_mode" value="driving" checked> Driving</label>
+            <label><input type="radio" name="route_mode" value="free"> Drawing</label>
+          </div>
+          <div class="thrift-saved-actions">
+            <button type="button" class="btn" id="thriftGenerateRoute" disabled>Draw Route</button>
+            <button type="button" class="btn" id="thriftSaveRoute" disabled>Save Route</button>
+            <button type="button" class="btn" id="thriftClearRoute" disabled>Clear</button>
+          </div>
         </div>
-        <div id="thriftSavedRouteList" class="thrift-saved-list"></div>
-      </div>
 
-      <div class="thrift-saved-section">
-        <div class="thrift-saved-header">
-          <h2>Saved Searches</h2>
-          <span id="thriftSavedCount"></span>
+        <div class="thrift-saved-section">
+          <div class="thrift-saved-header">
+            <h2>Saved Routes</h2>
+            <span id="thriftSavedRouteCount"></span>
+          </div>
+          <div id="thriftSavedRouteList" class="thrift-saved-list"></div>
         </div>
-        <div id="thriftSavedList" class="thrift-saved-list"></div>
-      </div>
 
-      <details class="thrift-archived-section">
-        <summary>Archived Searches</summary>
-        <div id="thriftArchivedList" class="thrift-saved-list"></div>
-      </details>
+        <div class="thrift-saved-section">
+          <div class="thrift-saved-header">
+            <h2>Saved Searches</h2>
+            <span id="thriftSavedCount"></span>
+          </div>
+          <div id="thriftSavedList" class="thrift-saved-list"></div>
+        </div>
+
+        <details class="thrift-archived-section">
+          <summary>Archived Searches</summary>
+          <div id="thriftArchivedList" class="thrift-saved-list"></div>
+        </details>
+      </div>
     </aside>
   </div>
 </div>
@@ -158,6 +164,7 @@
     font-size: 14px;
   }
   .thrift-radar-layout {
+    --mobile-sheet-offset: 42%;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
     grid-template-areas: "map side";
@@ -170,12 +177,52 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--card);
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    max-height: 100%;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  }
+  .thrift-panel-scroll {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding: 14px;
     display: grid;
     gap: 14px;
     align-content: start;
-    max-height: 100%;
-    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .thrift-sheet-handle {
+    display: none;
+    min-height: 42px;
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: rgba(15, 23, 42, 0.92);
+    color: var(--text);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 6px;
+    cursor: ns-resize;
+    touch-action: none;
+  }
+  .thrift-sheet-grip {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.7);
+  }
+  .thrift-sheet-title {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .thrift-map-stage {
     grid-area: map;
@@ -477,6 +524,48 @@
   .thrift-google-info button {
     margin-top: 8px;
   }
+  .thrift-fa-marker {
+    position: absolute;
+    width: 44px;
+    height: 52px;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    display: grid;
+    place-items: start center;
+    z-index: 1;
+  }
+  .thrift-fa-marker::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    width: 32px;
+    height: 32px;
+    background: var(--pin-color, #64748b);
+    border: 2px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.34));
+  }
+  .thrift-fa-marker::after {
+    content: "";
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: #fff;
+  }
+  .thrift-fa-marker i {
+    position: relative;
+    z-index: 1;
+    margin-top: 14px;
+    color: var(--pin-color, #64748b);
+    font-size: 13px;
+  }
   @keyframes thriftSpin {
     to { transform: rotate(360deg); }
   }
@@ -496,32 +585,108 @@
       max-height: none;
     }
   }
-  @media (max-width: 640px) {
+  @media (max-width: 760px) {
+    .thrift-radar-page {
+      max-width: none !important;
+      padding-left: 0 !important;
+      padding-right: 0 !important;
+    }
     .thrift-radar-header {
-      flex-direction: column;
-      align-items: stretch;
+      padding: 10px 12px;
+      margin-bottom: 0;
+      align-items: center;
+    }
+    .thrift-radar-header h1 {
+      font-size: 20px;
+      margin: 0;
+    }
+    .thrift-radar-header p,
+    .thrift-radar-header .btn {
+      display: none;
+    }
+    .thrift-radar-layout {
+      display: block;
+      position: relative;
+      height: calc(100dvh - 80px);
+      min-height: 560px;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
     }
     .thrift-radar-save-card {
       align-items: stretch;
       flex-direction: column;
     }
     .thrift-floating-stack {
-      position: relative;
-      transform: none;
-      width: auto;
-      margin: 10px;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(520px, calc(100% - 20px));
+      margin: 0;
+      z-index: 1250;
     }
     .thrift-map-stage {
-      display: grid;
-      grid-template-rows: auto minmax(420px, 58vh);
+      height: 100%;
+      min-height: 100%;
+      border-radius: 0;
+      border-left: 0;
+      border-right: 0;
     }
     #thriftMap,
     .thrift-map-canvas {
-      position: relative;
-      min-height: 420px;
+      position: absolute;
+      min-height: 100%;
+      height: 100%;
+    }
+    .thrift-radar-panel {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: min(76%, 580px);
+      max-height: none;
+      border-radius: 16px 16px 0 0;
+      border-left: 0;
+      border-right: 0;
+      transform: translateY(var(--mobile-sheet-offset));
+      z-index: 1350;
+      box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.34);
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    .thrift-radar-panel.is-dragging {
+      transition: none;
+    }
+    .thrift-sheet-handle {
+      display: inline-flex;
+    }
+    .thrift-panel-scroll {
+      padding: 10px 12px max(18px, env(safe-area-inset-bottom));
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .thrift-radar-panel[data-mobile-state="peek"] .thrift-panel-scroll {
+      opacity: 0.88;
+      transform: translateY(10px);
+    }
+    .thrift-radar-panel[data-mobile-state="mid"] .thrift-panel-scroll {
+      opacity: 0.95;
+      transform: translateY(4px);
+    }
+    .thrift-radar-panel[data-mobile-state="full"] .thrift-panel-scroll {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .thrift-google-layer-footer {
+      bottom: min(76%, 580px);
+      transform: translateY(44px);
+      font-size: 12px;
+      padding: 7px 8px;
     }
     .thrift-radar-zip-row {
       grid-template-columns: 1fr;
+    }
+    .thrift-floating-search {
+      max-height: min(52vh, 430px);
+      overflow-y: auto;
     }
     .thrift-location-copy {
       grid-template-columns: 1fr;
@@ -546,9 +711,18 @@
   let thriftUserLocation = null;
   let thriftUserMarker = null;
   let thriftLiveWatchId = null;
+  let ThriftFaMarker = null;
+  const thriftMobileSheetOffsets = { peek: 76, mid: 42, full: 4 };
+  let thriftMobileSheetState = 'mid';
+  let thriftSheetPointerStartY = null;
+  let thriftSheetPointerId = null;
+  let thriftSheetDragStartOffsetPct = null;
   const thriftSearchForm = document.getElementById('thriftRadarForm');
   const thriftEmptyOverlay = document.getElementById('thriftMapEmpty');
   const thriftNewSearchButton = document.getElementById('thriftNewSearch');
+  const thriftLayout = document.querySelector('.thrift-radar-layout');
+  const thriftSidePanel = document.getElementById('thriftSidePanel');
+  const thriftSheetHandle = document.getElementById('thriftSheetHandle');
 
   function thriftSelectedKeywords() {
     return Array.from(document.querySelectorAll('input[name="keywords"]:checked')).map((input) => input.value);
@@ -574,9 +748,115 @@
 
   function thriftSetSearchDialogVisible(visible) {
     thriftSearchForm?.classList.toggle('is-hidden', !visible);
+    if (visible) thriftSetMobileSheetState('peek');
     if (visible) {
       setTimeout(() => document.getElementById('thriftZipCode')?.focus(), 40);
     }
+  }
+
+  function thriftIsMobileViewport() {
+    return window.matchMedia('(max-width: 760px)').matches;
+  }
+
+  function thriftSetMobileSheetState(nextState) {
+    if (!thriftSidePanel || !thriftLayout || !thriftIsMobileViewport()) return;
+    const state = thriftMobileSheetOffsets[nextState] !== undefined ? nextState : 'mid';
+    thriftMobileSheetState = state;
+    thriftSidePanel.dataset.mobileState = state;
+    thriftLayout.style.setProperty('--mobile-sheet-offset', `${thriftMobileSheetOffsets[state]}%`);
+  }
+
+  function thriftClosestMobileSheetState(offsetPercent) {
+    return Object.entries(thriftMobileSheetOffsets).reduce((best, [state, value]) => {
+      const diff = Math.abs(offsetPercent - value);
+      return diff < best.diff ? { state, diff } : best;
+    }, { state: 'mid', diff: Infinity }).state;
+  }
+
+  function thriftMoveMobileSheet(direction) {
+    const order = ['peek', 'mid', 'full'];
+    const currentIndex = Math.max(0, order.indexOf(thriftMobileSheetState));
+    const nextIndex = Math.max(0, Math.min(order.length - 1, currentIndex + direction));
+    thriftSetMobileSheetState(order[nextIndex]);
+  }
+
+  function thriftResizeMapSoon() {
+    if (!thriftMap) return;
+    setTimeout(() => google.maps.event.trigger(thriftMap, 'resize'), 80);
+  }
+
+  function thriftSetupMobileSheet() {
+    if (!thriftSidePanel || !thriftSheetHandle) return;
+
+    const sync = () => {
+      if (thriftIsMobileViewport()) {
+        thriftSetMobileSheetState(thriftMobileSheetState || 'mid');
+      } else {
+        thriftSidePanel.classList.remove('is-dragging');
+        thriftLayout?.style.removeProperty('--mobile-sheet-offset');
+      }
+      thriftResizeMapSoon();
+    };
+
+    thriftSheetHandle.addEventListener('pointerdown', (event) => {
+      if (!thriftIsMobileViewport()) return;
+      thriftSheetPointerStartY = event.clientY;
+      thriftSheetPointerId = event.pointerId;
+      thriftSheetDragStartOffsetPct = Number(thriftMobileSheetOffsets[thriftMobileSheetState] ?? thriftMobileSheetOffsets.mid);
+      thriftSidePanel.classList.add('is-dragging');
+      try {
+        thriftSheetHandle.setPointerCapture?.(event.pointerId);
+      } catch (_error) {
+        // Ignore pointer capture failures.
+      }
+    });
+
+    const releasePointer = () => {
+      thriftSheetPointerStartY = null;
+      thriftSheetPointerId = null;
+      thriftSheetDragStartOffsetPct = null;
+      thriftSidePanel.classList.remove('is-dragging');
+    };
+
+    thriftSheetHandle.addEventListener('pointermove', (event) => {
+      if (!thriftIsMobileViewport()) return;
+      if (!Number.isFinite(thriftSheetPointerStartY)) return;
+      if (thriftSheetPointerId !== null && event.pointerId !== thriftSheetPointerId) return;
+      const panelHeight = thriftSidePanel.getBoundingClientRect().height || 0;
+      if (!panelHeight) return;
+      const startOffsetPct = Number.isFinite(thriftSheetDragStartOffsetPct)
+        ? thriftSheetDragStartOffsetPct
+        : Number(thriftMobileSheetOffsets[thriftMobileSheetState] ?? thriftMobileSheetOffsets.mid);
+      const deltaPx = event.clientY - thriftSheetPointerStartY;
+      const minOffsetPx = (thriftMobileSheetOffsets.full / 100) * panelHeight;
+      const maxOffsetPx = (thriftMobileSheetOffsets.peek / 100) * panelHeight;
+      const startOffsetPx = (startOffsetPct / 100) * panelHeight;
+      const nextOffsetPx = Math.max(minOffsetPx, Math.min(maxOffsetPx, startOffsetPx + deltaPx));
+      thriftLayout.style.setProperty('--mobile-sheet-offset', `${(nextOffsetPx / panelHeight) * 100}%`);
+    });
+
+    thriftSheetHandle.addEventListener('pointerup', (event) => {
+      if (!thriftIsMobileViewport()) return;
+      const startY = thriftSheetPointerStartY;
+      if (!Number.isFinite(startY)) {
+        releasePointer();
+        thriftSetMobileSheetState('full');
+        return;
+      }
+      const deltaY = event.clientY - startY;
+      const rawOffset = parseFloat(thriftLayout.style.getPropertyValue('--mobile-sheet-offset') || '');
+      const hasDragged = Math.abs(deltaY) >= 10;
+      releasePointer();
+      if (!hasDragged) {
+        thriftMoveMobileSheet(1);
+        return;
+      }
+      thriftSetMobileSheetState(Number.isFinite(rawOffset) ? thriftClosestMobileSheetState(rawOffset) : thriftMobileSheetState);
+    });
+
+    thriftSheetHandle.addEventListener('pointercancel', releasePointer);
+    window.addEventListener('resize', sync, { passive: true });
+    sync();
   }
 
   function thriftSelectedSearchMode() {
@@ -612,9 +892,53 @@
       polylineOptions: { strokeColor: '#f97316', strokeWeight: 5, strokeOpacity: 0.9 }
     });
     thriftDirectionsRenderer.setMap(thriftMap);
+    thriftEnsureFaMarkerClass();
     thriftUpdateSearchMode();
     thriftRenderSavedLists();
     thriftRenderSavedRoutes();
+  }
+
+  function thriftEnsureFaMarkerClass() {
+    if (ThriftFaMarker || !window.google?.maps) return;
+    ThriftFaMarker = class extends google.maps.OverlayView {
+      constructor({ position, map, title, iconClass, color, onClick }) {
+        super();
+        this.position = new google.maps.LatLng(position.lat, position.lng);
+        this.title = title;
+        this.iconClass = iconClass || 'fa-location-dot';
+        this.color = color || '#64748b';
+        this.onClick = onClick;
+        this.element = null;
+        this.setMap(map);
+      }
+      onAdd() {
+        this.element = document.createElement('button');
+        this.element.type = 'button';
+        this.element.className = 'thrift-fa-marker';
+        this.element.title = this.title || '';
+        this.element.style.setProperty('--pin-color', this.color);
+        this.element.innerHTML = `<i class="fas ${this.iconClass}"></i>`;
+        this.element.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.onClick?.(this);
+        });
+        this.getPanes().overlayMouseTarget.appendChild(this.element);
+      }
+      draw() {
+        if (!this.element) return;
+        const point = this.getProjection().fromLatLngToDivPixel(this.position);
+        if (!point) return;
+        this.element.style.transform = `translate(${point.x - 22}px, ${point.y - 52}px)`;
+      }
+      onRemove() {
+        this.element?.remove();
+        this.element = null;
+      }
+      getPosition() {
+        return this.position;
+      }
+    };
   }
 
   function thriftRequireMap() {
@@ -625,28 +949,6 @@
 
   function thriftGooglePosition(result) {
     return { lat: Number(result.lat), lng: Number(result.lng ?? result.lon) };
-  }
-
-  function thriftMarkerIcon(result) {
-    if (result.icon_url) {
-      return {
-        url: result.icon_url,
-        scaledSize: new google.maps.Size(40, 40),
-        anchor: new google.maps.Point(20, 40)
-      };
-    }
-    const option = thriftKeywordOptions[result.keyword] || {};
-    const color = result.color || option.color || '#64748b';
-    const svg = encodeURIComponent(`
-      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="52" viewBox="0 0 44 52">
-        <path fill="${color}" stroke="white" stroke-width="3" d="M22 2C11 2 4 10 4 20c0 14 18 30 18 30s18-16 18-30C40 10 33 2 22 2z"/>
-        <circle cx="22" cy="20" r="8" fill="white" opacity=".96"/>
-      </svg>`);
-    return {
-      url: `data:image/svg+xml;charset=UTF-8,${svg}`,
-      scaledSize: new google.maps.Size(40, 48),
-      anchor: new google.maps.Point(20, 46)
-    };
   }
 
   function thriftClearMarkers() {
@@ -727,31 +1029,35 @@
     thriftClearRoute();
     if (thriftEmptyOverlay) thriftEmptyOverlay.style.display = 'none';
     thriftSetSearchDialogVisible(false);
+    thriftSetMobileSheetState('mid');
     document.getElementById('thriftSaveSearch').disabled = false;
     const locationLabel = search.city || search.zip_code || 'Current location';
     document.getElementById('thriftCurrentSummary').textContent = `${locationLabel} · ${search.results.length} places · ${search.keywords.map(thriftKeywordLabel).join(', ')}`;
 
     const bounds = new google.maps.LatLngBounds();
     search.results.forEach((result) => {
-      const marker = new google.maps.Marker({
+      const option = thriftKeywordOptions[result.keyword] || {};
+      const marker = new ThriftFaMarker({
         position: thriftGooglePosition(result),
         map: thriftMap,
         title: result.name,
-        icon: thriftMarkerIcon(result)
-      });
-      marker.addListener('click', () => {
-        thriftInfoWindow.setContent(`
-          <div class="thrift-google-info">
-            <strong>${thriftEscape(result.name)}</strong>
-            <div>${thriftEscape(result.address)}</div>
-            <small>${thriftEscape(result.keyword_label || thriftKeywordLabel(result.keyword))}${result.rating ? ` · Rating ${thriftEscape(result.rating)}` : ''}</small><br>
-            <button type="button" class="btn submitbtn" data-add-route-stop="${thriftEscape(result.id)}">Add Stop</button>
-          </div>
-        `);
-        thriftInfoWindow.open(thriftMap, marker);
-        setTimeout(() => {
-          document.querySelector(`[data-add-route-stop="${CSS.escape(String(result.id))}"]`)?.addEventListener('click', () => thriftAddRouteStop(result));
-        }, 0);
+        iconClass: result.fallback_icon || option.icon || 'fa-location-dot',
+        color: result.color || option.color || '#64748b',
+        onClick: (activeMarker) => {
+          thriftInfoWindow.setContent(`
+            <div class="thrift-google-info">
+              <strong>${thriftEscape(result.name)}</strong>
+              <div>${thriftEscape(result.address)}</div>
+              <small>${thriftEscape(result.keyword_label || thriftKeywordLabel(result.keyword))}${result.rating ? ` · Rating ${thriftEscape(result.rating)}` : ''}</small><br>
+              <button type="button" class="btn submitbtn" data-add-route-stop="${thriftEscape(result.id)}">Add Stop</button>
+            </div>
+          `);
+          thriftInfoWindow.setPosition(activeMarker.getPosition());
+          thriftInfoWindow.open(thriftMap);
+          setTimeout(() => {
+            document.querySelector(`[data-add-route-stop="${CSS.escape(String(result.id))}"]`)?.addEventListener('click', () => thriftAddRouteStop(result));
+          }, 0);
+        }
       });
       thriftMarkers.push(marker);
       bounds.extend(marker.getPosition());
@@ -859,6 +1165,8 @@
       thriftEmptyOverlay.style.display = 'grid';
     }
   });
+
+  thriftSetupMobileSheet();
 
   thriftSearchForm?.addEventListener('submit', async (event) => {
     event.preventDefault();

@@ -70,77 +70,25 @@
   <div class="card" style="padding:16px;margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:12px;">
       <div>
-        <h2 style="margin:0 0 4px;font-size:18px;">Thrift Radar Keywords</h2>
-        <p style="color:var(--text-secondary);font-size:13px;margin:0;">Manage Google Places search terms and custom Cloudinary pin icons.</p>
+        <h2 style="margin:0 0 4px;font-size:18px;">Thrift Radar Categories</h2>
+        <p style="color:var(--text-secondary);font-size:13px;margin:0;">Manage the three customer-facing categories, their Google search terms, and Font Awesome pin icons.</p>
       </div>
-      <span class="tag">{{ thrift_keywords|length }} Keywords</span>
+      <span class="tag">{{ thrift_keywords|length }} Categories</span>
     </div>
-
-    <form method="post" action="{{ url_for('main.admin_thrift_radar_keyword_save') }}" enctype="multipart/form-data" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;align-items:end;margin-bottom:16px;">
-      <label style="grid-column:span 1;">
-        <span style="font-size:12px;color:var(--text-secondary);">Slug</span>
-        <input type="text" name="slug" placeholder="goodwill" required style="width:100%;margin-top:4px;">
-      </label>
-      <label style="grid-column:span 1;">
-        <span style="font-size:12px;color:var(--text-secondary);">Label</span>
-        <input type="text" name="label" placeholder="Goodwill" required style="width:100%;margin-top:4px;">
-      </label>
-      <label style="grid-column:span 2;">
-        <span style="font-size:12px;color:var(--text-secondary);">Search terms</span>
-        <input type="text" name="keywords" placeholder="goodwill, goodwill outlet" required style="width:100%;margin-top:4px;">
-      </label>
-      <label>
-        <span style="font-size:12px;color:var(--text-secondary);">Icon</span>
-        <input type="file" name="icon_file" accept="image/*" style="width:100%;margin-top:4px;">
-      </label>
-      <button type="submit" class="btn submitbtn">
-        <i class="fas fa-plus"></i> Add
-      </button>
-      <label>
-        <span style="font-size:12px;color:var(--text-secondary);">Match</span>
-        <select name="match_type" style="width:100%;margin-top:4px;">
-          <option value="any">Any term</option>
-          <option value="all">All words</option>
-        </select>
-      </label>
-      <label>
-        <span style="font-size:12px;color:var(--text-secondary);">Color</span>
-        <input type="text" name="color" value="#64748b" style="width:100%;margin-top:4px;">
-      </label>
-      <label>
-        <span style="font-size:12px;color:var(--text-secondary);">FA fallback</span>
-        <input type="text" name="fallback_icon" value="fa-location-dot" style="width:100%;margin-top:4px;">
-      </label>
-      <label>
-        <span style="font-size:12px;color:var(--text-secondary);">Order</span>
-        <input type="number" name="display_order" value="0" style="width:100%;margin-top:4px;">
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;padding-bottom:8px;">
-        <input type="checkbox" name="is_active" checked>
-        <span>Active</span>
-      </label>
-    </form>
 
     {% if thrift_keywords %}
     <div style="display:grid;gap:10px;">
       {% for keyword in thrift_keywords %}
-      <form method="post" action="{{ url_for('main.admin_thrift_radar_keyword_save') }}" enctype="multipart/form-data" style="border:1px solid var(--border);border-radius:8px;padding:10px;display:grid;grid-template-columns:48px repeat(6,minmax(0,1fr)) auto;gap:8px;align-items:end;">
+      <form method="post" action="{{ url_for('main.admin_thrift_radar_keyword_save') }}" style="border:1px solid var(--border);border-radius:8px;padding:10px;display:grid;grid-template-columns:48px repeat(6,minmax(0,1fr)) auto;gap:8px;align-items:end;">
         <input type="hidden" name="keyword_id" value="{{ keyword.id }}">
+        <input type="hidden" name="slug" value="{{ keyword.slug }}">
         <div style="align-self:center;">
-          {% if keyword.icon_url %}
-            <img src="{{ keyword.icon_url }}" alt="{{ keyword.label }}" style="width:40px;height:40px;object-fit:contain;">
-          {% else %}
-            <div style="width:40px;height:40px;border-radius:999px;background:{{ keyword.color }};display:grid;place-items:center;color:white;">
-              <i class="fas {{ keyword.fallback_icon or 'fa-location-dot' }}"></i>
-            </div>
-          {% endif %}
+          <div style="width:40px;height:40px;border-radius:999px;background:{{ keyword.color }};display:grid;place-items:center;color:white;">
+            <i class="fas {{ keyword.fallback_icon or 'fa-location-dot' }}"></i>
+          </div>
         </div>
         <label>
-          <span style="font-size:12px;color:var(--text-secondary);">Slug</span>
-          <input type="text" name="slug" value="{{ keyword.slug }}" required style="width:100%;margin-top:4px;">
-        </label>
-        <label>
-          <span style="font-size:12px;color:var(--text-secondary);">Label</span>
+          <span style="font-size:12px;color:var(--text-secondary);">Category</span>
           <input type="text" name="label" value="{{ keyword.label }}" required style="width:100%;margin-top:4px;">
         </label>
         <label style="grid-column:span 2;">
@@ -155,15 +103,11 @@
           </select>
         </label>
         <label>
-          <span style="font-size:12px;color:var(--text-secondary);">Icon upload</span>
-          <input type="file" name="icon_file" accept="image/*" style="width:100%;margin-top:4px;">
-        </label>
-        <label>
           <span style="font-size:12px;color:var(--text-secondary);">Color</span>
           <input type="text" name="color" value="{{ keyword.color }}" style="width:100%;margin-top:4px;">
         </label>
         <label>
-          <span style="font-size:12px;color:var(--text-secondary);">FA fallback</span>
+          <span style="font-size:12px;color:var(--text-secondary);">Font Awesome icon</span>
           <input type="text" name="fallback_icon" value="{{ keyword.fallback_icon or 'fa-location-dot' }}" style="width:100%;margin-top:4px;">
         </label>
         <label>
@@ -176,10 +120,8 @@
         </label>
         <div style="display:flex;gap:6px;align-items:center;">
           <button type="submit" class="btn submitbtn">Save</button>
-          <button type="submit" form="delete-keyword-{{ keyword.id }}" class="btn" onclick="return confirm('Delete this keyword?')">Delete</button>
         </div>
       </form>
-      <form id="delete-keyword-{{ keyword.id }}" method="post" action="{{ url_for('main.admin_thrift_radar_keyword_delete', keyword_id=keyword.id) }}"></form>
       {% endfor %}
     </div>
     {% endif %}

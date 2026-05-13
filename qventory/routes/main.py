@@ -87,56 +87,50 @@ INVENTORY_SOURCES_ENABLED_KEY = "inventory_sources_enabled"
 THRIFT_RADAR_ENABLED_KEY = "thrift_radar_enabled"
 THRIFT_RADAR_ROLES_KEY = "thrift_radar_roles"
 DEFAULT_THRIFT_RADAR_KEYWORDS = {
-    "goodwill": {
-        "label": "Goodwill",
-        "keywords": ["goodwill", "goodwill store", "goodwill outlet", "goodwill specialty store"],
+    "thrift_store": {
+        "label": "Thrift Stores",
+        "keywords": [
+            "thrift store",
+            "thrift shop",
+            "trift store",
+            "trift shop",
+            "thrift",
+            "second hand store",
+            "consignment store",
+            "goodwill",
+            "goodwill store",
+            "goodwill outlet",
+            "savers thrift",
+            "savers",
+            "value village",
+            "salvation army thrift",
+            "out of the closet",
+            "st vincent de paul thrift",
+        ],
         "match_type": "any",
         "icon": "fa-shirt",
         "color": "#22c55e",
         "display_order": 10,
     },
-    "savers": {
-        "label": "Savers / Value Village",
-        "keywords": ["savers thrift", "value village"],
+    "flea_market": {
+        "label": "Flea Markets",
+        "keywords": ["flea market", "swap meet", "antique market"],
         "match_type": "any",
-        "icon": "fa-store",
-        "color": "#3b82f6",
+        "icon": "fa-shop",
+        "color": "#f97316",
         "display_order": 20,
     },
-    "salvation_army": {
-        "label": "Salvation Army",
-        "keywords": ["salvation army thrift"],
-        "match_type": "all",
-        "icon": "fa-hand-holding-heart",
-        "color": "#ef4444",
-        "display_order": 30,
-    },
-    "flea_market": {
-        "label": "Flea Market",
-        "keywords": ["flea market", "swap meet"],
-        "match_type": "any",
-        "icon": "fa-store",
-        "color": "#f97316",
-        "display_order": 40,
-    },
     "outlet": {
-        "label": "Outlet",
+        "label": "Outlets",
         "keywords": ["outlet store", "clearance outlet", "liquidation outlet"],
         "match_type": "any",
         "icon": "fa-bag-shopping",
         "color": "#8b5cf6",
-        "display_order": 50,
-    },
-    "other": {
-        "label": "Other Thrift Store",
-        "keywords": ["thrift", "second hand", "consignment", "pawn shop"],
-        "match_type": "any",
-        "icon": "fa-location-dot",
-        "color": "#64748b",
-        "display_order": 90,
+        "display_order": 30,
     },
 }
 THRIFT_RADAR_KEYWORDS = DEFAULT_THRIFT_RADAR_KEYWORDS
+THRIFT_RADAR_CATEGORY_SLUGS = tuple(DEFAULT_THRIFT_RADAR_KEYWORDS.keys())
 THRIFT_RADAR_RADIUS_METERS = 40233
 
 PENDING_TASK_DEFS = [
@@ -1023,13 +1017,23 @@ def _google_maps_server_key():
 
 
 def _ensure_default_thrift_keywords():
-    existing_slugs = {
-        row.slug
-        for row in ThriftRadarKeyword.query.with_entities(ThriftRadarKeyword.slug).all()
+    existing = {
+        row.slug: row
+        for row in ThriftRadarKeyword.query.all()
     }
     added = False
     for slug, option in DEFAULT_THRIFT_RADAR_KEYWORDS.items():
-        if slug in existing_slugs:
+        if slug in existing:
+            keyword = existing[slug]
+            keyword.display_order = option.get("display_order") or keyword.display_order or 0
+            if not keyword.label:
+                keyword.label = option["label"]
+            if not keyword.keywords:
+                keyword.keywords = option.get("keywords") or [option["label"]]
+            if not keyword.fallback_icon:
+                keyword.fallback_icon = option.get("icon") or "fa-location-dot"
+            if not keyword.color:
+                keyword.color = option.get("color") or "#64748b"
             continue
         keyword = ThriftRadarKeyword(
             slug=slug,
@@ -1043,6 +1047,10 @@ def _ensure_default_thrift_keywords():
         )
         db.session.add(keyword)
         added = True
+    for slug, keyword in existing.items():
+        if slug not in THRIFT_RADAR_CATEGORY_SLUGS and keyword.is_active:
+            keyword.is_active = False
+            added = True
     if added:
         db.session.commit()
 
@@ -1051,6 +1059,7 @@ def _thrift_radar_keywords(active_only: bool = True):
     try:
         _ensure_default_thrift_keywords()
         query = ThriftRadarKeyword.query
+        query = query.filter(ThriftRadarKeyword.slug.in_(THRIFT_RADAR_CATEGORY_SLUGS))
         if active_only:
             query = query.filter(ThriftRadarKeyword.is_active.is_(True))
         rows = query.order_by(
@@ -1081,7 +1090,7 @@ def _normalize_thrift_keywords(values):
     if not isinstance(values, list):
         return []
     options = _thrift_radar_keywords(active_only=True)
-    return [key for key in options if key in values]
+    return [key for key in THRIFT_RADAR_CATEGORY_SLUGS if key in options and key in values]
 
 
 def _client_ip_address():
@@ -1655,7 +1664,6 @@ def _search_thrift_radar_google(payload, keywords):
                     "rating": place.get("rating"),
                     "keyword": slug,
                     "keyword_label": option.get("label") or slug,
-                    "icon_url": option.get("icon_url"),
                     "fallback_icon": option.get("icon"),
                     "color": option.get("color") or "#64748b",
                 })
@@ -8854,7 +8862,9 @@ def admin_inventory_sources():
         InventorySource.display_order.asc(),
         InventorySource.title.asc()
     ).all()
-    thrift_keywords = ThriftRadarKeyword.query.order_by(
+    thrift_keywords = ThriftRadarKeyword.query.filter(
+        ThriftRadarKeyword.slug.in_(THRIFT_RADAR_CATEGORY_SLUGS)
+    ).order_by(
         ThriftRadarKeyword.display_order.asc(),
         ThriftRadarKeyword.label.asc()
     ).all()
@@ -8936,7 +8946,6 @@ def _parse_thrift_keyword_terms(raw: str):
 def admin_thrift_radar_keyword_save():
     keyword_id = request.form.get("keyword_id")
     slug = (request.form.get("slug") or "").strip().lower()
-    slug = re.sub(r"[^a-z0-9_]+", "_", slug).strip("_")
     label = (request.form.get("label") or "").strip()
     terms = _parse_thrift_keyword_terms(request.form.get("keywords") or "")
     match_type = (request.form.get("match_type") or "any").strip().lower()
@@ -8949,8 +8958,11 @@ def admin_thrift_radar_keyword_save():
     except ValueError:
         display_order = 0
 
-    if not slug or not label or not terms:
-        flash("Keyword slug, label, and search terms are required.", "error")
+    if slug not in THRIFT_RADAR_CATEGORY_SLUGS:
+        flash("Invalid Thrift Radar category.", "error")
+        return redirect(url_for("main.admin_inventory_sources"))
+    if not label or not terms:
+        flash("Category label and search terms are required.", "error")
         return redirect(url_for("main.admin_inventory_sources"))
     if match_type not in {"any", "all"}:
         match_type = "any"
@@ -8967,18 +8979,6 @@ def admin_thrift_radar_keyword_save():
         keyword = ThriftRadarKeyword(slug=slug)
         db.session.add(keyword)
 
-    try:
-        icon_url = _upload_inventory_source_image_file(
-            request.files.get("icon_file"),
-            folder="qventory/thrift-radar-icons",
-        )
-    except (RuntimeError, ValueError) as e:
-        flash(str(e), "error")
-        return redirect(url_for("main.admin_inventory_sources"))
-    except Exception as e:
-        flash(f"Icon upload failed: {e}", "error")
-        return redirect(url_for("main.admin_inventory_sources"))
-
     keyword.slug = slug
     keyword.label = label[:120]
     keyword.keywords = terms
@@ -8987,20 +8987,9 @@ def admin_thrift_radar_keyword_save():
     keyword.fallback_icon = fallback_icon or "fa-location-dot"
     keyword.display_order = display_order
     keyword.is_active = is_active
-    if icon_url:
-        keyword.icon_url = icon_url
+    keyword.icon_url = None
     db.session.commit()
-    flash("Thrift Radar keyword saved.", "ok")
-    return redirect(url_for("main.admin_inventory_sources"))
-
-
-@main_bp.route("/admin/inventory-sources/thrift-keywords/<int:keyword_id>/delete", methods=["POST"])
-@require_admin
-def admin_thrift_radar_keyword_delete(keyword_id):
-    keyword = ThriftRadarKeyword.query.get_or_404(keyword_id)
-    db.session.delete(keyword)
-    db.session.commit()
-    flash("Thrift Radar keyword deleted.", "ok")
+    flash("Thrift Radar category saved.", "ok")
     return redirect(url_for("main.admin_inventory_sources"))
 
 
