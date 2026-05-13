@@ -1,3 +1,4 @@
+import json
 import requests
 from datetime import datetime
 from .ebay_inventory import get_user_access_token, EBAY_API_BASE
@@ -31,9 +32,29 @@ def create_offer(user_id: int, payload: dict) -> dict:
     url = f"{EBAY_API_BASE}/sell/inventory/v1/offer"
     resp = requests.post(url, headers=_headers(access_token), json=payload, timeout=30)
     if resp.status_code >= 400:
+        existing_offer_id = _extract_existing_offer_id(resp.text)
+        if existing_offer_id:
+            return {
+                "success": False,
+                "error": resp.text,
+                "error_code": 25002,
+                "existing_offer_id": existing_offer_id,
+            }
         return {"success": False, "error": resp.text}
     data = resp.json() if resp.text else {}
     return {"success": True, "offer_id": data.get("offerId"), "response": data}
+
+
+def update_offer(user_id: int, offer_id: str, payload: dict) -> dict:
+    access_token = get_user_access_token(user_id)
+    if not access_token:
+        return {"success": False, "error": "missing_access_token"}
+
+    url = f"{EBAY_API_BASE}/sell/inventory/v1/offer/{offer_id}"
+    resp = requests.put(url, headers=_headers(access_token), json=payload, timeout=30)
+    if resp.status_code >= 400:
+        return {"success": False, "error": resp.text}
+    return {"success": True, "offer_id": offer_id, "response": resp.json() if resp.text else {}}
 
 
 def publish_offer(user_id: int, offer_id: str) -> dict:
@@ -52,3 +73,20 @@ def publish_offer(user_id: int, offer_id: str) -> dict:
         "response": data,
         "published_at": datetime.utcnow(),
     }
+
+
+def _extract_existing_offer_id(error_text: str | None) -> str | None:
+    if not error_text:
+        return None
+    try:
+        data = json.loads(error_text)
+    except (TypeError, ValueError):
+        return None
+
+    for error in data.get("errors", []):
+        if error.get("errorId") != 25002:
+            continue
+        for param in error.get("parameters", []):
+            if param.get("name") == "offerId" and param.get("value"):
+                return str(param["value"])
+    return None

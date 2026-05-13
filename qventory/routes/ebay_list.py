@@ -11,6 +11,7 @@ from ..helpers.ebay_image_upload import create_ebay_upload_session, upload_ebay_
 from ..helpers.ebay_listing_publish import (
     create_or_replace_inventory_item,
     create_offer,
+    update_offer,
     publish_offer,
 )
 from ..helpers.ebay_account import get_account_policies, get_merchant_locations
@@ -307,6 +308,13 @@ def publish_draft(draft_id):
     }
 
     offer_result = create_offer(current_user.id, offer_payload)
+    if not offer_result.get("success") and offer_result.get("existing_offer_id"):
+        offer_result = update_offer(
+            current_user.id,
+            offer_result["existing_offer_id"],
+            offer_payload,
+        )
+
     if not offer_result.get("success") or not offer_result.get("offer_id"):
         draft.status = "FAILED"
         draft.last_error = offer_result.get("error")
