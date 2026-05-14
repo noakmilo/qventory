@@ -51,6 +51,29 @@ def _delete_cloudinary_public_id(public_id: str | None):
         print(f"[EBAY_LIST] Cloudinary cleanup failed for {public_id}: {exc}")
 
 
+def _cleanup_draft_cloudinary_images(draft: EbayListingDraft):
+    images = _draft_images(draft)
+    seen_public_ids = set()
+    changed = False
+
+    for image_entry in images:
+        if not isinstance(image_entry, dict):
+            continue
+        public_id = image_entry.get("cloudinary_public_id")
+        if public_id and public_id not in seen_public_ids:
+            _delete_cloudinary_public_id(public_id)
+            seen_public_ids.add(public_id)
+        if image_entry.get("cloudinary_url") or image_entry.get("cloudinary_public_id"):
+            image_entry["cloudinary_url"] = None
+            image_entry["cloudinary_public_id"] = None
+            if image_entry.get("ebay_image_url"):
+                image_entry["image_url"] = image_entry.get("ebay_image_url")
+            changed = True
+
+    if changed:
+        draft.images_json = images
+
+
 def _rate_limit(key: str, limit: int, window_seconds: int) -> bool:
     now = datetime.utcnow().timestamp()
     bucket = _rate_limits.get(key, [])
@@ -772,6 +795,7 @@ def publish_draft(draft_id):
     draft.ebay_listing_id = publish_result.get("listing_id")
     draft.published_at = publish_result.get("published_at") or datetime.utcnow()
     draft.last_error = None
+    _cleanup_draft_cloudinary_images(draft)
     db.session.commit()
 
     return jsonify({"ok": True, "draft": draft.to_dict()})
@@ -906,12 +930,14 @@ def upload_image():
     if size <= 0 or size > 8 * 1024 * 1024:
         return jsonify({"ok": False, "error": "invalid_size"}), 400
 
+    existing_public_id = images[replace_index].get("cloudinary_public_id") if is_replacement else None
     try:
-        public_id = f"ebay_drafts/user_{current_user.id}/draft_{draft.id}/{sha256 or int(datetime.utcnow().timestamp())}"
+        public_id = existing_public_id or f"ebay_drafts/user_{current_user.id}/draft_{draft.id}/{sha256 or int(datetime.utcnow().timestamp())}"
         result = cloudinary.uploader.upload(
             image_file.stream,
             public_id=public_id,
             overwrite=True,
+            invalidate=True,
             resource_type="image",
             format="jpg",
             transformation=[{"quality": "auto:good"}],
@@ -932,10 +958,13 @@ def upload_image():
         "ebay_image_url": None,
         "ebay_image_location": None,
         "is_main": len(images) == 0,
+        "replaced_cloudinary": bool(is_replacement and existing_public_id),
     }
     if is_replacement:
         image_entry["is_main"] = bool(images[replace_index].get("is_main"))
-        _delete_cloudinary_public_id(images[replace_index].get("cloudinary_public_id"))
+        previous_public_id = images[replace_index].get("cloudinary_public_id")
+        if previous_public_id and previous_public_id != image_entry["cloudinary_public_id"]:
+            _delete_cloudinary_public_id(previous_public_id)
         images[replace_index] = image_entry
     else:
         images.append(image_entry)

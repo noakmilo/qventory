@@ -20,6 +20,51 @@
     </a>
   </div>
 
+  <div class="glass" style="padding: 20px; margin-bottom: 20px; border-radius: var(--radius); border: 1px solid rgba(59,130,246,.28);">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+      <div>
+        <h2 style="margin:0 0 6px 0;color:var(--accent);">Listing Wizard Access</h2>
+        <p style="color:var(--sub);font-size:var(--fs-sm);margin:0;">
+          Control whether the eBay Listing Wizard route is active and which plans can see it in the sidebar.
+        </p>
+      </div>
+      <span style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;background:{{ 'rgba(16,185,129,.14)' if listing_feature_enabled else 'rgba(239,68,68,.14)' }};color:{{ '#10b981' if listing_feature_enabled else '#ef4444' }};font-size:12px;font-weight:700;">
+        <i class="fas fa-circle" style="font-size:8px;"></i>
+        {{ 'Enabled' if listing_feature_enabled else 'Disabled' }}
+      </span>
+    </div>
+
+    <form method="POST" action="{{ url_for('main.admin_update_listing_wizard_access') }}" style="display:grid;gap:14px;">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;background:var(--muted);cursor:pointer;width:max-content;max-width:100%;">
+        <input type="checkbox" name="listing_wizard_enabled" {{ 'checked' if listing_feature_enabled else '' }}>
+        <span>Enable Listing Wizard route globally</span>
+      </label>
+
+      <div>
+        <label style="display:block;margin-bottom:8px;color:var(--sub);font-size:var(--fs-sm);">
+          Allowed plans / user groups
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;">
+          {% for role in role_options %}
+          <label style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:6px;background:var(--muted);cursor:pointer;">
+            <input type="checkbox" name="listing_wizard_roles" value="{{ role }}" {% if role in listing_allowed_plans %}checked{% endif %}>
+            <span>{{ role.replace('_', ' ')|title }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <small style="display:block;color:var(--sub);font-size:var(--fs-xs);margin-top:8px;">
+          Users must have one of these roles/plans and the global toggle must be enabled.
+        </small>
+      </div>
+
+      <div>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Listing Wizard Access
+        </button>
+      </div>
+    </form>
+  </div>
+
   {% for plan in plans %}
   <div class="glass" style="padding: 20px; margin-bottom: 20px; border-radius: var(--radius);">
     <h2 style="margin: 0 0 16px 0; text-transform: capitalize; color: var(--accent);">

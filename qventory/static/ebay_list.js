@@ -1142,8 +1142,8 @@
     });
     if (hintEl) {
       hintEl.textContent = img.blob
-        ? 'Crop, rotate, flip, adjust brightness/contrast, resize and export to eBay.'
-        : 'Saved eBay image loaded. If export fails, re-add the original image and edit it locally.';
+        ? 'Crop, rotate, flip, adjust brightness/contrast, resize and save your changes.'
+        : 'Saved image loaded. If saving fails, re-add the original image and edit it locally.';
     }
     qs('#imageBrightnessRange').value = '0';
     qs('#imageContrastRange').value = '0';
@@ -1273,6 +1273,7 @@
     img.image_url = uploadData.image.image_url || img.cloudinary_url;
     img.ebay_image_url = uploadData.image.ebay_image_url || null;
     img.url = img.cloudinary_url || img.url;
+    img.replaced_cloudinary = Boolean(uploadData.image.replaced_cloudinary);
     delete img.replace_existing;
     draft = {
       ...uploadData.draft,
@@ -1280,7 +1281,10 @@
       item_specifics: previousDraft.item_specifics || uploadData.draft.item_specifics || {}
     };
     renderImageList();
-    setStatus('Image saved to Cloudinary. It will upload to eBay when you publish.');
+    setStatus(img.replaced_cloudinary
+      ? 'Image changes saved. The existing Cloudinary image was replaced.'
+      : 'Image saved temporarily. It will be removed from Cloudinary after the listing is published.');
+    delete img.replaced_cloudinary;
     if (!deferSave) {
       debounceSave();
     }
@@ -1465,12 +1469,7 @@
       img.replace_existing = true;
       renderImageList();
       ensureOpenImageEditor(img);
-      if (draft && draft.id) {
-        await uploadImage(img);
-      } else {
-        delete img.replace_existing;
-        setStatus('Image edits are ready locally. Click Save Draft to upload them.');
-      }
+      await uploadImage(img);
     } catch (err) {
       setStatus('Could not export this image. If it was loaded from a saved eBay URL, re-add the original file and edit it locally.');
     }
@@ -1602,6 +1601,26 @@
         data = {ok: false, error: 'invalid_response'};
       }
       if (res.ok && data.ok) {
+        if (data.draft) {
+          draft = data.draft;
+          images = (draft.images || []).map((img) => ({
+            filename: img.filename,
+            sha256: img.sha256,
+            width: img.width,
+            height: img.height,
+            cloudinary_url: img.cloudinary_url || null,
+            cloudinary_public_id: img.cloudinary_public_id || null,
+            image_url: img.image_url || img.ebay_image_url || null,
+            ebay_image_url: img.ebay_image_url,
+            ebay_image_location: img.ebay_image_location,
+            url: img.cloudinary_url || img.image_url || img.ebay_image_url,
+            is_main: img.is_main || false
+          }));
+          renderImageList();
+          if (selectedImageIndex !== null && images[selectedImageIndex]) {
+            ensureOpenImageEditor(images[selectedImageIndex]);
+          }
+        }
         const listingId = data.draft && data.draft.ebay_listing_id ? data.draft.ebay_listing_id : 'N/A';
         setPublishStatus(`Published. Listing ID: ${listingId}`);
         showPublishModal(

@@ -10064,8 +10064,43 @@ def admin_plan_limits():
     from qventory.models.subscription import PlanLimit
 
     plans = PlanLimit.query.order_by(PlanLimit.max_items.nullslast(), PlanLimit.max_items).all()
+    listing_feature_enabled = bool(
+        SystemSetting.get_int(
+            "feature_ebay_listing_create_enabled",
+            1 if current_app.config.get("FEATURE_EBAY_LISTING_CREATE_ENABLED", False) else 0
+        )
+    )
+    listing_allowed_plans = [plan.plan for plan in plans if plan.can_create_listings]
 
-    return render_template("admin_plan_limits.html", plans=plans)
+    return render_template(
+        "admin_plan_limits.html",
+        plans=plans,
+        listing_feature_enabled=listing_feature_enabled,
+        listing_allowed_plans=listing_allowed_plans,
+        role_options=USER_ROLE_OPTIONS,
+    )
+
+
+@main_bp.route("/admin/plan-limits/listing-wizard-access", methods=["POST"])
+@require_admin
+def admin_update_listing_wizard_access():
+    """Update global and plan-level access for the eBay Listing Wizard."""
+    from qventory.models.subscription import PlanLimit
+
+    enabled = request.form.get("listing_wizard_enabled") == "on"
+    allowed_plans = {
+        role for role in USER_ROLE_OPTIONS
+        if role in request.form.getlist("listing_wizard_roles")
+    }
+
+    SystemSetting.set_int("feature_ebay_listing_create_enabled", 1 if enabled else 0)
+
+    for plan_limit in PlanLimit.query.all():
+        plan_limit.can_create_listings = plan_limit.plan in allowed_plans
+    db.session.commit()
+
+    flash("Listing Wizard access updated successfully.", "ok")
+    return redirect(url_for("main.admin_plan_limits"))
 
 
 @main_bp.route("/admin/plan-limits/<string:plan>", methods=["POST"])
@@ -10073,7 +10108,6 @@ def admin_plan_limits():
 def admin_update_plan_limits(plan):
     """Update limits for a specific plan"""
     from qventory.models.subscription import PlanLimit
-    from qventory.models.system_setting import SystemSetting
 
     plan_limit = PlanLimit.query.filter_by(plan=plan).first_or_404()
 
@@ -10130,12 +10164,6 @@ def admin_update_plan_limits(plan):
         plan_limit.support_level = request.form.get("support_level", "community")
 
         db.session.commit()
-
-        if plan == "god":
-            SystemSetting.set_int(
-                "feature_ebay_listing_create_enabled",
-                1 if plan_limit.can_create_listings else 0
-            )
 
         flash(f"Plan limits for '{plan}' updated successfully", "ok")
 
