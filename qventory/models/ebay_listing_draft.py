@@ -24,6 +24,9 @@ class EbayListingDraft(db.Model):
     quantity = db.Column(db.Integer, nullable=True)
     price = db.Column(db.Numeric(10, 2), nullable=True)
     currency = db.Column(db.String(8), nullable=True, default="USD")
+    listing_format = db.Column(db.String(20), nullable=False, default="FIXED_PRICE")
+    accept_offers = db.Column(db.Boolean, nullable=False, default=False)
+    auction_start_price = db.Column(db.Numeric(10, 2), nullable=True)
 
     location_postal_code = db.Column(db.String(16), nullable=True)
     location_city = db.Column(db.String(80), nullable=True)
@@ -64,6 +67,9 @@ class EbayListingDraft(db.Model):
             "quantity": self.quantity,
             "price": float(self.price) if self.price is not None else None,
             "currency": self.currency,
+            "listing_format": self.listing_format or "FIXED_PRICE",
+            "accept_offers": bool(self.accept_offers),
+            "auction_start_price": float(self.auction_start_price) if self.auction_start_price is not None else None,
             "location": {
                 "postal_code": self.location_postal_code,
                 "city": self.location_city,

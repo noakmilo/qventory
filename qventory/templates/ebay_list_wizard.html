@@ -1,27 +1,44 @@
 {% extends "base_new.html" %}
-{% block title %}List on eBay – Qventory{% endblock %}
+{% block title %}List on eBay - Qventory{% endblock %}
 
 {% block content %}
 <div class="list-wizard">
   <div class="page-header">
     <div>
       <h1 class="page-title"><i class="fab fa-ebay"></i> List on eBay</h1>
-      <p class="page-subtitle">Create a new eBay listing</p>
+      <p class="page-subtitle">Create and publish a new eBay listing.</p>
     </div>
     <a class="btn" href="{{ url_for('ebay_list.ebay_list_drafts') }}">
       <i class="far fa-file-alt"></i> Manage Drafts
     </a>
   </div>
 
-  <div class="wizard-status" id="wizardStatus">Draft not loaded.</div>
-<div class="card listing-card">
-      <div class="image-tools">
+  <div class="wizard-status" id="wizardStatus">New unsaved draft.</div>
+
+  <div class="card listing-card image-workspace-card">
+    <div class="section-head">
+      <div>
+        <h2>Images</h2>
+        <p class="muted">Click or drop images here. Drag thumbnails to reorder; the first image is the main eBay photo.</p>
+      </div>
+    </div>
+
+    <div class="image-dropzone" id="imageDropzone" role="button" tabindex="0" aria-label="Add listing images">
+      <input type="file" id="imageInput" accept="image/*" multiple>
+      <div class="image-drop-copy">
+        <i class="far fa-images"></i>
+        <strong>Add listing images</strong>
+        <span>Click, drag & drop, or use your mobile camera/gallery chooser.</span>
+      </div>
+    </div>
+
+    <div class="image-tools">
       <div class="image-editor">
         <div class="open-image-editor-shell">
           <img id="cropperImage" alt="">
           <div class="image-empty-state" id="imageEmptyState">
-            <i class="far fa-images"></i>
-            <span>Select or add an image to edit.</span>
+            <i class="far fa-image"></i>
+            <span>Select an image to edit.</span>
           </div>
         </div>
         <div class="editor-controls">
@@ -49,23 +66,30 @@
             <button class="btn btn-primary" id="applyEditsBtn"><i class="fas fa-cloud-arrow-up"></i> Export & Upload</button>
             <button class="btn danger" id="deleteImageBtn"><i class="fas fa-trash"></i> Delete Image</button>
           </div>
-        <!--  <div class="muted" id="imageEditorHint">Cropper.js editor loaded. Select an image to edit.</div> 
-          -->
+          <div class="muted" id="imageEditorHint">Image edits stay local until you export and upload.</div>
         </div>
       </div>
       <div class="image-list" id="imageList"></div>
     </div>
   </div>
-</div>
+
   <div class="card listing-card">
-    <h2>Basic Info</h2>
+    <div class="section-head">
+      <h2>Basic Info</h2>
+    </div>
     <div class="form-grid">
-      <div>
-        <label class="label">Title</label>
+      <div class="span-2">
+        <div class="field-head">
+          <label class="label">Title</label>
+          <button class="btn btn-small" id="optimizeTitleBtn" type="button"><i class="fas fa-wand-magic-sparkles"></i> Optimize Title</button>
+        </div>
         <input class="input" type="text" id="titleInput" maxlength="80" placeholder="Item title">
       </div>
       <div>
-        <label class="label">SKU</label>
+        <div class="field-head">
+          <label class="label">SKU</label>
+          <button class="btn btn-small" id="generateSkuBtn" type="button"><i class="fas fa-barcode"></i> Generate</button>
+        </div>
         <input class="input" type="text" id="skuInput" placeholder="SKU">
       </div>
       <div>
@@ -79,7 +103,7 @@
         <input class="input" type="number" id="quantityInput" min="1" value="1">
       </div>
       <div>
-        <label class="label">Price</label>
+        <label class="label">Buy It Now Price</label>
         <input class="input" type="number" id="priceInput" min="0" step="0.01" placeholder="0.00">
       </div>
       <div>
@@ -89,25 +113,47 @@
         </select>
       </div>
     </div>
+  </div>
 
-    <div style="margin-top:16px;">
-      <div class="editor-header">
-        <h3 style="margin:0;">Description</h3>
+  <div class="card listing-card">
+    <h2>Listing Type</h2>
+    <div class="form-grid">
+      <div>
+        <label class="label">Format</label>
+        <select class="input" id="listingTypeInput">
+          <option value="FIXED_PRICE">Buy It Now</option>
+          <option value="FIXED_PRICE_OFFERS">Buy It Now + Accept Offers</option>
+          <option value="AUCTION">Auction</option>
+        </select>
+      </div>
+      <div id="auctionFields">
+        <label class="label">Auction Starting Price</label>
+        <input class="input" type="number" id="auctionStartPriceInput" min="0" step="0.01" placeholder="0.00">
+      </div>
+    </div>
+    <p class="muted">Auction listings use the starting price. Fixed price listings use the Buy It Now price.</p>
+  </div>
+
+  <div class="card listing-card">
+    <div class="editor-header">
+      <h2>Description</h2>
+      <div class="editor-actions">
+        <button class="btn btn-small" id="generateDescriptionBtn" type="button"><i class="fas fa-wand-magic-sparkles"></i> Generate with AI</button>
         <div class="editor-toggle">
-          <button class="btn btn-small active" id="visualModeBtn">Visual</button>
-          <button class="btn btn-small" id="htmlModeBtn">HTML</button>
+          <button class="btn btn-small active" id="visualModeBtn" type="button">Visual</button>
+          <button class="btn btn-small" id="htmlModeBtn" type="button">HTML</button>
         </div>
       </div>
-      <div class="editor-toolbar">
-        <button class="btn btn-small" data-cmd="bold"><strong>B</strong></button>
-        <button class="btn btn-small" data-cmd="italic"><em>I</em></button>
-        <button class="btn btn-small" data-cmd="underline"><u>U</u></button>
-        <button class="btn btn-small" data-cmd="insertUnorderedList">• List</button>
-        <button class="btn btn-small" data-cmd="insertOrderedList">1. List</button>
-      </div>
-      <div id="visualEditor" class="visual-editor" contenteditable="true"></div>
-      <textarea class="input" id="descriptionHtmlInput" rows="8" style="display:none;"></textarea>
     </div>
+    <div class="editor-toolbar">
+      <button class="btn btn-small" data-cmd="bold" type="button"><strong>B</strong></button>
+      <button class="btn btn-small" data-cmd="italic" type="button"><em>I</em></button>
+      <button class="btn btn-small" data-cmd="underline" type="button"><u>U</u></button>
+      <button class="btn btn-small" data-cmd="insertUnorderedList" type="button">List</button>
+      <button class="btn btn-small" data-cmd="insertOrderedList" type="button">1. List</button>
+    </div>
+    <div id="visualEditor" class="visual-editor" contenteditable="true"></div>
+    <textarea class="input" id="descriptionHtmlInput" rows="8" style="display:none;"></textarea>
   </div>
 
   <div class="card listing-card">
@@ -152,7 +198,7 @@
         <input class="input" type="number" id="packageHeightInput" min="0" step="0.1" placeholder="Optional">
       </div>
     </div>
-    <div class="muted" style="margin-top:8px;">Weight is required by eBay for calculated shipping policies. Dimensions are optional unless your policy or carrier service requires them.</div>
+    <p class="muted">Weight is required by eBay for calculated shipping policies.</p>
   </div>
 
   <div class="card listing-card">
@@ -161,7 +207,7 @@
       <div class="category-search">
         <i class="fas fa-search"></i>
         <input class="input" type="text" id="categorySearchInput" placeholder="Start typing an eBay category, for example: vintage stereo, vinyl records, jacket">
-        <button class="btn" id="categorySearchBtn">Search</button>
+        <button class="btn" id="categorySearchBtn" type="button">Search</button>
       </div>
       <div class="autocomplete" id="categoryAutocomplete"></div>
       <div class="category-selected" id="categorySelected">
@@ -171,31 +217,25 @@
   </div>
 
   <div class="card listing-card">
-    <h2>Item Specifics</h2>
-    <button class="btn" id="refreshSpecificsBtn" style="margin-bottom:8px;">Refresh Specifics</button>
-    <div id="specificsContainer" class="specifics-grid"></div>
-    <div class="muted" style="margin-top:8px;">Required fields are marked.</div>
-  </div>
-
-  <div class="card listing-card">
-    <div class="image-header">
+    <div class="section-head">
       <div>
-        <h2>Images</h2>
-        <p class="muted">Drag images to reorder them. The first image is the main eBay photo.</p>
+        <h2>Item Specifics</h2>
+        <p class="muted">Required fields are marked.</p>
       </div>
-      <label class="btn btn-primary image-upload-label">
-        <i class="fas fa-plus"></i> Add Images
-        <input type="file" id="imageInput" accept="image/*" multiple>
-      </label>
+      <div class="section-actions">
+        <button class="btn btn-small" id="fillSpecificsAiBtn" type="button"><i class="fas fa-wand-magic-sparkles"></i> Fill with AI</button>
+        <button class="btn btn-small" id="refreshSpecificsBtn" type="button">Refresh Specifics</button>
+      </div>
     </div>
-
+    <div id="specificsContainer" class="specifics-grid"></div>
+  </div>
 
   <div class="card listing-card">
     <h2>Review & Publish</h2>
     <div id="reviewSummary"></div>
     <div class="review-actions">
-      <button class="btn" id="saveDraftBtn">Save Draft</button>
-      <button class="btn btn-primary" id="publishBtn">List on eBay</button>
+      <button class="btn" id="saveDraftBtn" type="button">Save Draft</button>
+      <button class="btn btn-primary" id="publishBtn" type="button">List on eBay</button>
     </div>
     <div id="publishStatus" class="muted"></div>
   </div>
@@ -203,12 +243,22 @@
 
 <style>
   .list-wizard .wizard-status { margin-bottom:12px; color:var(--sub); font-size:13px; }
-  .list-wizard .page-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .list-wizard .page-header,
+  .list-wizard .section-head,
+  .list-wizard .field-head,
+  .list-wizard .editor-header,
+  .list-wizard .review-actions,
+  .list-wizard .section-actions,
+  .list-wizard .editor-actions { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .list-wizard .field-head { align-items:center; margin-bottom:4px; }
+  .list-wizard .section-actions,
+  .list-wizard .editor-actions,
+  .list-wizard .review-actions { justify-content:flex-start; align-items:center; }
   .list-wizard .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
-  .list-wizard .editor-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .list-wizard .span-2 { grid-column:span 2; }
   .list-wizard .editor-toggle { display:flex; gap:6px; }
   .list-wizard .editor-toolbar { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
-  .list-wizard .visual-editor { min-height:160px; border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(255,255,255,0.02); }
+  .list-wizard .visual-editor { min-height:190px; border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(255,255,255,0.02); }
   .list-wizard .category-picker { position:relative; display:grid; gap:10px; }
   .list-wizard .category-search { display:grid; grid-template-columns:22px minmax(0, 1fr) auto; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--card); }
   .list-wizard .category-search i { color:var(--sub); }
@@ -223,12 +273,16 @@
   .list-wizard .category-selected { border:1px dashed var(--border); border-radius:8px; padding:10px 12px; background:rgba(59,130,246,.06); }
   .list-wizard .category-selected strong { display:block; margin-bottom:2px; }
   .list-wizard .specifics-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
-  .list-wizard .image-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
-  .list-wizard .image-upload-label { position:relative; overflow:hidden; cursor:pointer; }
-  .list-wizard .image-upload-label input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+  .list-wizard .image-workspace-card { display:grid; gap:14px; }
+  .list-wizard .image-dropzone { position:relative; border:1px dashed var(--border); border-radius:8px; min-height:132px; display:flex; align-items:center; justify-content:center; background:rgba(59,130,246,.05); cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+  .list-wizard .image-dropzone.dragging { border-color:#38bdf8; background:rgba(56,189,248,.12); }
+  .list-wizard .image-dropzone input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .list-wizard .image-drop-copy { pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; color:var(--sub); padding:18px; }
+  .list-wizard .image-drop-copy i { font-size:34px; color:#38bdf8; }
+  .list-wizard .image-drop-copy strong { color:var(--text); }
   .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 310px; gap:16px; align-items:start; }
-  .list-wizard .open-image-editor-shell { height:560px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#111827; display:flex; align-items:center; justify-content:center; position:relative; }
-  .list-wizard #cropperImage { display:block; max-width:100%; max-height:560px; }
+  .list-wizard .open-image-editor-shell { height:520px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#111827; display:flex; align-items:center; justify-content:center; position:relative; }
+  .list-wizard #cropperImage { display:block; max-width:100%; max-height:520px; }
   .list-wizard .image-empty-state { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#94a3b8; background:#111827; }
   .list-wizard .image-empty-state i { font-size:38px; }
   .list-wizard .editor-controls { display:grid; gap:10px; margin-top:10px; }
@@ -244,10 +298,15 @@
   .list-wizard .image-card-actions { display:flex; gap:5px; flex-wrap:wrap; }
   .list-wizard .image-card .btn-small { padding:5px 7px; font-size:11px; }
   .list-wizard .danger { color:#f87171; border-color:rgba(248,113,113,.35); }
-  .list-wizard .review-actions { display:flex; gap:10px; margin-top:12px; }
   .list-wizard .muted { color:var(--sub); font-size:12px; }
-  @media (max-width: 800px) {
+  @media (max-width: 900px) {
     .list-wizard .image-tools { grid-template-columns:1fr; }
+    .list-wizard .span-2 { grid-column:span 1; }
+  }
+  @media (max-width: 640px) {
+    .list-wizard .category-search { grid-template-columns:22px minmax(0, 1fr); }
+    .list-wizard .category-search .btn { grid-column:1 / -1; }
+    .list-wizard .open-image-editor-shell { height:380px; }
   }
 </style>
 

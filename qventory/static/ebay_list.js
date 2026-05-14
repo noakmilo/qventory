@@ -22,6 +22,34 @@
     return `${base}/${id}`;
   }
 
+  function generateSku() {
+    const now = new Date();
+    const pad = (value) => String(value).padStart(2, '0');
+    const date = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const time = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    return `QV-${date}-${time}`;
+  }
+
+  function defaultDraft() {
+    return {
+      id: null,
+      title: '',
+      sku: generateSku(),
+      condition_id: '',
+      quantity: 1,
+      price: null,
+      currency: 'USD',
+      listing_format: 'FIXED_PRICE',
+      accept_offers: false,
+      auction_start_price: null,
+      category_id: null,
+      item_specifics: {},
+      package_details: {},
+      policy_ids: {},
+      images: []
+    };
+  }
+
   function escapeHtml(value) {
     return String(value || '').replace(/[&<>"']/g, (char) => ({
       '&': '&amp;',
@@ -33,26 +61,37 @@
   }
 
   async function createDraft() {
+    const previousDraft = draft || {};
     const res = await fetch(config.draftCreateUrl, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({})
     });
     const data = await res.json();
-    draft = data.draft;
-    setStatus(`Draft #${draft.id} loaded.`);
+    draft = {
+      ...data.draft,
+      category_id: previousDraft.category_id || data.draft.category_id || null,
+      item_specifics: previousDraft.item_specifics || data.draft.item_specifics || {}
+    };
+    const url = new URL(window.location.href);
+    url.searchParams.set('draft_id', draft.id);
+    window.history.replaceState({}, '', url);
+    setStatus(`Draft #${draft.id} created.`);
+    return draft;
   }
 
   async function loadDraftFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const draftId = params.get('draft_id');
     if (!draftId) {
-      await createDraft();
+      draft = defaultDraft();
+      setStatus('New unsaved draft. Click Save Draft when you are ready.');
       return;
     }
     const res = await fetch(draftUrl(config.draftBaseUrl, draftId));
     if (!res.ok) {
-      await createDraft();
+      draft = defaultDraft();
+      setStatus('Draft not found. Started a new unsaved draft.');
       return;
     }
     const data = await res.json();
@@ -60,12 +99,20 @@
     setStatus(`Draft #${draft.id} loaded.`);
   }
 
+  async function ensureDraftExists() {
+    if (draft && draft.id) return draft;
+    await createDraft();
+    return draft;
+  }
+
   function debounceSave() {
+    if (!draft || !draft.id) return;
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveDraft, 800);
+    saveTimer = setTimeout(() => saveDraft({createIfMissing: false}), 800);
   }
 
   function serializeDraftFromInputs() {
+    const listingType = qs('#listingTypeInput').value;
     return {
       title: qs('#titleInput').value.trim(),
       sku: qs('#skuInput').value.trim(),
@@ -74,6 +121,9 @@
       quantity: parseInt(qs('#quantityInput').value || '0', 10),
       price: parseFloat(qs('#priceInput').value || '0'),
       currency: qs('#currencyInput').value,
+      listing_format: listingType === 'AUCTION' ? 'AUCTION' : 'FIXED_PRICE',
+      accept_offers: listingType === 'FIXED_PRICE_OFFERS',
+      auction_start_price: readFloat('#auctionStartPriceInput'),
       package_details: serializePackageDetails(),
       description_html: getDescriptionHtml(),
       fulfillment_policy_id: qs('#fulfillmentPolicySelect').value || null,
@@ -111,25 +161,35 @@
     };
   }
 
-  async function saveDraft() {
-    if (!draft) return;
+  async function saveDraft(options = {}) {
+    const {createIfMissing = false, quiet = false, includeImages = true} = options;
+    if (!draft) draft = defaultDraft();
+    if (!draft.id) {
+      if (!createIfMissing) return;
+      await createDraft();
+    }
+    if (includeImages) {
+      await uploadPendingImages();
+    }
     normalizeMainImage();
     const payload = serializeDraftFromInputs();
     payload.category_id = draft.category_id || null;
     payload.item_specifics = draft.item_specifics || {};
-    payload.images = images.map((img, index) => ({
-      order: index,
-      filename: img.filename,
-      sha256: img.sha256,
-      width: img.width,
-      height: img.height,
-      cloudinary_url: img.cloudinary_url || img.image_url || null,
-      cloudinary_public_id: img.cloudinary_public_id || null,
-      image_url: img.cloudinary_url || img.image_url || img.url || null,
-      ebay_image_url: img.ebay_image_url,
-      ebay_image_location: img.ebay_image_location || null,
-      is_main: img.is_main || false
-    }));
+    if (includeImages) {
+      payload.images = images.map((img, index) => ({
+        order: index,
+        filename: img.filename,
+        sha256: img.sha256,
+        width: img.width,
+        height: img.height,
+        cloudinary_url: img.cloudinary_url || img.image_url || null,
+        cloudinary_public_id: img.cloudinary_public_id || null,
+        image_url: img.cloudinary_url || img.image_url || null,
+        ebay_image_url: img.ebay_image_url,
+        ebay_image_location: img.ebay_image_location || null,
+        is_main: img.is_main || false
+      }));
+    }
     const res = await fetch(draftUrl(config.draftBaseUrl, draft.id), {
       method: 'PATCH',
       headers: {'Content-Type': 'application/json'},
@@ -137,12 +197,24 @@
     });
     const data = await res.json();
     draft = data.draft;
-    setStatus(`Draft #${draft.id} saved at ${new Date().toLocaleTimeString()}`);
+    if (!quiet) {
+      setStatus(`Draft #${draft.id} saved at ${new Date().toLocaleTimeString()}`);
+    }
+  }
+
+  async function uploadPendingImages() {
+    if (!draft || !draft.id) return;
+    for (const img of images) {
+      if (img.blob && !img.cloudinary_url && !img.image_url) {
+        await uploadImage(img, {deferSave: true});
+      }
+    }
   }
 
   function bindInputAutosave() {
     [
       '#titleInput', '#skuInput', '#conditionInput', '#quantityInput', '#priceInput', '#currencyInput',
+      '#listingTypeInput', '#auctionStartPriceInput',
       '#packageWeightLbsInput', '#packageWeightOzInput', '#packageLengthInput', '#packageWidthInput', '#packageHeightInput'
     ]
       .forEach(sel => {
@@ -150,6 +222,7 @@
         el.addEventListener('input', debounceSave);
         el.addEventListener('change', debounceSave);
       });
+    qs('#listingTypeInput').addEventListener('change', toggleListingTypeFields);
     qs('#visualEditor').addEventListener('input', debounceSave);
     qs('#descriptionHtmlInput').addEventListener('input', debounceSave);
     ['#fulfillmentPolicySelect', '#paymentPolicySelect', '#returnPolicySelect']
@@ -159,11 +232,19 @@
   function renderDraftToInputs() {
     if (!draft) return;
     qs('#titleInput').value = draft.title || '';
-    qs('#skuInput').value = draft.sku || '';
+    qs('#skuInput').value = draft.sku || generateSku();
     qs('#conditionInput').value = draft.condition_id || '';
     qs('#quantityInput').value = draft.quantity || 1;
     qs('#priceInput').value = draft.price || '';
     qs('#currencyInput').value = draft.currency || 'USD';
+    const listingType = draft.listing_format === 'AUCTION'
+      ? 'AUCTION'
+      : draft.accept_offers
+        ? 'FIXED_PRICE_OFFERS'
+        : 'FIXED_PRICE';
+    qs('#listingTypeInput').value = listingType;
+    qs('#auctionStartPriceInput').value = draft.auction_start_price || '';
+    toggleListingTypeFields();
     const packageDetails = draft.package_details || {};
     qs('#packageWeightLbsInput').value = packageDetails.weight_lbs || '';
     qs('#packageWeightOzInput').value = packageDetails.weight_oz || '';
@@ -172,6 +253,11 @@
     qs('#packageHeightInput').value = packageDetails.height_in || '';
     setDescriptionHtml(draft.description_html || '');
     populateConditionSelect([], draft.condition_id || '');
+  }
+
+  function toggleListingTypeFields() {
+    const isAuction = qs('#listingTypeInput').value === 'AUCTION';
+    qs('#auctionFields').style.display = isAuction ? 'block' : 'none';
   }
 
   function applyCommand(cmd) {
@@ -340,6 +426,7 @@
   }
 
   async function selectCategory(cat) {
+    if (!draft) draft = defaultDraft();
     draft.category_id = cat.category_id;
     renderSelectedCategory(cat);
     qs('#categorySearchInput').value = cat.full_path || cat.name || '';
@@ -418,6 +505,48 @@
     const data = await res.json();
     specificsSchema = data.specifics;
     renderSpecificsForm();
+  }
+
+  async function runDraftAi(action, label) {
+    try {
+      setStatus(`${label}...`);
+      await saveDraft({createIfMissing: true, quiet: true});
+      const res = await fetch(`${config.draftBaseUrl}/${draft.id}/ai/${action}`, {method: 'POST'});
+      const data = await res.json();
+      if (!data.ok) {
+        setStatus(`${label} failed: ${data.details || data.error || 'unknown error'}`);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      setStatus(`${label} failed.`);
+      return null;
+    }
+  }
+
+  async function optimizeTitleWithAi() {
+    const data = await runDraftAi('title', 'Optimizing title');
+    if (!data || !data.title) return;
+    qs('#titleInput').value = data.title;
+    setStatus('Title optimized with AI.');
+    await saveDraft({createIfMissing: true});
+  }
+
+  async function generateDescriptionWithAi() {
+    const data = await runDraftAi('description', 'Generating description');
+    if (!data || !data.description_html) return;
+    setDescriptionHtml(data.description_html);
+    setStatus('Description generated with AI.');
+    await saveDraft({createIfMissing: true});
+  }
+
+  async function fillSpecificsWithAi() {
+    const data = await runDraftAi('specifics', 'Filling item specifics');
+    if (!data || !data.item_specifics) return;
+    draft.item_specifics = data.item_specifics;
+    renderSpecificsForm();
+    setStatus('Item specifics filled with AI.');
+    await saveDraft({createIfMissing: true});
   }
 
   function renderSpecificsForm() {
@@ -594,13 +723,20 @@
       images.push(img);
       renderImageList();
       selectImage(images.length - 1);
-      await uploadImage(img);
+      if (draft && draft.id) {
+        await uploadImage(img);
+      } else {
+        setStatus('Image ready locally. Click Save Draft to upload it.');
+      }
     } catch (err) {
       setStatus(`Failed to process image ${file.name}. If it's HEIC/HEIF, convert to JPG first.`);
     }
   }
 
-  async function uploadImage(img) {
+  async function uploadImage(img, options = {}) {
+    const {deferSave = false} = options;
+    await ensureDraftExists();
+    const previousDraft = draft || {};
     const formData = new FormData();
     formData.append('draft_id', draft.id);
     formData.append('filename', img.filename);
@@ -627,10 +763,16 @@
     img.ebay_image_url = uploadData.image.ebay_image_url || null;
     img.url = img.cloudinary_url || img.url;
     delete img.replace_existing;
-    draft = uploadData.draft;
+    draft = {
+      ...uploadData.draft,
+      category_id: previousDraft.category_id || uploadData.draft.category_id || null,
+      item_specifics: previousDraft.item_specifics || uploadData.draft.item_specifics || {}
+    };
     renderImageList();
     setStatus('Image saved to Cloudinary. It will upload to eBay when you publish.');
-    debounceSave();
+    if (!deferSave) {
+      debounceSave();
+    }
   }
 
   function renderImageList() {
@@ -789,7 +931,12 @@
       img.replace_existing = true;
       renderImageList();
       ensureOpenImageEditor(img);
-      await uploadImage(img);
+      if (draft && draft.id) {
+        await uploadImage(img);
+      } else {
+        delete img.replace_existing;
+        setStatus('Image edits are ready locally. Click Save Draft to upload them.');
+      }
     } catch (err) {
       setStatus('Could not export this image. If it was loaded from a saved eBay URL, re-add the original file and edit it locally.');
     }
@@ -809,6 +956,40 @@
     }
   });
   qs('#refreshSpecificsBtn').addEventListener('click', refreshSpecifics);
+  qs('#optimizeTitleBtn').addEventListener('click', optimizeTitleWithAi);
+  qs('#generateDescriptionBtn').addEventListener('click', generateDescriptionWithAi);
+  qs('#fillSpecificsAiBtn').addEventListener('click', fillSpecificsWithAi);
+  qs('#generateSkuBtn').addEventListener('click', () => {
+    qs('#skuInput').value = generateSku();
+    debounceSave();
+  });
+
+  const imageDropzone = qs('#imageDropzone');
+  imageDropzone.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'imageInput') return;
+    qs('#imageInput').click();
+  });
+  imageDropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      qs('#imageInput').click();
+    }
+  });
+  imageDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    imageDropzone.classList.add('dragging');
+  });
+  imageDropzone.addEventListener('dragleave', () => {
+    imageDropzone.classList.remove('dragging');
+  });
+  imageDropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    imageDropzone.classList.remove('dragging');
+    const files = Array.from(e.dataTransfer.files || []).filter(file => file.type.startsWith('image/'));
+    for (const file of files) {
+      await processFile(file);
+    }
+  });
 
   qs('#imageInput').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files || []);
@@ -849,13 +1030,13 @@
   });
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
-    await saveDraft();
+    await saveDraft({createIfMissing: true});
     qs('#publishStatus').textContent = 'Draft saved.';
   });
 
   qs('#publishBtn').addEventListener('click', async () => {
     qs('#publishStatus').textContent = 'Publishing...';
-    await saveDraft();
+    await saveDraft({createIfMissing: true});
     const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
     const data = await res.json();
     if (data.ok) {
@@ -884,6 +1065,8 @@
       }));
       renderImageList();
       selectImage(0);
+    } else {
+      renderImageList();
     }
     bindInputAutosave();
     setupEditorToggle();

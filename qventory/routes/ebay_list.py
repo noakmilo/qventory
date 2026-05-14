@@ -1,5 +1,6 @@
 from datetime import datetime
 import os
+import json
 import bleach
 from flask import Blueprint, jsonify, request, render_template
 from flask_login import login_required, current_user
@@ -83,6 +84,8 @@ ALLOWED_CONDITION_IDS = {
     "USED_ACCEPTABLE",
     "FOR_PARTS_OR_NOT_WORKING",
 }
+ALLOWED_LISTING_FORMATS = {"FIXED_PRICE", "AUCTION"}
+AI_SCENARIO = "ai_research"
 
 
 def _sanitize_html(html: str | None) -> str | None:
@@ -197,6 +200,10 @@ def _build_package_weight_and_size(package_details: dict | None):
     return package
 
 
+def _active_listing_format(draft: EbayListingDraft) -> str:
+    return draft.listing_format if draft.listing_format in ALLOWED_LISTING_FORMATS else "FIXED_PRICE"
+
+
 def _validate_draft(draft: EbayListingDraft):
     errors = {}
     if not draft.title:
@@ -233,7 +240,12 @@ def _validate_draft(draft: EbayListingDraft):
         errors["quantity"] = "Quantity must be at least 1."
 
     if draft.price is None or float(draft.price) <= 0:
-        errors["price"] = "Price must be greater than 0."
+        if _active_listing_format(draft) == "FIXED_PRICE":
+            errors["price"] = "Buy It Now price must be greater than 0."
+
+    if _active_listing_format(draft) == "AUCTION":
+        if draft.auction_start_price is None or float(draft.auction_start_price) <= 0:
+            errors["auction_start_price"] = "Auction start price must be greater than 0."
 
     if not draft.currency:
         errors["currency"] = "Currency is required."
@@ -273,6 +285,91 @@ def _validate_draft(draft: EbayListingDraft):
             errors["item_specifics"] = "Unable to validate item specifics."
 
     return errors
+
+
+def _openai_client():
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        return None, f"OpenAI library not available: {exc}"
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None, "OpenAI API key not configured."
+
+    try:
+        return OpenAI(api_key=api_key), None
+    except Exception as exc:
+        return None, f"Failed to initialize OpenAI client: {exc}"
+
+
+def _ai_token_error_response():
+    can_use, remaining = current_user.can_use_ai_tokens(AI_SCENARIO)
+    if can_use:
+        return None
+    return jsonify({
+        "ok": False,
+        "error": "ai_limit_reached",
+        "remaining": remaining,
+    }), 403
+
+
+def _parse_ai_json(content: str | None):
+    if not content:
+        return {}
+    text = content.strip()
+    if text.startswith("```json"):
+        text = text[7:].strip()
+    elif text.startswith("```"):
+        text = text[3:].strip()
+    if text.endswith("```"):
+        text = text[:-3].strip()
+    return json.loads(text)
+
+
+def _call_listing_ai(messages, max_tokens=900):
+    client, error = _openai_client()
+    if error:
+        return None, error
+    model = os.environ.get("OPENAI_EBAY_LISTING_MODEL", "gpt-4o-mini")
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.25,
+        max_tokens=max_tokens,
+        response_format={"type": "json_object"},
+    )
+    return _parse_ai_json(response.choices[0].message.content), None
+
+
+def _draft_ai_context(draft: EbayListingDraft):
+    return {
+        "title": draft.title or "",
+        "description_html": draft.description_html_sanitized or draft.description_html or "",
+        "category_id": draft.category_id,
+        "condition": draft.condition_label or draft.condition_id or "",
+        "price": float(draft.price) if draft.price is not None else None,
+        "item_specifics": draft.item_specifics_json or {},
+    }
+
+
+def _normalize_ai_specifics(raw_specifics):
+    if not isinstance(raw_specifics, dict):
+        return {}
+    normalized = {}
+    for key, value in raw_specifics.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        if isinstance(value, list):
+            values = [str(v).strip() for v in value if str(v).strip()]
+        elif value is None:
+            values = []
+        else:
+            values = [str(value).strip()] if str(value).strip() else []
+        if values:
+            normalized[name] = values[:5]
+    return normalized
 
 
 @ebay_list_bp.route("/ebay/list")
@@ -351,6 +448,7 @@ def update_draft(draft_id):
         "title", "description_html", "category_id",
         "item_specifics", "condition_id", "condition_label", "sku",
         "quantity", "price", "currency",
+        "listing_format", "accept_offers", "auction_start_price",
         "images", "status", "merchant_location_key",
         "package_details",
         "fulfillment_policy_id", "payment_policy_id", "return_policy_id",
@@ -381,6 +479,12 @@ def update_draft(draft_id):
                 draft.images_json = value
         elif key == "package_details":
             draft.package_details_json = value if isinstance(value, dict) else {}
+        elif key == "listing_format":
+            draft.listing_format = value if value in ALLOWED_LISTING_FORMATS else "FIXED_PRICE"
+        elif key == "accept_offers":
+            draft.accept_offers = bool(value)
+        elif key in {"price", "auction_start_price"}:
+            setattr(draft, key, None if value is None or value == "" else value)
         elif key in {"fulfillment_policy_id", "payment_policy_id", "return_policy_id"}:
             setattr(draft, key, value)
         else:
@@ -400,6 +504,151 @@ def validate_draft(draft_id):
         return jsonify({"ok": False, "error": "not_found"}), 404
     errors = _validate_draft(draft)
     return jsonify({"ok": len(errors) == 0, "errors": errors})
+
+
+@ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/ai/title", methods=["POST"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def ai_optimize_title(draft_id):
+    draft = _draft_or_404(draft_id)
+    if not draft:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    token_error = _ai_token_error_response()
+    if token_error:
+        return token_error
+
+    context = _draft_ai_context(draft)
+    if not context["title"]:
+        return jsonify({"ok": False, "error": "title_required"}), 400
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You optimize eBay listing titles. Return only JSON with key title. "
+                "The title must be natural, search-friendly, no keyword stuffing, and 80 characters or fewer."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(context, ensure_ascii=True),
+        },
+    ]
+    try:
+        data, error = _call_listing_ai(messages, max_tokens=220)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "openai_error", "details": str(exc)}), 500
+    if error:
+        return jsonify({"ok": False, "error": error}), 500
+
+    title = str((data or {}).get("title") or "").strip()[:80]
+    if not title:
+        return jsonify({"ok": False, "error": "empty_ai_response"}), 502
+    current_user.consume_ai_tokens(AI_SCENARIO)
+    return jsonify({"ok": True, "title": title})
+
+
+@ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/ai/description", methods=["POST"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def ai_generate_description(draft_id):
+    draft = _draft_or_404(draft_id)
+    if not draft:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    token_error = _ai_token_error_response()
+    if token_error:
+        return token_error
+
+    context = _draft_ai_context(draft)
+    if not context["title"]:
+        return jsonify({"ok": False, "error": "title_required"}), 400
+
+    image_url = None
+    images = _draft_images(draft)
+    if images:
+        image_url = _draft_image_source_url(images[0])
+
+    prompt = (
+        "Create an enriched eBay item description from this listing context. "
+        "Be accurate and do not invent exact specs not visible or provided. "
+        "Return only JSON with key description_html. Use simple HTML tags: p, ul, li, strong."
+    )
+    user_content = [{"type": "text", "text": f"{prompt}\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"}]
+    if image_url:
+        user_content.append({"type": "image_url", "image_url": {"url": image_url}})
+
+    messages = [
+        {"role": "system", "content": "You write concise, buyer-friendly eBay descriptions and return strict JSON."},
+        {"role": "user", "content": user_content},
+    ]
+    try:
+        data, error = _call_listing_ai(messages, max_tokens=900)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "openai_error", "details": str(exc)}), 500
+    if error:
+        return jsonify({"ok": False, "error": error}), 500
+
+    description_html = _sanitize_html((data or {}).get("description_html"))
+    if not description_html:
+        return jsonify({"ok": False, "error": "empty_ai_response"}), 502
+    current_user.consume_ai_tokens(AI_SCENARIO)
+    return jsonify({"ok": True, "description_html": description_html})
+
+
+@ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/ai/specifics", methods=["POST"])
+@login_required
+@require_feature_flag("FEATURE_EBAY_LISTING_CREATE_ENABLED")
+@require_plan_feature("create_listings")
+def ai_fill_specifics(draft_id):
+    draft = _draft_or_404(draft_id)
+    if not draft:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    token_error = _ai_token_error_response()
+    if token_error:
+        return token_error
+    if not draft.category_id:
+        return jsonify({"ok": False, "error": "category_required"}), 400
+
+    try:
+        specifics_schema = get_category_specifics(draft.category_id).to_dict()
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "specifics_lookup_failed", "details": str(exc)}), 500
+
+    context = _draft_ai_context(draft)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You fill eBay item specifics from title and description. "
+                "Use only fields present in the provided schema. Do not guess unknown brand, model, size, or year. "
+                "Return JSON with key item_specifics where each value is an array of strings."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps({
+                "listing": context,
+                "specifics_schema": {
+                    "required_fields": specifics_schema.get("required_fields", []),
+                    "optional_fields": specifics_schema.get("optional_fields", [])[:40],
+                },
+            }, ensure_ascii=True),
+        },
+    ]
+    try:
+        data, error = _call_listing_ai(messages, max_tokens=1000)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": "openai_error", "details": str(exc)}), 500
+    if error:
+        return jsonify({"ok": False, "error": error}), 500
+
+    current = draft.item_specifics_json or {}
+    generated = _normalize_ai_specifics((data or {}).get("item_specifics"))
+    merged = {**current, **generated}
+    current_user.consume_ai_tokens(AI_SCENARIO)
+    return jsonify({"ok": True, "item_specifics": merged})
 
 
 @ebay_list_bp.route("/api/ebay/drafts/<int:draft_id>/publish", methods=["POST"])
@@ -465,24 +714,36 @@ def publish_draft(draft_id):
         db.session.commit()
         return jsonify({"ok": False, "error": "inventory_item_failed", "details": inv_result.get("error")}), 400
 
+    listing_format = _active_listing_format(draft)
+    pricing_summary = {}
+    if listing_format == "AUCTION":
+        pricing_summary["auctionStartPrice"] = {
+            "value": str(draft.auction_start_price),
+            "currency": draft.currency or "USD",
+        }
+    else:
+        pricing_summary["price"] = {
+            "value": str(draft.price),
+            "currency": draft.currency or "USD",
+        }
+
+    listing_policies = {
+        "fulfillmentPolicyId": draft.fulfillment_policy_id,
+        "paymentPolicyId": draft.payment_policy_id,
+        "returnPolicyId": draft.return_policy_id,
+    }
+    if listing_format == "FIXED_PRICE" and draft.accept_offers:
+        listing_policies["bestOfferTerms"] = {"bestOfferEnabled": True}
+
     offer_payload = {
         "sku": draft.sku,
         "marketplaceId": "EBAY_US",
-        "format": "FIXED_PRICE",
+        "format": listing_format,
         "availableQuantity": int(draft.quantity or 0),
         "categoryId": draft.category_id,
         "merchantLocationKey": draft.merchant_location_key,
-        "listingPolicies": {
-            "fulfillmentPolicyId": draft.fulfillment_policy_id,
-            "paymentPolicyId": draft.payment_policy_id,
-            "returnPolicyId": draft.return_policy_id,
-        },
-        "pricingSummary": {
-            "price": {
-                "value": str(draft.price),
-                "currency": draft.currency or "USD",
-            }
-        }
+        "listingPolicies": listing_policies,
+        "pricingSummary": pricing_summary,
     }
 
     offer_result = create_offer(current_user.id, offer_payload)
@@ -539,6 +800,9 @@ def duplicate_draft(draft_id):
         quantity=draft.quantity,
         price=draft.price,
         currency=draft.currency,
+        listing_format=draft.listing_format,
+        accept_offers=draft.accept_offers,
+        auction_start_price=draft.auction_start_price,
         location_postal_code=draft.location_postal_code,
         location_city=draft.location_city,
         location_state=draft.location_state,
