@@ -8,6 +8,7 @@
   let cropper = null;
   let flipX = 1;
   let flipY = 1;
+  let currentAspectMode = 'free';
   let categorySearchTimer = null;
   const MAX_IMAGES = 24;
 
@@ -143,6 +144,16 @@
       return qs('#visualEditor').innerHTML;
     }
     return qs('#descriptionHtmlInput').value;
+  }
+
+  function setAiGenerating(targets, isGenerating) {
+    targets.forEach((target) => {
+      if (!target) return;
+      target.classList.toggle('ai-generating', isGenerating);
+      target.classList.toggle('ai-generating-text', isGenerating);
+      if ('disabled' in target) target.disabled = isGenerating;
+      if (target.isContentEditable) target.setAttribute('aria-busy', isGenerating ? 'true' : 'false');
+    });
   }
 
   function readFloat(selector) {
@@ -559,19 +570,34 @@
   }
 
   async function optimizeTitleWithAi() {
-    const data = await runDraftAi('title', 'Optimizing title');
-    if (!data || !data.title) return;
-    qs('#titleInput').value = data.title;
-    setStatus('Title optimized with AI.');
-    await saveDraft({createIfMissing: true});
+    const titleInput = qs('#titleInput');
+    const button = qs('#optimizeTitleBtn');
+    setAiGenerating([titleInput, button], true);
+    try {
+      const data = await runDraftAi('title', 'Optimizing title');
+      if (!data || !data.title) return;
+      titleInput.value = data.title;
+      setStatus('Title optimized with AI.');
+      await saveDraft({createIfMissing: true});
+    } finally {
+      setAiGenerating([titleInput, button], false);
+    }
   }
 
   async function generateDescriptionWithAi() {
-    const data = await runDraftAi('description', 'Generating description');
-    if (!data || !data.description_html) return;
-    setDescriptionHtml(data.description_html);
-    setStatus('Description generated with AI.');
-    await saveDraft({createIfMissing: true});
+    const visualEditor = qs('#visualEditor');
+    const htmlEditor = qs('#descriptionHtmlInput');
+    const button = qs('#generateDescriptionBtn');
+    setAiGenerating([visualEditor, htmlEditor, button], true);
+    try {
+      const data = await runDraftAi('description', 'Generating description');
+      if (!data || !data.description_html) return;
+      setDescriptionHtml(data.description_html);
+      setStatus('Description generated with AI.');
+      await saveDraft({createIfMissing: true});
+    } finally {
+      setAiGenerating([visualEditor, htmlEditor, button], false);
+    }
   }
 
   async function fillSpecificsWithAi() {
@@ -703,14 +729,18 @@
     imageEl.src = img.url;
     cropper = new window.Cropper(imageEl, {
       viewMode: 1,
-      autoCropArea: 0.92,
+      autoCropArea: 1,
+      aspectRatio: aspectRatioForMode(currentAspectMode),
       background: false,
       responsive: false,
       checkOrientation: true,
       movable: true,
       zoomable: true,
       rotatable: true,
-      scalable: true
+      scalable: true,
+      ready() {
+        fitCropBoxToCanvas();
+      }
     });
     if (hintEl) {
       hintEl.textContent = img.blob
@@ -720,6 +750,50 @@
     qs('#imageBrightnessRange').value = '0';
     qs('#imageContrastRange').value = '0';
     updateTonePreview();
+  }
+
+  function aspectRatioForMode(mode) {
+    if (mode === 'square') return 1;
+    if (mode === 'landscape') return 4 / 3;
+    return NaN;
+  }
+
+  function fitCropBoxToCanvas() {
+    if (!cropper) return;
+    const canvas = cropper.getCanvasData();
+    if (!canvas || !canvas.width || !canvas.height) return;
+    const aspectRatio = aspectRatioForMode(currentAspectMode);
+    if (Number.isFinite(aspectRatio)) {
+      let width = canvas.width;
+      let height = width / aspectRatio;
+      if (height > canvas.height) {
+        height = canvas.height;
+        width = height * aspectRatio;
+      }
+      cropper.setCropBoxData({
+        left: canvas.left + ((canvas.width - width) / 2),
+        top: canvas.top + ((canvas.height - height) / 2),
+        width,
+        height
+      });
+      return;
+    }
+    cropper.setCropBoxData({
+      left: canvas.left,
+      top: canvas.top,
+      width: canvas.width,
+      height: canvas.height
+    });
+  }
+
+  function setAspectMode(mode) {
+    currentAspectMode = mode;
+    document.querySelectorAll('[data-aspect]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.aspect === mode);
+    });
+    if (!cropper) return;
+    cropper.setAspectRatio(aspectRatioForMode(mode));
+    fitCropBoxToCanvas();
   }
 
   function updateTonePreview() {
@@ -1074,6 +1148,10 @@
     qs('#imageBrightnessRange').value = '0';
     qs('#imageContrastRange').value = '0';
     updateTonePreview();
+    setAspectMode(currentAspectMode);
+  });
+  document.querySelectorAll('[data-aspect]').forEach((btn) => {
+    btn.addEventListener('click', () => setAspectMode(btn.dataset.aspect));
   });
   qs('#rotateLeftBtn').addEventListener('click', () => {
     if (cropper) cropper.rotate(-90);

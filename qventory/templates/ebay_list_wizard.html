@@ -40,6 +40,9 @@
         <div class="editor-controls">
           <div class="editor-tool-row">
             <button class="btn btn-small" id="cropResetBtn" title="Reset crop"><i class="fas fa-undo"></i> Reset</button>
+            <button class="btn btn-small active" id="aspectFreeBtn" data-aspect="free" title="Free crop">Free</button>
+            <button class="btn btn-small" id="aspectSquareBtn" data-aspect="square" title="Square crop">1:1</button>
+            <button class="btn btn-small" id="aspectLandscapeBtn" data-aspect="landscape" title="Landscape crop">4:3</button>
             <button class="btn btn-small" id="rotateLeftBtn" title="Rotate left"><i class="fas fa-rotate-left"></i></button>
             <button class="btn btn-small" id="rotateRightBtn" title="Rotate right"><i class="fas fa-rotate-right"></i></button>
             <button class="btn btn-small" id="flipHorizontalBtn" title="Flip horizontal"><i class="fas fa-arrows-left-right"></i></button>
@@ -262,6 +265,11 @@
   .list-wizard .editor-toggle { display:flex; gap:6px; }
   .list-wizard .editor-toolbar { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .list-wizard .visual-editor { min-height:190px; border:1px solid var(--border); border-radius:8px; padding:10px; background:rgba(255,255,255,0.02); }
+  .list-wizard .ai-generating { position:relative; overflow:hidden; border-color:rgba(56,189,248,.75) !important; box-shadow:0 0 0 3px rgba(56,189,248,.16); }
+  .list-wizard .ai-generating::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(100deg, transparent 0%, rgba(56,189,248,.18) 45%, rgba(255,255,255,.22) 50%, rgba(56,189,248,.18) 55%, transparent 100%); transform:translateX(-100%); animation:aiTextShimmer 1.15s linear infinite; }
+  .list-wizard .ai-generating-text { background-image:linear-gradient(90deg, var(--text), #38bdf8, var(--text)); background-size:220% 100%; animation:aiTextPulse 1.3s ease-in-out infinite; }
+  @keyframes aiTextShimmer { to { transform:translateX(100%); } }
+  @keyframes aiTextPulse { 0%,100% { background-position:0% 50%; } 50% { background-position:100% 50%; } }
   .list-wizard .category-picker { position:relative; display:grid; gap:10px; }
   .list-wizard .category-search { display:grid; grid-template-columns:22px minmax(0, 1fr) auto; align-items:center; gap:8px; border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:var(--card); }
   .list-wizard .category-search i { color:var(--sub); }
@@ -289,6 +297,7 @@
   .list-wizard .editor-tool-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .list-wizard .editor-controls label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--text); }
   .list-wizard .editor-controls input[type="range"] { width:110px; }
+  .list-wizard .editor-controls .btn.active { border-color:#38bdf8; color:#38bdf8; background:rgba(56,189,248,.12); }
   .list-wizard .image-list { display:grid; gap:10px; }
   .list-wizard .image-grid { grid-template-columns:repeat(auto-fill, minmax(128px, 1fr)); align-items:stretch; }
   .list-wizard .image-card,
