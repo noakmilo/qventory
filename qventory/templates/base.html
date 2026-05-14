@@ -161,7 +161,7 @@
     <div class="cookie-content">
       <div class="cookie-text">
         <h3 id="cookieTitle">🍪 Cookie Notice</h3>
-        <p id="cookieDesc">We use essential cookies to keep you logged in and remember your preferences. We do NOT use tracking, analytics, or advertising cookies. <a href="{{ url_for('main.privacy_policy') }}" style="color:var(--accent);">Privacy Policy</a></p>
+        <p id="cookieDesc">We use essential cookies to keep you logged in and remember your preferences. We do NOT use tracking, analytics, or advertising cookies. <a href="{{ url_for('main.privacy_policy') }}" style="color:var(--text);text-decoration:underline;font-weight:700;text-underline-offset:3px;">Privacy Policy</a></p>
       </div>
       <div class="cookie-actions">
         <button id="rejectCookies" class="btn cookie-reject">Reject</button>
@@ -293,7 +293,7 @@
         // Show a message
         const msg = document.createElement('div');
         msg.className = 'cookie-rejected-msg';
-        msg.innerHTML = '<p>Cookies rejected. Only essential session cookies will be used. <a href="{{ url_for("main.privacy_policy") }}" style="color:var(--accent);text-decoration:underline;">Privacy Policy</a></p>';
+        msg.innerHTML = '<p>Cookies rejected. Only essential session cookies will be used. <a href="{{ url_for("main.privacy_policy") }}" style="color:var(--text);text-decoration:underline;font-weight:700;text-underline-offset:3px;">Privacy Policy</a></p>';
         document.body.appendChild(msg);
         setTimeout(()=> msg.remove(), 5000);
       });

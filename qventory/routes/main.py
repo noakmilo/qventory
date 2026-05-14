@@ -273,7 +273,31 @@ def require_admin(f):
 
 @main_bp.route("/")
 def landing():
-    return render_template("landing.html")
+    from qventory.models.subscription import PlanLimit
+    from qventory.models.ai_token import AITokenConfig
+    from qventory.models.system_setting import SystemSetting
+
+    plans = PlanLimit.query.filter(
+        ~PlanLimit.plan.in_(["early_adopter", "god", "enterprise"])
+    ).order_by(
+        db.case(
+            (PlanLimit.plan == "free", 1),
+            (PlanLimit.plan == "premium", 2),
+            (PlanLimit.plan == "plus", 3),
+            (PlanLimit.plan == "pro", 4),
+            else_=99
+        )
+    ).all()
+
+    token_configs = {cfg.role: cfg for cfg in AITokenConfig.query.all()}
+    trial_days = SystemSetting.get_int("stripe_trial_days", 10)
+
+    return render_template(
+        "landing.html",
+        plans=plans,
+        token_configs=token_configs,
+        trial_days=trial_days
+    )
 
 
 @main_bp.route("/stripe/webhook", methods=["POST"])

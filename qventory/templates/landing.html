@@ -65,11 +65,11 @@
 
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
     <a class="btn hero-cta-btn" href="{{ url_for('auth.register') }}"
-       style="background:#90baff;color:#ffffff;border:none;padding:14px 26px;font-weight:700;font-size:16px;box-shadow:0 12px 26px rgba(144,186,255,0.35);">
+       style="background:#1d4ed8;color:#ffffff;border:none;padding:14px 26px;font-weight:700;font-size:16px;box-shadow:0 12px 26px rgba(29,78,216,0.35);">
       Start Free
     </a>
     <a class="btn hero-cta-btn" href="{{ url_for('auth.login') }}"
-       style="background:#90baff;color:#ffffff;border:none;padding:14px 26px;font-weight:700;font-size:16px;box-shadow:0 12px 26px rgba(144,186,255,0.35);">
+       style="background:#1d4ed8;color:#ffffff;border:none;padding:14px 26px;font-weight:700;font-size:16px;box-shadow:0 12px 26px rgba(29,78,216,0.35);">
       Sign In
     </a>
   </div>
@@ -399,6 +399,114 @@
     padding:0 18px 18px;
     color:var(--sub);
     line-height:1.55;
+  }
+  .landing-pricing-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-bottom:18px;
+  }
+  .landing-pricing-header h2 {
+    margin:0 0 8px;
+  }
+  .landing-pricing-header p {
+    margin:0;
+    color:var(--sub);
+    max-width:760px;
+  }
+  .landing-pricing-grid {
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+    gap:16px;
+  }
+  .landing-plan-card {
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    min-height:100%;
+    padding:20px;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--glass-bg-strong);
+    overflow:hidden;
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .landing-plan-card:hover {
+    transform:translateY(-3px);
+    border-color:rgba(96,165,250,.45);
+    box-shadow:0 18px 46px rgba(0,0,0,.2);
+  }
+  .landing-plan-card:before {
+    content:"";
+    position:absolute;
+    inset:0 0 auto 0;
+    height:3px;
+    background:linear-gradient(90deg, #60a5fa, rgba(52,211,153,.65));
+  }
+  .landing-plan-name {
+    margin:0 0 8px;
+    color:var(--accent);
+    text-transform:capitalize;
+  }
+  .landing-plan-price {
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    margin-bottom:12px;
+  }
+  .landing-plan-price strong {
+    font-size:32px;
+    color:var(--text);
+    line-height:1;
+  }
+  .landing-plan-limit {
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:var(--muted);
+    text-align:center;
+    margin-bottom:14px;
+  }
+  .landing-plan-limit strong {
+    display:block;
+    color:var(--accent);
+    font-size:22px;
+  }
+  .landing-plan-features {
+    list-style:none;
+    padding:0;
+    margin:0 0 18px;
+    display:grid;
+    gap:10px;
+    flex:1;
+  }
+  .landing-plan-features li {
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    color:var(--text);
+    font-size:14px;
+  }
+  .landing-plan-features i {
+    width:18px;
+    margin-top:2px;
+    color:var(--accent);
+  }
+  .landing-plan-features .is-disabled {
+    color:var(--sub);
+    text-decoration:line-through;
+  }
+  .landing-plan-features .is-disabled i {
+    color:var(--sub);
+  }
+  .landing-plan-cta {
+    width:100%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
   }
   .dash-preview{
     margin:0 20px 10px;
@@ -758,6 +866,77 @@
     </div>
   </div>
 </section>
+
+{# ===== PRICING ===== #}
+{% if plans %}
+<section class="card landing-pricing-section" style="margin:20px;">
+  <div class="landing-pricing-header">
+    <div>
+      <div class="landing-eyebrow">Pricing</div>
+      <h2><i class="fas fa-credit-card landing-title-icon"></i>Choose the plan that fits your inventory</h2>
+      <p>Every paid plan includes a {{ trial_days }}-day trial before billing starts. Select a plan, create your account, verify your email, and Qventory will send you to checkout for that specific plan.</p>
+    </div>
+    <a class="btn" href="{{ url_for('main.pricing') }}">View full pricing <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+  </div>
+  <div class="landing-pricing-grid">
+    {% for plan in plans %}
+      {% set token_config = token_configs.get(plan.plan) %}
+      {% set free_all_access = plan.plan == 'free' %}
+      {% set ai_enabled = free_all_access or plan.can_use_ai_research %}
+      {% set bulk_enabled = free_all_access or plan.can_bulk_operations %}
+      <div class="landing-plan-card">
+        <h3 class="landing-plan-name">{{ plan.plan.replace('_', ' ').title() }}</h3>
+        <div class="landing-plan-price">
+          <strong>
+            {% if plan.monthly_price is not none %}
+              ${{ "%.2f"|format(plan.monthly_price) }}
+            {% else %}
+              Custom
+            {% endif %}
+          </strong>
+          {% if plan.monthly_price is not none %}
+            <span class="muted">/month</span>
+          {% endif %}
+        </div>
+        <div class="landing-plan-limit">
+          <strong>
+            {% if plan.max_items is none %}
+              Unlimited
+            {% else %}
+              {{ plan.max_items }}
+            {% endif %}
+          </strong>
+          <span class="muted">{% if plan.max_items is none %}items{% else %}max items{% endif %}</span>
+        </div>
+        <ul class="landing-plan-features">
+          <li><i class="fas fa-warehouse"></i><span>Active Inventory + A/B/S/C locations</span></li>
+          <li><i class="fas fa-receipt"></i><span>Receipts + expense tracking</span></li>
+          <li class="{{ '' if ai_enabled else 'is-disabled' }}">
+            <i class="fas {{ 'fa-circle-check' if ai_enabled else 'fa-circle-xmark' }}"></i>
+            <span>AI Research</span>
+          </li>
+          <li><i class="fas fa-bolt"></i><span>{% if token_config %}{{ token_config.daily_tokens }} AI tokens / day{% else %}AI tokens / day{% endif %}</span></li>
+          <li class="{{ '' if bulk_enabled else 'is-disabled' }}">
+            <i class="fas {{ 'fa-circle-check' if bulk_enabled else 'fa-circle-xmark' }}"></i>
+            <span>Bulk Operations</span>
+          </li>
+          <li><i class="fas fa-truck"></i><span>Fulfillment tracking</span></li>
+          <li><i class="fas fa-file-invoice-dollar"></i><span>Tax reports</span></li>
+          <li><i class="fas fa-headset"></i><span>{{ plan.support_level|capitalize }} Support</span></li>
+        </ul>
+        <a class="btn submitbtn landing-plan-cta" href="{{ url_for('auth.register', plan=plan.plan) }}">
+          {% if plan.plan == 'free' %}
+            Start Free
+          {% else %}
+            Choose {{ plan.plan.replace('_', ' ').title() }}
+          {% endif %}
+          <i class="fas fa-arrow-right" aria-hidden="true"></i>
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
 
 {# ===== CTA ===== #}
 <section class="card" style="margin:20px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">

@@ -255,10 +255,10 @@ body:not(.admin-layout) .remove-association-btn {
 }
 
 body:not(.admin-layout) .hero-cta-btn {
-  background:#90baff !important;
+  background:#1d4ed8 !important;
   color:#ffffff !important;
   border:none !important;
-  box-shadow:0 12px 26px rgba(144,186,255,0.35) !important;
+  box-shadow:0 12px 26px rgba(29,78,216,0.35) !important;
 }
 
 [data-theme="light"] body:not(.admin-layout) .hero-cta-btn,
