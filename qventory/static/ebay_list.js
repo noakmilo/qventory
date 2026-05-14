@@ -21,6 +21,7 @@
   const publishModalMessage = qs('#publishResultMessage');
   const publishModalList = qs('#publishResultList');
   const publishModalIcon = qs('#publishResultIcon');
+  let redirectAfterPublishModalClose = false;
 
   const FIELD_LABELS = {
     title: 'Title',
@@ -301,6 +302,10 @@
     if (!publishModal) return;
     publishModal.hidden = true;
     document.body.classList.remove('modal-open');
+    if (redirectAfterPublishModalClose) {
+      redirectAfterPublishModalClose = false;
+      window.location.href = config.draftsUrl || '/ebay/list/drafts';
+    }
   }
 
   if (publishModal) {
@@ -1630,6 +1635,7 @@
             ? 'eBay accepted the listing and it is now published.'
             : `eBay accepted the listing. Listing ID: ${listingId}.`
         );
+        redirectAfterPublishModalClose = true;
       } else {
         const messages = publishErrorMessages(data);
         if (data && data.errors) {

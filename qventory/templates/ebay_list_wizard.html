@@ -556,7 +556,8 @@
     uploadTokenUrl: "{{ url_for('ebay_list.get_upload_token') }}",
     imageConfirmUrl: "{{ url_for('ebay_list.confirm_upload') }}",
     policiesUrl: "{{ url_for('ebay_list.get_account_policies_api') }}",
-    locationsUrl: "{{ url_for('ebay_list.get_account_locations_api') }}"
+    locationsUrl: "{{ url_for('ebay_list.get_account_locations_api') }}",
+    draftsUrl: "{{ url_for('ebay_list.ebay_list_drafts') }}"
   };
 </script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css">
