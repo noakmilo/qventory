@@ -104,6 +104,22 @@
   <!-- End TrustBox widget -->
 </section>
 
+{# ===== DASH PREVIEW ===== #}
+<section class="dash-preview">
+  <div class="dash-preview__inner">
+    <picture>
+      <source srcset="{{ url_for('static', filename='pics/dashpreview.webp') }}" type="image/webp">
+      <img src="{{ url_for('static', filename='pics/dashpreview-1164.png') }}"
+           alt="Qventory dashboard preview"
+           width="1164"
+           height="611"
+           fetchpriority="high"
+           decoding="async"
+           class="dash-preview__img">
+    </picture>
+  </div>
+</section>
+
 {# ===== NEW SELLER TOOLS ===== #}
 <section class="landing-spotlight" style="margin:20px;">
   <div class="landing-spotlight__intro">
@@ -139,22 +155,6 @@
   </div>
 </section>
 
-{# ===== DASH PREVIEW ===== #}
-<section class="dash-preview">
-  <div class="dash-preview__inner">
-    <picture>
-      <source srcset="{{ url_for('static', filename='pics/dashpreview.webp') }}" type="image/webp">
-      <img src="{{ url_for('static', filename='pics/dashpreview-1164.png') }}"
-           alt="Qventory dashboard preview"
-           width="1164"
-           height="611"
-           fetchpriority="high"
-           decoding="async"
-           class="dash-preview__img">
-    </picture>
-  </div>
-</section>
-
 <script>
   (function() {
     const storageKey = 'qventory_theme';
@@ -177,6 +177,41 @@
         const theme = btn.dataset.theme;
         localStorage.setItem(storageKey, theme);
         applyTheme(theme);
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const revealTargets = document.querySelectorAll(
+        '.landing-hero, .dash-preview, .landing-spotlight, section.row, section.card, .grid > div, .landing-feature-card'
+      );
+
+      revealTargets.forEach((el, index) => {
+        el.classList.add('landing-reveal');
+        el.style.setProperty('--landing-delay', `${Math.min((index % 6) * 60, 300)}ms`);
+      });
+
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('is-visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.14, rootMargin: '0px 0px -8% 0px' });
+
+        revealTargets.forEach((el) => observer.observe(el));
+      } else {
+        revealTargets.forEach((el) => el.classList.add('is-visible'));
+      }
+
+      document.querySelectorAll('.landing-faq-item').forEach((item) => {
+        item.addEventListener('toggle', () => {
+          if (!item.open) return;
+          document.querySelectorAll('.landing-faq-item[open]').forEach((openItem) => {
+            if (openItem !== item) openItem.open = false;
+          });
+        });
       });
     });
   })();
@@ -307,6 +342,64 @@
     line-height:1.3;
     margin-top:1px;
   }
+  .landing-reveal {
+    opacity:0;
+    transform:translateY(22px) scale(.985);
+    filter:blur(6px);
+    transition:
+      opacity .62s ease var(--landing-delay, 0ms),
+      transform .62s ease var(--landing-delay, 0ms),
+      filter .62s ease var(--landing-delay, 0ms);
+    will-change:opacity, transform, filter;
+  }
+  .landing-reveal.is-visible {
+    opacity:1;
+    transform:translateY(0) scale(1);
+    filter:blur(0);
+  }
+  .landing-faq-list {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+  }
+  .landing-faq-item {
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:var(--glass-bg-strong);
+    overflow:hidden;
+    transition:border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+  .landing-faq-item[open] {
+    border-color:rgba(96,165,250,.45);
+    box-shadow:0 14px 34px rgba(0,0,0,.16);
+  }
+  .landing-faq-item summary {
+    list-style:none;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    padding:16px 18px;
+    cursor:pointer;
+    font-weight:800;
+    color:var(--text);
+  }
+  .landing-faq-item summary::-webkit-details-marker {
+    display:none;
+  }
+  .landing-faq-item summary i {
+    color:var(--accent);
+    transition:transform .18s ease;
+  }
+  .landing-faq-item[open] summary i {
+    transform:rotate(180deg);
+  }
+  .landing-faq-item p {
+    margin:0;
+    padding:0 18px 18px;
+    color:var(--sub);
+    line-height:1.55;
+  }
   .dash-preview{
     margin:0 20px 10px;
   }
@@ -370,10 +463,21 @@
     .landing-spotlight__grid {
       grid-template-columns:1fr;
     }
+    .landing-faq-list {
+      grid-template-columns:1fr;
+    }
     .landing-spotlight,
     .dash-preview {
       margin-left:12px;
       margin-right:12px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .landing-reveal {
+      opacity:1;
+      transform:none;
+      filter:none;
+      transition:none;
     }
   }
 </style>
@@ -669,51 +773,51 @@
 {# ===== FAQ ===== #}
 <section class="card" style="margin:20px;">
   <h2><i class="fas fa-circle-question landing-title-icon"></i>Frequently Asked Questions</h2>
-  <div class="grid cols-2">
-    <div>
-      <h3>How does eBay sync work?</h3>
+  <div class="landing-faq-list">
+    <details class="landing-faq-item">
+      <summary><span>How does eBay sync work?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Connect your eBay account via OAuth (secure, no password sharing). Qventory imports your active listings, sales, and order data automatically. Updates sync in real-time.</p>
-    </div>
-    <div>
-      <h3>What is auto-relist and how does it help?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>What is auto-relist and how does it help?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Auto-relist refreshes stale eBay listings to boost visibility. Qventory supports scheduled Update &amp; Relist with price drops, floor prices, bulk controls, and safety rules for sold or active-order items.</p>
-    </div>
-    <div>
-      <h3>What is Thrift Radar?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>What is Thrift Radar?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Thrift Radar is a sourcing tool for resellers. Search by ZIP code, city, or optional location to find thrift stores, flea markets, and outlets, then save searches and routes. It is currently focused on the U.S.</p>
-    </div>
-    <div>
-      <h3>Can Qventory create new eBay listings?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Can Qventory create new eBay listings?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Yes. The eBay Listing Wizard helps create listings with AI-assisted titles, descriptions, item specifics, image editing, SKU generation, category search, listing format, and draft management.</p>
-    </div>
-    <div>
-      <h3>What is the difference between Update &amp; Relist and Price Update?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>What is the difference between Update &amp; Relist and Price Update?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Update &amp; Relist creates a refreshed relisted item on a schedule. Price Update keeps the same live listing and gradually lowers the price like a Dutch Auction until it reaches your floor price.</p>
-    </div>
-    <div>
-      <h3>Does it track sales and profit?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Does it track sales and profit?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Yes! All sales are tracked with marketplace fees, shipping costs, and calculated net profit. Filter by date, marketplace, or status. Export sales data anytime.</p>
-    </div>
-    <div>
-      <h3>Can I track fulfillment and shipping?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Can I track fulfillment and shipping?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Absolutely. Monitor all orders from payment to delivery. Track shipping carriers, tracking numbers, and delivery status in one unified dashboard.</p>
-    </div>
-    <div>
-      <h3>Is AI pricing accurate?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Is AI pricing accurate?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Our AI analyzes eBay market trends to provide data-driven estimates. Always verify with the "Search sold listings" link provided in reports.</p>
-    </div>
-    <div>
-      <h3>Does it work on mobile?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Does it work on mobile?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Yes! Install as a PWA (Progressive Web App) on iOS or Android. Full QR scanning, dark mode, and optimized for phones.</p>
-    </div>
-    <div>
-      <h3>Which marketplaces are supported?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Which marketplaces are supported?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>eBay full integration (sync, sales, fulfillment). Track links for Amazon, Mercari, Vinted, Poshmark, Depop. Profit calculator supports eBay & Depop fees.</p>
-    </div>
-    <div>
-      <h3>Is my data private?</h3>
+    </details>
+    <details class="landing-faq-item">
+      <summary><span>Is my data private?</span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
       <p>Absolutely. Your inventory is yours. We don't sell data. eBay connection uses secure OAuth. Export all data anytime via CSV.</p>
-    </div>
+    </details>
   </div>
 </section>
 
