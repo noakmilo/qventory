@@ -410,6 +410,37 @@
     });
   }
 
+  // Profit Calculator modal close handling lives here because the modal is part
+  // of the base layout and can be opened from multiple pages.
+  function qventoryCloseProfitCalcModal() {
+    const modal = document.getElementById('profitCalcModal');
+    const frame = document.getElementById('profitCalcFrame');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.classList.remove('modal-open');
+    if (frame) {
+      frame.src = 'about:blank';
+    }
+  }
+  window.qventoryCloseProfitCalcModal = qventoryCloseProfitCalcModal;
+
+  document.addEventListener('click', (event) => {
+    const modal = document.getElementById('profitCalcModal');
+    if (!modal || modal.hidden) return;
+    const closeTarget = event.target.closest('#profitCalcModal [data-modal-close]');
+    if (closeTarget) {
+      event.preventDefault();
+      qventoryCloseProfitCalcModal();
+    }
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    const modal = document.getElementById('profitCalcModal');
+    if (event.key === 'Escape' && modal && !modal.hidden) {
+      qventoryCloseProfitCalcModal();
+    }
+  });
+
   // PWA Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
