@@ -5462,7 +5462,7 @@ def item_detail(item_id):
         relist_filters.append(or_(*relist_match))
         relist_history = AutoRelistHistory.query.filter(
             *relist_filters
-        ).order_by(AutoRelistHistory.started_at.asc()).all()
+        ).order_by(AutoRelistHistory.started_at.desc(), AutoRelistHistory.id.desc()).all()
         for rh in relist_history:
             detail = f"Status: {rh.status}"
             if rh.old_price is not None or rh.new_price is not None:
@@ -5474,7 +5474,8 @@ def item_detail(item_id):
                 new_title = rh.new_title or "—"
                 detail += f" • Title: {old_title} → {new_title}"
             relist_events.append({
-                "timestamp": rh.started_at,
+                "timestamp": rh.completed_at or rh.started_at,
+                "sort_id": rh.id,
                 "title": f"Relisted ({rh.mode or 'manual'})",
                 "detail": detail
             })
@@ -5505,7 +5506,7 @@ def item_detail(item_id):
             })
 
     events = [e for e in events if e.get("timestamp")]
-    events.sort(key=lambda e: e["timestamp"], reverse=True)
+    events.sort(key=lambda e: (e["timestamp"], e.get("sort_id", 0)), reverse=True)
 
     return render_template(
         "item_detail.html",
