@@ -86,6 +86,7 @@ ALLOWED_CONDITION_IDS = {
 }
 ALLOWED_LISTING_FORMATS = {"FIXED_PRICE", "AUCTION"}
 AI_SCENARIO = "ai_research"
+MAX_DRAFT_IMAGES = 24
 
 
 def _sanitize_html(html: str | None) -> str | None:
@@ -463,7 +464,7 @@ def update_draft(draft_id):
         elif key == "item_specifics":
             draft.item_specifics_json = value
         elif key == "images":
-            if isinstance(value, list) and len(value) <= 20:
+            if isinstance(value, list) and len(value) <= MAX_DRAFT_IMAGES:
                 old_public_ids = {
                     img.get("cloudinary_public_id")
                     for img in _draft_images(draft)
@@ -856,7 +857,7 @@ def get_upload_token():
     if size <= 0 or size > 2 * 1024 * 1024:
         return jsonify({"ok": False, "error": "invalid_size"}), 400
 
-    if len(_draft_images(draft)) >= 20:
+    if len(_draft_images(draft)) >= MAX_DRAFT_IMAGES:
         return jsonify({"ok": False, "error": "image_limit_reached"}), 400
 
     result = create_ebay_upload_session(current_user.id, filename, content_type, size, sha256)
@@ -892,7 +893,7 @@ def upload_image():
     except (TypeError, ValueError):
         replace_index = None
     is_replacement = replace_index is not None and 0 <= replace_index < len(images)
-    if len(images) >= 20 and not is_replacement:
+    if len(images) >= MAX_DRAFT_IMAGES and not is_replacement:
         return jsonify({"ok": False, "error": "image_limit_reached"}), 400
 
     sha256 = request.form.get("sha256")
@@ -957,7 +958,7 @@ def confirm_upload():
 
     image_entry = payload.get("image") or {}
     images = _draft_images(draft)
-    if len(images) >= 20:
+    if len(images) >= MAX_DRAFT_IMAGES:
         return jsonify({"ok": False, "error": "image_limit_reached"}), 400
     sha256 = image_entry.get("sha256")
     if sha256 and any(img.get("sha256") == sha256 for img in images):

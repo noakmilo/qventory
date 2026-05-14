@@ -75,10 +75,18 @@
         </div>
 
         <label>eBay Category</label>
-        <input type="text" id="ebayCategorySearchInput" class="input" placeholder="Search categories..." autocomplete="off">
-        <div id="ebayCategoryTree" class="category-tree"></div>
+        <div class="profit-category-picker">
+          <div class="profit-category-search">
+            <i class="fas fa-search"></i>
+            <input type="text" id="ebayCategorySearchInput" class="input" placeholder="Start typing an eBay category..." autocomplete="off">
+            <button class="btn" id="ebayCategorySearchBtn" type="button">Search</button>
+          </div>
+          <div id="ebayCategoryAutocomplete" class="category-autocomplete"></div>
+        </div>
         <input type="hidden" id="ebayCategoryId">
-        <div class="muted" id="ebayCategoryPath" style="margin-top:6px;"></div>
+        <div class="category-selected" id="ebayCategoryPath" style="margin-top:6px;">
+          <span class="muted">No category selected.</span>
+        </div>
 
         <div class="checkbox-container">
           <input type="checkbox" id="topRated">
@@ -260,54 +268,100 @@
     font-size: var(--fs-xs);
   }
 
-  .category-tree {
-    border: 1px solid var(--glass-border);
-    border-radius: 10px;
-    padding: 0.5rem;
-    background: var(--muted);
-    max-height: 320px;
-    overflow: auto;
+  .profit-category-picker {
+    position: relative;
+    display: grid;
+    gap: 8px;
   }
 
-  .category-node {
-    display: flex;
+  .profit-category-search {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 6px;
-    padding: 4px 6px;
-    border-radius: 6px;
+    gap: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: var(--muted);
+  }
+
+  .profit-category-search i {
+    color: var(--sub);
+  }
+
+  .profit-category-search .input {
+    border: 0;
+    padding: 8px 0;
+    background: transparent;
+  }
+
+  .profit-category-search .input:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .category-autocomplete {
+    position: absolute;
+    top: 54px;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    display: none;
+    z-index: 100;
+    max-height: 340px;
+    overflow: auto;
+    box-shadow: 0 8px 20px var(--glass-shadow);
+  }
+
+  .category-autocomplete .item {
+    padding: 10px 12px;
     cursor: pointer;
+    border-bottom: 1px solid var(--glass-border);
+    display: grid;
+    gap: 3px;
+  }
+
+  .category-autocomplete .item:last-child {
+    border-bottom: 0;
+  }
+
+  .category-autocomplete .item:hover {
+    background: rgba(56, 189, 248, 0.12);
+  }
+
+  .category-autocomplete .item-title {
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .category-autocomplete .item-meta {
+    font-size: var(--fs-xs);
+    color: var(--sub);
+  }
+
+  .category-selected {
+    border: 1px dashed var(--glass-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: rgba(56, 189, 248, 0.07);
+    color: var(--text);
     font-size: var(--fs-sm);
   }
 
-  .category-node:hover {
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .category-node.selected {
-    background: rgba(56, 189, 248, 0.15);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-  }
-
-  .category-children {
-    margin-left: 16px;
-    display: none;
-  }
-
-  .category-children.open {
+  .category-selected strong {
     display: block;
+    margin-bottom: 2px;
   }
 
-  .category-toggle {
-    width: 18px;
-    height: 18px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    color: var(--sub);
-    font-size: 12px;
-    cursor: pointer;
+  @media (max-width: 640px) {
+    .profit-category-search {
+      grid-template-columns: 22px minmax(0, 1fr);
+    }
+    .profit-category-search .btn {
+      grid-column: 1 / -1;
+    }
   }
   label {
     display: block;

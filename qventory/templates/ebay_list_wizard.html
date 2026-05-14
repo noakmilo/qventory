@@ -19,17 +19,13 @@
     <div class="section-head">
       <div>
         <h2>Images</h2>
-        <p class="muted">Click or drop images here. Drag thumbnails to reorder; the first image is the main eBay photo.</p>
+        <p class="muted">Add up to 24 images. Drag thumbnails to reorder; the first image is the main eBay photo.</p>
       </div>
     </div>
 
     <div class="image-dropzone" id="imageDropzone" role="button" tabindex="0" aria-label="Add listing images">
       <input type="file" id="imageInput" accept="image/*" multiple>
-      <div class="image-drop-copy">
-        <i class="far fa-images"></i>
-        <strong>Add listing images</strong>
-        <span>Click, drag & drop, or use your mobile camera/gallery chooser.</span>
-      </div>
+      <div class="image-list image-grid" id="imageList"></div>
     </div>
 
     <div class="image-tools">
@@ -69,7 +65,6 @@
           <div class="muted" id="imageEditorHint">Image edits stay local until you export and upload.</div>
         </div>
       </div>
-      <div class="image-list" id="imageList"></div>
     </div>
   </div>
 
@@ -81,7 +76,12 @@
       <div class="span-2">
         <div class="field-head">
           <label class="label">Title</label>
-          <button class="btn btn-small" id="optimizeTitleBtn" type="button"><i class="fas fa-wand-magic-sparkles"></i> Optimize Title</button>
+          <div class="title-tools">
+            <button class="btn btn-small icon-btn" id="listingProfitCalcBtn" type="button" title="Open Profit Calculator" aria-label="Open Profit Calculator">
+              <i class="fas fa-calculator"></i>
+            </button>
+            <button class="btn btn-small" id="optimizeTitleBtn" type="button"><i class="fas fa-wand-magic-sparkles"></i> Optimize Title</button>
+          </div>
         </div>
         <input class="input" type="text" id="titleInput" maxlength="80" placeholder="Item title">
       </div>
@@ -254,6 +254,9 @@
   .list-wizard .section-actions,
   .list-wizard .editor-actions,
   .list-wizard .review-actions { justify-content:flex-start; align-items:center; }
+  .list-wizard .title-tools { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .list-wizard .icon-btn { width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
+  .list-wizard #listingProfitCalcBtn i { color:#10b981; }
   .list-wizard .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
   .list-wizard .span-2 { grid-column:span 2; }
   .list-wizard .editor-toggle { display:flex; gap:6px; }
@@ -274,13 +277,10 @@
   .list-wizard .category-selected strong { display:block; margin-bottom:2px; }
   .list-wizard .specifics-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
   .list-wizard .image-workspace-card { display:grid; gap:14px; }
-  .list-wizard .image-dropzone { position:relative; border:1px dashed var(--border); border-radius:8px; min-height:132px; display:flex; align-items:center; justify-content:center; background:rgba(59,130,246,.05); cursor:pointer; transition:border-color .15s ease, background .15s ease; }
+  .list-wizard .image-dropzone { position:relative; border:1px dashed var(--border); border-radius:8px; min-height:170px; padding:12px; background:rgba(59,130,246,.05); transition:border-color .15s ease, background .15s ease; }
   .list-wizard .image-dropzone.dragging { border-color:#38bdf8; background:rgba(56,189,248,.12); }
-  .list-wizard .image-dropzone input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
-  .list-wizard .image-drop-copy { pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; color:var(--sub); padding:18px; }
-  .list-wizard .image-drop-copy i { font-size:34px; color:#38bdf8; }
-  .list-wizard .image-drop-copy strong { color:var(--text); }
-  .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr) 310px; gap:16px; align-items:start; }
+  .list-wizard .image-dropzone input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+  .list-wizard .image-tools { display:grid; grid-template-columns:minmax(0, 1fr); gap:16px; align-items:start; }
   .list-wizard .open-image-editor-shell { height:520px; border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#111827; display:flex; align-items:center; justify-content:center; position:relative; }
   .list-wizard #cropperImage { display:block; max-width:100%; max-height:520px; }
   .list-wizard .image-empty-state { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#94a3b8; background:#111827; }
@@ -289,14 +289,23 @@
   .list-wizard .editor-tool-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .list-wizard .editor-controls label { display:flex; gap:6px; align-items:center; font-size:13px; color:var(--text); }
   .list-wizard .editor-controls input[type="range"] { width:110px; }
-  .list-wizard .image-list { display:grid; gap:10px; max-height:720px; overflow:auto; }
-  .list-wizard .image-card { display:grid; grid-template-columns:84px minmax(0, 1fr); gap:10px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--card); cursor:grab; }
+  .list-wizard .image-list { display:grid; gap:10px; }
+  .list-wizard .image-grid { grid-template-columns:repeat(auto-fill, minmax(128px, 1fr)); align-items:stretch; }
+  .list-wizard .image-card,
+  .list-wizard .image-add-tile { min-height:154px; border:1px solid var(--border); border-radius:8px; padding:8px; background:var(--card); }
+  .list-wizard .image-card { display:grid; grid-template-rows:96px auto; gap:8px; cursor:grab; position:relative; }
   .list-wizard .image-card.selected { outline:2px solid #38bdf8; }
-  .list-wizard .image-card img { width:84px; height:84px; object-fit:cover; border-radius:6px; }
+  .list-wizard .image-card img { width:100%; height:96px; object-fit:cover; border-radius:6px; }
   .list-wizard .image-card-info { min-width:0; display:grid; gap:6px; }
   .list-wizard .image-card-title { font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .list-wizard .image-card-meta { font-size:11px; color:var(--sub); display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .list-wizard .image-main-badge { color:#f59e0b; font-weight:700; }
   .list-wizard .image-card-actions { display:flex; gap:5px; flex-wrap:wrap; }
   .list-wizard .image-card .btn-small { padding:5px 7px; font-size:11px; }
+  .list-wizard .image-add-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; text-align:center; color:var(--sub); cursor:pointer; border-style:dashed; background:rgba(59,130,246,.06); }
+  .list-wizard .image-add-tile i { font-size:28px; color:#38bdf8; }
+  .list-wizard .image-add-tile strong { color:var(--text); }
+  .list-wizard .image-add-tile span { font-size:12px; }
   .list-wizard .danger { color:#f87171; border-color:rgba(248,113,113,.35); }
   .list-wizard .muted { color:var(--sub); font-size:12px; }
   @media (max-width: 900px) {

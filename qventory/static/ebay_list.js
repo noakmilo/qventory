@@ -9,6 +9,7 @@
   let flipX = 1;
   let flipY = 1;
   let categorySearchTimer = null;
+  const MAX_IMAGES = 24;
 
   const qs = (sel) => document.querySelector(sel);
 
@@ -490,6 +491,53 @@
     `;
   }
 
+  function selectedCategoryPath() {
+    const selected = qs('#categorySelected strong');
+    return selected ? selected.textContent.trim() : '';
+  }
+
+  function openProfitCalcFromListing() {
+    const title = qs('#titleInput').value.trim();
+    const price = qs('#priceInput').value.trim();
+    const params = new URLSearchParams({
+      embed: '1',
+      title
+    });
+    if (price) params.set('price', price);
+    if (draft && draft.category_id) {
+      params.set('category_id', draft.category_id);
+      const path = selectedCategoryPath();
+      if (path) params.set('category_path', path);
+    }
+
+    const url = `/profit-calculator?${params.toString()}`;
+    const modal = qs('#profitCalcModal');
+    const frame = qs('#profitCalcFrame');
+    if (!modal || !frame) {
+      const standaloneParams = new URLSearchParams(params);
+      standaloneParams.delete('embed');
+      window.location.href = `/profit-calculator?${standaloneParams.toString()}`;
+      return;
+    }
+    frame.src = url;
+    modal.hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function setupProfitCalcModalClose() {
+    const modal = qs('#profitCalcModal');
+    const frame = qs('#profitCalcFrame');
+    if (!modal || modal.dataset.ebayListInitialized) return;
+    modal.dataset.ebayListInitialized = 'true';
+    modal.querySelectorAll('[data-modal-close]').forEach((target) => {
+      target.addEventListener('click', () => {
+        modal.hidden = true;
+        document.body.classList.remove('modal-open');
+        if (frame) frame.src = 'about:blank';
+      });
+    });
+  }
+
   async function fetchSpecifics(categoryId) {
     const url = `${config.categoriesUrl}/${categoryId}/specifics`;
     const res = await fetch(url);
@@ -699,6 +747,10 @@
 
   async function processFile(file) {
     try {
+      if (images.length >= MAX_IMAGES) {
+        setStatus(`You can add up to ${MAX_IMAGES} images.`);
+        return;
+      }
       const sha256 = await hashFile(file);
       if (images.some(img => img.sha256 === sha256)) {
         return;
@@ -778,10 +830,6 @@
   function renderImageList() {
     const list = qs('#imageList');
     list.innerHTML = '';
-    if (!images.length) {
-      list.innerHTML = '<div class="muted">No images yet.</div>';
-      return;
-    }
     images.forEach((img, index) => {
       const card = document.createElement('div');
       card.className = `image-card ${index === selectedImageIndex ? 'selected' : ''}`;
@@ -792,22 +840,33 @@
         <img src="${escapeHtml(img.url)}" alt="">
         <div class="image-card-info">
           <div class="image-card-title">${escapeHtml(img.filename || label)}</div>
-          <div class="muted">${label}${img.cloudinary_url || img.image_url ? ' · saved' : ' · pending save'}</div>
+          <div class="image-card-meta">
+            <span class="${index === 0 ? 'image-main-badge' : ''}">${escapeHtml(label)}</span>
+            <span>${img.cloudinary_url || img.image_url ? 'Saved' : 'Pending'}</span>
+          </div>
           <div class="image-card-actions">
-            <button class="btn btn-small" data-action="main" title="Set as main image"><i class="fas fa-star"></i></button>
+            <button class="btn btn-small" data-action="main" title="Set as main image"><i class="${index === 0 ? 'fas' : 'far'} fa-star"></i></button>
             <button class="btn btn-small" data-action="up" title="Move up"><i class="fas fa-arrow-up"></i></button>
             <button class="btn btn-small" data-action="down" title="Move down"><i class="fas fa-arrow-down"></i></button>
             <button class="btn btn-small danger" data-action="delete" title="Delete image"><i class="fas fa-trash"></i></button>
           </div>
         </div>
       `;
-      card.addEventListener('click', () => selectImage(index));
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectImage(index);
+      });
       card.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
         e.dataTransfer.setData('text/plain', index.toString());
       });
-      card.addEventListener('dragover', (e) => e.preventDefault());
+      card.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
       card.addEventListener('drop', (e) => {
         e.preventDefault();
+        e.stopPropagation();
         const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
         const to = parseInt(card.dataset.index, 10);
         if (Number.isNaN(from) || Number.isNaN(to) || from === to) return;
@@ -839,6 +898,22 @@
       });
       list.appendChild(card);
     });
+    if (images.length < MAX_IMAGES) {
+      const addTile = document.createElement('button');
+      addTile.type = 'button';
+      addTile.className = 'image-add-tile';
+      addTile.id = 'imageAddTile';
+      addTile.innerHTML = `
+        <i class="far fa-images"></i>
+        <strong>${images.length ? 'Add more images' : 'Add listing images'}</strong>
+        <span>${images.length}/${MAX_IMAGES} used. Click or drop here.</span>
+      `;
+      addTile.addEventListener('click', (e) => {
+        e.stopPropagation();
+        qs('#imageInput').click();
+      });
+      list.appendChild(addTile);
+    }
   }
 
   function normalizeMainImage() {
@@ -957,6 +1032,7 @@
   });
   qs('#refreshSpecificsBtn').addEventListener('click', refreshSpecifics);
   qs('#optimizeTitleBtn').addEventListener('click', optimizeTitleWithAi);
+  qs('#listingProfitCalcBtn').addEventListener('click', openProfitCalcFromListing);
   qs('#generateDescriptionBtn').addEventListener('click', generateDescriptionWithAi);
   qs('#fillSpecificsAiBtn').addEventListener('click', fillSpecificsWithAi);
   qs('#generateSkuBtn').addEventListener('click', () => {
@@ -967,6 +1043,7 @@
   const imageDropzone = qs('#imageDropzone');
   imageDropzone.addEventListener('click', (e) => {
     if (e.target && e.target.id === 'imageInput') return;
+    if (e.target.closest('.image-card') || e.target.closest('.image-add-tile')) return;
     qs('#imageInput').click();
   });
   imageDropzone.addEventListener('keydown', (e) => {
@@ -1070,6 +1147,7 @@
     }
     bindInputAutosave();
     setupEditorToggle();
+    setupProfitCalcModalClose();
     await loadPolicies();
     await loadLocations();
     await loadCategoryPicker();
