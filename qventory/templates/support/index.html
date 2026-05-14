@@ -12,7 +12,14 @@
       <p class="muted">Support tickets are available for paid plans. You can still view announcements.</p>
       {% endif %}
     </div>
-    <div class="tag">Open: {{ open_count }}/{{ max_open }}</div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="tag">Open: {{ open_count }}/{{ max_open }}</div>
+      {% if show_archived %}
+      <a class="btn" href="{{ url_for('main.support_inbox') }}"><i class="fas fa-inbox"></i> Active</a>
+      {% else %}
+      <a class="btn" href="{{ url_for('main.support_inbox', show='archived') }}"><i class="fas fa-box-archive"></i> Archived</a>
+      {% endif %}
+    </div>
   </div>
 </div>
 
@@ -40,7 +47,7 @@
 {% endif %}
 
 <div class="card">
-  <h3 style="margin-top:0;">Your Tickets</h3>
+  <h3 style="margin-top:0;">{{ 'Archived Tickets' if show_archived else 'Your Tickets' }}</h3>
   <div class="table-wrap">
     <table>
       <thead>
@@ -50,12 +57,13 @@
           <th>Status</th>
           <th>Updated</th>
           <th>Unread</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% if tickets|length == 0 %}
         <tr>
-          <td colspan="5" style="text-align:center;color:var(--text-secondary);padding:30px;">No tickets yet.</td>
+          <td colspan="6" style="text-align:center;color:var(--text-secondary);padding:30px;">{{ 'No archived tickets.' if show_archived else 'No tickets yet.' }}</td>
         </tr>
         {% else %}
         {% for ticket in tickets %}
@@ -94,6 +102,22 @@
               —
             {% endif %}
           </td>
+          <td>
+            <div class="support-ticket-actions">
+              {% if show_archived %}
+              <form method="post" action="{{ url_for('main.support_restore_ticket', ticket_code=ticket.ticket_code) }}">
+                <button class="btn btn-small" type="submit" title="Restore ticket"><i class="fas fa-rotate-left"></i></button>
+              </form>
+              {% else %}
+              <form method="post" action="{{ url_for('main.support_archive_ticket', ticket_code=ticket.ticket_code) }}">
+                <button class="btn btn-small" type="submit" title="Archive ticket"><i class="fas fa-box-archive"></i></button>
+              </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('main.support_delete_ticket', ticket_code=ticket.ticket_code) }}" onsubmit="return confirm('Remove this ticket from your inbox? Support can still keep the conversation for records.');">
+                <button class="btn btn-small danger" type="submit" title="Delete from inbox"><i class="fas fa-trash"></i></button>
+              </form>
+            </div>
+          </td>
         </tr>
         {% endfor %}
         {% endif %}
@@ -119,6 +143,18 @@
     background: rgba(148,163,184,0.2);
     color: #94a3b8;
     border-color: rgba(148,163,184,0.4);
+  }
+  .support-ticket-actions {
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .support-ticket-actions form {
+    margin:0;
+  }
+  .support-ticket-actions .danger {
+    color:#f87171;
+    border-color:rgba(248,113,113,0.35);
   }
 </style>
 {% endblock %}

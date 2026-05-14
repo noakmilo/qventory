@@ -2596,6 +2596,43 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   font-size: 14px;
 }
 
+.sidebar-submenu-toggle {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sidebar-submenu-caret {
+  margin-left: auto;
+  width: auto !important;
+  font-size: 12px !important;
+  transition: transform 0.18s ease;
+}
+
+.sidebar-submenu-group.is-open .sidebar-submenu-caret {
+  transform: rotate(90deg);
+}
+
+.sidebar-submenu {
+  display: none;
+  margin: 2px 0 6px;
+}
+
+.sidebar-submenu-group.is-open .sidebar-submenu {
+  display: block;
+}
+
+.sidebar-subitem {
+  padding-left: 34px;
+  font-size: 13px;
+}
+
+.sidebar-subitem i {
+  font-size: 14px;
+}
+
 .sidebar-item i {
   width: 20px;
   text-align: center;
@@ -2757,6 +2794,14 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 .new-layout.sidebar-collapsed .sidebar-item {
   justify-content: center;
   gap: 0;
+}
+
+.new-layout.sidebar-collapsed .sidebar-submenu {
+  display: none;
+}
+
+.new-layout.sidebar-collapsed .sidebar-submenu-caret {
+  display: none;
 }
 
 .new-layout.sidebar-collapsed .sidebar-item span {

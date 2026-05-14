@@ -25,6 +25,7 @@ from qventory.helpers.image_guarantee import (
 
 IMAGE_HYDRATE_MAX_ATTEMPTS = int(os.environ.get("IMAGE_HYDRATE_MAX_ATTEMPTS", "8"))
 IMAGE_HYDRATE_RETRY_SCHEDULE = (0, 60, 300, 900, 3600, 21600, 86400)
+IMAGE_HYDRATION_QUEUE = os.environ.get("IMAGE_HYDRATION_QUEUE", "imports")
 
 def log_task(msg):
     """Helper function for task logging"""
@@ -96,7 +97,7 @@ def _queue_item_image_hydration(item, reason="missing_image", countdown=0, force
                 "source": reason,
                 "force": bool(force),
             },
-            queue="image_hydration",
+            queue=IMAGE_HYDRATION_QUEUE,
             countdown=delay,
         )
         return True
@@ -147,7 +148,7 @@ def _queue_sale_image_hydration(sale, reason="missing_sale_image", countdown=0, 
                 "source": reason,
                 "force": bool(force),
             },
-            queue="image_hydration",
+            queue=IMAGE_HYDRATION_QUEUE,
             countdown=delay,
         )
         return True
@@ -245,7 +246,7 @@ def hydrate_item_image(
                     "source": source,
                     "force": force,
                 },
-                queue="image_hydration",
+                queue=IMAGE_HYDRATION_QUEUE,
                 countdown=delay,
             )
             log_task(

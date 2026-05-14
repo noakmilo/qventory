@@ -8,6 +8,7 @@ from celery.schedules import crontab
 
 # Get Redis URL from environment or use local default
 REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+IMAGE_HYDRATION_QUEUE = os.environ.get('IMAGE_HYDRATION_QUEUE', 'imports')
 
 # Create Celery instance
 celery = Celery(
@@ -34,8 +35,8 @@ celery.conf.update(
 # Task routing
 celery.conf.task_routes = {
     'qventory.tasks.import_ebay_inventory': {'queue': 'imports'},
-    'qventory.tasks.hydrate_item_image': {'queue': 'image_hydration'},
-    'qventory.tasks.hydrate_sale_image': {'queue': 'image_hydration'},
+    'qventory.tasks.hydrate_item_image': {'queue': IMAGE_HYDRATION_QUEUE},
+    'qventory.tasks.hydrate_sale_image': {'queue': IMAGE_HYDRATION_QUEUE},
     'qventory.tasks.reconcile_missing_images': {'queue': 'imports'},
     'qventory.tasks.reconcile_recent_missing_images': {'queue': 'imports'},
     'qventory.tasks.reconcile_historical_missing_images': {'queue': 'imports'},

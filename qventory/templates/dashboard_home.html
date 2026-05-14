@@ -73,7 +73,7 @@
   <script>
     (function() {
       const count = {{ today_listings_count }};
-      const listItemUrl = "{{ url_for('main.new_item') }}";
+      const listItemUrl = "{{ url_for('ebay_list.ebay_list_wizard') }}";
       const banner = document.getElementById('motivationalBanner');
       const emoji = document.getElementById('motivationalEmoji');
       const title = document.getElementById('motivationalTitle');
@@ -196,7 +196,7 @@
       // Update banner
       emoji.textContent = selectedMessage.emoji;
       title.textContent = selectedMessage.title;
-      message.innerHTML = selectedMessage.message + ' <a href="' + listItemUrl + '" class="motivational-message-link">List a new item</a>';
+      message.innerHTML = selectedMessage.message + ' <a href="' + listItemUrl + '" class="motivational-message-link">List on eBay</a>';
 
       // Change banner color for zero listings
       if (count === 0) {
@@ -411,10 +411,6 @@
     </div>
 
     <div class="quick-actions">
-      <a href="{{ url_for('main.new_item') }}" class="quick-action-btn">
-        <i class="fas fa-plus-circle"></i>
-        <span>Add Item</span>
-      </a>
       {% if can_open_listing_wizard %}
       <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="quick-action-btn">
         <i class="fab fa-ebay"></i>

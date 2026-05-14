@@ -2082,7 +2082,11 @@ def _support_access_allowed(user: User) -> bool:
 
 
 def _support_broadcast_exists(user_id: int) -> bool:
-    return SupportTicket.query.filter_by(user_id=user_id, kind="broadcast").count() > 0
+    return SupportTicket.query.filter(
+        SupportTicket.user_id == user_id,
+        SupportTicket.kind == "broadcast",
+        SupportTicket.user_deleted_at.is_(None),
+    ).count() > 0
 
 
 def _support_open_count(user_id: int) -> int:
@@ -2090,6 +2094,8 @@ def _support_open_count(user_id: int) -> int:
         SupportTicket.user_id == user_id,
         SupportTicket.status == "open",
         SupportTicket.kind != "broadcast",
+        SupportTicket.user_archived_at.is_(None),
+        SupportTicket.user_deleted_at.is_(None),
     ).count()
 
 
@@ -2106,6 +2112,8 @@ def _support_unread_for_user(user_id: int) -> int:
         .join(SupportTicket, SupportTicket.id == SupportMessage.ticket_id)
         .filter(
             SupportTicket.user_id == user_id,
+            SupportTicket.user_archived_at.is_(None),
+            SupportTicket.user_deleted_at.is_(None),
             SupportMessage.sender_role == "admin",
             SupportMessage.is_read_by_user.is_(False),
         )
@@ -5272,70 +5280,8 @@ def _parse_date(s: str | None):
 @main_bp.route("/item/new", methods=["GET", "POST"])
 @login_required
 def new_item():
-    s = get_or_create_settings(current_user)
-
-    if request.method == "POST":
-        title = (request.form.get("title") or "").strip()
-        listing_link = (request.form.get("listing_link") or "").strip() or None
-
-        web_url     = (request.form.get("web_url") or "").strip() or None
-        ebay_url    = (request.form.get("ebay_url") or "").strip() or None
-        amazon_url  = (request.form.get("amazon_url") or "").strip() or None
-        mercari_url = (request.form.get("mercari_url") or "").strip() or None
-        vinted_url  = (request.form.get("vinted_url") or "").strip() or None
-        poshmark_url= (request.form.get("poshmark_url") or "").strip() or None
-        depop_url   = (request.form.get("depop_url") or "").strip() or None
-
-        # Nuevos campos
-        item_thumb  = (request.form.get("item_thumb") or "").strip() or None
-        supplier    = (request.form.get("supplier") or "").strip() or None
-        item_cost   = _parse_float(request.form.get("item_cost"))
-        item_price  = _parse_float(request.form.get("item_price"))
-        listing_date= _parse_date(request.form.get("listing_date"))
-
-        A  = (request.form.get("A") or "").strip() or None
-        B  = (request.form.get("B") or "").strip() or None
-        S_ = (request.form.get("S") or "").strip() or None
-        C  = (request.form.get("C") or "").strip() or None
-
-        if not title:
-            flash("Title is required.", "error")
-            return redirect(url_for("main.new_item"))
-
-        from qventory.helpers.item_limits import get_item_limit_status
-        limit_status = get_item_limit_status(current_user.id, lock=True)
-        if not limit_status.allowed:
-            flash(
-                f"You have reached your plan limit ({limit_status.max_items} items). Upgrade to add more items.",
-                "error",
-            )
-            return redirect(url_for("main.dashboard"))
-
-        sku = generate_sku()
-        loc = compose_location_code(A=A, B=B, S=S_, C=C, enabled=tuple(s.enabled_levels()))
-        it = Item(
-            user_id=current_user.id,
-            title=title,
-            sku=sku,
-            listing_link=listing_link,
-            web_url=web_url, ebay_url=ebay_url, amazon_url=amazon_url,
-            mercari_url=mercari_url, vinted_url=vinted_url, poshmark_url=poshmark_url, depop_url=depop_url,
-            A=A, B=B, S=S_, C=C, location_code=loc,
-            # nuevos
-            item_thumb=item_thumb, supplier=supplier, item_cost=item_cost, item_price=item_price, listing_date=listing_date
-        )
-        db.session.add(it)
-        db.session.commit()
-
-        action = (request.form.get("submit_action") or "create").strip()
-        if action == "create_another":
-            flash("Item created. You can add another.", "ok")
-            return render_template("new_item.html", settings=s, item=None, cloudinary_enabled=cloudinary_enabled)
-
-        flash("Item created.", "ok")
-        return redirect(url_for("main.dashboard"))
-
-    return render_template("new_item.html", settings=s, item=None, cloudinary_enabled=cloudinary_enabled)
+    flash("Manual item creation has moved to the eBay Listing Wizard.", "ok")
+    return redirect(url_for("ebay_list.ebay_list_wizard"))
 
 
 @main_bp.route("/item/<int:item_id>/edit", methods=["GET", "POST"])
@@ -7759,14 +7705,24 @@ def support_inbox():
         flash("Support ticket created.", "ok")
         return redirect(url_for("main.support_detail", ticket_code=ticket.ticket_code))
 
-    tickets = SupportTicket.query.filter_by(user_id=current_user.id)\
-        .order_by(SupportTicket.updated_at.desc()).all()
+    show_archived = request.args.get("show") == "archived"
+    tickets_query = SupportTicket.query.filter(
+        SupportTicket.user_id == current_user.id,
+        SupportTicket.user_deleted_at.is_(None),
+    )
+    if show_archived:
+        tickets_query = tickets_query.filter(SupportTicket.user_archived_at.isnot(None))
+    else:
+        tickets_query = tickets_query.filter(SupportTicket.user_archived_at.is_(None))
+    tickets = tickets_query.order_by(SupportTicket.updated_at.desc()).all()
 
     unread_counts = dict(
         db.session.query(SupportMessage.ticket_id, func.count(SupportMessage.id))
         .join(SupportTicket, SupportTicket.id == SupportMessage.ticket_id)
         .filter(
             SupportTicket.user_id == current_user.id,
+            SupportTicket.user_archived_at.is_(None),
+            SupportTicket.user_deleted_at.is_(None),
             SupportMessage.sender_role == "admin",
             SupportMessage.is_read_by_user.is_(False),
         )
@@ -7781,6 +7737,7 @@ def support_inbox():
         open_count=open_count,
         max_open=max_open,
         can_create_ticket=can_create_ticket,
+        show_archived=show_archived,
         cloudinary_enabled=cloudinary_enabled,
     )
 
@@ -7792,6 +7749,8 @@ def support_detail(ticket_code):
         ticket_code=ticket_code,
         user_id=current_user.id
     ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
     if not _support_access_allowed(current_user) and ticket.kind != "broadcast":
         flash("Support is available for paid plans only.", "error")
         return redirect(url_for("main.dashboard"))
@@ -7820,6 +7779,8 @@ def support_send_message(ticket_code):
         ticket_code=ticket_code,
         user_id=current_user.id
     ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
     if not _support_access_allowed(current_user) and ticket.kind != "broadcast":
         flash("Support is available for paid plans only.", "error")
         return redirect(url_for("main.dashboard"))
@@ -7864,9 +7825,63 @@ def support_send_message(ticket_code):
             bytes=item.get("bytes"),
         ))
 
+    ticket.user_archived_at = None
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
     return redirect(url_for("main.support_detail", ticket_code=ticket_code))
+
+
+@main_bp.route("/support/<ticket_code>/archive", methods=["POST"])
+@login_required
+def support_archive_ticket(ticket_code):
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
+
+    ticket.user_archived_at = datetime.utcnow()
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Ticket archived.", "ok")
+    return redirect(url_for("main.support_inbox"))
+
+
+@main_bp.route("/support/<ticket_code>/restore", methods=["POST"])
+@login_required
+def support_restore_ticket(ticket_code):
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
+
+    ticket.user_archived_at = None
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Ticket restored.", "ok")
+    return redirect(url_for("main.support_inbox", show="archived"))
+
+
+@main_bp.route("/support/<ticket_code>/delete", methods=["POST"])
+@login_required
+def support_delete_ticket(ticket_code):
+    ticket = SupportTicket.query.filter_by(
+        ticket_code=ticket_code,
+        user_id=current_user.id
+    ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
+
+    now = datetime.utcnow()
+    ticket.user_deleted_at = now
+    ticket.user_archived_at = ticket.user_archived_at or now
+    ticket.updated_at = now
+    db.session.commit()
+    flash("Ticket removed from your inbox.", "ok")
+    return redirect(url_for("main.support_inbox"))
 
 
 @main_bp.route("/support/<ticket_code>/ack", methods=["POST"])
@@ -7876,6 +7891,8 @@ def support_acknowledge(ticket_code):
         ticket_code=ticket_code,
         user_id=current_user.id
     ).first_or_404()
+    if ticket.user_deleted_at is not None:
+        abort(404)
     if ticket.kind != "broadcast" or not ticket.requires_ack:
         flash("This ticket does not require acknowledgement.", "error")
         return redirect(url_for("main.support_detail", ticket_code=ticket_code))

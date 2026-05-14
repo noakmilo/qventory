@@ -78,6 +78,7 @@ def test_queue_item_hydration_enqueues_for_missing_image(monkeypatch):
     assert did_queue is True
     assert item.image_status == IMAGE_STATUS_PENDING
     assert len(queued) == 1
+    assert queued[0]["queue"] == "imports"
     assert queued[0]["kwargs"]["item_id"] == item.id
     assert queued[0]["kwargs"]["user_id"] == item.user_id
 

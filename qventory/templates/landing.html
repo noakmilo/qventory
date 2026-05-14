@@ -12,12 +12,12 @@
 {% set canonical = request.url_root.rstrip('/') %}
 <link rel="canonical" href="{{ canonical }}/">
 
-<meta name="description" content="Qventory helps eBay sellers sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as their business scales.">
+<meta name="description" content="Qventory helps eBay sellers sync inventory, create AI-powered listings, find sourcing spots with Thrift Radar, schedule relists, update prices, and track sales.">
 <meta name="keywords" content="inventory management software for ebay sellers, ebay inventory management, ebay seller software, ebay inventory tracking, ebay seller inventory tool">
 
 {# ===== Open Graph ===== #}
 <meta property="og:title" content="Inventory Management Software for eBay Sellers | Qventory">
-<meta property="og:description" content="Inventory Management Software for eBay Sellers. Sync listings, track sales, and manage fulfillment in one place.">
+<meta property="og:description" content="Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
@@ -25,7 +25,7 @@
 {# ===== Twitter Card ===== #}
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Inventory Management Software for eBay Sellers | Qventory">
-<meta name="twitter:description" content="Inventory Management Software for eBay Sellers. Sync listings, track sales, and manage fulfillment in one place.">
+<meta name="twitter:description" content="Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
 
 {# ===== JSON-LD: SoftwareApplication ===== #}
@@ -36,14 +36,15 @@
   "name": "Qventory",
   "applicationCategory": "BusinessApplication",
   "operatingSystem": "Web",
-  "description": "Inventory Management Software for eBay Sellers. Sync listings, manage inventory, track sales, and fulfillment in one place.",
+  "description": "Inventory Management Software for eBay Sellers. Sync listings, create AI-powered eBay listings, source with Thrift Radar, manage inventory, track sales, and fulfillment in one place.",
   "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-  "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA, Slow Movers, Retirements"
+  "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, AI eBay Listing Wizard, Thrift Radar, Scheduled Update and Relist, Price Update with Dutch Auction, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA, Slow Movers, Retirements"
 }
 </script>
 
 {# ===== HERO ===== #}
-<section class="card" style="margin:20px; padding:28px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent); position:relative;">
+<section class="card landing-hero" style="margin:20px; padding:28px; text-align:center; position:relative; overflow:hidden;">
+  <div class="landing-hero-grid" aria-hidden="true"></div>
   <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
     <div class="theme-toggle" aria-label="Toggle theme">
       <button type="button" class="theme-toggle-btn" data-theme="dark" title="Dark theme">
@@ -54,11 +55,12 @@
       </button>
     </div>
   </div>
+  <div class="landing-hero-kicker">Built for resellers who list, source, refresh, and ship every day</div>
   <h1 style="font-size:34px; margin:0 0 10px;">Inventory Management Software for <span style="color:var(--accent)">eBay Sellers.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
-    Built around real eBay seller workflows: intake → list → ship → reconcile.
+    Built around real eBay seller workflows: intake to list to ship to reconcile.
     Sync your <strong>eBay inventory</strong>, auto-relist for visibility, track <strong>sales & fulfillment</strong> in real-time,
-    and optimize pricing with <strong>AI research</strong> as you scale.
+    source smarter with <strong>Thrift Radar</strong>, and create better listings with <strong>AI superpowers</strong> as you scale.
   </p>
 
   <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
@@ -74,7 +76,11 @@
 
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap; color:var(--sub); font-size:13px;">
     <span class="tag">eBay Sync</span>
+    <span class="tag">AI Listing Wizard</span>
+    <span class="tag">Thrift Radar</span>
     <span class="tag">Auto-Relist</span>
+    <span class="tag">Update &amp; Relist</span>
+    <span class="tag">Dutch Auction Price Updates</span>
     <span class="tag">Slow Movers</span>
     <span class="tag">Retirements</span>
     <span class="tag">AI Market Research</span>
@@ -96,6 +102,41 @@
 
   <!-- TrustBox widget - Review Collector -->
   <!-- End TrustBox widget -->
+</section>
+
+{# ===== NEW SELLER TOOLS ===== #}
+<section class="landing-spotlight" style="margin:20px;">
+  <div class="landing-spotlight__intro">
+    <div class="landing-eyebrow">New seller tools</div>
+    <h2>More than inventory. A daily operating system for resellers.</h2>
+    <p>Qventory now helps you find sourcing spots, build eBay listings faster, refresh listings safely, and lower prices gradually without babysitting every item.</p>
+  </div>
+  <div class="landing-spotlight__grid">
+    <div class="landing-feature-card landing-feature-card--map">
+      <div class="landing-feature-icon"><i class="fas fa-location-crosshairs"></i></div>
+      <h3>Thrift Radar</h3>
+      <p>Search by ZIP code, city, or location to find thrift stores, flea markets, and outlets on a Google-powered map.</p>
+      <span>Save searches and build sourcing routes</span>
+    </div>
+    <div class="landing-feature-card landing-feature-card--ai">
+      <div class="landing-feature-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+      <h3>eBay Listing with AI</h3>
+      <p>Create listings with AI-assisted titles, descriptions, item specifics, image editing, SKU generation, and category search.</p>
+      <span>From photo and title to publish-ready listing</span>
+    </div>
+    <div class="landing-feature-card landing-feature-card--relist">
+      <div class="landing-feature-icon"><i class="fas fa-rotate"></i></div>
+      <h3>Update &amp; Relist</h3>
+      <p>Refresh stale listings with controlled price drops, floor prices, bulk selection review, and safe relist scheduling.</p>
+      <span>Built-in pacing protects your account workflow</span>
+    </div>
+    <div class="landing-feature-card landing-feature-card--price">
+      <div class="landing-feature-icon"><i class="fas fa-arrow-trend-down"></i></div>
+      <h3>Price Update Dutch Auction</h3>
+      <p>Schedule gradual price decreases without relisting the item, with floor-price protection and bulk controls.</p>
+      <span>Lower prices automatically until your stop price</span>
+    </div>
+  </div>
 </section>
 
 {# ===== DASH PREVIEW ===== #}
@@ -142,6 +183,130 @@
 </script>
 
 <style>
+  .landing-hero {
+    background:
+      linear-gradient(135deg, rgba(96,165,250,0.16), rgba(52,211,153,0.06) 42%, rgba(255,255,255,0.02)),
+      linear-gradient(180deg, rgba(255,255,255,0.05), transparent);
+  }
+  .landing-hero-grid {
+    position:absolute;
+    inset:0;
+    opacity:.14;
+    background-image:
+      linear-gradient(rgba(148,163,184,.2) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148,163,184,.2) 1px, transparent 1px);
+    background-size:36px 36px;
+    mask-image:linear-gradient(to bottom, #000, transparent 78%);
+    pointer-events:none;
+  }
+  .landing-hero > *:not(.landing-hero-grid) {
+    position:relative;
+    z-index:1;
+  }
+  .landing-hero-kicker,
+  .landing-eyebrow {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    margin-bottom:10px;
+    color:#60a5fa;
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .landing-spotlight {
+    display:grid;
+    grid-template-columns:minmax(220px,.7fr) minmax(0,1.3fr);
+    gap:18px;
+    align-items:stretch;
+  }
+  .landing-spotlight__intro,
+  .landing-feature-card {
+    border:1px solid var(--border);
+    background:var(--glass-bg-strong);
+    border-radius:16px;
+    padding:20px;
+    box-shadow:0 14px 38px rgba(0,0,0,.16);
+  }
+  .landing-spotlight__intro h2 {
+    margin:0 0 10px;
+    font-size:26px;
+    line-height:1.15;
+  }
+  .landing-spotlight__intro p,
+  .landing-feature-card p {
+    color:var(--sub);
+    line-height:1.55;
+  }
+  .landing-spotlight__grid {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px;
+  }
+  .landing-feature-card {
+    position:relative;
+    overflow:hidden;
+    min-height:210px;
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .landing-feature-card:hover {
+    transform:translateY(-3px);
+    border-color:rgba(96,165,250,.45);
+    box-shadow:0 18px 46px rgba(0,0,0,.24);
+  }
+  .landing-feature-card:before {
+    content:"";
+    position:absolute;
+    inset:0 0 auto 0;
+    height:3px;
+    background:linear-gradient(90deg, rgba(96,165,250,.85), rgba(52,211,153,.65));
+    pointer-events:none;
+  }
+  .landing-feature-card--map:before { background:linear-gradient(90deg, #22c55e, rgba(34,197,94,.35)); }
+  .landing-feature-card--ai:before { background:linear-gradient(90deg, #60a5fa, rgba(96,165,250,.35)); }
+  .landing-feature-card--relist:before { background:linear-gradient(90deg, #a855f7, rgba(168,85,247,.35)); }
+  .landing-feature-card--price:before { background:linear-gradient(90deg, #f59e0b, rgba(245,158,11,.35)); }
+  .landing-feature-icon {
+    width:42px;
+    height:42px;
+    border-radius:12px;
+    display:grid;
+    place-items:center;
+    background:rgba(96,165,250,.14);
+    color:#60a5fa;
+    margin-bottom:12px;
+    font-size:18px;
+  }
+  .landing-feature-card h3 {
+    margin:0 0 8px;
+  }
+  .landing-feature-card span {
+    display:inline-flex;
+    margin-top:6px;
+    color:var(--text);
+    font-size:13px;
+    font-weight:700;
+  }
+  .landing-title-icon {
+    color:var(--accent);
+    margin-right:8px;
+    width:1.15em;
+    text-align:center;
+  }
+  .landing-feature-title-icon {
+    color:var(--accent);
+    margin-right:8px;
+    width:1.25em;
+    text-align:center;
+  }
+  .landing-check-icon {
+    color:#fbbf24;
+    font-size:18px;
+    line-height:1.3;
+    margin-top:1px;
+  }
   .dash-preview{
     margin:0 20px 10px;
   }
@@ -196,37 +361,55 @@
   .theme-toggle-btn i {
     font-size:14px;
   }
+  @media (max-width: 860px) {
+    .landing-spotlight {
+      grid-template-columns:1fr;
+    }
+  }
+  @media (max-width: 620px) {
+    .landing-spotlight__grid {
+      grid-template-columns:1fr;
+    }
+    .landing-spotlight,
+    .dash-preview {
+      margin-left:12px;
+      margin-right:12px;
+    }
+  }
 </style>
 
 {# ===== VALUE ===== #}
 <section class="row" style="margin:20px;">
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>🎯 Why Qventory</h2>
+    <h2><i class="fas fa-bullseye landing-title-icon"></i>Why Qventory</h2>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li><strong>eBay Sync:</strong> Import inventory, sales & analytics from eBay automatically</li>
-      <li><strong>Auto-Relist:</strong> Schedule automatic or manual relisting to boost visibility</li>
-      <li><strong>Slow Movers:</strong> Identify listings that haven’t sold after X days</li>
+      <li><strong>AI Listing Wizard:</strong> Build publish-ready eBay listings from title, description, and images</li>
+      <li><strong>Thrift Radar:</strong> Find thrift stores, flea markets, outlets, and sourcing routes</li>
+      <li><strong>Update &amp; Relist:</strong> Schedule controlled relists to refresh stale listings safely</li>
+      <li><strong>Price Update:</strong> Run Dutch Auction-style price drops without relisting</li>
+      <li><strong>Slow Movers:</strong> Identify listings that haven't sold after X days</li>
       <li><strong>Retirements:</strong> Move items you no longer sell into a recycle-bin view</li>
       <li><strong>Track sales:</strong> Real-time sales analytics with profit margins & fees</li>
-      <li><strong>Fulfillment:</strong> Track shipping, delivery & order status in one place</li>
-      <li><strong>Price smarter:</strong> AI-powered market research for competitive pricing</li>
     </ul>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>⚡ How it Works</h2>
+    <h2><i class="fas fa-bolt landing-title-icon"></i>How it Works</h2>
     <ol style="margin:0; padding-left:18px; line-height:1.6;">
       <li><strong>Connect eBay:</strong> Sync your active listings, sales & order data</li>
-      <li><strong>Automate:</strong> Set up auto-relist rules to refresh listings automatically</li>
+      <li><strong>Source:</strong> Use Thrift Radar to find nearby sourcing opportunities</li>
+      <li><strong>List:</strong> Create better listings with AI titles, descriptions, and specifics</li>
+      <li><strong>Refresh:</strong> Schedule Update &amp; Relist or gradual price updates with floor protection</li>
       <li><strong>Track:</strong> Monitor sales, fulfillment & profit in real-time</li>
-      <li><strong>Optimize:</strong> Use AI research to price competitively & maximize profit</li>
     </ol>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>📈 Built for Scale</h2>
+    <h2><i class="fas fa-chart-line landing-title-icon"></i>Built for Scale</h2>
     <p style="margin:0 0 8px;">From bedroom to warehouse:</p>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li>Sync unlimited eBay listings automatically</li>
-      <li>Auto-relist to refresh visibility & boost sales</li>
+      <li>Bulk schedule relists and price updates with clear floor prices</li>
+      <li>Create listings faster with AI-assisted content and image workflows</li>
       <li>Track sales across multiple marketplaces</li>
       <li>Monitor fulfillment & shipping in one dashboard</li>
       <li>Export all data anytime (CSV)</li>
@@ -237,26 +420,30 @@
 {# ===== WORKFLOWS ===== #}
 <section class="row" style="margin:20px;">
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>🧰 Seller-Validated Workflows</h2>
+    <h2><i class="fas fa-toolbox landing-title-icon"></i>Seller-Validated Workflows</h2>
     <p style="margin:0 0 10px;color:var(--sub);">Built around what eBay sellers do every day.</p>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li><strong>Intake & organization:</strong> SKU + A/B/S/C locations for fast picks</li>
-      <li><strong>Relist & refresh:</strong> Boost visibility without manual edits</li>
+      <li><strong>Source & list:</strong> Thrift Radar routes plus AI listing creation</li>
+      <li><strong>Relist & refresh:</strong> Boost visibility without repetitive manual edits</li>
       <li><strong>Fees & profit clarity:</strong> See true margins, not surprises</li>
     </ul>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>⏱️ Save Hours Every Week</h2>
+    <h2><i class="fas fa-clock landing-title-icon"></i>Save Hours Every Week</h2>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li>Bulk updates with inline editing</li>
-      <li>Receipts → item costs in a few clicks</li>
+      <li>AI-assisted titles, descriptions, and item specifics</li>
+      <li>Saved sourcing searches and map routes</li>
+      <li>Receipts to item costs in a few clicks</li>
       <li>One dashboard for sales, shipping, and payouts</li>
     </ul>
   </div>
   <div class="card" style="margin:20px; flex:1 1 320px;">
-    <h2>✅ Data You Can Trust</h2>
+    <h2><i class="fas fa-circle-check landing-title-icon"></i>Data You Can Trust</h2>
     <ul style="margin:0; padding-left:18px; line-height:1.6;">
       <li>Reconcile sales with eBay finance data</li>
+      <li>Protect automated relists and price updates with floor prices</li>
       <li>Track shipping charged vs shipping cost</li>
       <li>Audit-ready exports for taxes and bookkeeping</li>
     </ul>
@@ -265,174 +452,202 @@
 
 {# ===== FEATURE GRID ===== #}
 <section class="card" style="margin:20px;">
-  <h2 style="margin-top:0;">🚀 Powerful Features</h2>
+  <h2 style="margin-top:0;"><i class="fas fa-rocket landing-title-icon"></i>Powerful Features</h2>
   <div class="grid cols-3">
     <div>
-      <h3 style="margin:0 0 6px;">🧭 Active Inventory</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-compass landing-feature-title-icon"></i>Active Inventory</h3>
       <p class="tag">Live, editable stock</p>
       <p>Manage all active items in one place with inline editing for cost, supplier, and location.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🏷️ A/B/S/C Location System</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-tags landing-feature-title-icon"></i>A/B/S/C Location System</h3>
       <p class="tag">Warehouse-ready</p>
       <p>Use Aisle, Bay, Shelf, and Container labels to organize inventory from small rooms to full warehouses.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🔄 eBay Sync</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-arrows-rotate landing-feature-title-icon"></i>eBay Sync</h3>
       <p class="tag">Full OAuth integration</p>
       <p>Connect your eBay account to automatically import active listings, sales data, orders, and analytics. Updates in real-time.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🔁 Auto-Relist</h3>
-      <p class="tag">Boost visibility</p>
-      <p>Schedule automatic relisting every N days or manually relist with price/title changes. Safety rules prevent relisting during active orders.</p>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-wand-magic-sparkles landing-feature-title-icon"></i>eBay Listing Wizard</h3>
+      <p class="tag">AI listing creation</p>
+      <p>Create new eBay listings with AI-optimized titles, enriched descriptions, smart item specifics, editable images, and auto-generated SKUs.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">⏳ Slow Movers</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-map-location-dot landing-feature-title-icon"></i>Thrift Radar</h3>
+      <p class="tag">Sourcing sidekick</p>
+      <p>Search thrift stores, flea markets, and outlets by ZIP code, city, or location. Save searches and build routes for sourcing trips.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-rotate landing-feature-title-icon"></i>Update &amp; Relist</h3>
+      <p class="tag">Refresh stale listings</p>
+      <p>Schedule relists with frequency, percentage drops, floor prices, and bulk controls so old listings get a clean new run.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-arrow-trend-down landing-feature-title-icon"></i>Price Update Dutch Auction</h3>
+      <p class="tag">Lower price without relisting</p>
+      <p>Gradually reduce prices on a schedule while keeping the same listing live, with floor-price protection for single items or bulk batches.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-repeat landing-feature-title-icon"></i>Auto-Relist</h3>
+      <p class="tag">Boost visibility safely</p>
+      <p>Run scheduled relist rules from the database with safeguards for sold items, active sales, floor prices, and inherited schedules.</p>
+    </div>
+    <div>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-hourglass-half landing-feature-title-icon"></i>Slow Movers</h3>
       <p class="tag">Relist stuck inventory</p>
-      <p>See listings that haven’t sold after your chosen window and relist them fast with title/price updates.</p>
+      <p>See listings that haven't sold after your chosen window and relist them fast with title/price updates.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">♻️ Retirements</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-recycle landing-feature-title-icon"></i>Retirements</h3>
       <p class="tag">Recycle-bin view</p>
-      <p>Move items you no longer want to sell into Retirements and purge them from eBay when you’re ready.</p>
+      <p>Move items you no longer want to sell into Retirements and purge them from eBay when you're ready.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">📊 Sales Analytics</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-chart-column landing-feature-title-icon"></i>Sales Analytics</h3>
       <p class="tag">Real-time tracking</p>
       <p>Track all sales with marketplace fees, shipping costs, and calculated profit margins. Filter by date, marketplace, or status.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">📦 Fulfillment Tracking</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-box landing-feature-title-icon"></i>Fulfillment Tracking</h3>
       <p class="tag">Ship & deliver</p>
       <p>Monitor orders from payment to delivery. Track shipping carriers, tracking numbers, and delivery status in one dashboard.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🧾 Expenses</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-file-invoice-dollar landing-feature-title-icon"></i>Expenses</h3>
       <p class="tag">Real costs</p>
       <p>Track business expenses and categorize spending to improve analytics and profit accuracy.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🧾 Receipts</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-receipt landing-feature-title-icon"></i>Receipts</h3>
       <p class="tag">OCR + matching</p>
       <p>Upload receipts, extract line items, and connect them to inventory or expenses.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🤖 AI Market Research</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-robot landing-feature-title-icon"></i>AI Market Research</h3>
       <p class="tag">Powered by OpenAI</p>
       <p>Get instant eBay pricing estimates with market data, suggested list/floor prices, and competitive strategy recommendations.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">💰 Profit Calculator</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-calculator landing-feature-title-icon"></i>Profit Calculator</h3>
       <p class="tag">eBay & Depop</p>
       <p>Calculate fees, shipping costs, and net profit before listing. Supports store subscriptions, top-rated seller discounts, and more.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">📤 CSV Import/Export</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-file-export landing-feature-title-icon"></i>CSV Import/Export</h3>
       <p class="tag">Universal compatibility</p>
       <p>Import from eBay or any platform. Auto-detects format, generates SKUs, and skips duplicates. Export anytime.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🏷️ QR Scanner</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-qrcode landing-feature-title-icon"></i>QR Scanner</h3>
       <p class="tag">In-browser + flashlight</p>
-      <p>Scan locations with your phone camera. Works in Add/Edit forms. Flashlight & camera flip support for any lighting.</p>
+      <p>Scan locations with your phone camera. Built for mobile inventory workflows, with flashlight and camera flip support for any lighting.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🧾 Tax Reports</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-file-lines landing-feature-title-icon"></i>Tax Reports</h3>
       <p class="tag">Ready for export</p>
       <p>Auto-generated summaries based on sales, costs, and expenses to simplify filing.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🧷 QR Batch</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-layer-group landing-feature-title-icon"></i>QR Batch</h3>
       <p class="tag">Bulk labels</p>
       <p>Generate and print batches of location labels to keep inventory organized at scale.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">📱 Mobile PWA</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-mobile-screen-button landing-feature-title-icon"></i>Mobile PWA</h3>
       <p class="tag">Install as app</p>
       <p>Add to home screen on iOS/Android. Works offline, full-screen, fast as a native app. Dark mode optimized.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🔗 Link In Bio Page</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-link landing-feature-title-icon"></i>Link In Bio Page</h3>
       <p class="tag">Free storefront page</p>
       <p>Share a clean storefront-style link with your seller name, image, and curated items. Works instantly, no extra hosting.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🗓️ Pickup Scheduler</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-calendar-check landing-feature-title-icon"></i>Pickup Scheduler</h3>
       <p class="tag">Coordinate pickups</p>
       <p>Let buyers book pickup times based on your availability, with automated confirmations and calendar downloads.</p>
     </div>
     <div>
-      <h3 style="margin:0 0 6px;">🛟 Help Center</h3>
+      <h3 style="margin:0 0 6px;"><i class="fas fa-life-ring landing-feature-title-icon"></i>Help Center</h3>
       <p class="tag">Guided setup</p>
       <p>Step-by-step guides for every module so your team can move fast with confidence.</p>
     </div>
   </div>
 </section>
 
-{# ===== AI PRICING CARD ===== #}
+{# ===== AI CARD ===== #}
 <section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(96,165,250,0.05), rgba(52,211,153,0.05));">
-  <h2 style="margin-top:0;">🧠 AI-Powered Pricing Intelligence</h2>
-  <p style="color:var(--sub); margin-bottom:12px;">Stop guessing. Start winning. Our AI analyzes eBay market data to give you:</p>
+  <h2 style="margin-top:0;"><i class="fas fa-brain landing-title-icon"></i>AI Superpowers for eBay Sellers</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Use AI where it saves the most time: pricing research, listing content, and item specifics.</p>
   <div class="grid cols-2" style="gap:12px;">
     <div style="background:var(--card);padding:12px;border-radius:8px;">
-      <strong style="color:#60a5fa">📊 Market Overview</strong>
+      <strong style="color:#60a5fa"><i class="fas fa-chart-column landing-feature-title-icon"></i>Market Overview</strong>
       <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Median prices, typical ranges, and recent sales volume</p>
     </div>
     <div style="background:var(--card);padding:12px;border-radius:8px;">
-      <strong style="color:#34d399">💵 Smart Pricing</strong>
+      <strong style="color:#34d399"><i class="fas fa-dollar-sign landing-feature-title-icon"></i>Smart Pricing</strong>
       <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Recommended list price, floor price, and best offer strategy</p>
+    </div>
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#a78bfa"><i class="fas fa-pen-nib landing-feature-title-icon"></i>Listing Copy</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Optimize titles and descriptions using your title, existing notes, and main photo</p>
+    </div>
+    <div style="background:var(--card);padding:12px;border-radius:8px;">
+      <strong style="color:#f59e0b"><i class="fas fa-puzzle-piece landing-feature-title-icon"></i>Item Specifics</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Fill category-specific details faster with smart suggestions and editable fields</p>
     </div>
   </div>
   <p style="margin-top:12px;font-size:13px;color:var(--sub)">
-    💡 <strong>Pro tip:</strong> Click the AI Research button on any item to get instant pricing insights based on current market conditions.
+    <i class="fas fa-lightbulb landing-feature-title-icon"></i><strong>Pro tip:</strong> Use AI Research on existing inventory, or the Listing Wizard when creating a brand-new eBay listing.
   </p>
 </section>
 
 {# ===== EBAY AUTO-RELIST CARD ===== #}
 <section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(139,92,246,0.05), rgba(236,72,153,0.05));">
-  <h2 style="margin-top:0;">🔁 eBay Auto-Relist Magic</h2>
-  <p style="color:var(--sub); margin-bottom:12px;">Boost your listing visibility automatically:</p>
+  <h2 style="margin-top:0;"><i class="fas fa-repeat landing-title-icon"></i>Scheduled Relist &amp; Price Automation</h2>
+  <p style="color:var(--sub); margin-bottom:12px;">Refresh stale listings or lower prices gradually without managing every item by hand.</p>
   <div class="grid cols-2" style="gap:12px;">
     <div style="background:var(--card);padding:12px;border-radius:8px;">
-      <strong style="color:#a78bfa">🤖 Automatic Mode</strong>
-      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Schedule relisting every N days. Set quiet hours, safety rules, and let it run on autopilot.</p>
+      <strong style="color:#a78bfa"><i class="fas fa-rotate landing-feature-title-icon"></i>Update &amp; Relist</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Schedule recurring relists with price decreases, floor prices, and inherited schedules after relist.</p>
     </div>
     <div style="background:var(--card);padding:12px;border-radius:8px;">
-      <strong style="color:#ec4899">✋ Manual Mode</strong>
-      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">One-click relist with optional price/title changes. Perfect for testing new pricing strategies.</p>
+      <strong style="color:#ec4899"><i class="fas fa-arrow-trend-down landing-feature-title-icon"></i>Price Update</strong>
+      <p style="margin:6px 0 0;font-size:14px;color:var(--sub)">Run Dutch Auction-style price drops on the same listing when you do not want to relist.</p>
     </div>
   </div>
   <p style="margin-top:12px;font-size:13px;color:var(--sub)">
-    🛡️ <strong>Safety first:</strong> Auto-skip if recent orders, active returns, or zero quantity. Never interrupt active sales.
+    <i class="fas fa-shield-halved landing-feature-title-icon"></i><strong>Safety first:</strong> Qventory avoids overlapping rules and stops scheduled relist flows when the item has sold.
   </p>
 </section>
 
 {# ===== EBAY SYNC CARD ===== #}
 <section class="card" style="margin:20px; background:linear-gradient(135deg, rgba(251,191,36,0.05), rgba(239,68,68,0.05));">
-  <h2 style="margin-top:0;">🔄 Full eBay Sync Integration</h2>
+  <h2 style="margin-top:0;"><i class="fas fa-arrows-rotate landing-title-icon"></i>Full eBay Sync Integration</h2>
   <p style="color:var(--sub); margin-bottom:12px;">Connect once, sync everything:</p>
   <div style="display:flex;flex-direction:column;gap:10px;">
     <div style="display:flex;align-items:start;gap:10px;">
-      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <i class="fas fa-check landing-check-icon"></i>
       <div>
         <strong>Active Inventory:</strong> Import all active listings with images, prices, SKUs, and quantities
       </div>
     </div>
     <div style="display:flex;align-items:start;gap:10px;">
-      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <i class="fas fa-check landing-check-icon"></i>
       <div>
         <strong>Sales & Orders:</strong> Automatically sync sold items with buyer info, fees, and profit calculations
       </div>
     </div>
     <div style="display:flex;align-items:start;gap:10px;">
-      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <i class="fas fa-check landing-check-icon"></i>
       <div>
         <strong>Fulfillment:</strong> Track shipping, tracking numbers, carriers, and delivery status
       </div>
     </div>
     <div style="display:flex;align-items:start;gap:10px;">
-      <span style="color:#fbbf24;font-size:20px;">✓</span>
+      <i class="fas fa-check landing-check-icon"></i>
       <div>
         <strong>Analytics:</strong> View sales trends, profit margins, and performance metrics in real-time
       </div>
@@ -444,16 +659,16 @@
 <section class="card" style="margin:20px; text-align:center; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);">
   <h2>Ready to Automate Your eBay Business?</h2>
   <p style="color:var(--sub); max-width:720px; margin:8px auto 16px;">
-    Join eBay sellers using Qventory to sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as your business scales.
+    Join eBay sellers using Qventory to source smarter, create AI-powered listings, schedule relists, update prices, sync inventory, and track profit as your business scales.
   </p>
   <a class="btn submitbtn" href="{{ url_for('auth.register') }}" style="font-size:16px;padding:12px 24px;">
-    Connect Your eBay Account Free →
+    Connect Your eBay Account Free <i class="fas fa-arrow-right" aria-hidden="true"></i>
   </a>
 </section>
 
 {# ===== FAQ ===== #}
 <section class="card" style="margin:20px;">
-  <h2>❓ Frequently Asked Questions</h2>
+  <h2><i class="fas fa-circle-question landing-title-icon"></i>Frequently Asked Questions</h2>
   <div class="grid cols-2">
     <div>
       <h3>How does eBay sync work?</h3>
@@ -461,7 +676,19 @@
     </div>
     <div>
       <h3>What is auto-relist and how does it help?</h3>
-      <p>Auto-relist refreshes your eBay listings to boost visibility. Schedule automatic relisting every N days, or manually relist with price/title changes. Includes safety rules to skip active orders.</p>
+      <p>Auto-relist refreshes stale eBay listings to boost visibility. Qventory supports scheduled Update &amp; Relist with price drops, floor prices, bulk controls, and safety rules for sold or active-order items.</p>
+    </div>
+    <div>
+      <h3>What is Thrift Radar?</h3>
+      <p>Thrift Radar is a sourcing tool for resellers. Search by ZIP code, city, or optional location to find thrift stores, flea markets, and outlets, then save searches and routes. It is currently focused on the U.S.</p>
+    </div>
+    <div>
+      <h3>Can Qventory create new eBay listings?</h3>
+      <p>Yes. The eBay Listing Wizard helps create listings with AI-assisted titles, descriptions, item specifics, image editing, SKU generation, category search, listing format, and draft management.</p>
+    </div>
+    <div>
+      <h3>What is the difference between Update &amp; Relist and Price Update?</h3>
+      <p>Update &amp; Relist creates a refreshed relisted item on a schedule. Price Update keeps the same live listing and gradually lowers the price like a Dutch Auction until it reaches your floor price.</p>
     </div>
     <div>
       <h3>Does it track sales and profit?</h3>
@@ -504,7 +731,22 @@
     {
       "@type": "Question",
       "name": "What is auto-relist and how does it help?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Auto-relist refreshes your eBay listings to boost visibility. Schedule automatic relisting every N days, or manually relist with price/title changes. Includes safety rules to skip active orders." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Auto-relist refreshes stale eBay listings to boost visibility. Qventory supports scheduled Update and Relist with price drops, floor prices, bulk controls, and safety rules for sold or active-order items." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is Thrift Radar?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Thrift Radar is a sourcing tool for resellers. Search by ZIP code, city, or optional location to find thrift stores, flea markets, and outlets, then save searches and routes. It is currently focused on the U.S." }
+    },
+    {
+      "@type": "Question",
+      "name": "Can Qventory create new eBay listings?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. The eBay Listing Wizard helps create listings with AI-assisted titles, descriptions, item specifics, image editing, SKU generation, category search, listing format, and draft management." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the difference between Update and Relist and Price Update?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Update and Relist creates a refreshed relisted item on a schedule. Price Update keeps the same live listing and gradually lowers the price like a Dutch Auction until it reaches your floor price." }
     },
     {
       "@type": "Question",

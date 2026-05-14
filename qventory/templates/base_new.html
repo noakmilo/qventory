@@ -122,10 +122,26 @@
           <i class="fas fa-shipping-fast"></i>
           <span>Fulfillment</span>
         </a>
-        <a href="{{ url_for('main.new_item') }}" class="sidebar-item {% if 'new_item' in request.endpoint %}active{% endif %}" title="Add Item">
-          <i class="fas fa-plus-circle"></i>
-          <span>Add Item</span>
-        </a>
+        {% if current_user.is_authenticated and current_user.get_plan_limits().can_create_listings and feature_ebay_listing_create_enabled %}
+        {% set ebay_listing_menu_active = request.endpoint in ['ebay_list.ebay_list_wizard', 'ebay_list.ebay_list_drafts'] %}
+        <div class="sidebar-submenu-group {% if ebay_listing_menu_active %}is-open{% endif %}">
+          <button type="button" class="sidebar-item sidebar-submenu-toggle {% if ebay_listing_menu_active %}active{% endif %}" aria-expanded="{{ 'true' if ebay_listing_menu_active else 'false' }}" title="eBay Listings">
+            <i class="fab fa-ebay"></i>
+            <span>eBay Listings</span>
+            <i class="fas fa-chevron-right sidebar-submenu-caret"></i>
+          </button>
+          <div class="sidebar-submenu">
+            <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="sidebar-item sidebar-subitem {% if request.endpoint == 'ebay_list.ebay_list_wizard' %}active{% endif %}" title="List on eBay">
+              <i class="fas fa-plus"></i>
+              <span>List on eBay</span>
+            </a>
+            <a href="{{ url_for('ebay_list.ebay_list_drafts') }}" class="sidebar-item sidebar-subitem {% if request.endpoint == 'ebay_list.ebay_list_drafts' %}active{% endif %}" title="eBay Drafts">
+              <i class="far fa-file-alt"></i>
+              <span>Drafts</span>
+            </a>
+          </div>
+        </div>
+        {% endif %}
       </div>
 
       <div class="sidebar-section">
@@ -173,26 +189,26 @@
           <span>AI Research</span>
         </a>
         {% if show_inventory_sources %}
-        <a href="{{ url_for('main.inventory_sources') }}" class="sidebar-item {% if request.endpoint == 'main.inventory_sources' %}active{% endif %}" title="Inventory Sources">
-          <i class="fas fa-map-marked-alt"></i>
-          <span>Inventory Sources</span>
-        </a>
-        {% if show_thrift_radar %}
-        <a href="{{ url_for('main.thrift_radar') }}" class="sidebar-item {% if 'thrift_radar' in request.endpoint %}active{% endif %}" title="Thrift Radar" style="padding-left:34px;">
-          <i class="fas fa-location-crosshairs"></i>
-          <span>Thrift Radar</span>
-        </a>
-        {% endif %}
-        {% endif %}
-        {% if current_user.is_authenticated and current_user.get_plan_limits().can_create_listings and feature_ebay_listing_create_enabled %}
-        <a href="{{ url_for('ebay_list.ebay_list_wizard') }}" class="sidebar-item {% if request.endpoint == 'ebay_list.ebay_list_wizard' %}active{% endif %}" title="List on eBay">
-          <i class="fab fa-ebay"></i>
-          <span>List on eBay</span>
-        </a>
-        <a href="{{ url_for('ebay_list.ebay_list_drafts') }}" class="sidebar-item {% if request.endpoint == 'ebay_list.ebay_list_drafts' %}active{% endif %}" title="eBay Drafts" style="padding-left:34px;">
-          <i class="far fa-file-alt"></i>
-          <span>eBay Drafts</span>
-        </a>
+        {% set sourcing_menu_active = request.endpoint == 'main.inventory_sources' or 'thrift_radar' in request.endpoint %}
+        <div class="sidebar-submenu-group {% if sourcing_menu_active %}is-open{% endif %}">
+          <button type="button" class="sidebar-item sidebar-submenu-toggle {% if sourcing_menu_active %}active{% endif %}" aria-expanded="{{ 'true' if sourcing_menu_active else 'false' }}" title="Inventory Sources">
+            <i class="fas fa-map-marked-alt"></i>
+            <span>Inventory Sources</span>
+            <i class="fas fa-chevron-right sidebar-submenu-caret"></i>
+          </button>
+          <div class="sidebar-submenu">
+            <a href="{{ url_for('main.inventory_sources') }}" class="sidebar-item sidebar-subitem {% if request.endpoint == 'main.inventory_sources' %}active{% endif %}" title="Sources">
+              <i class="fas fa-list"></i>
+              <span>Sources</span>
+            </a>
+            {% if show_thrift_radar %}
+            <a href="{{ url_for('main.thrift_radar') }}" class="sidebar-item sidebar-subitem {% if 'thrift_radar' in request.endpoint %}active{% endif %}" title="Thrift Radar">
+              <i class="fas fa-location-crosshairs"></i>
+              <span>Thrift Radar</span>
+            </a>
+            {% endif %}
+          </div>
+        </div>
         {% endif %}
         <a href="{{ url_for('receipts.list_receipts') }}" class="sidebar-item {% if 'receipts' in request.endpoint %}active{% endif %}" title="Receipt Scanner">
           <i class="fas fa-receipt"></i>
@@ -409,6 +425,15 @@
       }
     });
   }
+
+  document.querySelectorAll('.sidebar-submenu-toggle').forEach((button) => {
+    button.addEventListener('click', () => {
+      const group = button.closest('.sidebar-submenu-group');
+      if (!group) return;
+      const isOpen = group.classList.toggle('is-open');
+      button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+  });
 
   // Profit Calculator modal close handling lives here because the modal is part
   // of the base layout and can be opened from multiple pages.

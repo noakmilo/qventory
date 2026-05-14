@@ -17,6 +17,8 @@ class SupportTicket(db.Model):
     requires_ack = db.Column(db.Boolean, default=False, nullable=False)
     acknowledged_at = db.Column(db.DateTime, nullable=True)
     archived = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    user_archived_at = db.Column(db.DateTime, nullable=True, index=True)
+    user_deleted_at = db.Column(db.DateTime, nullable=True, index=True)
     status = db.Column(db.String(20), nullable=False, default="open", index=True)  # open, resolved, closed
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
