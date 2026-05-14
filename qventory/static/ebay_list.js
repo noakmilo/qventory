@@ -601,12 +601,19 @@
   }
 
   async function fillSpecificsWithAi() {
-    const data = await runDraftAi('specifics', 'Filling item specifics');
-    if (!data || !data.item_specifics) return;
-    draft.item_specifics = data.item_specifics;
-    renderSpecificsForm();
-    setStatus('Item specifics filled with AI.');
-    await saveDraft({createIfMissing: true});
+    const container = qs('#specificsContainer');
+    const button = qs('#fillSpecificsAiBtn');
+    setAiGenerating([container, button], true);
+    try {
+      const data = await runDraftAi('specifics', 'Filling item specifics');
+      if (!data || !data.item_specifics) return;
+      draft.item_specifics = data.item_specifics;
+      renderSpecificsForm();
+      setStatus('Item specifics filled with AI.');
+      await saveDraft({createIfMissing: true});
+    } finally {
+      setAiGenerating([container, button], false);
+    }
   }
 
   function renderSpecificsForm() {
@@ -620,10 +627,45 @@
       const label = document.createElement('label');
       label.className = 'label';
       label.textContent = `${spec.name}${requiredFlag ? ' *' : ''}`;
-      const input = document.createElement('input');
-      input.className = 'input';
-      input.value = (draft.item_specifics && draft.item_specifics[spec.name]) ? draft.item_specifics[spec.name][0] : '';
-      input.addEventListener('input', () => {
+      const values = Array.isArray(spec.values) ? spec.values.filter(v => v && v.value) : [];
+      const mode = String(spec.mode || '').toUpperCase();
+      const selectionOnly = mode === 'SELECTION_ONLY';
+      const currentValue = (draft.item_specifics && draft.item_specifics[spec.name]) ? draft.item_specifics[spec.name][0] : '';
+      let input;
+
+      if (values.length && selectionOnly) {
+        input = document.createElement('select');
+        input.className = 'input';
+        const empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = 'Select value';
+        input.appendChild(empty);
+        values.forEach((item) => {
+          const opt = document.createElement('option');
+          opt.value = item.value;
+          opt.textContent = item.value;
+          input.appendChild(opt);
+        });
+        input.value = values.some(item => item.value === currentValue) ? currentValue : '';
+      } else {
+        input = document.createElement('input');
+        input.className = 'input';
+        input.value = currentValue || '';
+        if (values.length) {
+          const datalistId = `specific-${spec.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${Math.random().toString(36).slice(2)}`;
+          input.setAttribute('list', datalistId);
+          const datalist = document.createElement('datalist');
+          datalist.id = datalistId;
+          values.forEach((item) => {
+            const opt = document.createElement('option');
+            opt.value = item.value;
+            datalist.appendChild(opt);
+          });
+          wrapper.appendChild(datalist);
+        }
+      }
+
+      const persistValue = () => {
         const val = input.value.trim();
         if (!draft.item_specifics) draft.item_specifics = {};
         if (val) {
@@ -632,9 +674,17 @@
           delete draft.item_specifics[spec.name];
         }
         debounceSave();
-      });
+      };
+      input.addEventListener('input', persistValue);
+      input.addEventListener('change', persistValue);
       wrapper.appendChild(label);
       wrapper.appendChild(input);
+      if (values.length && !selectionOnly) {
+        const hint = document.createElement('div');
+        hint.className = 'specifics-hint';
+        hint.textContent = 'Choose an eBay suggestion or type a custom value.';
+        wrapper.appendChild(hint);
+      }
       return wrapper;
     };
     required.forEach(spec => container.appendChild(makeField(spec, true)));
