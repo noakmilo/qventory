@@ -93,12 +93,14 @@ def _fetch_specifics_from_ebay(category_id: str, marketplace_id: str) -> dict:
             for v in (aspect.get("aspectValues") or [])
             if v.get("localizedValue") or v.get("value")
         ]
+        constraint = aspect.get("aspectConstraint") or {}
         entry = {
             "name": name,
             "values": values,
-            "mode": (aspect.get("aspectConstraint") or {}).get("aspectMode"),
+            "mode": constraint.get("aspectMode"),
+            "cardinality": constraint.get("itemToAspectCardinality"),
         }
-        if (aspect.get("aspectConstraint") or {}).get("aspectRequired"):
+        if constraint.get("aspectRequired"):
             required.append(entry)
         else:
             optional.append(entry)
@@ -109,6 +111,11 @@ def _fetch_specifics_from_ebay(category_id: str, marketplace_id: str) -> dict:
     }
 
 
+def _cache_has_cardinality(cache: EbayCategorySpecificCache) -> bool:
+    fields = (cache.required_fields_json or []) + (cache.optional_fields_json or [])
+    return not fields or all("cardinality" in field for field in fields if isinstance(field, dict))
+
+
 def get_category_specifics(category_id: str, marketplace_id: str = "EBAY_US", force_refresh: bool = False):
     now = datetime.utcnow()
     cache = EbayCategorySpecificCache.query.filter_by(
@@ -116,7 +123,7 @@ def get_category_specifics(category_id: str, marketplace_id: str = "EBAY_US", fo
         marketplace_id=marketplace_id
     ).first()
 
-    if cache and not force_refresh:
+    if cache and not force_refresh and _cache_has_cardinality(cache):
         if not cache.expires_at or cache.expires_at > now:
             return cache
 

@@ -940,11 +940,34 @@
       label.textContent = `${spec.name}${requiredFlag ? ' *' : ''}`;
       const values = Array.isArray(spec.values) ? spec.values.filter(v => v && v.value) : [];
       const mode = String(spec.mode || '').toUpperCase();
+      const cardinality = String(spec.cardinality || '').toUpperCase();
       const selectionOnly = mode === 'SELECTION_ONLY';
-      const currentValue = (draft.item_specifics && draft.item_specifics[spec.name]) ? draft.item_specifics[spec.name][0] : '';
+      const multiSelect = selectionOnly && values.length && cardinality === 'MULTI';
+      const currentValues = (draft.item_specifics && Array.isArray(draft.item_specifics[spec.name]))
+        ? draft.item_specifics[spec.name]
+        : [];
+      const currentValue = currentValues[0] || '';
       let input;
 
-      if (values.length && selectionOnly) {
+      wrapper.appendChild(label);
+
+      if (multiSelect) {
+        input = document.createElement('div');
+        input.className = 'specifics-checkbox-list';
+        input.dataset.specificName = spec.name;
+        values.forEach((item) => {
+          const optionLabel = document.createElement('label');
+          optionLabel.className = 'specifics-checkbox-option';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.value = item.value;
+          checkbox.checked = currentValues.includes(item.value);
+          checkbox.dataset.specificName = spec.name;
+          optionLabel.appendChild(checkbox);
+          optionLabel.appendChild(document.createTextNode(item.value));
+          input.appendChild(optionLabel);
+        });
+      } else if (values.length && selectionOnly) {
         input = document.createElement('select');
         input.className = 'input';
         const empty = document.createElement('option');
@@ -977,10 +1000,12 @@
       }
 
       const persistValue = () => {
-        const val = input.value.trim();
+        const selectedValues = multiSelect
+          ? Array.from(input.querySelectorAll('input[type="checkbox"]:checked')).map(item => item.value.trim()).filter(Boolean)
+          : [input.value.trim()].filter(Boolean);
         if (!draft.item_specifics) draft.item_specifics = {};
-        if (val) {
-          draft.item_specifics[spec.name] = [val];
+        if (selectedValues.length) {
+          draft.item_specifics[spec.name] = selectedValues.slice(0, 5);
         } else {
           delete draft.item_specifics[spec.name];
         }
@@ -988,14 +1013,24 @@
         debounceSave();
       };
       input.dataset.specificName = spec.name;
-      input.addEventListener('input', persistValue);
-      input.addEventListener('change', persistValue);
-      wrapper.appendChild(label);
+      if (multiSelect) {
+        input.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+          checkbox.addEventListener('change', persistValue);
+        });
+      } else {
+        input.addEventListener('input', persistValue);
+        input.addEventListener('change', persistValue);
+      }
       wrapper.appendChild(input);
       if (values.length && !selectionOnly) {
         const hint = document.createElement('div');
         hint.className = 'specifics-hint';
         hint.textContent = 'Choose an eBay suggestion or type a custom value.';
+        wrapper.appendChild(hint);
+      } else if (multiSelect) {
+        const hint = document.createElement('div');
+        hint.className = 'specifics-hint';
+        hint.textContent = 'Select all values that apply.';
         wrapper.appendChild(hint);
       }
       return wrapper;
