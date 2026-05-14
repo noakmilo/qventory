@@ -2255,19 +2255,56 @@ def auto_relist_offers(self):
                     history.old_price = rule.current_price
 
                 # SALE DETECTION: Check if item has been sold (auto mode only)
-                if rule.mode in ('auto', 'price_update') and rule.listing_id:
+                if rule.mode in ('auto', 'price_update') and (rule.listing_id or rule.offer_id):
                     from qventory.helpers.ebay_relist import check_item_sold_in_fulfillment
+                    from qventory.models.item import Item
 
-                    if check_item_sold_in_fulfillment(rule.user_id, rule.listing_id):
+                    listing_identifiers = [
+                        str(identifier).strip()
+                        for identifier in (rule.listing_id, rule.offer_id)
+                        if str(identifier or '').strip()
+                    ]
+                    sold_listing_id = next(
+                        (
+                            identifier for identifier in listing_identifiers
+                            if check_item_sold_in_fulfillment(rule.user_id, identifier)
+                        ),
+                        None
+                    )
+
+                    if sold_listing_id:
                         log_task(f"✓ Item SOLD - stopping auto-relist rule {rule.id}")
 
                         rule.enabled = False
                         rule.last_run_status = 'stopped_sold'
                         rule.last_run_at = datetime.utcnow()
                         rule.last_error_message = 'Rule stopped: item was sold'
+                        rule.next_run_at = None
+
+                        item_filters = [Item.ebay_listing_id == sold_listing_id]
+                        if rule.listing_id:
+                            item_filters.append(Item.ebay_listing_id == rule.listing_id)
+                        if rule.sku:
+                            item_filters.append(Item.sku == rule.sku)
+                        sold_item = Item.query.filter(
+                            Item.user_id == rule.user_id,
+                            or_(*item_filters)
+                        ).order_by(Item.updated_at.desc()).first()
+                        if sold_item:
+                            sold_item.is_active = False
+                            if not sold_item.sold_at:
+                                sold_item.sold_at = datetime.utcnow()
+                            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+                            sold_note = (
+                                f"\n[{timestamp}] Scheduled auto relist stopped: "
+                                f"listing {sold_listing_id} was sold."
+                            )
+                            if sold_note.strip() not in (sold_item.notes or ''):
+                                sold_item.notes = (sold_item.notes or '') + sold_note
+                            history.item_id = sold_item.id
 
                         history.status = 'skipped'
-                        history.skip_reason = 'Item sold - found in fulfillment database'
+                        history.skip_reason = 'Item sold - scheduled relist stopped before end/relist'
                         history.mark_completed()
 
                         db.session.commit()
@@ -4002,9 +4039,19 @@ def poll_user_listings(credential):
                         )
                 continue
 
+            relist_source = Item.query.filter_by(user_id=user_id).filter(
+                Item.notes.like(f'%Relist pending: {listing_id}%')
+            ).order_by(Item.updated_at.desc()).first()
+
             if remaining_quota is not None and remaining_quota <= 0:
-                log_task(f"    ✗ User reached plan limit while importing new listings")
-                break
+                if relist_source:
+                    log_task(
+                        f"    ↻ Importing relisted listing {listing_id} despite plan limit "
+                        f"because it replaces item {relist_source.id}"
+                    )
+                else:
+                    log_task(f"    ✗ User reached plan limit while importing new listings")
+                    break
 
             # Enrich with GetItem for full details (title, images, price, sku)
             enriched = get_listing_details_trading_api(user_id, listing_id) or {}
@@ -4058,10 +4105,6 @@ def poll_user_listings(credential):
             location_code = parsed_with_images.get('location_code') or ebay_custom_sku
             quantity = parsed_with_images.get('quantity')
 
-            relist_source = Item.query.filter_by(user_id=user_id).filter(
-                Item.notes.like(f'%Relist pending: {listing_id}%')
-            ).order_by(Item.updated_at.desc()).first()
-
             new_item = Item(
                 user_id=user_id,
                 title=title[:500] if title else 'eBay Item',
@@ -4085,7 +4128,7 @@ def poll_user_listings(credential):
                 notes=f"Auto-imported from eBay on {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} via polling"
             )
             limit_status = get_item_limit_status(user_id, lock=True)
-            if not limit_status.allowed:
+            if not limit_status.allowed and not relist_source:
                 log_task(
                     f"    ✗ User reached plan limit while importing new listings "
                     f"({limit_status.max_items} items)"
@@ -4151,7 +4194,7 @@ def poll_user_listings(credential):
 
             new_listings += 1
             last_title = title
-            if remaining_quota is not None:
+            if remaining_quota is not None and not relist_source:
                 remaining_quota -= 1
 
             if not has_image(new_item.item_thumb):

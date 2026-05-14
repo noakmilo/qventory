@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import requests
+import re
 from datetime import datetime, timedelta
 from qventory.helpers.ebay_inventory import (
     fetch_ebay_inventory_offers,
@@ -43,6 +44,47 @@ def is_probable_listing_id(value: str) -> bool:
     """
     candidate = _normalize_identifier(value)
     return bool(candidate) and candidate.isdigit() and len(candidate) >= 10
+
+
+def _find_pending_relist_item(user_id: int, old_listing_id: str):
+    """Return the local item and pending new listing id if this relist already succeeded."""
+    from qventory.models.item import Item
+
+    normalized_old = _normalize_identifier(old_listing_id)
+    if not normalized_old:
+        return None, None
+
+    item = Item.query.filter_by(
+        user_id=user_id,
+        ebay_listing_id=normalized_old
+    ).first()
+    if not item or not item.notes:
+        return item, None
+
+    matches = re.findall(
+        rf"Relist pending:\s*([0-9]+)\s*\(from\s*{re.escape(normalized_old)}\)",
+        item.notes or ""
+    )
+    pending_listing_id = matches[-1] if matches else None
+    return item, pending_listing_id
+
+
+def _idempotent_relist_result(user_id: int, old_listing_id: str) -> dict | None:
+    """Return a successful relist result when a previous attempt already created a new listing."""
+    _, pending_listing_id = _find_pending_relist_item(user_id, old_listing_id)
+    if not pending_listing_id:
+        return None
+    log_relist(
+        f"  ↻ Idempotency guard: listing {old_listing_id} already has "
+        f"pending relist {pending_listing_id}; skipping another RelistItem/Publish"
+    )
+    return {
+        "success": True,
+        "old_listing_id": old_listing_id,
+        "new_listing_id": pending_listing_id,
+        "new_offer_id": pending_listing_id,
+        "details": {"idempotent": True, "source": "local_relist_pending_note"},
+    }
 
 
 def resolve_offer_id_from_listing_id(
@@ -947,6 +989,10 @@ def mark_relist_pending(user_id: int, old_listing_id: str, new_listing_id: str, 
         return {'success': False, 'error': f'Item not found for listing {old_listing_id}'}
 
     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    existing_item, existing_pending_id = _find_pending_relist_item(user_id, old_listing_id)
+    if existing_item and existing_pending_id == str(new_listing_id):
+        return {'success': True, 'item_id': item.id, 'already_pending': True}
+
     relist_note = f"\n[{timestamp}] Relist pending: {new_listing_id} (from {old_listing_id})"
     item.notes = (item.notes or '') + relist_note
 
@@ -1596,6 +1642,12 @@ def execute_relist_inventory_api(user_id: int, rule, apply_changes=False) -> dic
     old_listing_id = offer.get('listingId') or rule.listing_id
     result['old_listing_id'] = old_listing_id
 
+    if old_listing_id:
+        idempotent_result = _idempotent_relist_result(user_id, old_listing_id)
+        if idempotent_result:
+            idempotent_result["new_offer_id"] = rule.offer_id
+            return idempotent_result
+
     # Step 2: Withdraw
     log_relist(f"  → Step 1/3: Withdrawing offer...")
     withdraw_result = withdraw_offer(user_id, rule.offer_id)
@@ -1728,6 +1780,10 @@ def execute_relist_trading_api(user_id: int, rule, apply_changes=False) -> dict:
         'details': {},
         'old_listing_id': item_id
     }
+
+    idempotent_result = _idempotent_relist_result(user_id, item_id)
+    if idempotent_result:
+        return idempotent_result
 
     # Step 1: Validate
     validation = validate_item_for_relist_trading_api(user_id, item_id, rule)
@@ -1862,20 +1918,33 @@ def check_item_sold_in_fulfillment(user_id: int, listing_id: str) -> bool:
         return False
 
     try:
+        from qventory.models.item import Item
         from qventory.models.sale import Sale
         from sqlalchemy import or_
 
-        # Check if this listing_id appears in sales table
-        # with either shipped_at or delivered_at populated
+        listing_id = str(listing_id).strip()
+
+        local_item = Item.query.filter_by(
+            user_id=user_id,
+            ebay_listing_id=listing_id
+        ).first()
+        if local_item and local_item.sold_at:
+            log_relist(f"✓ Listing {listing_id} has local sold_at - item SOLD")
+            return True
+
+        # Check if this listing_id appears in sales table. sold_at is enough:
+        # waiting for shipped/delivered can create a relist window after payment.
         sale = Sale.query.filter_by(
             user_id=user_id
         ).filter(
             or_(
+                Sale.sale_ebay_listing_id == listing_id,
                 Sale.marketplace_order_id == listing_id,
                 Sale.ebay_transaction_id == listing_id
             )
         ).filter(
             or_(
+                Sale.sold_at.isnot(None),
                 Sale.delivered_at.isnot(None),
                 Sale.shipped_at.isnot(None)
             )

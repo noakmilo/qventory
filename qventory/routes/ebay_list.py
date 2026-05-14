@@ -351,6 +351,13 @@ def _parse_ai_json(content: str | None):
     return json.loads(text)
 
 
+def _plain_text_from_html(html: str | None) -> str:
+    if not html:
+        return ""
+    text = bleach.clean(html, tags=[], strip=True)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _call_listing_ai(messages, max_tokens=900):
     client, error = _openai_client()
     if error:
@@ -367,9 +374,13 @@ def _call_listing_ai(messages, max_tokens=900):
 
 
 def _draft_ai_context(draft: EbayListingDraft):
+    description_html = draft.description_html_sanitized or draft.description_html or ""
+    description_text = _plain_text_from_html(description_html)
     return {
         "title": draft.title or "",
-        "description_html": draft.description_html_sanitized or draft.description_html or "",
+        "description_html": description_html,
+        "description_text": description_text,
+        "has_user_description": bool(description_text),
         "category_id": draft.category_id,
         "condition": draft.condition_label or draft.condition_id or "",
         "price": float(draft.price) if draft.price is not None else None,
@@ -595,11 +606,23 @@ def ai_generate_description(draft_id):
         image_url = _draft_image_source_url(images[0])
 
     prompt = (
-        "Create an enriched eBay item description from this listing context. "
+        "Create or optimize an enriched eBay item description from this listing context. "
+        "Input priority: always use the title; if user_description is present, improve and preserve it; "
+        "if the main image is present, use visible details from the image; if only the title is available, write from the title only. "
+        "When title, user_description, and main image are all present, use all three. "
         "Be accurate and do not invent exact specs not visible or provided. "
         "Return only JSON with key description_html. Use simple HTML tags: p, ul, li, strong."
     )
-    user_content = [{"type": "text", "text": f"{prompt}\n\nContext:\n{json.dumps(context, ensure_ascii=True)}"}]
+    context["has_main_image"] = bool(image_url)
+    user_content = [{
+        "type": "text",
+        "text": (
+            f"{prompt}\n\n"
+            f"Title: {context['title']}\n\n"
+            f"User description to optimize, if any:\n{context['description_text'] or '[none provided]'}\n\n"
+            f"Full listing context:\n{json.dumps(context, ensure_ascii=True)}"
+        )
+    }]
     if image_url:
         user_content.append({"type": "image_url", "image_url": {"url": image_url}})
 
