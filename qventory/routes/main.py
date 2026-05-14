@@ -5505,7 +5505,7 @@ def item_detail(item_id):
             })
 
     events = [e for e in events if e.get("timestamp")]
-    events.sort(key=lambda e: e["timestamp"])
+    events.sort(key=lambda e: e["timestamp"], reverse=True)
 
     return render_template(
         "item_detail.html",
