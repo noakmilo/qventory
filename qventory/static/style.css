@@ -3409,6 +3409,20 @@ body.modal-open{ overflow:hidden; touch-action:none; }
   width: min(960px, 96vw);
 }
 
+.modal__dialog--profit-calc {
+  max-width: 680px;
+  width: min(680px, 94vw);
+}
+
+.modal__dialog--profit-calc .modal__body--flush {
+  background: var(--bg);
+}
+
+.modal__dialog--profit-calc iframe {
+  height: min(78vh, 820px) !important;
+  display: block;
+}
+
 .modal__header {
   padding: 20px;
   border-bottom: 1px solid var(--border);

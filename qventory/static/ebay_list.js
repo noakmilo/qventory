@@ -529,12 +529,20 @@
     const frame = qs('#profitCalcFrame');
     if (!modal || modal.dataset.ebayListInitialized) return;
     modal.dataset.ebayListInitialized = 'true';
-    modal.querySelectorAll('[data-modal-close]').forEach((target) => {
-      target.addEventListener('click', () => {
+    document.addEventListener('click', (event) => {
+      const closeTarget = event.target.closest('#profitCalcModal [data-modal-close]');
+      if (closeTarget) {
         modal.hidden = true;
         document.body.classList.remove('modal-open');
         if (frame) frame.src = 'about:blank';
-      });
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.hidden) {
+        modal.hidden = true;
+        document.body.classList.remove('modal-open');
+        if (frame) frame.src = 'about:blank';
+      }
     });
   }
 
