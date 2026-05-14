@@ -15,9 +15,163 @@
   const qs = (sel) => document.querySelector(sel);
 
   const wizardStatus = qs('#wizardStatus');
+  const publishStatus = qs('#publishStatus');
+  const publishModal = qs('#publishResultModal');
+  const publishModalTitle = qs('#publishResultTitle');
+  const publishModalMessage = qs('#publishResultMessage');
+  const publishModalList = qs('#publishResultList');
+  const publishModalIcon = qs('#publishResultIcon');
+
+  const FIELD_LABELS = {
+    title: 'Title',
+    description: 'Description',
+    category_id: 'Category',
+    condition_id: 'Condition',
+    sku: 'SKU',
+    quantity: 'Quantity',
+    price: 'Buy It Now price',
+    auction_start_price: 'Auction starting price',
+    currency: 'Currency',
+    fulfillment_policy_id: 'Fulfillment policy',
+    payment_policy_id: 'Payment policy',
+    return_policy_id: 'Return policy',
+    merchant_location_key: 'Merchant location',
+    package_weight: 'Package weight',
+    images: 'Images',
+    item_specifics: 'Item specifics'
+  };
+
+  const ERROR_MESSAGES = {
+    rate_limited: 'Too many publish attempts. Wait a few minutes and try again.',
+    not_found: 'This draft could not be found. Refresh the page and try again.',
+    ebay_not_connected: 'Your eBay account is not connected. Connect eBay before publishing.',
+    image_upload_failed: 'One or more images could not be uploaded. Check your images and try again.',
+    inventory_item_failed: 'eBay could not create the inventory item for this listing.',
+    offer_failed: 'eBay could not create the offer for this listing.',
+    publish_failed: 'eBay rejected the final publish step.',
+    cloudinary_not_configured: 'Image uploads are not configured yet.',
+    invalid_size: 'One of the uploaded images is too large.',
+    image_limit_reached: 'eBay allows up to 24 images per listing.'
+  };
 
   function setStatus(msg) {
     if (wizardStatus) wizardStatus.textContent = msg;
+  }
+
+  function setPublishStatus(msg) {
+    if (publishStatus) publishStatus.textContent = msg;
+  }
+
+  function humanizeKey(key) {
+    return FIELD_LABELS[key] || String(key || '').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  function cleanErrorMessage(message) {
+    return String(message || '')
+      .replace(/^A user error has occurred\.\s*/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function formatFieldError(field, message) {
+    const label = humanizeKey(field);
+    const text = cleanErrorMessage(message);
+    if (!text) return `${label} needs attention.`;
+    if (text.toLowerCase().startsWith(label.toLowerCase())) return text;
+    return `${label}: ${text}`;
+  }
+
+  function flattenValidationErrors(errors) {
+    const messages = [];
+    if (!errors || typeof errors !== 'object') return messages;
+    Object.entries(errors).forEach(([field, value]) => {
+      if (field === 'item_specifics' && value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.entries(value).forEach(([specificName, specificError]) => {
+          const text = cleanErrorMessage(Array.isArray(specificError) ? specificError.join(', ') : specificError);
+          messages.push(`Item specific "${specificName}" is required${text && text !== 'Required.' ? `: ${text}` : '.'}`);
+        });
+        return;
+      }
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.entries(value).forEach(([nestedField, nestedValue]) => {
+          const text = cleanErrorMessage(Array.isArray(nestedValue) ? nestedValue.join(', ') : nestedValue);
+          messages.push(`${humanizeKey(field)} ${formatFieldError(nestedField, text)}`);
+        });
+        return;
+      }
+      const text = cleanErrorMessage(Array.isArray(value) ? value.join(', ') : value);
+      messages.push(formatFieldError(field, text));
+    });
+    return messages;
+  }
+
+  function parseEbayErrorDetails(details) {
+    if (!details) return [];
+    let parsed = details;
+    if (typeof details === 'string') {
+      try {
+        parsed = JSON.parse(details);
+      } catch (err) {
+        return [cleanErrorMessage(details)];
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') return [];
+    if (Array.isArray(parsed.errors)) {
+      return parsed.errors.map((error) => {
+        const message = cleanErrorMessage(error.message || error.longMessage || error.errorId || 'eBay returned an error.');
+        const parameter = Array.isArray(error.parameters) && error.parameters.length
+          ? error.parameters.map(param => param.name || param.value).filter(Boolean).join(', ')
+          : '';
+        return parameter ? `${message} (${parameter})` : message;
+      }).filter(Boolean);
+    }
+    if (parsed.message) return [cleanErrorMessage(parsed.message)];
+    return [];
+  }
+
+  function publishErrorMessages(data) {
+    const messages = [];
+    if (data && data.errors) messages.push(...flattenValidationErrors(data.errors));
+    if (data && data.details) messages.push(...parseEbayErrorDetails(data.details));
+    if (!messages.length && data && data.error) messages.push(ERROR_MESSAGES[data.error] || cleanErrorMessage(data.error));
+    if (!messages.length) messages.push('The listing could not be published. Review the draft and try again.');
+    return Array.from(new Set(messages.filter(Boolean)));
+  }
+
+  function showPublishModal(type, title, message, items = []) {
+    if (!publishModal) return;
+    publishModalTitle.textContent = title;
+    publishModalMessage.textContent = message || '';
+    publishModalIcon.classList.toggle('error', type === 'error');
+    publishModalIcon.innerHTML = type === 'error'
+      ? '<i class="fas fa-triangle-exclamation"></i>'
+      : '<i class="fas fa-check"></i>';
+    publishModalList.innerHTML = '';
+    items.forEach((item) => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      publishModalList.appendChild(li);
+    });
+    publishModalList.style.display = items.length ? 'grid' : 'none';
+    publishModal.hidden = false;
+    document.body.classList.add('modal-open');
+  }
+
+  function closePublishModal() {
+    if (!publishModal) return;
+    publishModal.hidden = true;
+    document.body.classList.remove('modal-open');
+  }
+
+  if (publishModal) {
+    publishModal.addEventListener('click', (event) => {
+      if (event.target === publishModal || event.target.closest('[data-publish-modal-close]')) {
+        closePublishModal();
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !publishModal.hidden) closePublishModal();
+    });
   }
 
   function draftUrl(base, id) {
@@ -1222,18 +1376,52 @@
 
   qs('#saveDraftBtn').addEventListener('click', async () => {
     await saveDraft({createIfMissing: true});
-    qs('#publishStatus').textContent = 'Draft saved.';
+    setPublishStatus('Draft saved.');
   });
 
   qs('#publishBtn').addEventListener('click', async () => {
-    qs('#publishStatus').textContent = 'Publishing...';
-    await saveDraft({createIfMissing: true});
-    const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
-    const data = await res.json();
-    if (data.ok) {
-      qs('#publishStatus').textContent = `Published! Listing ID: ${data.draft.ebay_listing_id || 'N/A'}`;
-    } else {
-      qs('#publishStatus').textContent = `Publish failed: ${JSON.stringify(data.errors || data.error)}`;
+    const publishBtn = qs('#publishBtn');
+    publishBtn.disabled = true;
+    setPublishStatus('Publishing listing...');
+    try {
+      await saveDraft({createIfMissing: true});
+      const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (err) {
+        data = {ok: false, error: 'invalid_response'};
+      }
+      if (res.ok && data.ok) {
+        const listingId = data.draft && data.draft.ebay_listing_id ? data.draft.ebay_listing_id : 'N/A';
+        setPublishStatus(`Published. Listing ID: ${listingId}`);
+        showPublishModal(
+          'success',
+          'Your listing is live',
+          listingId === 'N/A'
+            ? 'eBay accepted the listing and it is now published.'
+            : `eBay accepted the listing. Listing ID: ${listingId}.`
+        );
+      } else {
+        const messages = publishErrorMessages(data);
+        setPublishStatus('Publish needs attention.');
+        showPublishModal(
+          'error',
+          'We could not publish this listing',
+          'Please fix the following before trying again:',
+          messages
+        );
+      }
+    } catch (err) {
+      setPublishStatus('Publish needs attention.');
+      showPublishModal(
+        'error',
+        'We could not publish this listing',
+        'Something interrupted the publish request. Check your connection and try again.',
+        []
+      );
+    } finally {
+      publishBtn.disabled = false;
     }
   });
 

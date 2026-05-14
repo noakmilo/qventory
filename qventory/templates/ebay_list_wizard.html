@@ -242,9 +242,28 @@
     </div>
     <div id="publishStatus" class="muted"></div>
   </div>
+
+  <div class="listing-publish-modal" id="publishResultModal" hidden role="dialog" aria-modal="true" aria-labelledby="publishResultTitle">
+    <div class="listing-publish-modal__card">
+      <button class="listing-publish-modal__close" type="button" data-publish-modal-close aria-label="Close publication message">
+        <i class="fas fa-times"></i>
+      </button>
+      <div class="listing-publish-modal__icon" id="publishResultIcon">
+        <i class="fas fa-check"></i>
+      </div>
+      <h3 id="publishResultTitle">Listing published</h3>
+      <p id="publishResultMessage"></p>
+      <ul id="publishResultList"></ul>
+      <button class="btn btn-primary" type="button" data-publish-modal-close>OK</button>
+    </div>
+  </div>
 </div>
 
 <style>
+  .list-wizard { width:100%; max-width:100%; min-width:0; overflow-x:hidden; }
+  .list-wizard *,
+  .list-wizard *::before,
+  .list-wizard *::after { box-sizing:border-box; min-width:0; }
   .list-wizard .wizard-status { margin-bottom:12px; color:var(--sub); font-size:13px; }
   .list-wizard .page-header,
   .list-wizard .section-head,
@@ -261,6 +280,10 @@
   .list-wizard .icon-btn { width:34px; height:34px; padding:0; display:inline-flex; align-items:center; justify-content:center; }
   .list-wizard #listingProfitCalcBtn i { color:#10b981; }
   .list-wizard .form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; }
+  .list-wizard .input,
+  .list-wizard select,
+  .list-wizard textarea,
+  .list-wizard button { max-width:100%; }
   .list-wizard .span-2 { grid-column:span 2; }
   .list-wizard .editor-toggle { display:flex; gap:6px; }
   .list-wizard .editor-toolbar { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
@@ -318,14 +341,163 @@
   .list-wizard .image-add-tile span { font-size:12px; }
   .list-wizard .danger { color:#f87171; border-color:rgba(248,113,113,.35); }
   .list-wizard .muted { color:var(--sub); font-size:12px; }
+  .list-wizard .listing-publish-modal {
+    position:fixed;
+    inset:0;
+    z-index:3000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:22px;
+    background:rgba(15,23,42,.58);
+    backdrop-filter:blur(5px);
+  }
+  .list-wizard .listing-publish-modal[hidden] { display:none; }
+  .list-wizard .listing-publish-modal__card {
+    position:relative;
+    width:min(520px, 100%);
+    max-height:min(82vh, 640px);
+    overflow:auto;
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:24px;
+    background:var(--card);
+    color:var(--text);
+    box-shadow:0 24px 70px rgba(0,0,0,.35);
+    text-align:left;
+  }
+  .list-wizard .listing-publish-modal__close {
+    position:absolute;
+    top:12px;
+    right:12px;
+    width:34px;
+    height:34px;
+    border:1px solid var(--border);
+    border-radius:50%;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(255,255,255,.04);
+    color:var(--text);
+    cursor:pointer;
+  }
+  .list-wizard .listing-publish-modal__icon {
+    width:44px;
+    height:44px;
+    border-radius:50%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:12px;
+    background:rgba(16,185,129,.14);
+    color:#10b981;
+    font-size:20px;
+  }
+  .list-wizard .listing-publish-modal__icon.error {
+    background:rgba(239,68,68,.14);
+    color:#ef4444;
+  }
+  .list-wizard .listing-publish-modal__card h3 {
+    margin:0 36px 8px 0;
+    font-size:22px;
+    line-height:1.2;
+  }
+  .list-wizard .listing-publish-modal__card p {
+    margin:0 0 12px;
+    color:var(--sub);
+  }
+  .list-wizard .listing-publish-modal__card ul {
+    margin:0 0 18px;
+    padding-left:20px;
+    display:grid;
+    gap:6px;
+  }
+  .list-wizard .listing-publish-modal__card li { color:var(--text); }
   @media (max-width: 900px) {
     .list-wizard .image-tools { grid-template-columns:1fr; }
     .list-wizard .span-2 { grid-column:span 1; }
+    .list-wizard .form-grid,
+    .list-wizard .specifics-grid { grid-template-columns:1fr; }
+    .list-wizard .page-header { align-items:stretch; }
+    .list-wizard .page-header > * { width:100%; }
+    .list-wizard .page-header .btn { width:max-content; max-width:100%; }
   }
   @media (max-width: 640px) {
+    .list-wizard { padding-inline:0; }
+    .list-wizard .listing-card { padding:14px; border-radius:8px; }
+    .list-wizard .page-title { font-size:22px; line-height:1.15; }
+    .list-wizard .page-subtitle { font-size:13px; }
+    .list-wizard .section-head,
+    .list-wizard .field-head,
+    .list-wizard .editor-header,
+    .list-wizard .editor-actions,
+    .list-wizard .section-actions,
+    .list-wizard .review-actions {
+      flex-direction:column;
+      align-items:stretch;
+      gap:8px;
+    }
+    .list-wizard .title-tools,
+    .list-wizard .editor-actions,
+    .list-wizard .section-actions,
+    .list-wizard .review-actions {
+      width:100%;
+    }
+    .list-wizard .title-tools .btn:not(.icon-btn),
+    .list-wizard .editor-actions > .btn,
+    .list-wizard .section-actions .btn,
+    .list-wizard .review-actions .btn {
+      width:100%;
+      justify-content:center;
+    }
+    .list-wizard .title-tools {
+      display:grid;
+      grid-template-columns:42px minmax(0, 1fr);
+    }
+    .list-wizard .icon-btn { width:42px; height:38px; }
+    .list-wizard .editor-toggle { width:100%; display:grid; grid-template-columns:1fr 1fr; }
+    .list-wizard .editor-toggle .btn { width:100%; justify-content:center; }
+    .list-wizard .editor-toolbar,
+    .list-wizard .editor-tool-row {
+      flex-wrap:nowrap;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      padding-bottom:4px;
+    }
+    .list-wizard .editor-toolbar .btn,
+    .list-wizard .editor-tool-row .btn,
+    .list-wizard .editor-tool-row label {
+      flex:0 0 auto;
+      white-space:nowrap;
+    }
+    .list-wizard .visual-editor { min-height:170px; max-width:100%; overflow:auto; }
     .list-wizard .category-search { grid-template-columns:22px minmax(0, 1fr); }
     .list-wizard .category-search .btn { grid-column:1 / -1; }
+    .list-wizard .autocomplete { top:92px; max-height:260px; }
+    .list-wizard .image-dropzone { padding:8px; min-height:132px; }
+    .list-wizard .image-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+    .list-wizard .image-card,
+    .list-wizard .image-add-tile { min-height:142px; padding:7px; }
+    .list-wizard .image-card { grid-template-rows:82px auto; }
+    .list-wizard .image-card img { height:82px; }
+    .list-wizard .image-card-actions { display:grid; grid-template-columns:repeat(4, 1fr); gap:4px; }
+    .list-wizard .image-card-actions .btn-small { width:100%; padding:5px 0; }
     .list-wizard .open-image-editor-shell { height:380px; }
+    .list-wizard #cropperImage { max-height:380px; }
+    .list-wizard .editor-controls input[type="range"] { width:120px; }
+    .list-wizard .listing-publish-modal { padding:14px; align-items:center; }
+    .list-wizard .listing-publish-modal__card { padding:20px; border-radius:10px; width:100%; }
+    .list-wizard .listing-publish-modal__card h3 { font-size:20px; }
+  }
+  @media (max-width: 420px) {
+    .list-wizard .listing-card { padding:12px; }
+    .list-wizard .image-grid { grid-template-columns:1fr; }
+    .list-wizard .image-card,
+    .list-wizard .image-add-tile { min-height:158px; }
+    .list-wizard .image-card { grid-template-rows:98px auto; }
+    .list-wizard .image-card img { height:98px; }
+    .list-wizard .open-image-editor-shell { height:320px; }
+    .list-wizard #cropperImage { max-height:320px; }
   }
 </style>
 
