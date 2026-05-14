@@ -357,9 +357,13 @@ def create_app():
 
     @app.after_request
     def add_security_headers(response):
+        is_profit_calc_embed = (
+            request.endpoint == "main.profit_calculator"
+            and request.args.get("embed") == "1"
+        )
         # Basic security headers for SEO/security scanners
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN" if is_profit_calc_embed else "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
 
@@ -369,6 +373,7 @@ def create_app():
 
         # CSP: allow common inline styles/scripts used in templates; tighten later if needed
         if "Content-Security-Policy" not in response.headers:
+            frame_ancestors = "'self'" if is_profit_calc_embed else "'none'"
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
                 "img-src 'self' data: blob: https:; "
@@ -377,7 +382,7 @@ def create_app():
                 "connect-src 'self' https:; "
                 "worker-src 'self' blob:; "
                 "font-src 'self' https: data:; "
-                "frame-ancestors 'none'; "
+                f"frame-ancestors {frame_ancestors}; "
                 "base-uri 'self'; "
                 "form-action 'self';"
             )
