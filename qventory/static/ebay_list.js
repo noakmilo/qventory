@@ -54,6 +54,24 @@
     image_limit_reached: 'eBay allows up to 24 images per listing.'
   };
 
+  const VALIDATION_TARGETS = {
+    title: ['#titleInput'],
+    description: ['#visualEditor', '#descriptionHtmlInput'],
+    category_id: ['#categorySearchInput', '#categorySelected'],
+    condition_id: ['#conditionInput'],
+    sku: ['#skuInput'],
+    quantity: ['#quantityInput'],
+    price: ['#priceInput'],
+    auction_start_price: ['#auctionStartPriceInput'],
+    currency: ['#currencyInput'],
+    fulfillment_policy_id: ['#fulfillmentPolicySelect'],
+    payment_policy_id: ['#paymentPolicySelect'],
+    return_policy_id: ['#returnPolicySelect'],
+    package_weight: ['#packageWeightLbsInput', '#packageWeightOzInput'],
+    images: ['#imageDropzone'],
+    item_specifics: ['#specificsContainer']
+  };
+
   function setStatus(msg) {
     if (wizardStatus) wizardStatus.textContent = msg;
   }
@@ -64,6 +82,11 @@
 
   function humanizeKey(key) {
     return FIELD_LABELS[key] || String(key || '').replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+    return String(value || '').replace(/["\\]/g, '\\$&');
   }
 
   function cleanErrorMessage(message) {
@@ -136,6 +159,123 @@
     if (!messages.length && data && data.error) messages.push(ERROR_MESSAGES[data.error] || cleanErrorMessage(data.error));
     if (!messages.length) messages.push('The listing could not be published. Review the draft and try again.');
     return Array.from(new Set(messages.filter(Boolean)));
+  }
+
+  function clearValidationHighlights() {
+    document.querySelectorAll('.field-invalid').forEach(el => {
+      el.classList.remove('field-invalid');
+      el.removeAttribute('aria-invalid');
+    });
+    document.querySelectorAll('.validation-message').forEach(el => el.remove());
+  }
+
+  function addValidationMessage(target, message) {
+    if (!target || !message) return;
+    const parent = target.closest('label') || target.parentElement;
+    if (!parent || parent.querySelector('.validation-message')) return;
+    const note = document.createElement('div');
+    note.className = 'validation-message';
+    note.textContent = message;
+    parent.appendChild(note);
+  }
+
+  function markValidationField(field, message) {
+    const selectors = VALIDATION_TARGETS[field] || [];
+    selectors.forEach((selector) => {
+      const target = qs(selector);
+      if (!target) return;
+      target.classList.add('field-invalid');
+      target.setAttribute('aria-invalid', 'true');
+      addValidationMessage(target, message);
+    });
+  }
+
+  function applyValidationErrors(errors) {
+    clearValidationHighlights();
+    if (!errors || typeof errors !== 'object') return;
+    Object.entries(errors).forEach(([field, value]) => {
+      if (field === 'item_specifics' && value && typeof value === 'object' && !Array.isArray(value)) {
+        Object.entries(value).forEach(([specificName, specificError]) => {
+          const text = cleanErrorMessage(Array.isArray(specificError) ? specificError.join(', ') : specificError) || 'Required.';
+          const input = document.querySelector(`[data-specific-name="${cssEscape(specificName)}"]`);
+          if (input) {
+            input.classList.add('field-invalid');
+            input.setAttribute('aria-invalid', 'true');
+            addValidationMessage(input, text === 'Required.' ? 'This item specific is required.' : text);
+          }
+        });
+        markValidationField('item_specifics', 'Complete the required item specifics.');
+        return;
+      }
+      const text = value && typeof value === 'object' && !Array.isArray(value)
+        ? Object.values(value).map(item => Array.isArray(item) ? item.join(', ') : item).join(', ')
+        : Array.isArray(value) ? value.join(', ') : value;
+      markValidationField(field, cleanErrorMessage(text));
+    });
+  }
+
+  function hasValidationErrors(errors) {
+    if (!errors || typeof errors !== 'object') return false;
+    return Object.keys(errors).length > 0;
+  }
+
+  function focusFirstInvalidField() {
+    const first = document.querySelector('.field-invalid');
+    if (!first) return;
+    first.scrollIntoView({behavior: 'smooth', block: 'center'});
+    if (typeof first.focus === 'function') first.focus({preventScroll: true});
+  }
+
+  function clearFieldValidation(target) {
+    if (!target || !target.classList) return;
+    target.classList.remove('field-invalid');
+    target.removeAttribute('aria-invalid');
+    const parent = target.closest('label') || target.parentElement;
+    const note = parent ? parent.querySelector('.validation-message') : null;
+    if (note) note.remove();
+  }
+
+  function collectFrontendPublishErrors() {
+    const payload = serializeDraftFromInputs();
+    payload.category_id = draft && draft.category_id ? draft.category_id : null;
+    const errors = {};
+    const listingFormat = payload.listing_format;
+    const packageDetails = payload.package_details || {};
+    const weightOz = (Number(packageDetails.weight_lbs) || 0) * 16 + (Number(packageDetails.weight_oz) || 0);
+    const descriptionText = document.createElement('div');
+    descriptionText.innerHTML = payload.description_html || '';
+
+    if (!payload.title) errors.title = 'Title is required.';
+    if (!payload.sku) errors.sku = 'SKU is required.';
+    if (!payload.category_id && !(draft && draft.category_id)) errors.category_id = 'Category is required.';
+    if (!payload.condition_id) errors.condition_id = 'Condition is required.';
+    if (!payload.quantity || payload.quantity <= 0) errors.quantity = 'Quantity must be at least 1.';
+    if (listingFormat === 'FIXED_PRICE' && (!payload.price || payload.price <= 0)) {
+      errors.price = 'Buy It Now price must be greater than 0.';
+    }
+    if (listingFormat === 'AUCTION' && (!payload.auction_start_price || payload.auction_start_price <= 0)) {
+      errors.auction_start_price = 'Auction start price must be greater than 0.';
+    }
+    if (!payload.currency) errors.currency = 'Currency is required.';
+    if (!payload.description_html || !descriptionText.textContent.trim()) errors.description = 'Description is required.';
+    if (!payload.fulfillment_policy_id) errors.fulfillment_policy_id = 'Fulfillment policy is required.';
+    if (!payload.payment_policy_id) errors.payment_policy_id = 'Payment policy is required.';
+    if (!payload.return_policy_id) errors.return_policy_id = 'Return policy is required.';
+    if (weightOz <= 0) errors.package_weight = 'Package weight is required.';
+    if (!images.length) errors.images = 'At least one image is required.';
+
+    const requiredSpecifics = specificsSchema && Array.isArray(specificsSchema.required_fields)
+      ? specificsSchema.required_fields
+      : [];
+    requiredSpecifics.forEach((field) => {
+      const name = field.name;
+      if (name && !(draft.item_specifics && draft.item_specifics[name] && draft.item_specifics[name][0])) {
+        if (!errors.item_specifics || typeof errors.item_specifics !== 'object') errors.item_specifics = {};
+        errors.item_specifics[name] = 'Required.';
+      }
+    });
+
+    return errors;
   }
 
   function showPublishModal(type, title, message, items = []) {
@@ -385,14 +525,29 @@
     ]
       .forEach(sel => {
         const el = qs(sel);
-        el.addEventListener('input', debounceSave);
-        el.addEventListener('change', debounceSave);
+        el.addEventListener('input', () => {
+          clearFieldValidation(el);
+          debounceSave();
+        });
+        el.addEventListener('change', () => {
+          clearFieldValidation(el);
+          debounceSave();
+        });
       });
     qs('#listingTypeInput').addEventListener('change', toggleListingTypeFields);
-    qs('#visualEditor').addEventListener('input', debounceSave);
-    qs('#descriptionHtmlInput').addEventListener('input', debounceSave);
+    qs('#visualEditor').addEventListener('input', () => {
+      clearFieldValidation(qs('#visualEditor'));
+      debounceSave();
+    });
+    qs('#descriptionHtmlInput').addEventListener('input', () => {
+      clearFieldValidation(qs('#descriptionHtmlInput'));
+      debounceSave();
+    });
     ['#fulfillmentPolicySelect', '#paymentPolicySelect', '#returnPolicySelect']
-      .forEach(sel => qs(sel).addEventListener('change', debounceSave));
+      .forEach(sel => qs(sel).addEventListener('change', () => {
+        clearFieldValidation(qs(sel));
+        debounceSave();
+      }));
   }
 
   function renderDraftToInputs() {
@@ -596,6 +751,8 @@
     draft.category_id = cat.category_id;
     renderSelectedCategory(cat);
     qs('#categorySearchInput').value = cat.full_path || cat.name || '';
+    clearFieldValidation(qs('#categorySearchInput'));
+    clearFieldValidation(qs('#categorySelected'));
     await loadCategoryConditions(cat.category_id, draft.condition_id);
     await fetchSpecifics(cat.category_id);
     debounceSave();
@@ -827,8 +984,10 @@
         } else {
           delete draft.item_specifics[spec.name];
         }
+        clearFieldValidation(input);
         debounceSave();
       };
+      input.dataset.specificName = spec.name;
       input.addEventListener('input', persistValue);
       input.addEventListener('change', persistValue);
       wrapper.appendChild(label);
@@ -1037,6 +1196,7 @@
         is_main: images.length === 0
       };
       images.push(img);
+      clearFieldValidation(qs('#imageDropzone'));
       renderImageList();
       selectImage(images.length - 1);
       if (draft && draft.id) {
@@ -1384,6 +1544,20 @@
     publishBtn.disabled = true;
     setPublishStatus('Publishing listing...');
     try {
+      const localErrors = collectFrontendPublishErrors();
+      if (hasValidationErrors(localErrors)) {
+        applyValidationErrors(localErrors);
+        focusFirstInvalidField();
+        setPublishStatus('Publish needs attention.');
+        showPublishModal(
+          'error',
+          'Required details are missing',
+          'Please complete the highlighted fields before listing on eBay:',
+          publishErrorMessages({errors: localErrors})
+        );
+        return;
+      }
+      clearValidationHighlights();
       await saveDraft({createIfMissing: true});
       const res = await fetch(`${config.draftBaseUrl}/${draft.id}/publish`, {method: 'POST'});
       let data = {};
@@ -1404,6 +1578,10 @@
         );
       } else {
         const messages = publishErrorMessages(data);
+        if (data && data.errors) {
+          applyValidationErrors(data.errors);
+          focusFirstInvalidField();
+        }
         setPublishStatus('Publish needs attention.');
         showPublishModal(
           'error',
