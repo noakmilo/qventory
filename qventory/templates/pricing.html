@@ -1,6 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Pricing – Qventory{% endblock %}
 {% block meta_description %}Qventory pricing for resellers. Choose a plan by item limits, with a free trial before billing starts.{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "OfferCatalog",
+  "name": "Qventory Pricing",
+  "url": "{{ request.url_root.rstrip('/') }}{{ url_for('main.pricing') }}",
+  "itemListElement": [
+    {% for plan in plans %}
+    {
+      "@type": "Offer",
+      "name": "{{ plan.plan.replace('_', ' ').title() }} Plan",
+      "price": "{% if plan.monthly_price is not none %}{{ '%.2f'|format(plan.monthly_price) }}{% else %}0{% endif %}",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock",
+      "url": "{{ request.url_root.rstrip('/') }}{{ url_for('auth.register', plan=plan.plan) }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div style="padding: 20px; max-width: 1400px; margin: 0 auto;">

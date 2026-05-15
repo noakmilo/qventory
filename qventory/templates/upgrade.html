@@ -181,7 +181,7 @@
             Current Plan
           </button>
           {% elif plan.plan == 'free' %}
-          <a href="mailto:support@qventory.com" class="btn" style="width: 100%; display: inline-block;">
+          <a href="{{ url_for('main.privacy_policy') }}#contact" class="btn" style="width: 100%; display: inline-block;">
             Contact Support to Downgrade
           </a>
           {% else %}

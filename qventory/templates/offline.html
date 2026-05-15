@@ -1,9 +1,26 @@
 <!-- templates/offline.html -->
 {% extends "base.html" %}
 {% block title %}Offline – Qventory{% endblock %}
+{% block meta_description %}Qventory offline page for users who need to reconnect before accessing their reseller dashboard and inventory tools.{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebPage",
+  "name": "Qventory Offline",
+  "url": "{{ request.url_root.rstrip('/') }}/offline",
+  "description": "Offline page for Qventory, the inventory management platform for eBay sellers and resellers.",
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "Qventory",
+    "url": "{{ request.url_root.rstrip('/') }}/"
+  }
+}
+</script>
+{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>You're offline</h2>
+  <h1>You're offline</h1>
   <p>This page is available without internet. Reconnect to access your dashboard. :)</p>
   <a class="btn" href="/">Go to Home</a>
 </div>

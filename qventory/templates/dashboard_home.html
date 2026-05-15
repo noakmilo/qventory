@@ -1,5 +1,19 @@
 {% extends "base_new.html" %}
 {% block title %}Dashboard – Qventory{% endblock %}
+{% block meta_description %}Qventory dashboard for resellers to monitor inventory, pending tasks, listings, sales, fulfillment, and quick actions.{% endblock %}
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Qventory Dashboard",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "url": "{{ request.url_root.rstrip('/') }}{{ url_for('main.dashboard') }}",
+  "description": "Authenticated dashboard for managing reseller inventory, eBay listings, sales, fulfillment, and business tasks in Qventory."
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="dashboard-home">

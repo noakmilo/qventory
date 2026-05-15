@@ -10223,6 +10223,12 @@ def privacy_policy():
     return render_template("privacy.html")
 
 
+@main_bp.route("/cdn-cgi/l/email-protection")
+def cloudflare_email_protection_fallback():
+    """Fallback for stale Cloudflare email-protection URLs discovered by crawlers."""
+    return redirect(url_for("main.privacy_policy", _anchor="contact"), code=301)
+
+
 # ==================== PROFIT CALCULATOR ====================
 
 @main_bp.route("/profit-calculator")

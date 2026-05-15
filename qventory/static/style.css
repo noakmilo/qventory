@@ -2332,13 +2332,20 @@ body.modal-open{ overflow:hidden; touch-action:none; }
 
 .relist-cta{
   align-self:flex-start;
-  background:#90baff;
+  background:#1d4ed8;
   color:#ffffff;
   border:none;
 }
 
 .relist-cta:hover{
   filter:brightness(0.95);
+}
+
+.cookie-privacy-link {
+  color:var(--text) !important;
+  text-decoration:underline !important;
+  font-weight:700;
+  text-underline-offset:3px;
 }
 
 .qr-viewport{
