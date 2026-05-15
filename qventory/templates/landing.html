@@ -1,34 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Inventory Management Software for eBay Sellers | Qventory{% endblock %}
+{% block meta_description %}Qventory helps eBay sellers sync inventory, create AI-powered listings, find sourcing spots with Thrift Radar, schedule relists, update prices, and track sales.{% endblock %}
+{% block og_title %}Inventory Management Software for eBay Sellers | Qventory{% endblock %}
+{% block og_description %}Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.{% endblock %}
+{% block twitter_title %}Inventory Management Software for eBay Sellers | Qventory{% endblock %}
+{% block twitter_description %}Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.{% endblock %}
 {% block extra_head %}
-<link rel="preload" as="image" href="{{ url_for('static', filename='pics/dashpreview.webp') }}" imagesrcset="{{ url_for('static', filename='pics/dashpreview.webp') }} 1x" imagesizes="(max-width: 1200px) 100vw, 1164px">
-<!-- TrustBox script -->
-<!-- End TrustBox script -->
-{% endblock %}
-
-{% block content %}
-
-{# ===== Canonical & SEO ===== #}
 {% set canonical = request.url_root.rstrip('/') %}
-<link rel="canonical" href="{{ canonical }}/">
-
-<meta name="description" content="Qventory helps eBay sellers sync inventory, create AI-powered listings, find sourcing spots with Thrift Radar, schedule relists, update prices, and track sales.">
+<link rel="preload" as="image" href="{{ url_for('static', filename='pics/dashpreview.webp') }}" imagesrcset="{{ url_for('static', filename='pics/dashpreview.webp') }} 1x" imagesizes="(max-width: 1200px) 100vw, 1164px">
 <meta name="keywords" content="inventory management software for ebay sellers, ebay inventory management, ebay seller software, ebay inventory tracking, ebay seller inventory tool">
-
-{# ===== Open Graph ===== #}
-<meta property="og:title" content="Inventory Management Software for eBay Sellers | Qventory">
-<meta property="og:description" content="Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.">
-<meta property="og:type" content="website">
 <meta property="og:url" content="{{ canonical }}/">
 <meta property="og:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
-
-{# ===== Twitter Card ===== #}
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Inventory Management Software for eBay Sellers | Qventory">
-<meta name="twitter:description" content="Inventory Management Software for eBay Sellers. Sync listings, create AI listings, source with Thrift Radar, schedule relists, and track sales in one place.">
 <meta name="twitter:image" content="{{ url_for('static', filename='og_qventory.png', _external=True) }}">
-
-{# ===== JSON-LD: SoftwareApplication ===== #}
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -41,6 +24,11 @@
   "featureList": "Inventory Management for eBay Sellers, eBay OAuth Integration, AI eBay Listing Wizard, Thrift Radar, Scheduled Update and Relist, Price Update with Dutch Auction, Sales Analytics, Fulfillment Tracking, AI Pricing Research, Profit Calculator, Mobile PWA, Slow Movers, Retirements"
 }
 </script>
+<!-- TrustBox script -->
+<!-- End TrustBox script -->
+{% endblock %}
+
+{% block content %}
 
 {# ===== HERO ===== #}
 <section class="card landing-hero" style="margin:20px; padding:28px; text-align:center; position:relative; overflow:hidden;">
@@ -55,7 +43,7 @@
       </button>
     </div>
   </div>
-  <div class="landing-hero-kicker">Built for resellers who list, source, refresh, and ship every day</div>
+  <div class="landing-hero-kicker">Built by a reseller, for resellers who list, source, refresh, and ship every day.</div>
   <h1 style="font-size:34px; margin:0 0 10px;">Inventory Management Software for <span style="color:var(--accent)">eBay Sellers.</span></h1>
   <p style="font-size:16px; color:var(--sub); max-width:900px; margin:10px auto 18px;">
     Built around real eBay seller workflows: intake to list to ship to reconcile.

@@ -16,6 +16,10 @@
   {% endif %}
   <title>{{ norm_title }}</title>
   <meta name="description" content="{% block meta_description %}Qventory helps eBay sellers sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as their business scales.{% endblock %}">
+  {% set canonical_path = '/' if request.path == '/' else request.path.rstrip('/') %}
+  {% block canonical %}
+  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ canonical_path }}">
+  {% endblock %}
   {% set social_image = url_for('static', filename='pics/preview_card.png', _external=True) %}
   <meta property="og:title" content="{% block og_title %}Qventory{% endblock %}">
   <meta property="og:description" content="{% block og_description %}Inventory management for resellers. Track listings, costs, sales, and fulfillment in one place.{% endblock %}">

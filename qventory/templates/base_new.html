@@ -15,6 +15,10 @@
   {% endif %}
   <title>{{ norm_title }}</title>
   <meta name="description" content="{% block meta_description %}Qventory helps eBay sellers sync inventory, auto-relist listings, track sales & fulfillment, and grow profits as their business scales.{% endblock %}">
+  {% set canonical_path = '/' if request.path == '/' else request.path.rstrip('/') %}
+  {% block canonical %}
+  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ canonical_path }}">
+  {% endblock %}
   {% set social_image = url_for('static', filename='pics/preview_card.png', _external=True) %}
   <meta property="og:title" content="{% block og_title %}Qventory{% endblock %}">
   <meta property="og:description" content="{% block og_description %}Inventory management for resellers. Track listings, costs, sales, and fulfillment in one place.{% endblock %}">
@@ -71,8 +75,8 @@
 
 <body class="new-layout" data-theme="{{ theme_preference }}">
 
-  <!-- Sidebar (Desktop Only) -->
-  <aside class="sidebar">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="appSidebar">
     <div class="sidebar-header">
       <button type="button" class="sidebar-collapse-btn" id="sidebarCollapseToggle" aria-label="Toggle sidebar" aria-expanded="true">
         <i class="fas fa-bars"></i>
@@ -278,7 +282,7 @@
 
   <!-- Mobile Header (Mobile Only) -->
   <header class="mobile-header">
-    <button class="mobile-menu-toggle" id="mobileMenuToggle">
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Open navigation menu" aria-controls="appSidebar" aria-expanded="false">
       <i class="fas fa-bars"></i>
     </button>
 
@@ -371,7 +375,7 @@
   </div>
 
   <!-- Mobile Sidebar Overlay -->
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
 
   <script>
   // Mobile menu toggle
@@ -383,14 +387,42 @@
   const SIDEBAR_KEY = 'qventorySidebarCollapsed';
 
   if (toggle) {
+    const closeMobileSidebar = () => {
+      sidebar?.classList.remove('show');
+      overlay?.classList.remove('show');
+      toggle.setAttribute('aria-expanded', 'false');
+      document.body.classList.remove('mobile-sidebar-open');
+    };
+
+    const openMobileSidebar = () => {
+      sidebar?.classList.add('show');
+      overlay?.classList.add('show');
+      toggle.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('mobile-sidebar-open');
+    };
+
     toggle.addEventListener('click', () => {
-      sidebar.classList.toggle('show');
-      overlay.classList.toggle('show');
+      if (sidebar?.classList.contains('show')) {
+        closeMobileSidebar();
+      } else {
+        openMobileSidebar();
+      }
     });
 
-    overlay.addEventListener('click', () => {
-      sidebar.classList.remove('show');
-      overlay.classList.remove('show');
+    overlay?.addEventListener('click', closeMobileSidebar);
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && sidebar?.classList.contains('show')) {
+        closeMobileSidebar();
+      }
+    });
+
+    sidebar?.querySelectorAll('a.sidebar-item').forEach((link) => {
+      link.addEventListener('click', () => {
+        if (window.matchMedia('(max-width: 768px)').matches) {
+          closeMobileSidebar();
+        }
+      });
     });
   }
 

@@ -1,7 +1,7 @@
 <!-- templates/offline.html -->
 {% extends "base.html" %}
-{% block title %}Offline – Qventory{% endblock %}
-{% block meta_description %}Qventory offline page for users who need to reconnect before accessing their reseller dashboard and inventory tools.{% endblock %}
+{% block title %}Qventory Offline Access for Sellers{% endblock %}
+{% block meta_description %}Reconnect to Qventory to access your reseller dashboard, inventory tools, eBay listing workflows, sales tracking, and fulfillment data.{% endblock %}
 {% block extra_head %}
 <script type="application/ld+json">
 {
@@ -19,9 +19,33 @@
 </script>
 {% endblock %}
 {% block content %}
-<div class="card">
+<div class="card" style="max-width:900px;margin:0 auto;">
   <h1>You're offline</h1>
-  <p>This page is available without internet. Reconnect to access your dashboard. :)</p>
+  <p>
+    Qventory cannot reach the network right now. Reconnect to open your reseller dashboard, sync eBay activity, manage inventory, publish listings, update prices, review fulfillment, and continue working with the latest account data.
+  </p>
+
+  <div class="grid cols-3" style="margin:22px 0;">
+    <div>
+      <h2 style="font-size:1.1rem;"><i class="fas fa-wifi"></i> Check your connection</h2>
+      <p style="color:var(--sub);line-height:1.6;">Confirm Wi-Fi or cellular data is available, then refresh this page. If you use a VPN, firewall, or browser privacy extension, make sure it is not blocking Qventory.</p>
+    </div>
+    <div>
+      <h2 style="font-size:1.1rem;"><i class="fas fa-rotate"></i> Try again safely</h2>
+      <p style="color:var(--sub);line-height:1.6;">Qventory saves important work through authenticated requests. Once the connection returns, reload the page before continuing a listing, import, or account action.</p>
+    </div>
+    <div>
+      <h2 style="font-size:1.1rem;"><i class="fas fa-shield-halved"></i> Keep data current</h2>
+      <p style="color:var(--sub);line-height:1.6;">Inventory, sales, receipts, and eBay listing information should be reviewed online so you are always working with the most recent marketplace state.</p>
+    </div>
+  </div>
+
+  <p style="color:var(--sub);line-height:1.7;">
+    This offline page exists as a temporary fallback for sellers using Qventory as a web app. It helps you understand why the dashboard is unavailable and gives you a clean way back to the public home page while your connection recovers.
+  </p>
+  <p style="color:var(--sub);line-height:1.7;">
+    When you are back online, start by refreshing any open inventory, draft listing, or report page before submitting changes. That avoids working from stale browser state and keeps Qventory aligned with eBay listing status, current pricing, saved images, receipts, fulfillment updates, and account permissions. If the page continues to appear after reconnecting, close the tab, open Qventory again, and sign in so the app can create a fresh session.
+  </p>
   <a class="btn" href="/">Go to Home</a>
 </div>
 {% endblock %}
