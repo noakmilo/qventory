@@ -44,15 +44,15 @@
 
     <div class="admin-stats">
       <div class="stat-card">
-        <div class="stat-value">{{ user_stats|length }}</div>
+        <div class="stat-value">{{ total_users }}</div>
         <div class="stat-label">Total Users</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ user_stats|selectattr('has_inventory')|list|length }}</div>
+        <div class="stat-value">{{ users_with_inventory }}</div>
         <div class="stat-label">With Inventory</div>
       </div>
       <div class="stat-card">
-        <div class="stat-value">{{ user_stats|map(attribute='item_count')|sum }}</div>
+        <div class="stat-value">{{ total_items }}</div>
         <div class="stat-label">Total Items</div>
       </div>
     </div>
@@ -238,6 +238,38 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #60a5fa;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.stat-label {
+  font-size: var(--fs-sm);
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 </style>
 {% endblock %}

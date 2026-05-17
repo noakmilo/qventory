@@ -9305,13 +9305,17 @@ def _admin_user_stats():
 @main_bp.route("/admin/dashboard")
 @require_admin
 def admin_dashboard():
-    """Admin dashboard - admin task controls only."""
+    """Admin dashboard - task controls and high-level account totals."""
     from qventory.models.system_setting import SystemSetting
 
+    user_stats = _admin_user_stats()
     heuristic_days = SystemSetting.get_int('delivery_heuristic_days', 7)
     trial_days = SystemSetting.get_int('stripe_trial_days', 10)
     return render_template(
         "admin_dashboard.html",
+        total_users=len(user_stats),
+        users_with_inventory=sum(1 for stat in user_stats if stat["has_inventory"]),
+        total_items=sum(stat["item_count"] for stat in user_stats),
         heuristic_days=heuristic_days,
         trial_days=trial_days
     )
