@@ -32,15 +32,15 @@
       <label>Recipients</label>
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
         <label style="display:flex;gap:8px;align-items:center;">
-          <input type="radio" name="target" value="all" checked>
+          <input type="radio" name="target" value="all" {% if target != 'specific' %}checked{% endif %}>
           All users
         </label>
         <label style="display:flex;gap:8px;align-items:center;">
-          <input type="radio" name="target" value="specific">
+          <input type="radio" name="target" value="specific" {% if target == 'specific' %}checked{% endif %}>
           Specific users
         </label>
       </div>
-      <textarea class="input" name="recipients" rows="3" placeholder="comma-separated emails or usernames (only for specific users)"></textarea>
+      <textarea class="input" name="recipients" rows="3" placeholder="comma-separated emails or usernames (only for specific users)">{{ recipients or '' }}</textarea>
       <div class="muted" style="margin-top:6px;">If "Specific users" is selected, add emails or usernames separated by commas.</div>
     </div>
     <div style="display:flex;gap:12px;align-items:center;">

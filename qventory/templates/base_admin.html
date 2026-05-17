@@ -51,6 +51,10 @@
       <!-- User Management Section -->
       <div class="admin-sidebar-section">
         <div class="admin-sidebar-section-title">User Management</div>
+        <a href="{{ url_for('main.admin_users') }}" class="admin-sidebar-item {% if request.endpoint == 'main.admin_users' %}active{% endif %}">
+          <i class="fas fa-users"></i>
+          <span>User List</span>
+        </a>
         <a href="{{ url_for('main.admin_users_roles') }}" class="admin-sidebar-item {% if 'admin_users_roles' in request.endpoint %}active{% endif %}">
           <i class="fas fa-users-cog"></i>
           <span>User Roles</span>

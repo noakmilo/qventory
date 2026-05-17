@@ -8074,7 +8074,41 @@ def admin_support_broadcast():
             flash(f"Broadcast sent to {created_count} users.", "ok")
         return redirect(url_for("main.admin_support_inbox"))
 
-    return render_template("admin_support/broadcast.html")
+    recipients = (request.args.get("recipients") or "").strip()
+    target = "specific" if recipients else "all"
+    return render_template(
+        "admin_support/broadcast.html",
+        recipients=recipients,
+        target=target,
+    )
+
+
+@main_bp.route("/admin/support/broadcast/selected", methods=["POST"])
+@require_admin
+def admin_support_broadcast_selected():
+    raw_user_ids = request.form.getlist("user_ids")
+    user_ids = []
+    for raw_user_id in raw_user_ids:
+        try:
+            user_ids.append(int(raw_user_id))
+        except (TypeError, ValueError):
+            continue
+
+    user_ids = sorted(set(user_ids))
+    if not user_ids:
+        flash("Select at least one user to broadcast to.", "error")
+        return redirect(url_for("main.admin_users"))
+
+    users = User.query.filter(User.id.in_(user_ids)).order_by(User.id.asc()).all()
+    if not users:
+        flash("No recipients found.", "error")
+        return redirect(url_for("main.admin_users"))
+
+    return render_template(
+        "admin_support/broadcast.html",
+        recipients=",".join(user.email for user in users),
+        target="specific",
+    )
 
 
 @main_bp.route("/admin/support/<ticket_code>")
@@ -9194,12 +9228,8 @@ def admin_inventory_sources_upload_image():
         return jsonify({"ok": False, "error": str(e)}), 502
 
 
-@main_bp.route("/admin/dashboard")
-@require_admin
-def admin_dashboard():
-    """Admin dashboard - view all users and their inventory stats"""
-    from qventory.models.system_setting import SystemSetting
-    from qventory.models.subscription import Subscription
+def _admin_user_stats():
+    """Build admin user rows without triggering per-user subscription queries."""
     from qventory.models.marketplace_credential import MarketplaceCredential
 
     users = User.query.all()
@@ -9256,25 +9286,88 @@ def admin_dashboard():
         missing_cost_count = missing_cost_count_map.get(user.id, 0)
         subscription = subscription_map.get(user.id)
         subscription_plan = (subscription.plan if subscription else "free")
+        subscription_status = (subscription.status if subscription else "active")
         user_stats.append({
             'user': user,
             'item_count': item_count,
             'missing_cost_count': missing_cost_count,
             'has_inventory': item_count > 0,
             'subscription_plan': subscription_plan,
+            'subscription_status': subscription_status,
             'connected_store': user.id in ebay_connected_ids
         })
 
     # Sort by item count descending
     user_stats.sort(key=lambda x: x['item_count'], reverse=True)
+    return user_stats
+
+
+@main_bp.route("/admin/dashboard")
+@require_admin
+def admin_dashboard():
+    """Admin dashboard - admin task controls only."""
+    from qventory.models.system_setting import SystemSetting
 
     heuristic_days = SystemSetting.get_int('delivery_heuristic_days', 7)
     trial_days = SystemSetting.get_int('stripe_trial_days', 10)
     return render_template(
         "admin_dashboard.html",
-        user_stats=user_stats,
         heuristic_days=heuristic_days,
         trial_days=trial_days
+    )
+
+
+@main_bp.route("/admin/users")
+@require_admin
+def admin_users():
+    """Admin user list with quick segments."""
+    active_filter = (request.args.get("filter") or "all").strip().lower()
+    now = datetime.utcnow()
+    cutoff_30 = now - timedelta(days=30)
+    cutoff_7 = now - timedelta(days=7)
+    paid_plans = {"early_adopter", "premium", "plus", "pro", "enterprise", "god"}
+
+    all_user_stats = _admin_user_stats()
+    paid_count = sum(
+        1 for stat in all_user_stats
+        if stat["subscription_plan"] in paid_plans and stat["subscription_status"] == "active"
+    )
+    new_30_count = sum(
+        1 for stat in all_user_stats
+        if stat["user"].created_at and stat["user"].created_at >= cutoff_30
+    )
+    new_7_count = sum(
+        1 for stat in all_user_stats
+        if stat["user"].created_at and stat["user"].created_at >= cutoff_7
+    )
+
+    if active_filter == "paid":
+        user_stats = [
+            stat for stat in all_user_stats
+            if stat["subscription_plan"] in paid_plans and stat["subscription_status"] == "active"
+        ]
+    elif active_filter == "new30":
+        user_stats = [
+            stat for stat in all_user_stats
+            if stat["user"].created_at and stat["user"].created_at >= cutoff_30
+        ]
+    elif active_filter == "new7":
+        user_stats = [
+            stat for stat in all_user_stats
+            if stat["user"].created_at and stat["user"].created_at >= cutoff_7
+        ]
+    else:
+        active_filter = "all"
+        user_stats = all_user_stats
+
+    return render_template(
+        "admin_users.html",
+        user_stats=user_stats,
+        total_users=len(all_user_stats),
+        paid_count=paid_count,
+        new_30_count=new_30_count,
+        new_7_count=new_7_count,
+        active_filter=active_filter,
     )
 
 
@@ -9504,7 +9597,7 @@ def admin_delete_user(user_id):
         db.session.rollback()
         flash(f"Error deleting user '{username}': {str(e)}", "error")
 
-    return redirect(url_for('main.admin_dashboard'))
+    return redirect(url_for('main.admin_users'))
 
 
 @main_bp.route("/admin/users/bulk-delete", methods=["POST"])
@@ -9522,7 +9615,7 @@ def admin_bulk_delete_users():
     user_ids = sorted(set(user_ids))
     if not user_ids:
         flash("Select at least one user to delete.", "error")
-        return redirect(url_for('main.admin_dashboard'))
+        return redirect(url_for('main.admin_users'))
 
     skipped_self = current_user.is_authenticated and current_user.id in user_ids
     if skipped_self:
@@ -9530,7 +9623,7 @@ def admin_bulk_delete_users():
 
     if not user_ids:
         flash("You cannot delete your own admin session from bulk delete.", "error")
-        return redirect(url_for('main.admin_dashboard'))
+        return redirect(url_for('main.admin_users'))
 
     users = User.query.filter(User.id.in_(user_ids)).all()
     existing_ids = {user.id for user in users}
@@ -9555,7 +9648,7 @@ def admin_bulk_delete_users():
         db.session.rollback()
         flash(f"Error deleting selected users: {str(e)}", "error")
 
-    return redirect(url_for('main.admin_dashboard'))
+    return redirect(url_for('main.admin_users'))
 
 
 @main_bp.route("/admin/user/create", methods=["GET", "POST"])

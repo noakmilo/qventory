@@ -1,0 +1,400 @@
+{% extends "base_admin.html" %}
+{% block title %}User List - Admin - Qventory{% endblock %}
+
+{% block breadcrumb %}
+<nav class="admin-breadcrumb">
+  <a class="breadcrumb-link" href="{{ url_for('main.admin_dashboard') }}">Dashboard</a>
+  <span class="breadcrumb-separator">/</span>
+  <span class="breadcrumb-current">User List</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="card" style="width:98%;margin:0 auto;">
+    <div class="admin-header">
+      <div>
+        <h1>User List</h1>
+        <p style="color:var(--sub);">Filter users, inspect accounts, and send selected broadcasts.</p>
+      </div>
+      <div class="admin-actions">
+        <a href="{{ url_for('main.admin_dashboard') }}" class="btn">
+          <i class="fas fa-tachometer-alt"></i> Dashboard
+        </a>
+        <a href="{{ url_for('main.admin_create_user') }}" class="btn">
+          <i class="fas fa-user-plus"></i> Create User
+        </a>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="admin-stats">
+      <a class="stat-card stat-card-link {% if active_filter == 'paid' %}active{% endif %}" href="{{ url_for('main.admin_users', filter='paid') }}">
+        <div class="stat-value">{{ paid_count }}</div>
+        <div class="stat-label">Paid Users</div>
+      </a>
+      <a class="stat-card stat-card-link {% if active_filter == 'new30' %}active{% endif %}" href="{{ url_for('main.admin_users', filter='new30') }}">
+        <div class="stat-value">{{ new_30_count }}</div>
+        <div class="stat-label">New Users in Last 30 Days</div>
+      </a>
+      <a class="stat-card stat-card-link {% if active_filter == 'new7' %}active{% endif %}" href="{{ url_for('main.admin_users', filter='new7') }}">
+        <div class="stat-value">{{ new_7_count }}</div>
+        <div class="stat-label">New Users in Last 7 Days</div>
+      </a>
+      <a class="stat-card stat-card-link {% if active_filter == 'all' %}active{% endif %}" href="{{ url_for('main.admin_users') }}">
+        <div class="stat-value">{{ total_users }}</div>
+        <div class="stat-label">All Users</div>
+      </a>
+    </div>
+
+    <div style="margin-bottom:var(--space-4);">
+      <div style="position:relative;max-width:500px;">
+        <input
+          type="text"
+          id="userSearch"
+          placeholder="Search by username or email..."
+          style="width:100%;padding:12px 40px 12px 40px;border-radius:8px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);font-size:var(--fs-sm);"
+        >
+        <i class="fas fa-search" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--sub);"></i>
+        <button
+          id="clearSearch"
+          onclick="document.getElementById('userSearch').value='';filterUsers();"
+          style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--sub);cursor:pointer;display:none;font-size:18px;padding:4px 8px;"
+        >x</button>
+      </div>
+      <div id="searchStats" style="margin-top:8px;font-size:var(--fs-xs);color:var(--sub);"></div>
+    </div>
+
+    <form
+      id="bulkDeleteUsersForm"
+      method="post"
+      action="{{ url_for('main.admin_bulk_delete_users') }}"
+      onsubmit="return confirmBulkDeleteUsers();"
+    ></form>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;margin:var(--space-3) 0;">
+      <div style="display:flex;align-items:center;gap:10px;color:var(--sub);font-size:var(--fs-sm);">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="selectAllUsers">
+          <span>Select visible users</span>
+        </label>
+        <span id="selectedUsersCount">0 selected</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button
+          type="button"
+          id="broadcastSelectedBtn"
+          class="btn"
+          disabled
+          style="background:rgba(96,165,250,0.15);border-color:rgba(96,165,250,0.35);color:#93c5fd;"
+        >
+          <i class="fas fa-bullhorn"></i> Broadcast Selected
+        </button>
+        <button
+          type="submit"
+          form="bulkDeleteUsersForm"
+          id="bulkDeleteUsersBtn"
+          class="btn"
+          disabled
+          style="background:rgba(248,113,113,0.15);border-color:rgba(248,113,113,0.35);color:#f87171;"
+        >
+          <i class="fas fa-trash-alt"></i> Delete Selected
+        </button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:44px;"></th>
+            <th>User ID</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Plan</th>
+            <th>Connected Store</th>
+            <th>Items</th>
+            <th>Missing Cost</th>
+            <th>Status</th>
+            <th>Last Activity</th>
+            <th>Last Login</th>
+            <th>Created</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for stat in user_stats %}
+          <tr data-username="{{ stat.user.username|lower }}" data-email="{{ stat.user.email|lower }}">
+            <td style="text-align:center;">
+              <input
+                type="checkbox"
+                name="user_ids"
+                value="{{ stat.user.id }}"
+                class="user-select-checkbox"
+                form="bulkDeleteUsersForm"
+                data-username="{{ stat.user.username }}"
+                data-email="{{ stat.user.email }}"
+              >
+            </td>
+            <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">{{ stat.user.id }}</td>
+            <td><strong>{{ stat.user.username }}</strong></td>
+            <td>{{ stat.user.email }}</td>
+            <td><span class="role-badge role-{{ stat.user.role }}">{{ stat.user.role.replace('_', ' ') }}</span></td>
+            <td><span class="tag" style="text-transform:capitalize;">{{ stat.subscription_plan.replace('_', ' ') }}</span></td>
+            <td>
+              {% if stat.connected_store %}
+                <span class="tag" style="background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.3);color:#4ade80;">Yes</span>
+              {% else %}
+                <span class="tag" style="background:rgba(156,163,175,0.15);border-color:rgba(156,163,175,0.3);color:#9ca3af;">No</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if stat.item_count > 0 %}
+                <span class="tag">{{ stat.item_count }} items</span>
+              {% else %}
+                <span style="color:var(--sub);">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if stat.missing_cost_count > 0 %}
+                <span class="tag" style="background:rgba(248,113,113,0.15);border-color:rgba(248,113,113,0.3);color:#f87171;">{{ stat.missing_cost_count }}</span>
+              {% else %}
+                <span style="color:var(--sub);">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if stat.has_inventory %}
+                <span class="tag" style="background:rgba(74,222,128,0.15);border-color:rgba(74,222,128,0.3);color:#4ade80;"><i class="fas fa-check-circle"></i> Active</span>
+              {% else %}
+                <span class="tag" style="background:rgba(156,163,175,0.15);border-color:rgba(156,163,175,0.3);color:#9ca3af;"><i class="fas fa-circle"></i> Empty</span>
+              {% endif %}
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">
+              {% if stat.user.last_activity %}
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <span style="color:var(--text);">{{ stat.user.last_activity.strftime('%Y-%m-%d') }}</span>
+                  <span style="color:var(--sub);font-size:10px;">{{ stat.user.last_activity.strftime('%H:%M:%S') }}</span>
+                </div>
+              {% else %}
+                <span style="color:#9ca3af;font-style:italic;">Never</span>
+              {% endif %}
+            </td>
+            <td style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;">
+              {% if stat.user.last_login %}
+                <div style="display:flex;flex-direction:column;gap:2px;">
+                  <span style="color:var(--text);">{{ stat.user.last_login.strftime('%Y-%m-%d') }}</span>
+                  <span style="color:var(--sub);font-size:10px;">{{ stat.user.last_login.strftime('%H:%M:%S') }}</span>
+                </div>
+              {% else %}
+                <span style="color:#9ca3af;font-style:italic;">Never</span>
+              {% endif %}
+            </td>
+            <td style="font-family:ui-monospace,'SF Mono',Consolas,monospace;font-size:var(--fs-xs);">{{ stat.user.created_at.strftime('%Y-%m-%d') if stat.user.created_at else '-' }}</td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="{{ url_for('main.admin_user_inventory_text', user_id=stat.user.id) }}" class="btn settingsbtn" title="View user inventory (text)"><i class="fas fa-eye"></i></a>
+                <a href="{{ url_for('main.admin_user_diagnostics', user_id=stat.user.id) }}" class="btn settingsbtn" title="View import diagnostics"><i class="fas fa-stethoscope"></i></a>
+                <form method="post" action="{{ url_for('main.admin_impersonate_user', user_id=stat.user.id) }}" onsubmit="return confirm('Impersonate {{ stat.user.username }}?');" style="display:inline;">
+                  <button type="submit" class="btn settingsbtn" title="Login as user"><i class="fas fa-user-secret"></i></button>
+                </form>
+                <form method="post" action="{{ url_for('main.admin_delete_user', user_id=stat.user.id) }}" onsubmit="return confirm('Delete user \'{{ stat.user.username }}\' and all their data ({{ stat.item_count }} items)? This cannot be undone!')" style="display:inline;">
+                  <button type="submit" class="btn settingsbtn" title="Delete user"><i class="fas fa-trash-alt"></i></button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if not user_stats %}
+    <div style="text-align:center;padding:var(--space-5);color:var(--sub);">
+      <i class="fas fa-users" style="font-size:48px;opacity:0.3;margin-bottom:var(--space-3);"></i>
+      <p>No users found</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+const searchInput = document.getElementById('userSearch');
+const clearBtn = document.getElementById('clearSearch');
+const searchStats = document.getElementById('searchStats');
+const userRows = document.querySelectorAll('tbody tr');
+const totalUsers = userRows.length;
+const selectAllUsers = document.getElementById('selectAllUsers');
+const selectedUsersCount = document.getElementById('selectedUsersCount');
+const bulkDeleteUsersBtn = document.getElementById('bulkDeleteUsersBtn');
+const broadcastSelectedBtn = document.getElementById('broadcastSelectedBtn');
+const userCheckboxes = document.querySelectorAll('.user-select-checkbox');
+
+function getVisibleRows() {
+  return Array.from(userRows).filter(row => row.style.display !== 'none');
+}
+
+function getSelectedUsers() {
+  return Array.from(userCheckboxes).filter(checkbox => checkbox.checked);
+}
+
+function updateBulkActionsState() {
+  const selected = getSelectedUsers();
+  const visible = getVisibleRows();
+  const visibleCheckboxes = visible.map(row => row.querySelector('.user-select-checkbox')).filter(Boolean);
+  const selectedVisibleCount = visibleCheckboxes.filter(checkbox => checkbox.checked).length;
+
+  selectedUsersCount.textContent = `${selected.length} selected`;
+  bulkDeleteUsersBtn.disabled = selected.length === 0;
+  broadcastSelectedBtn.disabled = selected.length === 0;
+  selectAllUsers.checked = visibleCheckboxes.length > 0 && selectedVisibleCount === visibleCheckboxes.length;
+  selectAllUsers.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCheckboxes.length;
+}
+
+function confirmBulkDeleteUsers() {
+  const selected = getSelectedUsers();
+  if (selected.length === 0) {
+    return false;
+  }
+
+  const names = selected.map(checkbox => checkbox.dataset.username).filter(Boolean);
+  const preview = names.slice(0, 8).join(', ');
+  const suffix = names.length > 8 ? ` and ${names.length - 8} more` : '';
+  return confirm(`Delete ${selected.length} selected user(s) and all their data? This cannot be undone.\n\n${preview}${suffix}`);
+}
+
+function filterUsers() {
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  let visibleCount = 0;
+
+  userRows.forEach(row => {
+    const username = row.dataset.username || '';
+    const email = row.dataset.email || '';
+    const matches = username.includes(searchTerm) || email.includes(searchTerm);
+    row.style.display = matches ? '' : 'none';
+    if (matches) {
+      visibleCount++;
+    }
+  });
+
+  clearBtn.style.display = searchTerm ? 'block' : 'none';
+  searchStats.textContent = searchTerm ? `Showing ${visibleCount} of ${totalUsers} users` : '';
+  if (searchTerm && visibleCount === 0) {
+    searchStats.innerHTML = '<span style="color:#f87171;">No users found</span>';
+  }
+  updateBulkActionsState();
+}
+
+searchInput.addEventListener('input', filterUsers);
+selectAllUsers.addEventListener('change', () => {
+  getVisibleRows().forEach(row => {
+    const checkbox = row.querySelector('.user-select-checkbox');
+    if (checkbox) {
+      checkbox.checked = selectAllUsers.checked;
+    }
+  });
+  updateBulkActionsState();
+});
+userCheckboxes.forEach(checkbox => {
+  checkbox.addEventListener('change', updateBulkActionsState);
+});
+broadcastSelectedBtn.addEventListener('click', () => {
+  const selected = getSelectedUsers();
+  if (selected.length === 0) {
+    return;
+  }
+  const form = document.createElement('form');
+  form.method = 'post';
+  form.action = '{{ url_for("main.admin_support_broadcast_selected") }}';
+  selected.forEach(checkbox => {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'user_ids';
+    input.value = checkbox.value;
+    form.appendChild(input);
+  });
+  document.body.appendChild(form);
+  form.submit();
+});
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    filterUsers();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  }
+});
+updateBulkActionsState();
+</script>
+
+<style>
+#userSearch:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96,165,250,0.1);
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.stat-card-link {
+  color: inherit;
+  display: block;
+  text-decoration: none;
+}
+
+.stat-card-link.active,
+.stat-card-link:hover {
+  border-color: rgba(96,165,250,0.55);
+  background: rgba(96,165,250,0.1);
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #60a5fa;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+}
+
+.stat-label {
+  font-size: var(--fs-sm);
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+</style>
+{% endblock %}
