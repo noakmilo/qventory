@@ -14,6 +14,7 @@ from .failed_import import FailedImport
 from .expense import Expense
 from .auto_relist_rule import AutoRelistRule, AutoRelistHistory
 from .email_verification import EmailVerification
+from .pending_registration import PendingRegistration
 from .receipt import Receipt
 from .receipt_item import ReceiptItem
 from .receipt_usage import ReceiptUsage
@@ -56,6 +57,7 @@ __all__ = [
     'AutoRelistRule',
     'AutoRelistHistory',
     'EmailVerification',
+    'PendingRegistration',
     'Receipt',
     'ReceiptItem',
     'ReceiptUsage',
