@@ -237,6 +237,7 @@
                 type="button"
                 title="Queue an eBay polling refresh"
                 data-refresh-url="{{ url_for('main.inventory_refresh') }}"
+                data-active-refresh-url="{{ url_for('main.active_inventory_refresh') }}"
                 data-status-url-template="{{ url_for('main.import_job_status', job_id=0) }}"
                 data-active-url="{{ url_for('main.inventory_active') }}">
           <i class="fas fa-sync-alt"></i> Refresh
@@ -2036,6 +2037,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (message) alert(message);
   }
 
+  function watchRefreshJob(jobId) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => pollRefreshJob(jobId), 3000);
+    pollRefreshJob(jobId);
+  }
+
   async function pollRefreshJob(jobId) {
     const statusUrl = refreshBtn.dataset.statusUrlTemplate.replace('/0', `/${jobId}`);
     try {
@@ -2086,12 +2093,30 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       setButtonState('Queued');
-      pollTimer = setInterval(() => pollRefreshJob(data.job_id), 3000);
-      pollRefreshJob(data.job_id);
+      watchRefreshJob(data.job_id);
     } catch (error) {
       resetButton(error.message || 'Failed to queue refresh');
     }
   });
+
+  async function restoreActiveRefreshState() {
+    try {
+      const response = await fetch(refreshBtn.dataset.activeRefreshUrl);
+      const data = await response.json();
+      if (!data.ok || !data.has_active || !data.job) return;
+
+      if (data.job.status === 'processing') {
+        setButtonState('Refreshing');
+      } else {
+        setButtonState('Queued');
+      }
+      watchRefreshJob(data.job.id);
+    } catch (error) {
+      console.error('Unable to restore refresh state:', error);
+    }
+  }
+
+  restoreActiveRefreshState();
 })();
 {% endif %}
 </script>

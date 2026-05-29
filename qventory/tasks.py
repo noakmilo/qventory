@@ -7,7 +7,7 @@ import random
 import sys
 import time
 from datetime import datetime, timedelta
-from sqlalchemy import and_, func, or_
+from sqlalchemy import func, or_
 from qventory.celery_app import celery
 from qventory.extensions import db
 from qventory import create_app
@@ -4358,10 +4358,7 @@ def poll_ebay_new_listings_for_user(self, user_id, job_id=None):
         active_job = ImportJob.query.filter(
             ImportJob.user_id == user_id,
             ImportJob.id != job.id,
-            or_(
-                ImportJob.status.in_(['pending', 'processing']),
-                and_(ImportJob.status == 'queued', ImportJob.created_at < job.created_at),
-            ),
+            ImportJob.status.in_(['pending', 'processing']),
         ).order_by(ImportJob.created_at.asc()).first()
         active_poll = PollingLog.query.filter(
             PollingLog.user_id == user_id,
@@ -4370,9 +4367,15 @@ def poll_ebay_new_listings_for_user(self, user_id, job_id=None):
         ).order_by(PollingLog.started_at.asc()).first()
 
         if active_job or active_poll:
+            blocker = (
+                f"job:{active_job.id}:{active_job.status}"
+                if active_job else
+                f"poll:{active_poll.id}:running"
+            )
             job.status = 'queued'
-            job.error_message = 'Waiting for the current refresh/import task to finish.'
+            job.error_message = f'Waiting for the current refresh/import task to finish ({blocker}).'
             db.session.commit()
+            log_task(f"Manual refresh for user {user_id} waiting behind {blocker}")
             if self.request.retries >= self.max_retries:
                 job.status = 'failed'
                 job.completed_at = datetime.utcnow()

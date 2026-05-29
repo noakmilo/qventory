@@ -2544,6 +2544,20 @@ def inventory_refresh():
         if not credential:
             return jsonify({"ok": False, "error": "eBay account not connected"}), 400
 
+        existing_job = ImportJob.query.filter_by(
+            user_id=current_user.id,
+            import_mode='manual_refresh'
+        ).filter(
+            ImportJob.status.in_(['queued', 'pending', 'processing'])
+        ).order_by(ImportJob.created_at.asc()).first()
+        if existing_job:
+            return jsonify({
+                "ok": True,
+                "job_id": existing_job.id,
+                "task_id": existing_job.celery_task_id,
+                "message": "Refresh already queued. Active Inventory will reload when it completes."
+            })
+
         job = ImportJob(
             user_id=current_user.id,
             import_mode='manual_refresh',
@@ -2556,7 +2570,8 @@ def inventory_refresh():
 
         task = poll_ebay_new_listings_for_user.apply_async(
             kwargs={"user_id": current_user.id, "job_id": job.id},
-            queue="imports"
+            queue="imports",
+            priority=9
         )
         job.celery_task_id = task.id
         db.session.commit()
@@ -2571,6 +2586,30 @@ def inventory_refresh():
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception("Failed to queue inventory refresh")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/api/inventory/refresh/active")
+@login_required
+def active_inventory_refresh():
+    """Return the current queued/running manual inventory refresh, if any."""
+    try:
+        from qventory.models.import_job import ImportJob
+
+        job = ImportJob.query.filter_by(
+            user_id=current_user.id,
+            import_mode='manual_refresh'
+        ).filter(
+            ImportJob.status.in_(['queued', 'pending', 'processing'])
+        ).order_by(ImportJob.created_at.desc()).first()
+
+        if not job:
+            return jsonify({"ok": True, "has_active": False})
+
+        return jsonify({"ok": True, "has_active": True, "job": job.to_dict()})
+
+    except Exception as e:
+        current_app.logger.exception("Failed to check active inventory refresh")
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
