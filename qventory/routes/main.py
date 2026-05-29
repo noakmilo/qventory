@@ -2527,6 +2527,53 @@ def inventory_count():
         return jsonify({"error": "Failed to get count"}), 500
 
 
+@main_bp.route("/api/inventory/refresh", methods=["POST"])
+@login_required
+def inventory_refresh():
+    """Queue a user-scoped inventory polling refresh."""
+    try:
+        from qventory.models.import_job import ImportJob
+        from qventory.models.marketplace_credential import MarketplaceCredential
+        from qventory.tasks import poll_ebay_new_listings_for_user
+
+        credential = MarketplaceCredential.query.filter_by(
+            user_id=current_user.id,
+            marketplace='ebay',
+            is_active=True
+        ).first()
+        if not credential:
+            return jsonify({"ok": False, "error": "eBay account not connected"}), 400
+
+        job = ImportJob(
+            user_id=current_user.id,
+            import_mode='manual_refresh',
+            listing_status='ACTIVE',
+            status='queued',
+            error_message='Queued behind any active refresh/import task.'
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        task = poll_ebay_new_listings_for_user.apply_async(
+            kwargs={"user_id": current_user.id, "job_id": job.id},
+            queue="imports"
+        )
+        job.celery_task_id = task.id
+        db.session.commit()
+
+        return jsonify({
+            "ok": True,
+            "job_id": job.id,
+            "task_id": task.id,
+            "message": "Refresh queued. Active Inventory will reload when it completes."
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("Failed to queue inventory refresh")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @main_bp.route("/api/inventory/stream")
 @login_required
 def inventory_stream():
