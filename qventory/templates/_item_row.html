@@ -285,6 +285,15 @@
       <button class="btn retired-purge-btn" type="button" data-retired-id="{{ it.id }}" style="padding:6px 10px">
         <i class="fas fa-trash-alt"></i> Purge on eBay
       </button>
+      {% if it.is_archived %}
+      <button class="btn retired-archive-btn" type="button" data-retired-id="{{ it.id }}" data-archive="false" style="padding:6px 10px;margin-left:6px">
+        <i class="fas fa-undo"></i> Restore
+      </button>
+      {% else %}
+      <button class="btn retired-archive-btn" type="button" data-retired-id="{{ it.id }}" data-archive="true" style="padding:6px 10px;margin-left:6px">
+        <i class="fas fa-box-archive"></i> Archive
+      </button>
+      {% endif %}
       <button class="btn retired-delete-btn" type="button" data-retired-id="{{ it.id }}" style="padding:6px 10px;margin-left:6px;background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.35);color:#ef4444;">
         <i class="fas fa-times"></i> Remove
       </button>

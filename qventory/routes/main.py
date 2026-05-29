@@ -3576,6 +3576,7 @@ def inventory_sold():
 def inventory_retired():
     """Show items copied into Retirements"""
     s = get_or_create_settings(current_user)
+    show_archived = request.args.get("show") == "archived"
 
     page, per_page, offset = _get_pagination_params()
     filters = _get_inventory_filter_params()
@@ -3591,6 +3592,7 @@ def inventory_retired():
         offset=offset,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        archived=show_archived,
         **filters,
     )
 
@@ -3605,6 +3607,7 @@ def inventory_retired():
             offset=offset,
             sort_by=sort_by,
             sort_dir=sort_dir,
+            archived=show_archived,
             **filters,
         )
 
@@ -3625,7 +3628,8 @@ def inventory_retired():
         total_items=total_items,
         pagination=pagination,
         view_type="retired",
-        page_title="Retirements",
+        page_title="Archived Retirements" if show_archived else "Retirements",
+        show_archived=show_archived,
         sort_by=sort_by,
         sort_dir=sort_dir,
         items_remaining=None,
@@ -6019,6 +6023,65 @@ def bulk_delete_retired_items():
     except Exception as e:
         db.session.rollback()
         print(f"[BULK_DELETE_RETIRED] Error: {str(e)}", file=sys.stderr)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@main_bp.route("/retired_items/bulk_archive", methods=["POST"])
+@login_required
+def bulk_archive_retired_items():
+    """
+    Archive or restore retired items.
+    Expects JSON: {"retired_item_ids": [1, 2, 3], "archive": true}
+    """
+    try:
+        data = request.get_json()
+        if not data or "retired_item_ids" not in data:
+            return jsonify({"ok": False, "error": "Missing retired_item_ids"}), 400
+
+        retired_ids = data["retired_item_ids"]
+        if not isinstance(retired_ids, list):
+            return jsonify({"ok": False, "error": "retired_item_ids must be an array"}), 400
+
+        try:
+            retired_ids = [int(x) for x in retired_ids]
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "error": "Invalid retired item ID format"}), 400
+
+        if len(retired_ids) == 0:
+            return jsonify({"ok": False, "error": "No items selected"}), 400
+
+        archive_value = data.get("archive", True)
+        archive = str(archive_value).strip().lower() not in {"0", "false", "no", "off"}
+        retired_items = RetiredItem.query.filter(
+            RetiredItem.id.in_(retired_ids),
+            RetiredItem.user_id == current_user.id
+        ).all()
+
+        if not retired_items:
+            return jsonify({"ok": False, "error": "No items found"}), 404
+
+        now = datetime.utcnow()
+        changed = 0
+        for retired in retired_items:
+            if bool(retired.is_archived) == archive:
+                continue
+            retired.is_archived = archive
+            retired.archived_at = now if archive else None
+            retired.updated_at = now
+            changed += 1
+
+        db.session.commit()
+
+        action = "Archived" if archive else "Restored"
+        return jsonify({
+            "ok": True,
+            "changed": changed,
+            "message": f"{action} {changed} retired item(s)"
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"[BULK_ARCHIVE_RETIRED] Error: {str(e)}", file=sys.stderr)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

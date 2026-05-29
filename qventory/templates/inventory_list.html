@@ -25,6 +25,8 @@
         <i class="fas fa-eye-slash"></i> Inactive Items
       {% elif view_type == 'ended' %}
         <i class="fas fa-times-circle"></i> Ended Inventory
+      {% elif view_type == 'retired' %}
+        <i class="fas fa-box-archive"></i> {{ 'Archived Retirements' if show_archived else 'Retirements' }}
       {% endif %}
     </h1>
     <p style="color:var(--text-secondary);font-size:14px;">
@@ -36,8 +38,20 @@
         Items hidden from your active inventory
       {% elif view_type == 'ended' %}
         Items that are no longer active
+      {% elif view_type == 'retired' %}
+        {{ 'Archived retired items kept out of the main Retirements list' if show_archived else 'Items copied into Retirements for post-retirement cleanup' }}
       {% endif %}
     </p>
+    {% if view_type == 'retired' %}
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+      <a class="btn {{ '' if show_archived else 'submitbtn' }}" href="{{ url_for('main.inventory_retired') }}">
+        <i class="fas fa-list"></i> Active Retirements
+      </a>
+      <a class="btn {{ 'submitbtn' if show_archived else '' }}" href="{{ url_for('main.inventory_retired', show='archived') }}">
+        <i class="fas fa-box-archive"></i> Archived
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   {% if view_type == 'active' and show_upgrade_banner|default(False) %}
@@ -78,6 +92,9 @@
     <div id="filtersContent" class="filters-content">
       <form id="filterForm" method="get" action="{{ request.path }}" class="filters-grid">
         <input type="hidden" name="page" value="1">
+        {% if view_type == 'retired' and show_archived %}
+        <input type="hidden" name="show" value="archived">
+        {% endif %}
         <input type="hidden" name="per_page" value="{{ pagination.per_page }}">
         {% if sort_by %}
         <input type="hidden" name="sort" value="{{ sort_by }}">
@@ -182,7 +199,12 @@
             {% elif view_type == 'inactive_user' %}
             <option value="reactivate_by_user">Reactivate (Show in Active)</option>
             {% elif view_type == 'retired' %}
+            {% if show_archived %}
+            <option value="restore_retired">Restore to Retirements</option>
+            {% else %}
+            <option value="archive_retired">Archive Selected</option>
             <option value="purge_retired">Purge on eBay</option>
+            {% endif %}
             <option value="delete_retired">Remove from Retirements</option>
             {% endif %}
             {# Sync to eBay (kept for later) #}
@@ -460,7 +482,7 @@
           {% elif view_type == 'slow_movers' %}
             No slow movers yet
           {% elif view_type == 'retired' %}
-            No items in Retirements yet
+            {{ 'No archived retired items yet' if show_archived else 'No items in Retirements yet' }}
           {% elif view_type == 'ended' %}
             No ended items found
           {% endif %}

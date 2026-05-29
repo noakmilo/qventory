@@ -157,6 +157,31 @@ if (bulkActionApply) {
         console.error('Bulk purge error:', error);
         alert('Failed to purge retired items');
       }
+    } else if (action === 'archive_retired' || action === 'restore_retired') {
+      const archive = action === 'archive_retired';
+      const verb = archive ? 'Archive' : 'Restore';
+      if (!confirm(`${verb} ${itemIds.length} retired item(s)?`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/retired_items/bulk_archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ retired_item_ids: itemIds, archive })
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          alert(data.message);
+          location.reload();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk archive retired error:', error);
+        alert(archive ? 'Failed to archive retired items' : 'Failed to restore retired items');
+      }
     } else if (action === 'delete_retired') {
       if (!confirm(`Remove ${itemIds.length} item(s) from Retirements?`)) {
         return;
@@ -1865,6 +1890,42 @@ function initializeItemEventListeners() {
         } catch (error) {
           console.error('Retired purge error:', error);
           alert('Failed to purge item');
+        }
+      });
+      btn.dataset.initialized = 'true';
+    }
+  });
+
+  // Retired items archive/restore buttons
+  document.querySelectorAll('.retired-archive-btn').forEach(btn => {
+    if (!btn.dataset.initialized) {
+      btn.addEventListener('click', async () => {
+        const retiredId = parseInt(btn.dataset.retiredId, 10);
+        const archive = btn.dataset.archive !== 'false';
+        if (!Number.isFinite(retiredId)) {
+          alert('Invalid item');
+          return;
+        }
+        if (!confirm(archive ? 'Archive this retired item?' : 'Restore this retired item?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/retired_items/bulk_archive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ retired_item_ids: [retiredId], archive })
+          });
+          const data = await response.json();
+          if (data.ok) {
+            alert(data.message || (archive ? 'Archived' : 'Restored'));
+            location.reload();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to update item'));
+          }
+        } catch (error) {
+          console.error('Retired archive error:', error);
+          alert(archive ? 'Failed to archive item' : 'Failed to restore item');
         }
       });
       btn.dataset.initialized = 'true';

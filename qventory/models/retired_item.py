@@ -22,10 +22,11 @@ class RetiredItem(db.Model):
     location_code = db.Column(db.String, nullable=True, index=True)
 
     status = db.Column(db.String(20), default="pending", nullable=False, index=True)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False, index=True)
     note = db.Column(db.Text, nullable=True)
     last_error = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     purged_at = db.Column(db.DateTime, nullable=True)
-
+    archived_at = db.Column(db.DateTime, nullable=True)

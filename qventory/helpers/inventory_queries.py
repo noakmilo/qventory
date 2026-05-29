@@ -284,11 +284,13 @@ SELECT
     r.ebay_url,
     r.ebay_listing_id,
     r.status,
+    r.is_archived,
     r.note,
     r.last_error,
     r.created_at,
     r.updated_at,
     r.purged_at,
+    r.archived_at,
     NULL::text AS web_url,
     NULL::text AS amazon_url,
     NULL::text AS mercari_url,
@@ -637,11 +639,12 @@ def fetch_retired_items(
     search: Optional[str] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = None,
+    archived: bool = False,
     limit: int = 20,
     offset: int = 0,
 ) -> Tuple[List[SimpleNamespace], int]:
-    clauses = ["r.user_id = :user_id"]
-    params: Dict[str, object] = {"user_id": user_id}
+    clauses = ["r.user_id = :user_id", "COALESCE(r.is_archived, FALSE) = :archived"]
+    params: Dict[str, object] = {"user_id": user_id, "archived": archived}
 
     if search:
         clauses.append(
@@ -661,6 +664,7 @@ def fetch_retired_items(
         "status": "r.status",
         "created_at": "r.created_at",
         "updated_at": "r.updated_at",
+        "archived_at": "r.archived_at",
     }
     direction = "ASC" if (sort_dir or "").lower() == "asc" else "DESC"
     order_col = order_map.get((sort_by or "").lower(), "r.created_at")
