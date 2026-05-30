@@ -232,16 +232,6 @@
           <i class="fas fa-download"></i> Export
         </a>
         {% if view_type == 'active' %}
-        <button id="inventoryRefreshBtn"
-                class="btn backup-btn"
-                type="button"
-                title="Queue an eBay polling refresh"
-                data-refresh-url="{{ url_for('main.inventory_refresh') }}"
-                data-active-refresh-url="{{ url_for('main.active_inventory_refresh') }}"
-                data-status-url-template="{{ url_for('main.import_job_status', job_id=0) }}"
-                data-active-url="{{ url_for('main.inventory_active') }}">
-          <i class="fas fa-sync-alt"></i> Refresh
-        </button>
         {# Sync eBay (kept for later) #}
         {#
         <button id="syncEbayActiveBtn" class="btn backup-btn" title="Sync existing inventory with eBay">
@@ -2015,108 +2005,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     clearTimeout(reconnectTimeout);
   });
-})();
-{% endif %}
-
-{% if view_type == 'active' %}
-(function(){
-  const refreshBtn = document.getElementById('inventoryRefreshBtn');
-  if (!refreshBtn) return;
-
-  let pollTimer = null;
-  const originalHtml = refreshBtn.innerHTML;
-
-  function setButtonState(label, disabled = true) {
-    refreshBtn.disabled = disabled;
-    refreshBtn.innerHTML = `<i class="fas fa-sync-alt fa-spin"></i> ${label}`;
-  }
-
-  function resetButton(message) {
-    refreshBtn.disabled = false;
-    refreshBtn.innerHTML = originalHtml;
-    if (message) alert(message);
-  }
-
-  function watchRefreshJob(jobId) {
-    if (pollTimer) clearInterval(pollTimer);
-    pollTimer = setInterval(() => pollRefreshJob(jobId), 3000);
-    pollRefreshJob(jobId);
-  }
-
-  async function pollRefreshJob(jobId) {
-    const statusUrl = refreshBtn.dataset.statusUrlTemplate.replace('/0', `/${jobId}`);
-    try {
-      const response = await fetch(statusUrl);
-      const data = await response.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Unable to check refresh status');
-      }
-
-      const job = data.job;
-      if (job.status === 'queued' || job.status === 'pending') {
-        setButtonState('Queued');
-        return;
-      }
-      if (job.status === 'processing') {
-        setButtonState('Refreshing');
-        return;
-      }
-      if (job.status === 'completed') {
-        clearInterval(pollTimer);
-        setButtonState('Reloading');
-        window.location.href = refreshBtn.dataset.activeUrl;
-        return;
-      }
-      if (job.status === 'failed') {
-        clearInterval(pollTimer);
-        resetButton(job.error_message || 'Refresh failed');
-      }
-    } catch (error) {
-      clearInterval(pollTimer);
-      resetButton(error.message || 'Refresh failed');
-    }
-  }
-
-  refreshBtn.addEventListener('click', async () => {
-    if (refreshBtn.disabled) return;
-    setButtonState('Queueing');
-
-    try {
-      const response = await fetch(refreshBtn.dataset.refreshUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}'
-      });
-      const data = await response.json();
-      if (!data.ok) {
-        throw new Error(data.error || 'Failed to queue refresh');
-      }
-
-      setButtonState('Queued');
-      watchRefreshJob(data.job_id);
-    } catch (error) {
-      resetButton(error.message || 'Failed to queue refresh');
-    }
-  });
-
-  async function restoreActiveRefreshState() {
-    try {
-      const response = await fetch(refreshBtn.dataset.activeRefreshUrl);
-      const data = await response.json();
-      if (!data.ok || !data.has_active || !data.job) return;
-
-      if (data.job.status === 'processing') {
-        setButtonState('Refreshing');
-      } else {
-        setButtonState('Queued');
-      }
-      watchRefreshJob(data.job.id);
-    } catch (error) {
-      console.error('Unable to restore refresh state:', error);
-    }
-  }
-
-  restoreActiveRefreshState();
 })();
 {% endif %}
 </script>

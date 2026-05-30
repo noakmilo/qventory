@@ -35,7 +35,6 @@ celery.conf.update(
 # Task routing
 celery.conf.task_routes = {
     'qventory.tasks.import_ebay_inventory': {'queue': 'imports'},
-    'qventory.tasks.poll_ebay_new_listings_for_user': {'queue': 'imports'},
     'qventory.tasks.hydrate_item_image': {'queue': IMAGE_HYDRATION_QUEUE},
     'qventory.tasks.hydrate_sale_image': {'queue': IMAGE_HYDRATION_QUEUE},
     'qventory.tasks.reconcile_missing_images': {'queue': 'imports'},
