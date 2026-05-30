@@ -5932,10 +5932,37 @@ def bulk_purge_retired_items():
         purged = 0
         failed = 0
         skipped = 0
+        local_inactivated = 0
         now = datetime.utcnow()
+
+        def mark_retired_source_inactive(retired):
+            item_query = Item.query.filter(Item.user_id == current_user.id)
+            item = None
+            if retired.item_id:
+                item = item_query.filter(Item.id == retired.item_id).first()
+            if not item and retired.ebay_listing_id:
+                item = item_query.filter(Item.ebay_listing_id == retired.ebay_listing_id).first()
+            if not item or not item.is_active:
+                return False
+
+            item.is_active = False
+            item.updated_at = now
+            item.last_ebay_sync = now
+            timestamp = now.strftime('%Y-%m-%d %H:%M:%S UTC')
+            purge_note = f"\n[{timestamp}] Listing ended on eBay from Retirements purge."
+            if purge_note.strip() not in (item.notes or ''):
+                item.notes = (item.notes or '') + purge_note
+            try:
+                from qventory.helpers.link_bio import remove_featured_items_for_user
+                remove_featured_items_for_user(current_user.id, [item.id])
+            except Exception:
+                pass
+            return True
 
         for retired in retired_items:
             if retired.status == "purged":
+                if mark_retired_source_inactive(retired):
+                    local_inactivated += 1
                 skipped += 1
                 continue
 
@@ -5952,6 +5979,8 @@ def bulk_purge_retired_items():
                 retired.purged_at = now
                 retired.last_error = None
                 retired.updated_at = now
+                if mark_retired_source_inactive(retired):
+                    local_inactivated += 1
                 purged += 1
             else:
                 retired.status = "failed"
@@ -5966,7 +5995,11 @@ def bulk_purge_retired_items():
             "purged": purged,
             "failed": failed,
             "skipped": skipped,
-            "message": f"Purged {purged} item(s) on eBay, {failed} failed, {skipped} skipped"
+            "local_inactivated": local_inactivated,
+            "message": (
+                f"Purged {purged} item(s) on eBay, marked {local_inactivated} local item(s) inactive, "
+                f"{failed} failed, {skipped} skipped"
+            )
         })
 
     except Exception as e:
