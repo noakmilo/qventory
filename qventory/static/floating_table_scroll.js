@@ -13,7 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     floatingScroll.tabIndex = 0;
     floatingScrollContent.className = 'floating-table-scroll__content';
     floatingScroll.appendChild(floatingScrollContent);
-    tableWrap.insertAdjacentElement('afterend', floatingScroll);
+    // Keep the fixed scrollbar outside cards/backdrop-filter containers, which can
+    // otherwise make `position: fixed` relative to the card instead of the viewport.
+    document.body.appendChild(floatingScroll);
 
     let syncing = false;
 
