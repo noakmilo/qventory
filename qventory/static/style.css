@@ -796,13 +796,13 @@ i {color:#8ab4fd;}
 .floating-table-scroll{
   display:none;
   position:fixed;
-  bottom:max(8px, env(safe-area-inset-bottom, 0px));
-  height:20px;
+  bottom:0;
+  height:22px;
   overflow-x:auto;
   overflow-y:hidden;
   z-index:40;
   border:1px solid var(--glass-border);
-  border-radius:999px;
+  border-radius:10px 10px 0 0;
   background:var(--card);
   opacity:1;
   isolation:isolate;
