@@ -779,28 +779,16 @@ i {color:#8ab4fd;}
 }
 
 /* Inventory and fulfillment tables keep every column accessible via horizontal scroll. */
-.inventory-table-wrap,
-.fulfillment-table-wrap{
+.table-wrap.inventory-table-wrap,
+.table-wrap.fulfillment-table-wrap{
   overflow-x:auto;
-  scrollbar-width:thin;
-  scrollbar-color:rgba(138,180,255,0.55) rgba(138,180,255,0.08);
-  scrollbar-gutter:stable;
+  scrollbar-width:none;
 }
-.inventory-table-wrap::-webkit-scrollbar,
-.fulfillment-table-wrap::-webkit-scrollbar{
-  height:10px;
-}
-.inventory-table-wrap::-webkit-scrollbar-track,
-.fulfillment-table-wrap::-webkit-scrollbar-track{
-  background:rgba(138,180,255,0.08);
-  border-radius:999px;
-}
-.inventory-table-wrap::-webkit-scrollbar-thumb,
-.fulfillment-table-wrap::-webkit-scrollbar-thumb{
-  background:rgba(138,180,255,0.55);
-  border:2px solid transparent;
-  border-radius:999px;
-  background-clip:padding-box;
+.table-wrap.inventory-table-wrap::-webkit-scrollbar,
+.table-wrap.fulfillment-table-wrap::-webkit-scrollbar{
+  display:none;
+  width:0;
+  height:0;
 }
 .inventory-table-wrap .inventory-table{
   min-width:1200px;

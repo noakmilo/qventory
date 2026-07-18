@@ -20,15 +20,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncWidthsAndVisibility = () => {
       const tableRect = tableWrap.getBoundingClientRect();
       const hasHorizontalOverflow = tableWrap.scrollWidth > tableWrap.clientWidth + 1;
-      const tableCrossesViewportBottom = tableRect.top < window.innerHeight - 24;
-      const nativeScrollbarIsBelowViewport = tableRect.bottom > window.innerHeight;
+      const tableIsVisible = tableRect.top < window.innerHeight && tableRect.bottom > 0;
 
       floatingScrollContent.style.width = `${tableWrap.scrollWidth}px`;
       floatingScroll.style.left = `${Math.max(0, tableRect.left)}px`;
       floatingScroll.style.width = `${Math.min(tableRect.width, window.innerWidth - Math.max(0, tableRect.left))}px`;
       floatingScroll.classList.toggle(
         'is-visible',
-        hasHorizontalOverflow && tableCrossesViewportBottom && nativeScrollbarIsBelowViewport
+        hasHorizontalOverflow && tableIsVisible
       );
     };
 
