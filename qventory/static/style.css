@@ -797,16 +797,18 @@ i {color:#8ab4fd;}
   display:none;
   position:fixed;
   bottom:max(8px, env(safe-area-inset-bottom, 0px));
-  height:18px;
+  height:20px;
   overflow-x:auto;
   overflow-y:hidden;
   z-index:40;
   border:1px solid var(--glass-border);
   border-radius:999px;
   background:var(--card);
-  box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  opacity:1;
+  isolation:isolate;
+  box-shadow:0 -3px 0 var(--bg), 0 4px 14px rgba(0,0,0,0.35);
   scrollbar-width:thin;
-  scrollbar-color:rgba(138,180,255,0.75) rgba(138,180,255,0.12);
+  scrollbar-color:rgba(138,180,255,0.9) var(--card);
 }
 .floating-table-scroll.is-visible{
   display:block;
@@ -818,7 +820,7 @@ i {color:#8ab4fd;}
   height:16px;
 }
 .floating-table-scroll::-webkit-scrollbar-track{
-  background:rgba(138,180,255,0.12);
+  background:var(--card);
   border-radius:999px;
 }
 .floating-table-scroll::-webkit-scrollbar-thumb{
