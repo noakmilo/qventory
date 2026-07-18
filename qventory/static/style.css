@@ -805,6 +805,40 @@ i {color:#8ab4fd;}
 .inventory-table-wrap .inventory-table{
   min-width:1200px;
 }
+.floating-table-scroll{
+  display:none;
+  position:fixed;
+  bottom:max(8px, env(safe-area-inset-bottom, 0px));
+  height:18px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  z-index:40;
+  border:1px solid var(--glass-border);
+  border-radius:999px;
+  background:var(--card);
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(138,180,255,0.75) rgba(138,180,255,0.12);
+}
+.floating-table-scroll.is-visible{
+  display:block;
+}
+.floating-table-scroll__content{
+  height:1px;
+}
+.floating-table-scroll::-webkit-scrollbar{
+  height:16px;
+}
+.floating-table-scroll::-webkit-scrollbar-track{
+  background:rgba(138,180,255,0.12);
+  border-radius:999px;
+}
+.floating-table-scroll::-webkit-scrollbar-thumb{
+  background:rgba(138,180,255,0.75);
+  border:3px solid transparent;
+  border-radius:999px;
+  background-clip:padding-box;
+}
 .table-wrap table{
   width:100%;
   border-collapse:separate;
