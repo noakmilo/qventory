@@ -777,6 +777,34 @@ i {color:#8ab4fd;}
   box-shadow:0 10px 22px var(--glass-shadow);
   position:relative;
 }
+
+/* Inventory and fulfillment tables keep every column accessible via horizontal scroll. */
+.inventory-table-wrap,
+.fulfillment-table-wrap{
+  overflow-x:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(138,180,255,0.55) rgba(138,180,255,0.08);
+  scrollbar-gutter:stable;
+}
+.inventory-table-wrap::-webkit-scrollbar,
+.fulfillment-table-wrap::-webkit-scrollbar{
+  height:10px;
+}
+.inventory-table-wrap::-webkit-scrollbar-track,
+.fulfillment-table-wrap::-webkit-scrollbar-track{
+  background:rgba(138,180,255,0.08);
+  border-radius:999px;
+}
+.inventory-table-wrap::-webkit-scrollbar-thumb,
+.fulfillment-table-wrap::-webkit-scrollbar-thumb{
+  background:rgba(138,180,255,0.55);
+  border:2px solid transparent;
+  border-radius:999px;
+  background-clip:padding-box;
+}
+.inventory-table-wrap .inventory-table{
+  min-width:1200px;
+}
 .table-wrap table{
   width:100%;
   border-collapse:separate;
@@ -1278,6 +1306,7 @@ tbody tr:hover td{
 /* Oculta en móvil vertical */
 @media (max-width: 720px) and (orientation: portrait) {
   .mobile-hide { display: none !important; }
+  .inventory-table-wrap .mobile-hide { display: table-cell !important; }
 }
 /* En landscape/tablet/desktop se muestran */
 @media (max-width: 1024px) and (orientation: landscape),

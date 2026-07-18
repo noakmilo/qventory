@@ -249,7 +249,7 @@
       </div>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap{% if view_type in ['active', 'sold', 'slow_movers', 'retired'] %} inventory-table-wrap{% endif %}">
       {% set un = current_user.username %}
       <table class="inventory-table{% if view_type == 'sold' %} inventory-table--sold{% endif %}">
         <thead>
