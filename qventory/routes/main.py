@@ -4540,7 +4540,7 @@ def sync_ebay_inventory():
     # DEBUG: Log user role and god mode status
     print(f"[SYNC_INVENTORY] User {current_user.id} - role: {current_user.role}, is_god_mode: {current_user.is_god_mode}", file=sys.stderr)
 
-    # Get plan limits (needed for both checks and later sync limiting)
+    # Check integration access; item capacity does not block maintenance.
     plan_limits = current_user.get_plan_limits()
 
     if not current_user.is_god_mode:
@@ -4552,24 +4552,6 @@ def sync_ebay_inventory():
                 'upgrade_required': True
             }), 403
 
-        # Check how many items they're trying to sync vs their plan limit
-        current_item_count = Item.query.filter(
-            Item.user_id == current_user.id,
-            Item.is_active.is_(True),
-            Item.inactive_by_user.is_(False)
-        ).count()
-
-        # Free plan should only sync up to their max_items limit
-        if plan_limits.max_items is not None:
-            if current_item_count >= plan_limits.max_items:
-                return jsonify({
-                    'success': False,
-                    'error': f'You have reached your plan limit ({plan_limits.max_items} items). Upgrade to sync more items.',
-                    'upgrade_required': True,
-                    'current_count': current_item_count,
-                    'max_allowed': plan_limits.max_items
-                }), 403
-
     try:
         # Get all items with eBay listing IDs
         items_query = Item.query.filter(
@@ -4579,12 +4561,8 @@ def sync_ebay_inventory():
             Item.inactive_by_user.is_(False)
         )
 
-        # Limit sync to plan limits (only for non-god users)
-        if not current_user.is_god_mode and plan_limits.max_items is not None:
-            # Only sync up to the plan limit
-            items_to_sync = items_query.limit(plan_limits.max_items).all()
-        else:
-            items_to_sync = items_query.all()
+        # Existing records must be reconciled even when the account is at its limit.
+        items_to_sync = items_query.all()
 
         if not items_to_sync:
             return jsonify({
@@ -4610,6 +4588,10 @@ def sync_ebay_inventory():
             if offer.get('ebay_listing_id')
         }
         can_mark_inactive = result.get('can_mark_inactive', False)
+        from qventory.helpers.inventory_reconciliation import confirmed_inactive_listing_ids
+        inactive_listing_ids = confirmed_inactive_listing_ids(
+            current_user.id, result, [item.ebay_listing_id for item in items_to_sync],
+        )
         sources = ', '.join(result.get('sources', [])) or 'unknown'
         print(f"[SYNC_INVENTORY] Sources: {sources} | offers: {len(result.get('offers', []))} | can_mark_inactive={can_mark_inactive}", file=sys.stderr)
 
@@ -4667,7 +4649,7 @@ def sync_ebay_inventory():
                     if not item.is_active:
                         item.is_active = True
             else:
-                if can_mark_inactive:
+                if str(item.ebay_listing_id) in inactive_listing_ids:
                     # SOFT DELETE: Item no longer exists on eBay (sold/removed) - mark as inactive
                     print(f"[SYNC_INVENTORY] Item no longer on eBay, marking inactive: {item.title} (ID: {item.id}, eBay: {item.ebay_listing_id})", file=sys.stderr)
                     if item.is_active:

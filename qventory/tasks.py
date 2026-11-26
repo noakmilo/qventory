@@ -11,6 +11,7 @@ from sqlalchemy import func, or_
 from qventory.celery_app import celery
 from qventory.extensions import db
 from qventory import create_app
+from qventory.helpers.inventory_reconciliation import confirmed_inactive_listing_ids
 from qventory.helpers.image_guarantee import (
     IMAGE_STATUS_EXHAUSTED,
     IMAGE_STATUS_FAILED,
@@ -2916,6 +2917,13 @@ def process_item_ended_event(event):
         if not listing_id or not event.user_id:
             return {'status': 'error', 'message': 'Missing data'}
 
+        from qventory.helpers.ebay_inventory import get_listing_status_trading_api
+        current_status = get_listing_status_trading_api(event.user_id, listing_id)
+        if not current_status.get('success'):
+            return {'status': 'error', 'message': current_status.get('error', 'Status lookup failed')}
+        if current_status.get('status') not in {'ENDED', 'COMPLETED'}:
+            return {'status': 'success', 'message': 'Listing is not ended'}
+
         item = Item.query.filter_by(
             user_id=event.user_id,
             ebay_listing_id=str(listing_id)
@@ -2926,6 +2934,12 @@ def process_item_ended_event(event):
             return {'status': 'not_found'}
 
         log_task(f"  ✓ Found: {item.title}")
+
+        # Ended listings must leave active inventory without deleting history.
+        item.is_active = False
+        item.last_ebay_sync = datetime.utcnow()
+        from qventory.helpers.link_bio import remove_featured_items_for_user
+        remove_featured_items_for_user(event.user_id, [item.id])
 
         # Add note about listing end
         end_note = f"\n[{datetime.utcnow().strftime('%Y-%m-%d')}] Listing ended on eBay ({end_reason})"
@@ -3201,6 +3215,10 @@ def process_platform_notification(self, event_id):
                 result = process_revise_item_notification(event)
             elif notification_type == 'RelistItem':
                 result = process_relist_item_notification(event)
+            elif notification_type in {'EndItem', 'ItemSold'}:
+                # Verify current state: delayed notifications must not override
+                # a listing which has since become active again.
+                result = process_end_item_notification(event)
             else:
                 log_task(f"⚠️  Unknown notification type: {notification_type}")
                 result = {'status': 'skipped', 'message': f'Unknown type: {notification_type}'}
@@ -3229,6 +3247,28 @@ def process_platform_notification(self, event_id):
             db.session.commit()
 
             return {'status': 'error', 'message': str(e)}
+
+
+def process_end_item_notification(event):
+    from qventory.helpers.ebay_inventory import get_listing_status_trading_api
+    from qventory.models.item import Item
+    from qventory.helpers.link_bio import remove_featured_items_for_user
+
+    listing_id = event.payload.get('item_id')
+    if not event.user_id or not listing_id:
+        return {'status': 'error', 'message': 'Missing user or listing ID'}
+    result = get_listing_status_trading_api(event.user_id, listing_id)
+    if not result.get('success'):
+        return {'status': 'error', 'message': result.get('error', 'Status lookup failed')}
+    if result.get('status') not in {'ENDED', 'COMPLETED'}:
+        return {'status': 'success', 'message': 'Listing is not ended'}
+    item = Item.query.filter_by(user_id=event.user_id, ebay_listing_id=str(listing_id)).first()
+    if item:
+        item.is_active = False
+        item.last_ebay_sync = datetime.utcnow()
+        remove_featured_items_for_user(event.user_id, [item.id])
+        db.session.commit()
+    return {'status': 'success', 'item_id': item.id if item else None}
 
 
 def process_add_item_notification(event):
@@ -4386,13 +4426,10 @@ def reconcile_user_inventory(self, user_id):
             o.get('ebay_listing_id'): o for o in offers if o.get('ebay_listing_id')
         }
 
-        # Safety: if snapshot covers < 85% of active DB items, don't inactivate
-        active_in_db = sum(1 for i in items_to_sync if i.is_active)
-        if can_mark_inactive and active_in_db > 0 and len(offers_by_listing) > 0:
-            coverage = len(offers_by_listing) / active_in_db
-            if coverage < 0.85:
-                log_task(f"[RECONCILE] User {user_id}: safety override — snapshot {len(offers_by_listing)} vs DB {active_in_db} ({coverage:.0%})")
-                can_mark_inactive = False
+        inactive_listing_ids = confirmed_inactive_listing_ids(
+            user_id, snapshot,
+            [item.ebay_listing_id for item in items_to_sync if item.is_active],
+        )
 
         updated = 0
         inactivated = 0
@@ -4421,7 +4458,7 @@ def reconcile_user_inventory(self, user_id):
                     if offer.get('ebay_offer_id'):
                         item.ebay_offer_id = offer['ebay_offer_id']
             else:
-                if can_mark_inactive and item.is_active:
+                if str(item.ebay_listing_id) in inactive_listing_ids and item.is_active:
                     item.is_active = False
                     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                     item.notes = (item.notes or '') + f"\n[{timestamp}] Marked inactive by reconciliation (not in eBay snapshot)"
@@ -4675,21 +4712,14 @@ def sync_ebay_active_inventory_auto(self):
                     if offer.get('ebay_listing_id')
                 }
 
-                # Safety check: if the snapshot has significantly fewer items than
-                # what we have active in the DB, the API likely returned incomplete
-                # data even though it reported success. Do NOT mass-inactivate.
-                active_ebay_items_in_db = sum(1 for i in items_to_sync if i.is_active)
-                snapshot_count = len(offers_by_listing)
-                if can_mark_inactive and active_ebay_items_in_db > 0 and snapshot_count > 0:
-                    coverage_ratio = snapshot_count / active_ebay_items_in_db
-                    if coverage_ratio < 0.85:
-                        log_task(f"    ⚠ Safety override: snapshot has {snapshot_count} items but DB has {active_ebay_items_in_db} active "
-                                 f"({coverage_ratio:.0%} coverage). Skipping inactivation to prevent false positives.")
-                        can_mark_inactive = False
+                inactive_listing_ids = confirmed_inactive_listing_ids(
+                    user.id, snapshot,
+                    [item.ebay_listing_id for item in items_to_sync if item.is_active],
+                )
+                # Limits apply to reactivations, never to updates or closures.
+                from qventory.helpers.item_limits import get_item_limit_status
+                reactivation_remaining = get_item_limit_status(user.id, lock=True).remaining
 
-                if not can_mark_inactive:
-                    log_task("    Incomplete data; items not found will remain active")
-                
                 updated_count = 0
                 deleted_count = 0
 
@@ -4701,8 +4731,13 @@ def sync_ebay_active_inventory_auto(self):
 
                     if offer_data:
                         if not item.is_active:
+                            counts_toward_limit = not item.inactive_by_user
+                            if counts_toward_limit and reactivation_remaining is not None and reactivation_remaining <= 0:
+                                continue
                             item.is_active = True
                             updated_count += 1
+                            if counts_toward_limit and reactivation_remaining is not None:
+                                reactivation_remaining -= 1
 
                         # Item still exists - update price
                         if offer_data.get('item_price') and offer_data['item_price'] != item.item_price:
@@ -4714,7 +4749,7 @@ def sync_ebay_active_inventory_auto(self):
                         # Listing still present in active snapshot; keep active.
                     else:
                         # Only mark items inactive if we are confident we fetched the full offer set
-                        if can_mark_inactive:
+                        if str(item.ebay_listing_id) in inactive_listing_ids:
                             # SOFT DELETE: Item no longer on eBay (sold/removed) - mark as inactive
                             # Don't mark as sold_at here - that will be set by sync_ebay_sold_orders_auto
                             if item.is_active:
@@ -6533,44 +6568,14 @@ def sync_and_purge_inactive_items(self):
 
                 log_task(f"  Database has {len(db_items)} active items with eBay listing IDs")
 
-                # Create a set of active eBay listing IDs for fast lookup
-                active_ebay_listing_ids = set()
-                for ebay_item in ebay_items:
-                    listing_id = (
-                        ebay_item.get('ebay_listing_id')
-                        or ebay_item.get('listingId')
-                        or ebay_item.get('listing_id')
-                    )
-                    if listing_id:
-                        active_ebay_listing_ids.add(str(listing_id))
-
-                if not ebay_items and db_items:
-                    log_task("  ⚠ No active listings returned from eBay; skipping inactive marking")
-                    db.session.commit()
-                    users_processed += 1
-                    continue
-
-                if not can_mark_inactive:
-                    log_task("  ⚠ Incomplete listing snapshot; skipping inactive marking")
-                    db.session.commit()
-                    users_processed += 1
-                    continue
-
-                db_listing_ids = {str(item.ebay_listing_id) for item in db_items if item.ebay_listing_id}
-                overlap_count = len(active_ebay_listing_ids.intersection(db_listing_ids))
-                if db_listing_ids and active_ebay_listing_ids and overlap_count == 0:
-                    log_task(
-                        "  ⚠ No overlap between eBay listings and DB listings; "
-                        "skipping inactive marking to avoid mass deactivation"
-                    )
-                    db.session.commit()
-                    users_processed += 1
-                    continue
+                inactive_listing_ids = confirmed_inactive_listing_ids(
+                    user.id, snapshot, [item.ebay_listing_id for item in db_items],
+                )
 
                 # Check each database item against eBay
                 marked_inactive = 0
                 for db_item in db_items:
-                    if str(db_item.ebay_listing_id) not in active_ebay_listing_ids:
+                    if str(db_item.ebay_listing_id) in inactive_listing_ids:
                         # Item no longer active on eBay
                         db_item.is_active = False
                         try:

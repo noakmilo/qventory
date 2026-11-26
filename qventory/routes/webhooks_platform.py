@@ -199,6 +199,21 @@ def parse_platform_notification(root: ET.Element) -> dict:
         for child in body:
             tag_name = child.tag.split('}')[-1]  # Remove namespace
 
+            # Platform events share GetItemResponse; the response tag alone
+            # cannot distinguish a new listing from a closed one.
+            event_name = get_xml_text(child, './/ebl:NotificationEventName', EBAY_NS)
+            event_types = {
+                'ItemListed': 'AddItem',
+                'ItemRevised': 'ReviseItem',
+                'ItemClosed': 'EndItem',
+                'ItemUnsold': 'EndItem',
+                'ItemSold': 'ItemSold',
+            }
+            if event_name:
+                notification_type = event_types.get(event_name, event_name)
+                response_elem = child
+                break
+
             if 'GetItem' in tag_name:
                 notification_type = 'AddItem'
                 response_elem = child

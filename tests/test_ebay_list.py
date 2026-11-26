@@ -1,4 +1,4 @@
-import os
+from flask import Flask, make_response
 
 from qventory.extensions import db
 from qventory.helpers import ebay_inventory
@@ -9,13 +9,19 @@ from qventory.routes.ebay_list import _validate_draft
 
 
 def _make_app():
-    os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-    os.environ["FEATURE_EBAY_LISTING_CREATE_ENABLED"] = "True"
-    from qventory import create_app
-    app = create_app()
-    app.config["TESTING"] = True
+    # This permission test only needs users and a login session, not production
+    # startup hooks, PostgreSQL-only tables or environment-dependent Config.
+    from qventory.extensions import login_manager
+    from qventory.models.system_setting import SystemSetting
+    app = Flask(__name__)
+    app.config.update(TESTING=True, SECRET_KEY='test',
+                      SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
+                      FEATURE_EBAY_LISTING_CREATE_ENABLED=True)
+    db.init_app(app)
+    login_manager.init_app(app)
     with app.app_context():
-        db.create_all()
+        User.__table__.create(db.engine)
+        SystemSetting.__table__.create(db.engine)
     return app
 
 
@@ -37,7 +43,7 @@ def test_require_role_blocks_non_god():
         from flask_login import login_user
         user = User.query.filter_by(username="freeuser").first()
         login_user(user)
-        resp = protected()
+        resp = make_response(protected())
         assert resp.status_code == 403
 
 

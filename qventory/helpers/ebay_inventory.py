@@ -613,6 +613,46 @@ def get_listing_details_trading_api(user_id, listing_id):
         return {}
 
 
+def get_listing_status_trading_api(user_id, listing_id):
+    """Read the current status; errors and missing listings are not closures."""
+    from xml.sax.saxutils import escape
+
+    token = get_user_access_token(user_id)
+    if not token:
+        return {'success': False, 'error': 'no_access_token'}
+    xml = (
+        '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">'
+        f'<ItemID>{escape(str(listing_id))}</ItemID>'
+        '<OutputSelector>Item.ItemID</OutputSelector>'
+        '<OutputSelector>Item.SellingStatus.ListingStatus</OutputSelector>'
+        '</GetItemRequest>'
+    )
+    try:
+        response = requests.post(TRADING_API_URL, data=xml, headers={
+            'X-EBAY-API-SITEID': '0',
+            'X-EBAY-API-COMPATIBILITY-LEVEL': TRADING_COMPAT_LEVEL,
+            'X-EBAY-API-CALL-NAME': 'GetItem',
+            'X-EBAY-API-APP-NAME': os.environ.get('EBAY_CLIENT_ID', ''),
+            'X-EBAY-API-IAF-TOKEN': token,
+            'Content-Type': 'text/xml',
+        }, timeout=30)
+        if response.status_code != 200:
+            return {'success': False, 'error': f'http_{response.status_code}', 'retryable': True}
+        root = ET.fromstring(response.content)
+        if root.findtext('ebay:Ack', namespaces=_XML_NS) not in {'Success', 'Warning'}:
+            errors = ' '.join(root.itertext()).lower()
+            throttled = any(value in errors for value in ('rate limit', 'usage limit', 'throttle'))
+            return {'success': False, 'error': 'api_failure', 'retryable': throttled}
+        returned_id = root.findtext('ebay:Item/ebay:ItemID', namespaces=_XML_NS)
+        status = root.findtext('ebay:Item/ebay:SellingStatus/ebay:ListingStatus', namespaces=_XML_NS)
+        if returned_id != str(listing_id) or not status:
+            return {'success': False, 'error': 'missing_or_mismatched_listing_status'}
+        return {'success': True, 'status': status.strip().upper()}
+    except (requests.RequestException, ET.ParseError) as exc:
+        log_inv(f'Listing status lookup failed for {listing_id}: {type(exc).__name__}')
+        return {'success': False, 'error': type(exc).__name__, 'retryable': True}
+
+
 def get_image_candidates_for_listing(
     user_id,
     listing_id,
@@ -1211,6 +1251,7 @@ def get_active_listings_trading_api(
 
     all_items = []
     failed_items = []  # Track items that failed to parse
+    parse_failure_count = 0
     page_number = 1
     entries_per_page = 200  # Max allowed by eBay
     total_pages = 1  # Will be updated from first response
@@ -1317,6 +1358,10 @@ def get_active_listings_trading_api(
 
             # Check for errors
             ack = root.find('ebay:Ack', ns)
+            if ack is None or ack.text not in {'Success', 'Warning', 'Failure', 'PartialFailure'}:
+                terminated_early = True
+                terminate_reason = 'unsuccessful_response'
+                break
             if ack is not None and ack.text in ['Failure', 'PartialFailure']:
                 errors = root.findall('.//ebay:Errors', ns)
                 error_texts = []
@@ -1478,6 +1523,7 @@ def get_active_listings_trading_api(
 
                 except Exception as e:
                     # Collect failed item details
+                    parse_failure_count += 1
                     try:
                         failed_id_elem = item_elem.find('ebay:ItemID', ns)
                         failed_title_elem = item_elem.find('ebay:Title', ns)
@@ -1535,7 +1581,7 @@ def get_active_listings_trading_api(
     log_inv(f"  Successfully fetched: {len(all_items)} items")
     log_inv(f"  Failed to parse: {len(failed_items)} items")
     meta['fetched'] = len(all_items)
-    meta['failed'] = len(failed_items)
+    meta['failed'] = parse_failure_count
     if meta.get('pages_expected') is None:
         meta['pages_expected'] = total_pages if 'total_pages' in locals() else None
 
@@ -1554,6 +1600,8 @@ def get_active_listings_trading_api(
             meta['is_complete'] = True
 
         if len(failed_items) > 0:
+            meta['is_complete'] = False
+            meta['incomplete_reason'] = 'parse_failures'
             log_inv(f"  ⚠️  {len(failed_items)} items failed to parse and will be stored for retry")
     log_inv(f"=" * 60)
 
@@ -1567,6 +1615,12 @@ def get_active_listings_trading_api(
 
     if terminated_early and not meta.get('incomplete_reason'):
         meta['incomplete_reason'] = terminate_reason or "terminated_early"
+    if parse_failure_count:
+        meta['is_complete'] = False
+        meta['incomplete_reason'] = 'parse_failures'
+    if meta.get('expected_total') is not None and len(all_items[:max_items]) != meta['expected_total']:
+        meta['is_complete'] = False
+        meta['incomplete_reason'] = meta.get('incomplete_reason') or 'missing_or_truncated_items'
     if meta.get('expected_total') is None:
         meta['is_complete'] = False
 
@@ -2223,6 +2277,7 @@ def _normalize_trading_item_to_offer(item):
     listing_id = item.get('ebay_listing_id') or item.get('listing_id')
     sku = item.get('sku') or item.get('ebay_sku')
     return {
+        'product': item.get('product') or {},
         'item_price': item.get('item_price'),
         'ebay_url': item.get('ebay_url'),
         'ebay_listing_id': listing_id,
@@ -2292,11 +2347,16 @@ def fetch_active_listings_snapshot(user_id, limit=200, max_pages=50, max_items=5
             collect_failures=False,
             return_meta=True
         )
-        if trading_items:
-            trading_success = True
-            trading_complete = bool(trading_meta.get('is_complete'))
-            trading_rate_limited = bool(trading_meta.get('rate_limited'))
-            trading_incomplete_reason = trading_meta.get('incomplete_reason')
+        # A complete response containing zero listings is valid too.
+        trading_complete = (
+            bool(trading_meta.get('is_complete'))
+            and not trading_meta.get('failed')
+            and all(item.get('ebay_listing_id') for item in trading_items)
+        )
+        trading_rate_limited = bool(trading_meta.get('rate_limited'))
+        trading_incomplete_reason = trading_meta.get('incomplete_reason')
+        trading_success = trading_complete or bool(trading_items)
+        if trading_success:
             sources.append('trading_api')
             trading_offers = [_normalize_trading_item_to_offer(item) for item in trading_items]
             offers.extend(trading_offers)

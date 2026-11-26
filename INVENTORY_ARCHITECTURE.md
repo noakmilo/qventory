@@ -1,5 +1,35 @@
 # Qventory Inventory Architecture
 
+## Reconciliation and repair
+
+Only complete Trading snapshots can establish that a listing is absent. A
+successful response explicitly reporting zero listings is a complete snapshot;
+network errors, missing totals, parse failures and truncated results are not.
+When more than 15% of an account's active listing IDs are absent, reconciliation
+checks each missing ID with Trading `GetItem`. Only `Ended` or `Completed`
+statuses authorize those closures. Active, unknown and unavailable listings
+remain unchanged. Rate limits interrupt verification until the next run.
+
+This policy is shared by manual synchronization, automatic synchronization,
+per-user reconciliation, administrative cleanup and the repair script. Plan
+capacity does not block updates or closures. Items are marked inactive; sales,
+cost history and receipts are preserved. Platform notifications are classified
+by `NotificationEventName`, and closure events check the current listing state
+before deactivating it.
+
+After deploying and restarting the web and Celery workers, use the application's
+environment to review affected accounts (no inventory changes by default):
+
+```bash
+python reconcile_inventory.py --user-id 22 --user-id 51 --user-id 205
+```
+
+To apply confirmed closures, explicitly add `--apply`. Each execution fetches
+fresh eBay data rather than applying an old report. It does not delete items or
+sales. No schema migration is required for this correction. Missing webhook
+delivery must be investigated separately in the deployment; periodic
+reconciliation remains available even without webhook events.
+
 ## Overview
 
 Qventory now properly separates inventory into three distinct views, each serving a different purpose:
