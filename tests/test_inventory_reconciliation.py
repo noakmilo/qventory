@@ -126,8 +126,13 @@ def test_get_item_requires_success_matching_id_and_status(monkeypatch, ack, stat
     xml = f'''<GetItemResponse xmlns="urn:ebay:apis:eBLBaseComponents"><Ack>{ack}</Ack>
       <Item><ItemID>{returned_id}</ItemID><SellingStatus><ListingStatus>{status}</ListingStatus>
       </SellingStatus></Item></GetItemResponse>'''
-    monkeypatch.setattr(ebay.requests, 'post', lambda *a, **k: SimpleNamespace(
-        status_code=200, content=xml.encode()))
+    def post(*args, **kwargs):
+        # Trading requires the XML declaration; without it eBay's gateway
+        # returns ErrorCode 5 even though the request is valid XML locally.
+        assert kwargs['data'].startswith('<?xml version="1.0" encoding="utf-8"?>')
+        return SimpleNamespace(status_code=200, content=xml.encode())
+
+    monkeypatch.setattr(ebay.requests, 'post', post)
     assert ebay.get_listing_status_trading_api(22, '123')['success'] is success
 
 

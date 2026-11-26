@@ -621,6 +621,7 @@ def get_listing_status_trading_api(user_id, listing_id):
     if not token:
         return {'success': False, 'error': 'no_access_token'}
     xml = (
+        '<?xml version="1.0" encoding="utf-8"?>'
         '<GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">'
         f'<ItemID>{escape(str(listing_id))}</ItemID>'
         '<OutputSelector>Item.ItemID</OutputSelector>'
